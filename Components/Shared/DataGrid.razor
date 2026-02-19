@@ -1,0 +1,164 @@
+@using System.Data
+@using System.Linq
+
+<div class="datagrid-panel">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="datagrid-title">@Title</div>
+    }
+
+    @if (Data != null && Data.Rows.Count > 0)
+    {
+        <div class="datagrid-scroll">
+            <table class="datagrid-table">
+                <thead>
+                    <tr>
+                        @foreach (DataColumn col in Data.Columns)
+                        {
+                            <th @onclick="() => SortBy(col.ColumnName)"
+                                class="@(SortColumn == col.ColumnName ? "sorted" : "")">
+                                @col.ColumnName
+                                @if (SortColumn == col.ColumnName)
+                                {
+                                    <span>@(SortAscending ? " ▲" : " ▼")</span>
+                                }
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in GetSortedRows())
+                    {
+                        <tr @onclick="() => HandleRowClick(row)"
+                            class="@(IsClickable ? "clickable" : "")">
+                            @foreach (DataColumn col in Data.Columns)
+                            {
+                                <td title="@row[col]?.ToString()">
+                                    @try
+                                    {
+                                        @FormatCell(row[col], col.ColumnName)
+                                    }
+                                    catch (Exception)
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="datagrid-footer">
+            @Data.Rows.Count row(s)
+        </div>
+    }
+    else
+    {
+        <div class="datagrid-empty">No data available</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public DataTable? Data 
+    { 
+        get => _data;
+        set
+        {
+            if (_data != value)
+            {
+                _data = value;
+                // Invalidate cache when data changes
+                _cachedSortedRows = null;
+            }
+        }
+    }
+    [Parameter] public EventCallback<DataRow> OnRowClick { get; set; }
+    [Parameter] public bool IsClickable { get; set; } = false;
+    [Parameter] public int MaxRows { get; set; } = 500;
+
+    private DataTable? _data;
+
+    private string? SortColumn;
+    private bool SortAscending = true;
+    
+    // Cached sorted rows for performance
+    private DataRow[]? _cachedSortedRows;
+    private string? _lastSortColumn;
+    private bool _lastSortAscending;
+
+    private void SortBy(string column)
+    {
+        if (SortColumn == column)
+        {
+            SortAscending = !SortAscending;
+        }
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        // Invalidate cache
+        _cachedSortedRows = null;
+    }
+
+    private DataRow[] GetSortedRows()
+    {
+        if (Data == null || Data.Columns.Count == 0) return Array.Empty<DataRow>();
+        
+        // Return cached results if sort hasn't changed
+        if (_cachedSortedRows != null && SortColumn == _lastSortColumn && SortAscending == _lastSortAscending)
+        {
+            // Verify cached rows are still valid for current DataTable
+            if (_cachedSortedRows.Length > 0 && _cachedSortedRows[0].Table == Data)
+            {
+                return _cachedSortedRows;
+            }
+        }
+
+        var rows = Data.AsEnumerable();
+        if (!string.IsNullOrEmpty(SortColumn))
+        {
+            // Check if column exists before sorting
+            if (Data.Columns.Contains(SortColumn))
+            {
+                rows = SortAscending
+                    ? rows.OrderBy(r => r[SortColumn]?.ToString(), StringComparer.OrdinalIgnoreCase)
+                    : rows.OrderByDescending(r => r[SortColumn]?.ToString(), StringComparer.OrdinalIgnoreCase);
+            }
+        }
+        
+        _cachedSortedRows = rows.Take(MaxRows).ToArray();
+        _lastSortColumn = SortColumn;
+        _lastSortAscending = SortAscending;
+        
+        return _cachedSortedRows;
+    }
+
+    private async Task HandleRowClick(DataRow row)
+    {
+        if (OnRowClick.HasDelegate)
+            await OnRowClick.InvokeAsync(row);
+    }
+
+    private string FormatCell(object? value, string columnName)
+    {
+        if (value == null || value == DBNull.Value) return "";
+
+        // Format duration columns
+        if (columnName.Contains("duration", StringComparison.OrdinalIgnoreCase)
+            || columnName.Contains("_ms", StringComparison.OrdinalIgnoreCase))
+        {
+            if (double.TryParse(value.ToString(), out var ms))
+            {
+                if (ms >= 60000) return $"{ms / 60000:F1}m";
+                if (ms >= 1000) return $"{ms / 1000:F1}s";
+                return $"{ms:F0}ms";
+            }
+        }
+
+        var str = value.ToString() ?? "";
+        return str.Length > 100 ? str[..100] + "..." : str;
+    }
+}

@@ -1,0 +1,404 @@
+@page "/databasedeploy"
+@using Microsoft.Data.SqlClient
+@using Microsoft.SqlServer.Dac
+@using Microsoft.Extensions.Configuration
+@using System.IO
+@using System.Diagnostics
+@using SqlHealthAssessment.Data.Services
+
+
+<div class="database-deploy-page">
+    <h2 style="margin-bottom: 20px;">Deploy SQLWATCH Database</h2>
+
+    <div class="deploy-section">
+        <h3>SQL Server Configuration</h3>
+        <div class="form-group">
+            <label for="serverName">Server Name:</label>
+            <input id="serverName" class="form-input" type="text" @bind="ServerName" placeholder="localhost\SQLEXPRESS" />
+        </div>
+        <div class="form-group">
+            <label for="databaseName">Database Name:</label>
+            <input id="databaseName" class="form-input" type="text" @bind="DatabaseName" placeholder="SQLWATCH" />
+        </div>
+        <div class="form-group">
+            <label for="authType">Authentication:</label>
+            <select id="authType" class="form-input" @onchange="OnAuthTypeChanged">
+                <option value="windows">Windows Authentication</option>
+                <option value="sql">SQL Server Authentication</option>
+            </select>
+        </div>
+        @if (AuthType == "sql")
+        {
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input id="username" class="form-input" type="text" @bind="Username" placeholder="sa" />
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input id="password" class="form-input" type="password" @bind="Password" />
+            </div>
+        }
+    </div>
+
+    <div class="deploy-section">
+        <h3>Deployment Options</h3>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" @bind="CreateDatabase" />
+                Create database if it doesn't exist
+            </label>
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" @bind="OverwriteExisting" />
+                Overwrite existing database (DANGEROUS)
+            </label>
+        </div>
+    </div>
+
+    <div class="deploy-actions">
+        <button class="btn btn-primary" @onclick="TestConnection" disabled="@isConnecting">
+            @if (isConnecting) {
+                <span>Testing...</span>
+            } else {
+                <span>Test Connection</span>
+            }
+        </button>
+        <button class="btn btn-success" @onclick="DeployDatabase" disabled="@(isDeploying || !CanDeploy)">
+            @if (isDeploying) {
+                <span>Deploying...</span>
+            } else {
+                <span>🚀 Deploy Database</span>
+            }
+        </button>
+    </div>
+
+    @if (CanDeploy && !isDeploying)
+    {
+        <div class="ready-to-deploy">
+            ✅ Ready to deploy to <strong>@ServerName/@DatabaseName</strong>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(ConnectionStatus))
+    {
+        <div class="status-message @(ConnectionSuccess ? "success" : "error")">
+            @ConnectionStatus
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(DeployStatus))
+    {
+        <div class="deploy-status">
+            <h4>Deployment Status</h4>
+            <div class="status-message @(DeploySuccess ? "success" : "error")">
+                @DeployStatus
+            </div>
+            @if (!string.IsNullOrEmpty(DeployLog))
+            {
+                <div class="deploy-log">
+                    <h5>Deployment Log:</h5>
+                    <pre>@DeployLog</pre>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+
+    private string ServerName = "localhost";
+    private string DatabaseName = "SQLWATCH";
+    private string AuthType = "windows";
+    private string Username = "";
+    private string Password = "";
+    private bool CreateDatabase = true;
+    private bool OverwriteExisting = false;
+
+    private string ConnectionStatus = "";
+    private bool ConnectionSuccess = false;
+    private string DeployStatus = "";
+    private bool DeploySuccess = false;
+    private string DeployLog = "";
+
+    private bool isConnecting = false;
+    private bool isDeploying = false;
+
+    private bool CanDeploy = false;
+
+    private void OnAuthTypeChanged(ChangeEventArgs e)
+    {
+        AuthType = e.Value?.ToString() ?? "windows";
+        if (AuthType == "windows")
+        {
+            Username = "";
+            Password = "";
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        isConnecting = true;
+        ConnectionStatus = "Testing connection...";
+
+        try
+        {
+            var connectionString = BuildConnectionString();
+            using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
+
+            ConnectionStatus = $"✅ Successfully connected to {ServerName}";
+            ConnectionSuccess = true;
+
+            if(!string.IsNullOrEmpty(ServerName) && !string.IsNullOrEmpty(DatabaseName))
+            {
+                CanDeploy = true;   
+            }
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"❌ Connection failed: {ex.Message}";
+            ConnectionSuccess = false;
+            CanDeploy = false;
+        }
+        finally
+        {
+            isConnecting = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string BuildConnectionString()
+    {
+        var builder = new SqlConnectionStringBuilder
+        {
+            DataSource = ServerName,
+            InitialCatalog = "master",
+            IntegratedSecurity = AuthType == "windows",
+            ConnectTimeout = 30
+        };
+
+        if (AuthType == "sql")
+        {
+            builder.UserID = Username;
+            builder.Password = Password;
+        }
+
+        return builder.ConnectionString;
+    }
+
+    private string BuildTargetConnectionString()
+    {
+        var builder = new SqlConnectionStringBuilder
+        {
+            DataSource = ServerName,
+            InitialCatalog = DatabaseName,
+            IntegratedSecurity = AuthType == "windows",
+            ConnectTimeout = 30
+        };
+
+        if (AuthType == "sql")
+        {
+            builder.UserID = Username;
+            builder.Password = Password;
+        }
+
+        return builder.ConnectionString;
+    }
+
+    private async Task DeployDatabase()
+    {
+        isDeploying = true;
+        DeployStatus = "Starting deployment...";
+        DeployLog = "";
+
+        if(CanDeploy == false)
+        {
+            DeployStatus = "❌ Cannot deploy: Please test connection and ensure all fields are filled correctly.";
+            isDeploying = false;
+            return;
+        }
+
+        try
+        {
+            // Test connection again
+            DeployStatus = "Testing connection...";
+            await TestConnection();
+            if (!ConnectionSuccess)
+            {
+                DeployStatus = "❌ Deployment failed: Connection test failed";
+                isDeploying = false;
+                return;
+            }
+
+            // Deploy using dacpac
+            DeployStatus = "Deploying database using dacpac...";
+            await DeployWithDacpac();
+
+            DeployStatus = "✅ Database deployed successfully!";
+            DeploySuccess = true;
+        }
+        catch (Exception ex)
+        {
+            DeployStatus = $"❌ Deployment failed: {ex.Message}";
+            DeployLog += $"\nError: {ex.StackTrace}";
+            DeploySuccess = false;
+        }
+        finally
+        {
+            isDeploying = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DeployWithDacpac()
+    {
+        var connectionString = BuildTargetConnectionString();
+        var deploymentService = new SqlWatchDeploymentService(connectionString, DatabaseName);
+        
+        var progress = new Progress<DeploymentProgress>(p => {
+            DeployStatus = p.Status;
+            DeployLog += $"\n[{p.Percentage}%] {p.Status}";
+            InvokeAsync(StateHasChanged);
+        });
+
+        // Find the dacpac file
+        var dacpacPath = FindDacpacFile();
+        if (string.IsNullOrEmpty(dacpacPath))
+        {
+            throw new Exception("Dacpac file not found. Please ensure SQLWATCH.dacpac is available in the Dacpacs directory.");
+        }
+
+        // Deploy dacpac with embedded post-deploy SQL commands
+        var result = await deploymentService.DeployDatabaseAsync(dacpacPath, progress);
+        
+        if (!result.Success)
+        {
+            throw new Exception(result.Message);
+        }
+
+        DeployLog += "\n\n" + result.Log.ToString();
+    }
+
+    private string FindDacpacFile()
+    {
+        // Look in the Dacpacs subdirectory
+        var dacpacPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Dacpacs", "SQLWATCH.dacpac");
+        
+        if (File.Exists(dacpacPath))
+        {
+            DeployLog += $"\nFound dacpac file: {dacpacPath}";
+            return dacpacPath;
+        }
+
+        DeployLog += $"\n⚠️ Dacpac file not found at: {dacpacPath}";
+        return string.Empty;
+    }
+}
+
+<style>
+    .database-deploy-page {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .deploy-section {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--input-bg);
+        color: var(--text);
+    }
+
+    .deploy-actions {
+        display: flex;
+        gap: 10px;
+        margin: 20px 0;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-success {
+        background: var(--green);
+        color: white;
+    }
+
+    .status-message {
+        padding: 10px;
+        border-radius: 4px;
+        margin: 10px 0;
+    }
+
+    .status-message.success {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid var(--green);
+        color: var(--green);
+    }
+
+    .status-message.error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid var(--red);
+        color: var(--red);
+    }
+
+    .deploy-log {
+        margin-top: 15px;
+    }
+
+    .deploy-log pre {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 10px;
+        font-size: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+
+    .ready-to-deploy {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid var(--green);
+        border-radius: 4px;
+        padding: 10px;
+        color: var(--green);
+        margin: 10px 0;
+    }
+</style>

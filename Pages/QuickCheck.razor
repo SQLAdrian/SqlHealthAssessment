@@ -1,0 +1,778 @@
+@page "/quickcheck"
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@using System.IO
+@inject CheckRepositoryService CheckRepo
+@inject CheckExecutionService CheckExecutor
+@inject ServerConnectionManager ConnectionManager
+@inject UserSettingsService UserSettings
+@implements IDisposable
+
+<div class="quickcheck-page">
+    <div class="page-header">
+        <div>
+            <h2>Quick Check</h2>
+            <p class="page-description">
+                Run SQL health checks from sql-checks.json against configured servers.
+            </p>
+        </div>
+        <div class="header-actions">
+            <div class="header-stats">
+                <span class="stat-pill">@EnabledChecksCount enabled checks</span>
+                <span class="stat-pill">@EnabledServersCount enabled servers</span>
+            </div>
+            <button class="btn btn-sm btn-toggle-diag @(ShowDiagnosticPane ? "active" : "")"
+                    @onclick="ToggleDiagnosticPane" title="Toggle diagnostic output">
+                Diagnostics @(ShowDiagnosticPane ? "ON" : "OFF")
+            </button>
+        </div>
+    </div>
+
+    <div class="qc-layout @(ShowDiagnosticPane ? "with-diag" : "")">
+        <!-- Main Content -->
+        <div class="qc-main">
+            <!-- Check Mode Selection -->
+            <div class="mode-selection">
+                <div class="mode-card @(CheckMode == "quick" ? "selected" : "")" @onclick='() => SetCheckMode("quick")'>
+                    <span class="mode-icon">⚡</span>
+                    <div class="mode-info">
+                        <strong>Quick Check</strong>
+                        <small>Critical + Warning severity only (@QuickCheckCount checks)</small>
+                    </div>
+                </div>
+                <div class="mode-card @(CheckMode == "full" ? "selected" : "")" @onclick='() => SetCheckMode("full")'>
+                    <span class="mode-icon">🔍</span>
+                    <div class="mode-info">
+                        <strong>Full Check</strong>
+                        <small>Critical + Warning + Info severity (@FullCheckCount checks)</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Server Selection -->
+            <div class="server-selection">
+                <div class="server-selection-header">
+                    <label>Target Servers:</label>
+                    <div class="server-scope-toggle">
+                        <button class="scope-btn @(RunAllServers ? "active" : "")" @onclick="() => RunAllServers = true">
+                            All Enabled Servers
+                        </button>
+                        <button class="scope-btn @(!RunAllServers ? "active" : "")" @onclick="() => RunAllServers = false">
+                            Select Server
+                        </button>
+                    </div>
+                </div>
+
+                @if (!RunAllServers)
+                {
+                    <select @bind="SelectedConnectionId" @bind:after="OnServerSelected" class="server-select">
+                        <option value="">-- Select a server connection --</option>
+                        @foreach (var conn in Connections)
+                        {
+                            <option value="@conn.Id">
+                                @conn.ServerNames (@conn.AuthenticationDisplay)
+                                @(conn.Environment != null ? $"[{conn.Environment}]" : "")
+                                @(!conn.IsEnabled ? " [DISABLED]" : "")
+                            </option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <div class="all-servers-preview">
+                        @if (EnabledConnections.Count == 0)
+                        {
+                            <span class="no-servers">No enabled server connections configured. Go to Servers page to add connections.</span>
+                        }
+                        else
+                        {
+                            @foreach (var conn in EnabledConnections)
+                            {
+                                @foreach (var server in conn.GetServerList())
+                                {
+                                    <span class="server-chip">@server</span>
+                                }
+                            }
+                        }
+                    </div>
+                }
+
+                <div class="action-row">
+                    <button class="btn btn-primary btn-run" @onclick="RunChecks"
+                            disabled="@(IsRunning || (!RunAllServers && string.IsNullOrEmpty(SelectedConnectionId)) || (RunAllServers && EnabledConnections.Count == 0))">
+                        @if (IsRunning)
+                        {
+                            <span>Running...</span>
+                        }
+                        else
+                        {
+                            <span>@(CheckMode == "quick" ? "⚡ Run Quick Check" : "🔍 Run Full Check")</span>
+                        }
+                    </button>
+
+                    @if (Results.Count > 0)
+                    {
+                        <button class="btn btn-secondary" @onclick="ClearResults">Clear Results</button>
+                    }
+
+                    <button class="btn btn-secondary" @onclick="ImportChecks" disabled="@IsImporting">
+                        @(IsImporting ? "Importing..." : "📥 Import Checks")
+                    </button>
+                </div>
+            </div>
+
+            @if (IsRunning)
+            {
+                <div class="progress-section">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: @Progress%"></div>
+                    </div>
+                    <span class="progress-text">
+                        @ProgressMessage (@Progress%)
+                    </span>
+                </div>
+            }
+
+            @if (Results.Count > 0)
+            {
+                <!-- Execution Info -->
+                <div class="execution-info">
+                    <span>Executed at @ExecutionTime.ToString("HH:mm:ss") | Duration: @ExecutionDuration | Mode: @(CheckMode == "quick" ? "Quick" : "Full")</span>
+                    <span>@ServersTested server(s) tested</span>
+                </div>
+
+                <!-- Per-Server Summary -->
+                @if (ServerSummaries.Count > 0)
+                {
+                    <div class="server-summaries">
+                        @foreach (var summary in ServerSummaries)
+                        {
+                            <div class="server-summary-card @(summary.Failed > 0 ? "has-failures" : summary.Errors > 0 ? "has-errors" : "all-passed")">
+                                <div class="server-summary-name">@summary.InstanceName</div>
+                                <div class="server-summary-stats">
+                                    <span class="ss-passed" title="Passed">✅ @summary.Passed</span>
+                                    <span class="ss-failed" title="Failed">❌ @summary.Failed</span>
+                                    <span class="ss-errors" title="Errors">⚠️ @summary.Errors</span>
+                                    <span class="ss-duration" title="Duration">@summary.Duration.TotalSeconds.ToString("F1")s</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Clickable Overall Summary Cards -->
+                <div class="results-summary">
+                    <div class="summary-card passed @(SelectedFilter == "passed" ? "active-filter" : "")"
+                         @onclick='() => SetFilterFromCard("passed")'>
+                        <span class="summary-icon">✅</span>
+                        <span class="summary-count">@PassedCount</span>
+                        <span class="summary-label">Passed</span>
+                    </div>
+                    <div class="summary-card failed @(SelectedFilter == "failed" ? "active-filter" : "")"
+                         @onclick='() => SetFilterFromCard("failed")'>
+                        <span class="summary-icon">❌</span>
+                        <span class="summary-count">@FailedCount</span>
+                        <span class="summary-label">Failed</span>
+                    </div>
+                    <div class="summary-card errors @(SelectedFilter == "errors" ? "active-filter" : "")"
+                         @onclick='() => SetFilterFromCard("errors")'>
+                        <span class="summary-icon">⚠️</span>
+                        <span class="summary-count">@ErrorCount</span>
+                        <span class="summary-label">Errors</span>
+                    </div>
+                    <div class="summary-card total @(SelectedFilter == "all" ? "active-filter" : "")"
+                         @onclick='() => SetFilterFromCard("all")'>
+                        <span class="summary-icon">📋</span>
+                        <span class="summary-count">@Results.Count</span>
+                        <span class="summary-label">Total</span>
+                    </div>
+                </div>
+
+                <!-- Results Filter -->
+                <div class="results-filter">
+                    <label>Status:</label>
+                    <select @bind="SelectedFilter" class="filter-select">
+                        <option value="all">All Results</option>
+                        <option value="passed">Passed Only</option>
+                        <option value="failed">Failed Only</option>
+                        <option value="errors">Errors Only</option>
+                    </select>
+                    <label>Category:</label>
+                    <select @bind="SelectedCategory" class="filter-select">
+                        <option value="">All Categories</option>
+                        @foreach (var cat in Categories)
+                        {
+                            <option value="@cat">@cat</option>
+                        }
+                    </select>
+                    <label>Server:</label>
+                    <select @bind="SelectedServer" class="filter-select">
+                        <option value="">All Servers</option>
+                        @foreach (var srv in ServersInResults)
+                        {
+                            <option value="@srv">@srv</option>
+                        }
+                    </select>
+                    <label>Severity:</label>
+                    <select @bind="SelectedSeverity" class="filter-select">
+                        <option value="">All Severities</option>
+                        <option value="Critical">Critical</option>
+                        <option value="Warning">Warning</option>
+                        <option value="Info">Info</option>
+                    </select>
+                    <span class="filter-count">@FilteredResults.Count() results</span>
+                </div>
+
+                <!-- Results Grid -->
+                <div class="results-grid">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Server</th>
+                                <th>Check</th>
+                                <th>Category</th>
+                                <th>Severity</th>
+                                <th>Duration</th>
+                                <th>Description</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var result in FilteredResults)
+                            {
+                                <tr class="@GetRowClass(result)" @onclick="() => ToggleExpandResult(result.CheckId + result.InstanceName)">
+                                    <td class="status-cell">
+                                        @if (!string.IsNullOrEmpty(result.ErrorMessage))
+                                        {
+                                            <span class="status-badge error">⚠️ Error</span>
+                                        }
+                                        else if (result.Passed)
+                                        {
+                                            <span class="status-badge passed">✅ Pass</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-badge failed">❌ Fail</span>
+                                        }
+                                    </td>
+                                    <td class="server-cell">@result.InstanceName</td>
+                                    <td class="check-name">
+                                        <strong>@result.CheckName</strong>
+                                        <br />
+                                        <small class="check-id">@result.CheckId</small>
+                                    </td>
+                                    <td><span class="category-badge">@result.Category</span></td>
+                                    <td>
+                                        <span class="severity-badge @GetSeverityClass(result.Severity)">
+                                            @result.Severity
+                                        </span>
+                                    </td>
+                                    <td class="duration-cell">@(result.DurationMs)ms</td>
+                                    <td class="description-cell">@result.Description</td>
+                                    <td class="message-cell">@result.Message</td>
+                                </tr>
+                                @if (ExpandedResults.Contains(result.CheckId + result.InstanceName) && !string.IsNullOrEmpty(result.RecommendedAction))
+                                {
+                                    <tr class="expanded-row">
+                                        <td colspan="8">
+                                            <div class="expanded-detail">
+                                                @if (!string.IsNullOrEmpty(result.Description))
+                                                {
+                                                    <div class="detail-section">
+                                                        <strong>Description:</strong> @result.Description
+                                                    </div>
+                                                }
+                                                <div class="detail-section">
+                                                    <strong>Recommended Action:</strong> @result.RecommendedAction
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (!IsRunning && HasRun)
+            {
+                <div class="no-checks">
+                    <p>No checks were executed. Make sure sql-checks.json is loaded with enabled checks.</p>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(StatusMessage))
+            {
+                <div class="status-message @StatusClass">
+                    @StatusMessage
+                </div>
+            }
+        </div>
+
+        <!-- Diagnostic Output Pane -->
+        @if (ShowDiagnosticPane)
+        {
+            <div class="qc-diag-pane">
+                <div class="diag-header">
+                    <span>Diagnostic Output</span>
+                    <div class="diag-header-actions">
+                        <button class="btn btn-sm" @onclick="ClearDiagLog" title="Clear log">Clear</button>
+                        <button class="btn btn-sm" @onclick="ToggleDiagnosticPane" title="Close pane">X</button>
+                    </div>
+                </div>
+                <div class="diag-scroll" @ref="DiagScrollRef">
+                    @foreach (var entry in DiagLog)
+                    {
+                        <div class="diag-entry @entry.Level">
+                            <span class="diag-time">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                            <span class="diag-msg">@entry.Message</span>
+                        </div>
+                    }
+                    @if (DiagLog.Count == 0)
+                    {
+                        <div class="diag-empty">Run a check to see diagnostic output here.</div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<ServerConnection> Connections = new();
+    private List<CheckResult> Results = new();
+    private List<CheckExecutionSummary> ServerSummaries = new();
+    private List<string> Categories = new();
+    private HashSet<string> ExpandedResults = new();
+    private List<DiagLogEntry> DiagLog = new();
+    private ElementReference DiagScrollRef;
+
+    private string SelectedConnectionId = string.Empty;
+    private string SelectedFilter = "all";
+    private string SelectedCategory = string.Empty;
+    private string SelectedServer = string.Empty;
+    private string SelectedSeverity = string.Empty;
+    private string CheckMode = "quick"; // "quick" or "full"
+    private bool RunAllServers = true;
+    private bool ShowDiagnosticPane;
+
+    private bool IsRunning;
+    private bool IsImporting;
+    private bool HasRun;
+    private int Progress;
+    private string ProgressMessage = string.Empty;
+    private string StatusMessage = string.Empty;
+    private string StatusClass = string.Empty;
+    private DateTime ExecutionTime;
+    private string ExecutionDuration = string.Empty;
+    private int ServersTested;
+
+    private int PassedCount => Results.Count(r => r.Passed && string.IsNullOrEmpty(r.ErrorMessage));
+    private int FailedCount => Results.Count(r => !r.Passed && string.IsNullOrEmpty(r.ErrorMessage));
+    private int ErrorCount => Results.Count(r => !string.IsNullOrEmpty(r.ErrorMessage));
+
+    private List<ServerConnection> EnabledConnections =>
+        ConnectionManager.GetEnabledConnections();
+
+    private int EnabledChecksCount => CheckRepo.GetEnabledChecks().Count;
+    private int EnabledServersCount => EnabledConnections.SelectMany(c => c.GetServerList()).Count();
+
+    private int QuickCheckCount => CheckRepo.GetChecksBySeverity("Critical", "Warning").Count;
+    private int FullCheckCount => CheckRepo.GetEnabledChecks()
+        .Count(c => c.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+                    c.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
+                    c.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase));
+
+    private List<string> ServersInResults =>
+        Results.Select(r => r.InstanceName).Distinct().OrderBy(s => s).ToList();
+
+    private IEnumerable<CheckResult> FilteredResults
+    {
+        get
+        {
+            var filtered = Results.AsEnumerable();
+
+            filtered = SelectedFilter switch
+            {
+                "passed" => filtered.Where(r => r.Passed && string.IsNullOrEmpty(r.ErrorMessage)),
+                "failed" => filtered.Where(r => !r.Passed && string.IsNullOrEmpty(r.ErrorMessage)),
+                "errors" => filtered.Where(r => !string.IsNullOrEmpty(r.ErrorMessage)),
+                _ => filtered
+            };
+
+            if (!string.IsNullOrEmpty(SelectedCategory))
+                filtered = filtered.Where(r => r.Category.Equals(SelectedCategory, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrEmpty(SelectedServer))
+                filtered = filtered.Where(r => r.InstanceName.Equals(SelectedServer, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrEmpty(SelectedSeverity))
+                filtered = filtered.Where(r => r.Severity.Equals(SelectedSeverity, StringComparison.OrdinalIgnoreCase));
+
+            return filtered;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Connections = ConnectionManager.GetConnections();
+        await CheckRepo.LoadChecksAsync();
+        var checks = CheckRepo.GetEnabledChecks();
+        Categories = checks.Select(c => c.Category).Distinct().OrderBy(c => c).ToList();
+        ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
+
+        // Subscribe to per-check events for diagnostic logging
+        CheckExecutor.OnCheckCompleted += HandleCheckCompleted;
+    }
+
+    public void Dispose()
+    {
+        CheckExecutor.OnCheckCompleted -= HandleCheckCompleted;
+    }
+
+    private void HandleCheckCompleted(CheckResult result)
+    {
+        var status = !string.IsNullOrEmpty(result.ErrorMessage) ? "ERR"
+                   : result.Passed ? "PASS" : "FAIL";
+        var level = !string.IsNullOrEmpty(result.ErrorMessage) ? "error"
+                  : result.Passed ? "pass" : "fail";
+
+        var msg = $"[{result.InstanceName}] {status} {result.CheckId} \"{result.CheckName}\" " +
+                  $"(val={result.ActualValue}, exp={result.ExpectedValue}, {result.DurationMs}ms)" +
+                  (!string.IsNullOrEmpty(result.ErrorMessage) ? $" - {result.ErrorMessage}" : "");
+
+        AddDiagEntry(msg, level);
+    }
+
+    private void AddDiagEntry(string message, string level = "info")
+    {
+        DiagLog.Add(new DiagLogEntry
+        {
+            Timestamp = DateTime.Now,
+            Message = message,
+            Level = level
+        });
+
+        // Keep max 2000 entries
+        if (DiagLog.Count > 2000)
+            DiagLog.RemoveRange(0, DiagLog.Count - 2000);
+
+        // Auto-scroll and refresh UI on the UI thread
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnServerSelected() => StateHasChanged();
+
+    private void SetCheckMode(string mode)
+    {
+        CheckMode = mode;
+        StateHasChanged();
+    }
+
+    private void SetFilterFromCard(string filter)
+    {
+        // Toggle: clicking the active filter resets to "all"
+        SelectedFilter = SelectedFilter == filter ? "all" : filter;
+        StateHasChanged();
+    }
+
+    private void ToggleDiagnosticPane()
+    {
+        ShowDiagnosticPane = !ShowDiagnosticPane;
+        UserSettings.SetShowDiagnosticPane(ShowDiagnosticPane);
+    }
+
+    private void ClearDiagLog()
+    {
+        DiagLog.Clear();
+    }
+
+    private void ClearResults()
+    {
+        Results = new();
+        ServerSummaries = new();
+        ExpandedResults = new();
+        HasRun = false;
+        StatusMessage = string.Empty;
+        SelectedFilter = "all";
+    }
+
+    private void ToggleExpandResult(string key)
+    {
+        if (!ExpandedResults.Remove(key))
+            ExpandedResults.Add(key);
+    }
+
+    private async Task RunChecks()
+    {
+        IsRunning = true;
+        HasRun = false;
+        Results = new();
+        ServerSummaries = new();
+        ExpandedResults = new();
+        Progress = 0;
+        ProgressMessage = "Starting...";
+        StatusMessage = string.Empty;
+        ExecutionTime = DateTime.Now;
+        ServersTested = 0;
+        SelectedFilter = "all";
+
+        var overallStart = DateTime.UtcNow;
+
+        // Diagnostic logging
+        AddDiagEntry($"=== {(CheckMode == "quick" ? "Quick" : "Full")} Check started ===", "info");
+
+        try
+        {
+            // Build list of (connection, server) pairs to execute against
+            var targets = new List<(ServerConnection Connection, string Server)>();
+
+            if (RunAllServers)
+            {
+                foreach (var conn in EnabledConnections)
+                {
+                    foreach (var server in conn.GetServerList())
+                    {
+                        targets.Add((conn, server));
+                    }
+                }
+            }
+            else
+            {
+                var connection = ConnectionManager.GetConnection(SelectedConnectionId);
+                if (connection == null)
+                {
+                    StatusMessage = "Connection not found.";
+                    StatusClass = "error";
+                    AddDiagEntry("ERROR: Connection not found", "error");
+                    return;
+                }
+
+                foreach (var server in connection.GetServerList())
+                {
+                    targets.Add((connection, server));
+                }
+            }
+
+            if (targets.Count == 0)
+            {
+                StatusMessage = "No servers to check.";
+                StatusClass = "error";
+                AddDiagEntry("ERROR: No servers to check", "error");
+                return;
+            }
+
+            AddDiagEntry($"Targets: {targets.Count} server(s)", "info");
+
+            // Build the severity filter for quick check mode (Critical + Warning)
+            // Full check mode also filters by severity to exclude draft/placeholder checks
+            Func<SqlCheck, bool>? filter = CheckMode == "quick" || CheckMode == "full"
+                ? c => c.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+                        c.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
+                        c.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase)
+                : null;
+
+            // Log check counts
+            var checksToRun = filter != null
+                ? CheckRepo.GetEnabledChecks().Where(filter).ToList()
+                : CheckRepo.GetEnabledChecks();
+            AddDiagEntry($"Checks to execute per server: {checksToRun.Count}", "info");
+
+            // Log check breakdown by category
+            var byCat = checksToRun.GroupBy(c => c.Category).OrderBy(g => g.Key);
+            foreach (var group in byCat)
+            {
+                AddDiagEntry($"  Category '{group.Key}': {group.Count()} checks", "info");
+            }
+
+            // Log check breakdown by severity
+            var bySev = checksToRun.GroupBy(c => c.Severity).OrderBy(g => g.Key);
+            foreach (var group in bySev)
+            {
+                AddDiagEntry($"  Severity '{group.Key}': {group.Count()} checks", "info");
+            }
+
+            // Log check breakdown by execution type
+            var byExec = checksToRun.GroupBy(c => c.ExecutionType ?? "scalar").OrderBy(g => g.Key);
+            foreach (var group in byExec)
+            {
+                AddDiagEntry($"  ExecutionType '{group.Key}': {group.Count()} checks", "info");
+            }
+
+            var allResults = new List<CheckResult>();
+            int totalTargets = targets.Count;
+            int completedTargets = 0;
+
+            foreach (var (conn, server) in targets)
+            {
+                ProgressMessage = $"Checking {server}...";
+                AddDiagEntry($"--- Connecting to {server} ---", "info");
+                StateHasChanged();
+
+                try
+                {
+                    CheckExecutionSummary summary;
+
+                    if (filter != null)
+                    {
+                        summary = await CheckExecutor.ExecuteChecksAsync(conn, server, filter);
+                    }
+                    else
+                    {
+                        summary = await CheckExecutor.ExecuteChecksAsync(conn, server);
+                    }
+
+                    ServerSummaries.Add(summary);
+
+                    AddDiagEntry($"--- {server} complete: {summary.Passed} pass, {summary.Failed} fail, {summary.Errors} err ({summary.Duration.TotalSeconds:F1}s) ---", "info");
+
+                    // Get the results that were just stored
+                    var serverResults = CheckExecutor.GetResults(server, 1000);
+                    allResults.AddRange(serverResults);
+                }
+                catch (Exception ex)
+                {
+                    AddDiagEntry($"ERROR on {server}: {ex.Message}", "error");
+                    System.Diagnostics.Debug.WriteLine($"[QuickCheck] Error on {server}: {ex.Message}");
+                    ServerSummaries.Add(new CheckExecutionSummary
+                    {
+                        InstanceName = server,
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow,
+                        Errors = CheckRepo.GetEnabledChecks().Count
+                    });
+                }
+
+                completedTargets++;
+                Progress = (int)((double)completedTargets / totalTargets * 100);
+                ServersTested = completedTargets;
+                StateHasChanged();
+            }
+
+            Results = allResults;
+            HasRun = true;
+
+            var totalDuration = DateTime.UtcNow - overallStart;
+            ExecutionDuration = $"{totalDuration.TotalSeconds:F1}s";
+
+            // Update categories from results
+            Categories = Results.Select(r => r.Category).Distinct().OrderBy(c => c).ToList();
+
+            if (Results.Count > 0)
+            {
+                StatusMessage = $"{(CheckMode == "quick" ? "Quick" : "Full")} check completed: {PassedCount} passed, {FailedCount} failed, {ErrorCount} errors across {ServersTested} server(s)";
+                StatusClass = FailedCount > 0 || ErrorCount > 0 ? "warning" : "success";
+            }
+            else
+            {
+                StatusMessage = "No checks were executed. Make sure checks are enabled in sql-checks.json";
+                StatusClass = "warning";
+            }
+
+            AddDiagEntry($"=== Complete: {Results.Count} total results in {ExecutionDuration} ===", "info");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error running checks: {ex.Message}";
+            StatusClass = "error";
+            AddDiagEntry($"FATAL ERROR: {ex.Message}", "error");
+            System.Diagnostics.Debug.WriteLine($"[QuickCheck] Error: {ex}");
+        }
+        finally
+        {
+            IsRunning = false;
+            Progress = 100;
+            ProgressMessage = "Complete";
+        }
+    }
+
+    private async Task ImportChecks()
+    {
+        IsImporting = true;
+        StatusMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // Look for import files in the SQLMonitoring folder or app directory
+            var searchPaths = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "..", "SQLMonitoring"),
+                Path.Combine(AppContext.BaseDirectory, "SQLMonitoring"),
+                AppContext.BaseDirectory
+            };
+
+            string? importFile = null;
+
+            foreach (var searchPath in searchPaths)
+            {
+                if (Directory.Exists(searchPath))
+                {
+                    var jsonFiles = Directory.GetFiles(searchPath, "sql-checks*.json")
+                        .OrderByDescending(f => f)
+                        .FirstOrDefault();
+                    if (jsonFiles != null)
+                    {
+                        importFile = jsonFiles;
+                        break;
+                    }
+                }
+            }
+
+            if (importFile == null)
+            {
+                StatusMessage = "No import file found. Place a sql-checks-export*.json file in the SQLMonitoring folder.";
+                StatusClass = "warning";
+                AddDiagEntry("Import: no import file found", "error");
+                return;
+            }
+
+            AddDiagEntry($"Importing from {Path.GetFileName(importFile)}...", "info");
+            var (added, updated, skipped) = await CheckRepo.ImportChecksFromFileAsync(importFile);
+
+            StatusMessage = $"Import complete from {Path.GetFileName(importFile)}: {added} added, {updated} updated, {skipped} skipped";
+            StatusClass = "success";
+            AddDiagEntry($"Import done: {added} added, {updated} updated, {skipped} skipped", "pass");
+
+            // Refresh categories
+            var checks = CheckRepo.GetEnabledChecks();
+            Categories = checks.Select(c => c.Category).Distinct().OrderBy(c => c).ToList();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Import error: {ex.Message}";
+            StatusClass = "error";
+            AddDiagEntry($"Import ERROR: {ex.Message}", "error");
+        }
+        finally
+        {
+            IsImporting = false;
+        }
+    }
+
+    private string GetRowClass(CheckResult result)
+    {
+        if (!string.IsNullOrEmpty(result.ErrorMessage))
+            return "row-error";
+        return result.Passed ? "row-passed" : "row-failed";
+    }
+
+    private string GetSeverityClass(string severity)
+    {
+        return severity?.ToLower() switch
+        {
+            "critical" => "severity-critical",
+            "warning" => "severity-warning",
+            "info" => "severity-info",
+            _ => "severity-default"
+        };
+    }
+
+    private class DiagLogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public string Level { get; set; } = "info"; // "info", "pass", "fail", "error"
+    }
+}

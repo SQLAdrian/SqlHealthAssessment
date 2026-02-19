@@ -1,0 +1,1277 @@
+{
+  "version": 1,
+  "dashboards": [
+    {
+      "id": "repository",
+      "title": "Repository",
+      "route": "/",
+      "enabled": true,
+      "showAllOption": true,
+      "panels": [
+        {
+          "id": "repo.instance_count",
+          "title": "Instances",
+          "description": null,
+          "enabled": true,
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 1,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT COUNT(DISTINCT sql_instance) AS [Value]\r\nFROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)\r\nWHERE repo_collector_is_active = 1",
+            "sqlite": "\r\nSELECT COUNT(DISTINCT sql_instance) AS [Value]\r\nFROM sqlwatch_config_sql_instance\r\nWHERE repo_collector_is_active = 1"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.process_memory",
+          "title": "SQL Memory",
+          "description": null,
+          "enabled": true,
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 2,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    \u0027Memory %\u0027 AS [Series],\r\n    d.memory_utilization_percentage AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_process_memory d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nORDER BY h.report_time DESC",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Memory %\u0027 AS [Series],\r\n    d.memory_utilization_percentage AS [Value]\r\nFROM sqlwatch_logger_perf_os_process_memory d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY h.report_time DESC\r\nLIMIT 1"
+          },
+          "statUnit": "%",
+          "statThresholdKey": "SQL Memory",
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [
+            {
+              "operator": "\u003E=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 85,
+              "color": "#ff9800",
+              "label": "Warning"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 95,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.schedulers",
+          "title": "Pending Queue",
+          "description": null,
+          "enabled": true,
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 3,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    \u0027Pending\u0027 AS [Series],\r\n    d.work_queue_count AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nORDER BY h.report_time DESC",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Pending\u0027 AS [Series],\r\n    d.work_queue_count AS [Value]\r\nFROM sqlwatch_logger_perf_os_schedulers d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY h.report_time DESC\r\nLIMIT 1"
+          },
+          "statUnit": "",
+          "statThresholdKey": "Pending",
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [
+            {
+              "operator": "\u003E=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 1,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.checks",
+          "title": "Health Checks",
+          "description": null,
+          "enabled": true,
+          "panelType": "CheckStatus",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 4,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    d.check_status AS [Status],\r\n    COUNT(*) AS [Count]\r\nFROM dbo.sqlwatch_logger_check d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nGROUP BY d.check_status",
+            "sqlite": "\r\nSELECT\r\n    d.check_status AS [Status],\r\n    COUNT(*) AS [Count]\r\nFROM sqlwatch_logger_check d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY d.check_status"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.cpu",
+          "title": "CPU Utilization",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 1,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    instance_name \u002B \u0027 %\u0027  AS [Series],\n    AVG(CONVERT(MONEY,d.cntr_value_calculated)) AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_performance_counters d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nINNER JOIN dbo.sqlwatch_meta_performance_counter m WITH (NOLOCK)\n    ON m.sql_instance = d.sql_instance\n    AND m.performance_counter_id = d.performance_counter_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND m.counter_name IN (\u0027Processor Time %\u0027,\u0027Privileged Time %\u0027,\u0027User Time %\u0027)\n    AND m.cntr_type \u003C\u003E 1073939712\nGROUP BY h.report_time ,\n    instance_name",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    m.counter_name AS [Series],\r\n    d.cntr_value_calculated AS [Value]\r\nFROM sqlwatch_logger_perf_os_performance_counters d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_performance_counter m\r\n    ON m.sql_instance = d.sql_instance\r\n    AND m.performance_counter_id = d.performance_counter_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND m.counter_name IN (\u0027Processor Time %\u0027,\u0027Privileged Time %\u0027,\u0027User Time %\u0027)\r\n    AND m.cntr_type \u003C\u003E 1073939712\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.perf_counters",
+          "title": "Performance Counters",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 2,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    m.counter_name AS [Series],\n    CONVERT(MONEY,SUM(d.cntr_value_calculated)) AS [Value]\n    --, m.*\nFROM dbo.sqlwatch_logger_perf_os_performance_counters d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nINNER JOIN dbo.sqlwatch_meta_performance_counter m WITH (NOLOCK)\n    ON m.sql_instance = d.sql_instance\n    AND m.performance_counter_id = d.performance_counter_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND m.counter_name IN (\u0027Batch Requests/Sec\u0027,\u0027Readahead pages/sec\u0027,\u0027Transactions/sec\u0027,\u0027Processes blocked\u0027)\n    AND m.cntr_type \u003C\u003E 1073939712\nGROUP BY h.report_time ,\n    m.counter_name ",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    m.counter_name AS [Series],\r\n    d.cntr_value_calculated AS [Value]\r\nFROM sqlwatch_logger_perf_os_performance_counters d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_performance_counter m\r\n    ON m.sql_instance = d.sql_instance\r\n    AND m.performance_counter_id = d.performance_counter_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND m.counter_name IN (\u0027Batch Requests/Sec\u0027,\u0027Readahead pages/sec\u0027,\u0027Transactions/sec\u0027,\u0027Processes blocked\u0027)\r\n    AND m.cntr_type \u003C\u003E 1073939712\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.wait_stats",
+          "title": "Wait Stats",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 3,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Wait Time (ms)\u0027 AS [Series],\r\n    SUM(d.wait_time_ms_delta) AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_wait_stats d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nGROUP BY h.report_time\r\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Wait Time (ms)\u0027 AS [Series],\r\n    SUM(d.wait_time_ms_delta) AS [Value]\r\nFROM sqlwatch_logger_perf_os_wait_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.file_stats",
+          "title": "File IO Throughput MB/s",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 4,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    \u0027MB Read/s\u0027 AS [Series],\n    CONVERT(MONEY,SUM(CASE WHEN ISNULL(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_read_delta / d.delta_seconds ELSE 0 END))/1024/1024 AS [Value]\nFROM dbo.sqlwatch_logger_perf_file_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\n\nUNION ALL\n\nSELECT\n    h.report_time AS [Time],\n    \u0027MB Written/s\u0027 AS [Series],\n    CONVERT(MONEY,SUM(CASE WHEN ISNULL(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_written_delta / d.delta_seconds ELSE 0 END))/1024/1024 AS [Value]\nFROM dbo.sqlwatch_logger_perf_file_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\nORDER BY [Time]",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Bytes Read/s\u0027 AS [Series],\r\n    SUM(CASE WHEN COALESCE(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_read_delta / d.delta_seconds ELSE 0 END) AS [Value]\r\nFROM sqlwatch_logger_perf_file_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\n\r\nUNION ALL\r\n\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Bytes Written/s\u0027 AS [Series],\r\n    SUM(CASE WHEN COALESCE(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_written_delta / d.delta_seconds ELSE 0 END) AS [Value]\r\nFROM sqlwatch_logger_perf_file_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\nORDER BY [Time]"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.database_count",
+          "title": "Databases",
+          "description": null,
+          "enabled": true,
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 5,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT COUNT(*) AS [Value]\r\nFROM sys.databases WITH (NOLOCK)\r\nWHERE state_desc = 'ONLINE'",
+            "sqlite": "\r\nSELECT COUNT(*) AS [Value]\r\nFROM sqlite_master\r\nWHERE type='table' AND name NOT LIKE 'sqlite_%'"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repository.text_servername",
+          "title": "Server",
+          "description": "",
+          "enabled": true,
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 4,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "\nSELECT \n    @@SERVERNAME AS ServerName,\n    --SERVERPROPERTY(\u0027Edition\u0027) AS Edition,\n    CASE ServerProperty(\u0027EngineEdition\u0027)\n \nWHEN 1  THEN \u0027Desktop\u0027\nWHEN 2  THEN \n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Busi%\u0027 THEN \u0027Business Intelligence\u0027\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Developer%\u0027 THEN \u0027Developer\u0027\n    ELSE \u0027Standard\u0027-- (For Standard, Standard Developer, Web, and Business Intelligence.)\n    END\nWHEN 3  THEN \n-- (For Enterprise, Enterprise Developer, Developer, and Evaluation editions.)\n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Developer%\u0027 THEN \u0027Developer\u0027\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Evaluation%\u0027 THEN \u0027Evaluation\u0027\n    ELSE \u0027Enterprise\u0027\n    END\n\nWHEN 4  THEN \u0027Express\u0027-- (For Express, Express with Tools, and Express with Advanced Services)\nWHEN 5  THEN \u0027SQL Database\u0027\nWHEN 6  THEN \u0027Azure Synapse\u0027-- Analytics\nWHEN 8  THEN \u0027Azure SQL MI\u0027\nWHEN 9  THEN \u0027Azure SQL Edge\u0027-- (For all editions of Azure SQL Edge)\nWHEN 11 THEN  \u0027Azure Synapse serverless\u0027-- SQL pool, or Microsoft Fabric\nWHEN 12 THEN  \u0027Microsoft Fabric\u0027-- SQL database in Microsoft Fabric.\n    END AS Edition\n    ,\n    \n    \n    CASE \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u00278%\u0027    THEN \u00272000\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u00279%\u0027    THEN \u00272005\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002710.0%\u0027 THEN \u00272008\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002710.5%\u0027 THEN \u00272008 R2\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002711%\u0027   THEN \u00272012\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002712%\u0027   THEN \u00272014\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002713%\u0027   THEN \u00272016\u0027     \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002714%\u0027   THEN \u00272017\u0027 \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002715%\u0027   THEN \u00272019\u0027 \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002716%\u0027   THEN \u00272022\u0027 \n     ELSE \u0027unknown\u0027\n  END \n    --@@VERSION \n    AS [Version],\n    SERVERPROPERTY(\u0027ProductVersion\u0027) AS BuildNr",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 5
+        },
+        {
+          "id": "repository.text_server_CPU_OS",
+          "title": "Server CPU and OS",
+          "description": "",
+          "enabled": true,
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 4,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\nSELECT \n    \n    (SELECT socket_count FROM sys.dm_os_sys_info) AS [CPU Sockets],\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS [Virtual CPU Count],\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN \u0027VM\u0027 ELSE \u0027Physical\u0027 END AS [System Type],\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS [Operating System]",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repository.text_server_other",
+          "title": "Server Other",
+          "description": "",
+          "enabled": true,
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 9,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\nSELECT \n   \n    CASE WHEN SERVERPROPERTY(\u0027IsHadrEnabled\u0027) = 1 THEN \u0027Yes\u0027 ELSE \u0027No\u0027 END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = \u0027sa\u0027 AND is_disabled = 0) THEN \u0027Enabled\u0027 ELSE \u0027Disabled\u0027 END AS [sa account state]",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repository.text_server_memory",
+          "title": "Server Memory Usage",
+          "description": "",
+          "enabled": true,
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 8,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\nSELECT \n   \n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [System Total Memory GB],\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Allocated to SQL],\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Used By SQL],\n    CONVERT(INT,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))\n    /\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))*100)\n    [SQL Memory usage %]\n    \n",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        }
+      ]
+    },
+    {
+      "id": "instance",
+      "title": "Instance Overview",
+      "route": "/instance",
+      "enabled": true,
+      "showAllOption": false,
+      "panels": [
+        {
+          "id": "repo.instance_count",
+          "title": "Instances",
+          "description": null,
+          "enabled": true,
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 1,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT COUNT(DISTINCT sql_instance) AS [Value]\r\nFROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)\r\nWHERE repo_collector_is_active = 1",
+            "sqlite": "\r\nSELECT COUNT(DISTINCT sql_instance) AS [Value]\r\nFROM sqlwatch_config_sql_instance\r\nWHERE repo_collector_is_active = 1"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.process_memory",
+          "title": "SQL Memory",
+          "description": null,
+          "enabled": true,
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 2,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    \u0027Memory %\u0027 AS [Series],\r\n    d.memory_utilization_percentage AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_process_memory d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nORDER BY h.report_time DESC",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Memory %\u0027 AS [Series],\r\n    d.memory_utilization_percentage AS [Value]\r\nFROM sqlwatch_logger_perf_os_process_memory d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY h.report_time DESC\r\nLIMIT 1"
+          },
+          "statUnit": "%",
+          "statThresholdKey": "SQL Memory",
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [
+            {
+              "operator": "\u003E=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 85,
+              "color": "#ff9800",
+              "label": "Warning"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 95,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "repo.schedulers",
+          "title": "Pending Queue",
+          "description": null,
+          "enabled": true,
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 3,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    \u0027Pending\u0027 AS [Series],\r\n    d.work_queue_count AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nORDER BY h.report_time DESC",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Pending\u0027 AS [Series],\r\n    d.work_queue_count AS [Value]\r\nFROM sqlwatch_logger_perf_os_schedulers d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY h.report_time DESC\r\nLIMIT 1"
+          },
+          "statUnit": "",
+          "statThresholdKey": "Pending",
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [
+            {
+              "operator": "\u003E=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 1,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.disk_space",
+          "title": "Disk Space",
+          "description": null,
+          "enabled": true,
+          "panelType": "BarGauge",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 10,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    v.volume_name AS [Label],\r\n    CASE WHEN d.volume_total_space_bytes \u003E 0\r\n        THEN CAST((1.0 - (1.0 * d.volume_free_space_bytes / d.volume_total_space_bytes)) * 100.0 AS decimal(5,1))\r\n        ELSE 0 END AS [Value],\r\n    \u0027%\u0027 AS [Unit],\r\n    d.sql_instance AS [Instance]\r\nFROM dbo.sqlwatch_logger_disk_utilisation_volume d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN dbo.sqlwatch_meta_os_volume v WITH (NOLOCK)\r\n    ON v.sql_instance = d.sql_instance\r\n    AND v.sqlwatch_volume_id = d.sqlwatch_volume_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\n    AND h.snapshot_time = (\r\n        SELECT MAX(h2.snapshot_time)\r\n        FROM dbo.sqlwatch_logger_snapshot_header h2 WITH (NOLOCK)\r\n        WHERE h2.report_time BETWEEN @TimeFrom AND @TimeTo\r\n            AND h2.sql_instance = d.sql_instance\r\n            AND h2.snapshot_type_id = d.snapshot_type_id\r\n    )",
+            "sqlite": "\r\nSELECT\r\n    v.volume_name AS [Label],\r\n    CASE WHEN d.volume_total_space_bytes \u003E 0\r\n        THEN CAST((1.0 - (1.0 * d.volume_free_space_bytes / d.volume_total_space_bytes)) * 100.0 AS REAL)\r\n        ELSE 0 END AS [Value],\r\n    \u0027%\u0027 AS [Unit],\r\n    d.sql_instance AS [Instance]\r\nFROM sqlwatch_logger_disk_utilisation_volume d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_os_volume v\r\n    ON v.sql_instance = d.sql_instance\r\n    AND v.sqlwatch_volume_id = d.sqlwatch_volume_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND h.snapshot_time = (\r\n        SELECT MAX(h2.snapshot_time)\r\n        FROM sqlwatch_logger_snapshot_header h2\r\n        WHERE h2.report_time BETWEEN @TimeFrom AND @TimeTo\r\n            AND h2.sql_instance = d.sql_instance\r\n            AND h2.snapshot_type_id = d.snapshot_type_id\r\n    )"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": "Disk Space Used %",
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [
+            {
+              "operator": "\u003E=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 80,
+              "color": "#ff9800",
+              "label": "Warning"
+            },
+            {
+              "operator": "\u003E=",
+              "value": 90,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.cpu",
+          "title": "CPU Utilization",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 1,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    instance_name \u002B \u0027 %\u0027  AS [Series],\n    AVG(CONVERT(MONEY,d.cntr_value_calculated)) AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_performance_counters d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nINNER JOIN dbo.sqlwatch_meta_performance_counter m WITH (NOLOCK)\n    ON m.sql_instance = d.sql_instance\n    AND m.performance_counter_id = d.performance_counter_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND m.counter_name IN (\u0027Processor Time %\u0027,\u0027Privileged Time %\u0027,\u0027User Time %\u0027)\n    AND m.cntr_type \u003C\u003E 1073939712\nGROUP BY h.report_time ,\n    instance_name",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    m.counter_name AS [Series],\r\n    d.cntr_value_calculated AS [Value]\r\nFROM sqlwatch_logger_perf_os_performance_counters d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_performance_counter m\r\n    ON m.sql_instance = d.sql_instance\r\n    AND m.performance_counter_id = d.performance_counter_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND m.counter_name IN (\u0027Processor Time %\u0027,\u0027Privileged Time %\u0027,\u0027User Time %\u0027)\r\n    AND m.cntr_type \u003C\u003E 1073939712\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.activity",
+          "title": "Activity (Batch Requests, Logins, etc.)",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 2,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    m.counter_name AS [Series],\n    SUM(CONVERT(MONEY,d.cntr_value_calculated)) AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_performance_counters d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nINNER JOIN dbo.sqlwatch_meta_performance_counter m WITH (NOLOCK)\n    ON m.sql_instance = d.sql_instance\n    AND m.performance_counter_id = d.performance_counter_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND m.counter_name IN (\u0027Batch Requests/Sec\u0027,\u0027Logins/sec\u0027,\u0027Transactions/sec\u0027,\u0027SQL Compilations/sec\u0027,\u0027User Connections\u0027)\n    AND m.cntr_type \u003C\u003E 1073939712\nGROUP BY h.report_time,\n    m.counter_name",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    m.counter_name AS [Series],\r\n    d.cntr_value_calculated AS [Value]\r\nFROM sqlwatch_logger_perf_os_performance_counters d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_performance_counter m\r\n    ON m.sql_instance = d.sql_instance\r\n    AND m.performance_counter_id = d.performance_counter_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND m.counter_name IN (\u0027Batch Requests/Sec\u0027,\u0027Logins/sec\u0027,\u0027Transactions/sec\u0027,\u0027SQL Compilations/sec\u0027,\u0027User Connections\u0027)\r\n    AND m.cntr_type \u003C\u003E 1073939712\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.waits_category",
+          "title": "Wait Events by Category",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 3,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    ISNULL(ws.wait_category, \u0027Other\u0027) AS [Series],\r\n    SUM(d.wait_time_ms_delta) AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_wait_stats d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN dbo.vw_sqlwatch_meta_wait_stats_category ws WITH (NOLOCK)\r\n    ON ws.sql_instance = d.sql_instance\r\n    AND ws.wait_type_id = d.wait_type_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nGROUP BY h.report_time, ISNULL(ws.wait_category, \u0027Other\u0027)\r\nHAVING SUM(d.wait_time_ms_delta) \u003E 0\r\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    COALESCE(cw.wait_category,\r\n        CASE\r\n            WHEN mw.wait_type LIKE \u0027LCK_%\u0027 THEN \u0027Lock\u0027\r\n            WHEN mw.wait_type LIKE \u0027LATCH_%\u0027 THEN \u0027Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGELATCH_%\u0027 THEN \u0027Buffer Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGEIOLATCH_%\u0027 THEN \u0027Buffer IO\u0027\r\n            WHEN mw.wait_type IN (\u0027CXPACKET\u0027,\u0027EXCHANGE\u0027,\u0027CXCONSUMER\u0027) THEN \u0027CPU - Parallelism\u0027\r\n            WHEN mw.wait_type IN (\u0027ASYNC_NETWORK_IO\u0027,\u0027NET_WAITFOR_PACKET\u0027) THEN \u0027Network IO\u0027\r\n            WHEN mw.wait_type IN (\u0027LOGMGR\u0027,\u0027LOGBUFFER\u0027,\u0027WRITELOG\u0027) THEN \u0027Tran Log IO\u0027\r\n            WHEN mw.wait_type LIKE \u0027HADR_%\u0027 THEN \u0027Always On\u0027\r\n            ELSE \u0027Other\u0027\r\n        END\r\n    ) AS [Series],\r\n    SUM(d.wait_time_ms_delta) AS [Value]\r\nFROM sqlwatch_logger_perf_os_wait_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN sqlwatch_meta_wait_stats mw\r\n    ON mw.sql_instance = d.sql_instance\r\n    AND mw.wait_type_id = d.wait_type_id\r\nLEFT JOIN sqlwatch_config_wait_stats cw\r\n    ON cw.wait_type = mw.wait_type\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time, [Series]\r\nHAVING SUM(d.wait_time_ms_delta) \u003E 0\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.memory",
+          "title": "Memory GB and usage %",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 4,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    \u0027Physical Memory In Use (GB)\u0027 AS [Series],\n    AVG(CONVERT(MONEY,d.physical_memory_in_use_kb))/1024/1024 AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_process_memory d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    GROUP BY h.report_time\n\nUNION ALL\n\nSELECT\n    h.report_time,\n    \u0027Memory Utilization % of commit\u0027,\n    AVG(d.memory_utilization_percentage)\nFROM dbo.sqlwatch_logger_perf_os_process_memory d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Physical Memory In Use (KB)\u0027 AS [Series],\r\n    d.physical_memory_in_use_kb AS [Value]\r\nFROM sqlwatch_logger_perf_os_process_memory d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n\r\nUNION ALL\r\n\r\nSELECT\r\n    h.report_time,\r\n    \u0027Memory Utilization %\u0027,\r\n    d.memory_utilization_percentage\r\nFROM sqlwatch_logger_perf_os_process_memory d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY [Time]"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.sessions",
+          "title": "Sessions",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 5,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\nSELECT\n    h.report_time AS [Time],\n    \u0027Running\u0027 AS [Series]\n    , MAX(d.running) AS [Value]\n    --,d.running,d.*\nFROM dbo.sqlwatch_logger_dm_exec_sessions_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time\n\nUNION ALL\n\nSELECT h.report_time, \u0027Sleeping\u0027\n, MAX(d.sleeping)\nFROM dbo.sqlwatch_logger_dm_exec_sessions_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time\nUNION ALL\n\nSELECT h.report_time, \u0027Dormant\u0027\n, MAX(d.dormant)\nFROM dbo.sqlwatch_logger_dm_exec_sessions_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Running\u0027 AS [Series], d.running AS [Value]\r\nFROM sqlwatch_logger_dm_exec_sessions_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND d.type = 1\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Sleeping\u0027, d.sleeping\r\nFROM sqlwatch_logger_dm_exec_sessions_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND d.type = 1\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Dormant\u0027, d.dormant\r\nFROM sqlwatch_logger_dm_exec_sessions_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND d.type = 1\r\nORDER BY [Time]"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.requests",
+          "title": "Requests",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 6,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\n\nSELECT\n    h.report_time AS [Time],\n    \u0027Background\u0027 AS [Series]\n    , MAX(d.background) AS [Value]\nFROM dbo.sqlwatch_logger_dm_exec_requests_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time\n\nUNION ALL\n\nSELECT h.report_time, \u0027Running\u0027, MAX(d.running)\nFROM dbo.sqlwatch_logger_dm_exec_requests_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time\n\nUNION ALL\n\nSELECT h.report_time, \u0027Runnable\u0027, MAX(d.runnable)\nFROM dbo.sqlwatch_logger_dm_exec_requests_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time\n\nUNION ALL\n\nSELECT h.report_time, \u0027Sleeping\u0027, MAX(d.sleeping)\nFROM dbo.sqlwatch_logger_dm_exec_requests_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time\n\nUNION ALL\n\nSELECT h.report_time, \u0027Suspended\u0027, MAX(d.suspended)\nFROM dbo.sqlwatch_logger_dm_exec_requests_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND d.type = 1\nGROUP BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Background\u0027 AS [Series], d.background AS [Value]\r\nFROM sqlwatch_logger_dm_exec_requests_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND d.type = 1\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Running\u0027, d.running\r\nFROM sqlwatch_logger_dm_exec_requests_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance AND d.type = 1\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Runnable\u0027, d.runnable\r\nFROM sqlwatch_logger_dm_exec_requests_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance AND d.type = 1\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Sleeping\u0027, d.sleeping\r\nFROM sqlwatch_logger_dm_exec_requests_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance AND d.type = 1\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Suspended\u0027, d.suspended\r\nFROM sqlwatch_logger_dm_exec_requests_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance AND d.type = 1\r\nORDER BY [Time]"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.file_stats_latency",
+          "title": "File Stats \u2014 Latency (ms)",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 500,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 7,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    ISNULL(f.database_name,\u0027?\u0027) \u002B \u0027 - \u0027 \u002B ISNULL(mf.file_name,\u0027?\u0027) AS [Series],\n    AVG(CONVERT(MONEY,CASE WHEN d.num_of_reads_delta \u003E 0 THEN d.io_stall_read_ms_delta / d.num_of_reads_delta ELSE 0 END\n    \u002B CASE WHEN d.num_of_writes_delta \u003E 0 THEN d.io_stall_write_ms_delta / d.num_of_writes_delta ELSE 0 END)) AS [Value]\nFROM dbo.sqlwatch_logger_perf_file_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nLEFT JOIN dbo.sqlwatch_meta_master_file mf WITH (NOLOCK)\n    ON mf.sql_instance = d.sql_instance\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\nLEFT JOIN dbo.sqlwatch_meta_database f WITH (NOLOCK)\n    ON f.sql_instance = mf.sql_instance\n    AND f.sqlwatch_database_id = mf.sqlwatch_database_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY \nh.report_time,\n    ISNULL(f.database_name,\u0027?\u0027) \u002B \u0027 - \u0027 \u002B ISNULL(mf.file_name,\u0027?\u0027)",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    COALESCE(db.database_name,\u0027?\u0027) || \u0027 - \u0027 || COALESCE(mf.file_name,\u0027?\u0027) AS [Series],\r\n    CASE WHEN d.num_of_reads_delta \u003E 0 THEN d.io_stall_read_ms_delta / d.num_of_reads_delta ELSE 0 END\r\n    \u002B CASE WHEN d.num_of_writes_delta \u003E 0 THEN d.io_stall_write_ms_delta / d.num_of_writes_delta ELSE 0 END AS [Value]\r\nFROM sqlwatch_logger_perf_file_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN sqlwatch_meta_master_file mf\r\n    ON mf.sql_instance = d.sql_instance\r\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\r\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\r\nLEFT JOIN sqlwatch_meta_database db\r\n    ON db.sql_instance = mf.sql_instance\r\n    AND db.sqlwatch_database_id = mf.sqlwatch_database_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.file_stats_throughput",
+          "title": "File Stats \u2014 Throughput (MB/s)",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 500,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 8,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT [Time]\n, [Series]\n,[Value]\nFROM (\nSELECT\n    h.report_time AS [Time],\n    ISNULL(f.database_name,\u0027?\u0027) \u002B \u0027 Read MB/s\u0027 AS [Series],\n    AVG(CONVERT(MONEY,CASE WHEN ISNULL(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_read_delta / d.delta_seconds ELSE 0 END))/1024/1024 AS [Value]\nFROM dbo.sqlwatch_logger_perf_file_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nLEFT JOIN dbo.sqlwatch_meta_master_file mf WITH (NOLOCK)\n    ON mf.sql_instance = d.sql_instance\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\nLEFT JOIN dbo.sqlwatch_meta_database f WITH (NOLOCK)\n    ON f.sql_instance = mf.sql_instance\n    AND f.sqlwatch_database_id = mf.sqlwatch_database_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY \nh.report_time ,f.database_name\nUNION ALL\n\nSELECT\n    h.report_time,\n    ISNULL(f.database_name,\u0027?\u0027) \u002B \u0027 Write MB/s\u0027,\n    AVG(CONVERT(MONEY,CASE WHEN ISNULL(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_written_delta / d.delta_seconds ELSE 0 END))/1024/1024 \nFROM dbo.sqlwatch_logger_perf_file_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nLEFT JOIN dbo.sqlwatch_meta_master_file mf WITH (NOLOCK)\n    ON mf.sql_instance = d.sql_instance\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\nLEFT JOIN dbo.sqlwatch_meta_database f WITH (NOLOCK)\n    ON f.sql_instance = mf.sql_instance\n    AND f.sqlwatch_database_id = mf.sqlwatch_database_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY \nh.report_time ,f.database_name\n)\nT1 ORDER BY [Time]",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    COALESCE(db.database_name,\u0027?\u0027) || \u0027 Read B/s\u0027 AS [Series],\r\n    CASE WHEN COALESCE(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_read_delta / d.delta_seconds ELSE 0 END AS [Value]\r\nFROM sqlwatch_logger_perf_file_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN sqlwatch_meta_master_file mf\r\n    ON mf.sql_instance = d.sql_instance\r\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\r\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\r\nLEFT JOIN sqlwatch_meta_database db\r\n    ON db.sql_instance = mf.sql_instance\r\n    AND db.sqlwatch_database_id = mf.sqlwatch_database_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n\r\nUNION ALL\r\n\r\nSELECT\r\n    h.report_time,\r\n    COALESCE(db.database_name,\u0027?\u0027) || \u0027 Write B/s\u0027,\r\n    CASE WHEN COALESCE(d.delta_seconds,0) \u003E 0 THEN d.num_of_bytes_written_delta / d.delta_seconds ELSE 0 END\r\nFROM sqlwatch_logger_perf_file_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN sqlwatch_meta_master_file mf\r\n    ON mf.sql_instance = d.sql_instance\r\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\r\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\r\nLEFT JOIN sqlwatch_meta_database db\r\n    ON db.sql_instance = mf.sql_instance\r\n    AND db.sqlwatch_database_id = mf.sqlwatch_database_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY [Time]"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.schedulers",
+          "title": "Scheduler Stats",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 9,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    \u0027Current Tasks\u0027 AS [Series], MAX(d.current_tasks_count) AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\nUNION ALL\n\nSELECT h.report_time, \u0027Runnable Tasks\u0027, MAX(d.runnable_tasks_count)\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\nUNION ALL\n\nSELECT h.report_time, \u0027Work Queue\u0027, MAX(d.work_queue_count)\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\nUNION ALL\n\nSELECT h.report_time, \u0027Pending Disk IO\u0027, MAX(d.pending_disk_io_count)\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\nORDER BY [Time]",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Current Tasks\u0027 AS [Series], d.current_tasks_count AS [Value]\r\nFROM sqlwatch_logger_perf_os_schedulers d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Runnable Tasks\u0027, d.runnable_tasks_count\r\nFROM sqlwatch_logger_perf_os_schedulers d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Work Queue\u0027, d.work_queue_count\r\nFROM sqlwatch_logger_perf_os_schedulers d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance\r\n\r\nUNION ALL\r\n\r\nSELECT h.report_time, \u0027Pending Disk IO\u0027, d.pending_disk_io_count\r\nFROM sqlwatch_logger_perf_os_schedulers d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance\r\nORDER BY [Time]"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.blocking",
+          "title": "Blocking",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 10,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Blocked Sessions\u0027 AS [Series],\r\n    COUNT(DISTINCT d.blocked_spid) AS [Value]\r\nFROM dbo.sqlwatch_logger_xes_blockers d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nGROUP BY h.report_time\r\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Blocked Sessions\u0027 AS [Series],\r\n    COUNT(DISTINCT d.blocked_spid) AS [Value]\r\nFROM sqlwatch_logger_xes_blockers d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.lock_requests",
+          "title": "Lock Requests",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 11,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    m.counter_name AS [Series],\n    MAX(d.cntr_value_calculated) AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_performance_counters d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nINNER JOIN dbo.sqlwatch_meta_performance_counter m WITH (NOLOCK)\n    ON m.sql_instance = d.sql_instance\n    AND m.performance_counter_id = d.performance_counter_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND m.counter_name IN (\u0027Lock Requests/sec\u0027,\u0027Lock Waits/sec\u0027,\u0027Lock Timeouts/sec\u0027,\u0027Number of Deadlocks/sec\u0027)\n    AND m.cntr_type \u003C\u003E 1073939712\nGROUP BY h.report_time ,\n    m.counter_name\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    m.counter_name AS [Series],\r\n    d.cntr_value_calculated AS [Value]\r\nFROM sqlwatch_logger_perf_os_performance_counters d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_performance_counter m\r\n    ON m.sql_instance = d.sql_instance\r\n    AND m.performance_counter_id = d.performance_counter_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND m.counter_name IN (\u0027Lock Requests/sec\u0027,\u0027Lock Waits/sec\u0027,\u0027Lock Timeouts/sec\u0027,\u0027Number of Deadlocks/sec\u0027)\r\n    AND m.cntr_type \u003C\u003E 1073939712\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.page_life",
+          "title": "Page Life Expectancy",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 12,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    \u0027Page Life Expectancy\u0027 AS [Series],\n    MAX(d.cntr_value_calculated) AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_performance_counters d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nINNER JOIN dbo.sqlwatch_meta_performance_counter m WITH (NOLOCK)\n    ON m.sql_instance = d.sql_instance\n    AND m.performance_counter_id = d.performance_counter_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND m.counter_name = \u0027Page life expectancy\u0027\n    AND m.cntr_type \u003C\u003E 1073939712\nGROUP BY h.report_time\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Page Life Expectancy\u0027 AS [Series],\r\n    d.cntr_value_calculated AS [Value]\r\nFROM sqlwatch_logger_perf_os_performance_counters d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_performance_counter m\r\n    ON m.sql_instance = d.sql_instance\r\n    AND m.performance_counter_id = d.performance_counter_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND m.counter_name = \u0027Page life expectancy\u0027\r\n    AND m.cntr_type \u003C\u003E 1073939712\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.memory_clerks",
+          "title": "Memory Breakdown (MB)",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 13,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    mc.clerk_name AS [Series],\n    MAX(omc.allocated_kb)/1024 AS [Value]\nFROM dbo.sqlwatch_logger_perf_os_memory_clerks omc WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = omc.snapshot_time\n    AND h.snapshot_type_id = omc.snapshot_type_id\n    AND h.sql_instance = omc.sql_instance\nINNER JOIN dbo.sqlwatch_meta_memory_clerk mc WITH (NOLOCK)\n    ON mc.sql_instance = omc.sql_instance\n    AND mc.sqlwatch_mem_clerk_id = omc.sqlwatch_mem_clerk_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND omc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time ,\n    mc.clerk_name\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    mc.clerk_name AS [Series],\r\n    omc.allocated_kb AS [Value]\r\nFROM sqlwatch_logger_perf_os_memory_clerks omc\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = omc.snapshot_time\r\n    AND h.snapshot_type_id = omc.snapshot_type_id\r\n    AND h.sql_instance = omc.sql_instance\r\nINNER JOIN sqlwatch_meta_memory_clerk mc\r\n    ON mc.sql_instance = omc.sql_instance\r\n    AND mc.sqlwatch_mem_clerk_id = omc.sqlwatch_mem_clerk_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND omc.sql_instance = @SqlInstance\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.database_stats",
+          "title": "Database Stats",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 2,
+            "order": 14,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    \u0027Database Count\u0027 AS [Series],\n    COUNT(DISTINCT d.sqlwatch_database_id) AS [Value]\nFROM dbo.sqlwatch_logger_disk_utilisation_database d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\n\nUNION ALL\n\nSELECT\n    h.report_time,\n    \u0027Total Size (GB)\u0027,\n    CONVERT(MONEY,SUM(ISNULL(d.database_size_bytes,0)) / 1048576.0/1024)\nFROM dbo.sqlwatch_logger_disk_utilisation_database d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY h.report_time\nORDER BY [Time]",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Database Count\u0027 AS [Series],\r\n    COUNT(DISTINCT d.sqlwatch_database_id) AS [Value]\r\nFROM sqlwatch_logger_disk_utilisation_database d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\n\r\nUNION ALL\r\n\r\nSELECT\r\n    h.report_time,\r\n    \u0027Total Size (MB)\u0027,\r\n    SUM(COALESCE(d.database_size_bytes,0)) / 1048576.0\r\nFROM sqlwatch_logger_disk_utilisation_database d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\nORDER BY [Time]"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.tempdb",
+          "title": "TempDB Size (GB)",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 15,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT\n[Time]\n,[Series]\n,SUM([Value]) [Value]\nFROM(\nSELECT\n    h.report_time AS [Time],\n    \u0027TempDB Size (GB)\u0027 AS [Series]\n    , file_name\n    --,CONVERT(MONEY,SUM(d.size_on_disk_bytes) / 1048576.0/1024) AS [Value]\n    ,CONVERT(MONEY,MAX(d.size_on_disk_bytes) / 1048576.0/1024) [Value]\n    --, COUNT(*)\n    --, mf.*\nFROM dbo.sqlwatch_logger_perf_file_stats d WITH (NOLOCK)\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\n    ON h.snapshot_time = d.snapshot_time\n    AND h.snapshot_type_id = d.snapshot_type_id\n    AND h.sql_instance = d.sql_instance\nINNER JOIN dbo.sqlwatch_meta_master_file mf WITH (NOLOCK)\n    ON mf.sql_instance = d.sql_instance\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\nINNER JOIN dbo.sqlwatch_meta_database db WITH (NOLOCK)\n    ON db.sql_instance = mf.sql_instance\n    AND db.sqlwatch_database_id = mf.sqlwatch_database_id\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\n    AND db.database_name = \u0027tempdb\u0027\nGROUP BY h.report_time,file_name\n) T\nGROUP BY [Time],[Series]\nORDER BY [Time]",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027TempDB Size (MB)\u0027 AS [Series],\r\n    SUM(d.size_on_disk_bytes) / 1048576.0 AS [Value]\r\nFROM sqlwatch_logger_perf_file_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_master_file mf\r\n    ON mf.sql_instance = d.sql_instance\r\n    AND mf.sqlwatch_database_id = d.sqlwatch_database_id\r\n    AND mf.sqlwatch_master_file_id = d.sqlwatch_master_file_id\r\nINNER JOIN sqlwatch_meta_database db\r\n    ON db.sql_instance = mf.sql_instance\r\n    AND db.sqlwatch_database_id = mf.sqlwatch_database_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND db.database_name = \u0027tempdb\u0027\r\nGROUP BY h.report_time\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.checks_history",
+          "title": "Check Failures Over Time",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Bar",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 20,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    d.check_status AS [Series],\r\n    COUNT(*) AS [Value]\r\nFROM dbo.sqlwatch_logger_check d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\n    AND d.check_status \u003C\u003E \u0027OK\u0027\r\nGROUP BY h.report_time, d.check_status\r\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    d.check_status AS [Series],\r\n    COUNT(*) AS [Value]\r\nFROM sqlwatch_logger_check d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND d.check_status \u003C\u003E \u0027OK\u0027\r\nGROUP BY h.report_time, d.check_status\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.checks_detail",
+          "title": "Check Details",
+          "description": null,
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 21,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    d.snapshot_time,\r\n    c.check_name,\r\n    c.check_description,\r\n    d.check_value,\r\n    d.check_status,\r\n    d.check_exec_time_ms,\r\n    d.sql_instance\r\nFROM dbo.sqlwatch_logger_check d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN dbo.sqlwatch_meta_check c WITH (NOLOCK)\r\n    ON c.sql_instance = d.sql_instance\r\n    AND c.check_id = d.check_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nORDER BY d.snapshot_time DESC",
+            "sqlite": "\r\nSELECT\r\n    d.snapshot_time,\r\n    c.check_name,\r\n    c.check_description,\r\n    d.check_value,\r\n    d.check_status,\r\n    d.check_exec_time_ms,\r\n    d.sql_instance\r\nFROM sqlwatch_logger_check d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN sqlwatch_meta_check c\r\n    ON c.sql_instance = d.sql_instance\r\n    AND c.check_id = d.check_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY d.snapshot_time DESC"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.ks1",
+          "title": "Key Stats",
+          "description": "",
+          "enabled": true,
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 1,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\nselect TOP 1\n --time = pc.snapshot_time\n--,\n\u0027CPU usage %\u0027 = sum(case \n when 1=1 and mpc.counter_name = \u0027Processor Time %\u0027 then pc.[cntr_value_calculated] \n --when serverproperty(\u0027EngineEdition\u0027) = 3 and mpc.counter_name = \u0027CPU usage %\u0027 then pc.[cntr_value_calculated] \n --when serverproperty(\u0027EngineEdition\u0027) \u003C\u003E 3 and mpc.counter_name = \u0027Processor Time %\u0027 then pc.[cntr_value_calculated]\n else null end)\n, \u0027Batch Requests/sec\u0027 =CONVERT(INT, avg(case when mpc.counter_name = \u0027Batch Requests/sec\u0027 then pc.[cntr_value_calculated] else null end))\n\n, \u0027Logins/sec\u0027 = CONVERT(INT,avg(case when mpc.counter_name = \u0027Logins/sec\u0027 then pc.[cntr_value_calculated] else null end))\n, \u0027Transactions/sec\u0027 = CONVERT(INT,sum(case when mpc.counter_name = \u0027Transactions/sec\u0027 and pc.instance_name not in (\u0027_Total\u0027,\u0027mssqlsystemresource\u0027) then pc.[cntr_value_calculated] else null end))\n, \u0027User Connections\u0027 = avg(case when mpc.counter_name = \u0027User Connections\u0027 then pc.[cntr_value_calculated] else null end)\n, \u0027SQL Compilations/sec\u0027 = CONVERT(INT,avg(case when mpc.counter_name = \u0027SQL Compilations/sec\u0027 then pc.[cntr_value_calculated] else null end))\n, \u0027Availability Group Bytes\u0027 = avg(case when mpc.counter_name in (\u0027Bytes Sent to Replica/sec\u0027,\u0027Bytes Received from Replica/sec\u0027) then pc.[cntr_value_calculated] else null end)\n \nfrom [dbo].[sqlwatch_logger_perf_os_performance_counters] pc\n\ninner join [dbo].[sqlwatch_meta_performance_counter] mpc\non pc.sql_instance = mpc.sql_instance\nand pc.performance_counter_id = mpc.performance_counter_id\n\nWHERE 1=1--snapshot_time BETWEEN @TimeFrom AND @TimeTo\n\nand pc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nand mpc.counter_name in (\u0027CPU usage %\u0027\n ,\u0027Batch Requests/sec\u0027\n ,\u0027Logins/sec\u0027\n ,\u0027Transactions/sec\u0027\n ,\u0027User Connections\u0027\n ,\u0027SQL Compilations/sec\u0027\n ,\u0027Bytes Sent to Replica/sec\u0027\n ,\u0027Bytes Received from Replica/sec\u0027\n ,\u0027Processor Time %\u0027\n ,\u0027% Processor Time\u0027\n \n ,\u0027Connection Memory (KB)\u0027\n ,\u0027Optimizer Memory (KB)\u0027\n ,\u0027SQL Cache Memory (KB)\u0027\n ,\u0027Total Server Memory (KB)\u0027\n ,\u0027Stolen Server Memory (KB)\u0027\n , \u0027Target Server Memory (KB)\u0027\n )\n\ngroup by pc.snapshot_time\norder by pc.snapshot_time DESC",
+            "sqlite": ""
+          },
+          "statUnit": "%",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "instance.ks2",
+          "title": "More Key Stats",
+          "description": "",
+          "enabled": true,
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 2,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "\nselect TOP 1\n \u0027Connection Memory (MB)\u0027\t\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Connection Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\telse null end))\n ,\u0027Optimizer Memory (MB)\u0027\t\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Optimizer Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,\u0027SQL Cache Memory (MB)\u0027\t\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027SQL Cache Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,\u0027Total Server Memory (MB)\u0027\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Total Server Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\telse null end))\n ,\u0027Stolen Server Memory (MB)\u0027\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Stolen Server Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024 else null end))\n ,\u0027Target Server Memory (MB)\u0027\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Target Server Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024 else null end))\nfrom [dbo].[sqlwatch_logger_perf_os_performance_counters] pc\n\ninner join [dbo].[sqlwatch_meta_performance_counter] mpc\non pc.sql_instance = mpc.sql_instance\nand pc.performance_counter_id = mpc.performance_counter_id\n\nWHERE 1=1--snapshot_time BETWEEN @TimeFrom AND @TimeTo\n\nand pc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nand mpc.counter_name in (\u0027CPU usage %\u0027\n ,\u0027Batch Requests/sec\u0027\n ,\u0027Logins/sec\u0027\n ,\u0027Transactions/sec\u0027\n ,\u0027User Connections\u0027\n ,\u0027SQL Compilations/sec\u0027\n ,\u0027Bytes Sent to Replica/sec\u0027\n ,\u0027Bytes Received from Replica/sec\u0027\n ,\u0027Processor Time %\u0027\n ,\u0027% Processor Time\u0027\n \n ,\u0027Connection Memory (KB)\u0027\n ,\u0027Optimizer Memory (KB)\u0027\n ,\u0027SQL Cache Memory (KB)\u0027\n ,\u0027Total Server Memory (KB)\u0027\n ,\u0027Stolen Server Memory (KB)\u0027\n , \u0027Target Server Memory (KB)\u0027\n )\n\ngroup by pc.snapshot_time\norder by pc.snapshot_time DESC",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        }
+      ]
+    },
+    {
+      "id": "longqueries",
+      "title": "Long Running Queries",
+      "route": "/",
+      "enabled": true,
+      "showAllOption": true,
+      "panels": [
+        {
+          "id": "repo.long_queries",
+          "title": "Long Running Queries",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 5,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "SELECT [Time]=event_time, [Series] = \u0027Long queries\u0027, [Value] = count(distinct session_id)\nFROM [dbo].[vw_sqlwatch_report_fact_xes_long_queries]\nWHERE report_time BETWEEN @TimeFrom AND @TimeTo\n    AND sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nGROUP BY event_time\nORDER BY  [Time] desc",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Long Queries\u0027 AS [Series],\r\n    COUNT(*) AS [Value]\r\nFROM sqlwatch_logger_xes_long_queries d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "longqueries.querydetails",
+          "title": "Long Queries Details",
+          "description": "",
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 6,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "SELECT *  \nFROM [dbo].[vw_sqlwatch_report_fact_xes_long_queries]\nWHERE report_time BETWEEN @TimeFrom AND @TimeTo\n    AND sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nORDER BY  event_time desc",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "longqueries.querytext",
+          "title": "Query Text",
+          "description": "",
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 7,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT time=getdate(),sql_text [statement]\nFROM [dbo].[vw_sqlwatch_report_fact_xes_long_queries]\nWHERE report_time BETWEEN @TimeFrom AND @TimeTo\n    AND sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        }
+      ]
+    },
+    {
+      "id": "blocking",
+      "title": "Blocking",
+      "route": "/",
+      "enabled": true,
+      "showAllOption": true,
+      "panels": [
+        {
+          "id": "blocking.count",
+          "title": "Blocked Sessions",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 1,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "SELECT h.report_time AS [Time], 'Blocked Sessions' AS [Series], COUNT(DISTINCT d.blocked_spid) AS [Value] FROM dbo.sqlwatch_logger_xes_blockers d WITH (NOLOCK) INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK) ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ',')) GROUP BY h.report_time ORDER BY h.report_time",
+            "sqlite": "SELECT h.report_time AS [Time], 'Blocked Sessions' AS [Series], COUNT(DISTINCT d.blocked_spid) AS [Value] FROM sqlwatch_logger_xes_blockers d INNER JOIN sqlwatch_logger_snapshot_header h ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance GROUP BY h.report_time ORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "blocking.details",
+          "title": "Blocking Details",
+          "description": "",
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 350,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 2,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "SELECT d.sql_instance, d.blocked_spid AS [Blocked SPID], d.blocking_spid AS [Blocking SPID], d.wait_type, d.wait_time AS [Wait Time (ms)], d.blocking_duration_ms AS [Blocking Duration (ms)], h.report_time AS [Time] FROM dbo.sqlwatch_logger_xes_blockers d WITH (NOLOCK) INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK) ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ',')) ORDER BY h.report_time DESC",
+            "sqlite": "SELECT d.sql_instance, d.blocked_spid AS [Blocked SPID], d.blocking_spid AS [Blocking SPID], d.wait_type, d.wait_time AS [Wait Time (ms)], d.blocking_duration_ms AS [Blocking Duration (ms)], h.report_time AS [Time] FROM sqlwatch_logger_xes_blockers d INNER JOIN sqlwatch_logger_snapshot_header h ON h.snapshot_time = d.snapshot_time AND h.snapshot_type_id = d.snapshot_type_id AND h.sql_instance = d.sql_instance WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo AND d.sql_instance = @SqlInstance ORDER BY h.report_time DESC"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        }
+      ]
+    },
+    {
+      "id": "waitevents",
+      "title": "Wait Events",
+      "route": "/",
+      "enabled": true,
+      "showAllOption": true,
+      "panels": [
+        {
+          "id": "waits.timeseries_category",
+          "title": "Wait Events by Category",
+          "description": null,
+          "enabled": true,
+          "panelType": "TimeSeries",
+          "chartType": "Area",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 1,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    ISNULL(ws.wait_category, \u0027Other\u0027) AS [Series],\r\n    SUM(d.wait_time_ms_delta) AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_wait_stats d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN dbo.vw_sqlwatch_meta_wait_stats_category ws WITH (NOLOCK)\r\n    ON ws.sql_instance = d.sql_instance\r\n    AND ws.wait_type_id = d.wait_type_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nGROUP BY h.report_time, ISNULL(ws.wait_category, \u0027Other\u0027)\r\nHAVING SUM(d.wait_time_ms_delta) \u003E 0\r\nORDER BY h.report_time",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    COALESCE(cw.wait_category,\r\n        CASE\r\n            WHEN mw.wait_type LIKE \u0027LCK_%\u0027 THEN \u0027Lock\u0027\r\n            WHEN mw.wait_type LIKE \u0027LATCH_%\u0027 THEN \u0027Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGELATCH_%\u0027 THEN \u0027Buffer Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGEIOLATCH_%\u0027 THEN \u0027Buffer IO\u0027\r\n            WHEN mw.wait_type IN (\u0027CXPACKET\u0027,\u0027EXCHANGE\u0027,\u0027CXCONSUMER\u0027) THEN \u0027CPU - Parallelism\u0027\r\n            WHEN mw.wait_type IN (\u0027ASYNC_NETWORK_IO\u0027,\u0027NET_WAITFOR_PACKET\u0027) THEN \u0027Network IO\u0027\r\n            WHEN mw.wait_type IN (\u0027LOGMGR\u0027,\u0027LOGBUFFER\u0027,\u0027WRITELOG\u0027) THEN \u0027Tran Log IO\u0027\r\n            WHEN mw.wait_type LIKE \u0027HADR_%\u0027 THEN \u0027Always On\u0027\r\n            ELSE \u0027Other\u0027\r\n        END\r\n    ) AS [Series],\r\n    SUM(d.wait_time_ms_delta) AS [Value]\r\nFROM sqlwatch_logger_perf_os_wait_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN sqlwatch_meta_wait_stats mw\r\n    ON mw.sql_instance = d.sql_instance\r\n    AND mw.wait_type_id = d.wait_type_id\r\nLEFT JOIN sqlwatch_config_wait_stats cw\r\n    ON cw.wait_type = mw.wait_type\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time, [Series]\r\nHAVING SUM(d.wait_time_ms_delta) \u003E 0\r\nORDER BY h.report_time"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        },
+        {
+          "id": "waits.details",
+          "title": "Wait Event Details",
+          "description": null,
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 300,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 2,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    ISNULL(ws.wait_category, \u0027Other\u0027) AS [Category],\r\n    mw.wait_type AS [Wait Type],\r\n    SUM(d.wait_time_ms_delta) AS [Wait Time (ms)],\r\n    SUM(d.waiting_tasks_count_delta) AS [Waiting Tasks],\r\n    d.sql_instance\r\nFROM dbo.sqlwatch_logger_perf_os_wait_stats d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN dbo.vw_sqlwatch_meta_wait_stats_category ws WITH (NOLOCK)\r\n    ON ws.sql_instance = d.sql_instance\r\n    AND ws.wait_type_id = d.wait_type_id\r\nLEFT JOIN dbo.sqlwatch_meta_wait_stats mw WITH (NOLOCK)\r\n    ON mw.sql_instance = d.sql_instance\r\n    AND mw.wait_type_id = d.wait_type_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\n    AND d.wait_time_ms_delta \u003E 0\r\nGROUP BY h.report_time, ISNULL(ws.wait_category, \u0027Other\u0027), mw.wait_type, d.sql_instance\r\nORDER BY h.report_time DESC, [Wait Time (ms)] DESC",
+            "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    COALESCE(cw.wait_category,\r\n        CASE\r\n            WHEN mw.wait_type LIKE \u0027LCK_%\u0027 THEN \u0027Lock\u0027\r\n            WHEN mw.wait_type LIKE \u0027LATCH_%\u0027 THEN \u0027Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGELATCH_%\u0027 THEN \u0027Buffer Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGEIOLATCH_%\u0027 THEN \u0027Buffer IO\u0027\r\n            WHEN mw.wait_type IN (\u0027CXPACKET\u0027,\u0027EXCHANGE\u0027,\u0027CXCONSUMER\u0027) THEN \u0027CPU - Parallelism\u0027\r\n            WHEN mw.wait_type IN (\u0027ASYNC_NETWORK_IO\u0027,\u0027NET_WAITFOR_PACKET\u0027) THEN \u0027Network IO\u0027\r\n            WHEN mw.wait_type IN (\u0027LOGMGR\u0027,\u0027LOGBUFFER\u0027,\u0027WRITELOG\u0027) THEN \u0027Tran Log IO\u0027\r\n            WHEN mw.wait_type LIKE \u0027HADR_%\u0027 THEN \u0027Always On\u0027\r\n            ELSE \u0027Other\u0027\r\n        END\r\n    ) AS [Category],\r\n    mw.wait_type AS [Wait Type],\r\n    SUM(d.wait_time_ms_delta) AS [Wait Time (ms)],\r\n    SUM(d.waiting_tasks_count_delta) AS [Waiting Tasks],\r\n    d.sql_instance\r\nFROM sqlwatch_logger_perf_os_wait_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN sqlwatch_meta_wait_stats mw\r\n    ON mw.sql_instance = d.sql_instance\r\n    AND mw.wait_type_id = d.wait_type_id\r\nLEFT JOIN sqlwatch_config_wait_stats cw\r\n    ON cw.wait_type = mw.wait_type\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND d.wait_time_ms_delta \u003E 0\r\nGROUP BY h.report_time, [Category], mw.wait_type, d.sql_instance\r\nORDER BY h.report_time DESC, [Wait Time (ms)] DESC"
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        }
+      ]
+    }
+  ],
+  "supportQueries": {
+    "instances.list": {
+      "sqlServer": "\r\nSELECT sql_instance\r\nFROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)\r\nORDER BY repo_collector_is_active DESC, sql_instance",
+      "sqlite": "\r\nSELECT sql_instance\r\nFROM sqlwatch_config_sql_instance\r\nORDER BY repo_collector_is_active DESC, sql_instance"
+    },
+    "longquery.sqltext": {
+      "sqlServer": "\r\nSELECT\r\n    COALESCE(qph.statement_for_query_plan_hash, \u0027\u0027) AS sql_text,\r\n    qph.query_plan_for_query_plan_hash AS query_plan\r\nFROM dbo.sqlwatch_logger_xes_long_queries d WITH (NOLOCK)\r\nLEFT JOIN dbo.sqlwatch_meta_query_plan qp WITH (NOLOCK)\r\n    ON qp.sql_instance = d.sql_instance\r\n    AND qp.plan_handle = d.plan_handle\r\n    AND qp.statement_start_offset = d.statement_start_offset\r\n    AND qp.statement_end_offset = d.statement_end_offset\r\nLEFT JOIN dbo.sqlwatch_meta_query_plan_hash qph WITH (NOLOCK)\r\n    ON qph.sql_instance = qp.sql_instance\r\n    AND qph.query_plan_hash = qp.query_plan_hash\r\nWHERE d.long_query_id = @QueryId\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))",
+      "sqlite": "\r\nSELECT\r\n    COALESCE(qph.statement_for_query_plan_hash, \u0027\u0027) AS sql_text,\r\n    qph.query_plan_for_query_plan_hash AS query_plan\r\nFROM sqlwatch_logger_xes_long_queries d\r\nLEFT JOIN sqlwatch_meta_query_plan qp\r\n    ON qp.sql_instance = d.sql_instance\r\n    AND qp.plan_handle = d.plan_handle\r\n    AND qp.statement_start_offset = d.statement_start_offset\r\n    AND qp.statement_end_offset = d.statement_end_offset\r\nLEFT JOIN sqlwatch_meta_query_plan_hash qph\r\n    ON qph.sql_instance = qp.sql_instance\r\n    AND qph.query_plan_hash = qp.query_plan_hash\r\nWHERE d.long_query_id = @QueryId\r\n    AND d.sql_instance = @SqlInstance"
+    },
+    "longquery.timeseries": {
+      "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Long Queries\u0027 AS [Series],\r\n    COUNT(*) AS [Value]\r\nFROM dbo.sqlwatch_logger_xes_long_queries d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nGROUP BY h.report_time\r\nORDER BY h.report_time",
+      "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    \u0027Long Queries\u0027 AS [Series],\r\n    COUNT(*) AS [Value]\r\nFROM sqlwatch_logger_xes_long_queries d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nGROUP BY h.report_time\r\nORDER BY h.report_time"
+    },
+    "longquery.details": {
+      "sqlServer": "\r\nSELECT\r\n    d.long_query_id,\r\n    d.sql_instance,\r\n    h.report_time AS [date],\r\n    d.duration_ms,\r\n    d.logical_reads,\r\n    d.writes,\r\n    d.plan_handle,\r\n    d.statement_start_offset,\r\n    d.statement_end_offset\r\nFROM dbo.sqlwatch_logger_xes_long_queries d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\nORDER BY h.report_time DESC",
+      "sqlite": "\r\nSELECT\r\n    d.long_query_id,\r\n    d.sql_instance,\r\n    h.report_time AS [date],\r\n    d.duration_ms,\r\n    d.logical_reads,\r\n    d.writes,\r\n    d.plan_handle,\r\n    d.statement_start_offset,\r\n    d.statement_end_offset\r\nFROM sqlwatch_logger_xes_long_queries d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\nORDER BY h.report_time DESC"
+    },
+    "waits.details": {
+      "sqlServer": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    ISNULL(ws.wait_category, \u0027Other\u0027) AS [Category],\r\n    mw.wait_type AS [Wait Type],\r\n    SUM(d.wait_time_ms_delta) AS [Wait Time (ms)],\r\n    SUM(d.waiting_tasks_count_delta) AS [Waiting Tasks],\r\n    d.sql_instance\r\nFROM dbo.sqlwatch_logger_perf_os_wait_stats d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN dbo.vw_sqlwatch_meta_wait_stats_category ws WITH (NOLOCK)\r\n    ON ws.sql_instance = d.sql_instance\r\n    AND ws.wait_type_id = d.wait_type_id\r\nLEFT JOIN dbo.sqlwatch_meta_wait_stats mw WITH (NOLOCK)\r\n    ON mw.sql_instance = d.sql_instance\r\n    AND mw.wait_type_id = d.wait_type_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\r\n    AND d.wait_time_ms_delta \u003E 0\r\nGROUP BY h.report_time, ISNULL(ws.wait_category, \u0027Other\u0027), mw.wait_type, d.sql_instance\r\nORDER BY h.report_time DESC, [Wait Time (ms)] DESC",
+      "sqlite": "\r\nSELECT\r\n    h.report_time AS [Time],\r\n    COALESCE(cw.wait_category,\r\n        CASE\r\n            WHEN mw.wait_type LIKE \u0027LCK_%\u0027 THEN \u0027Lock\u0027\r\n            WHEN mw.wait_type LIKE \u0027LATCH_%\u0027 THEN \u0027Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGELATCH_%\u0027 THEN \u0027Buffer Latch\u0027\r\n            WHEN mw.wait_type LIKE \u0027PAGEIOLATCH_%\u0027 THEN \u0027Buffer IO\u0027\r\n            WHEN mw.wait_type IN (\u0027CXPACKET\u0027,\u0027EXCHANGE\u0027,\u0027CXCONSUMER\u0027) THEN \u0027CPU - Parallelism\u0027\r\n            WHEN mw.wait_type IN (\u0027ASYNC_NETWORK_IO\u0027,\u0027NET_WAITFOR_PACKET\u0027) THEN \u0027Network IO\u0027\r\n            WHEN mw.wait_type IN (\u0027LOGMGR\u0027,\u0027LOGBUFFER\u0027,\u0027WRITELOG\u0027) THEN \u0027Tran Log IO\u0027\r\n            WHEN mw.wait_type LIKE \u0027HADR_%\u0027 THEN \u0027Always On\u0027\r\n            ELSE \u0027Other\u0027\r\n        END\r\n    ) AS [Category],\r\n    mw.wait_type AS [Wait Type],\r\n    SUM(d.wait_time_ms_delta) AS [Wait Time (ms)],\r\n    SUM(d.waiting_tasks_count_delta) AS [Waiting Tasks],\r\n    d.sql_instance\r\nFROM sqlwatch_logger_perf_os_wait_stats d\r\nINNER JOIN sqlwatch_logger_snapshot_header h\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nLEFT JOIN sqlwatch_meta_wait_stats mw\r\n    ON mw.sql_instance = d.sql_instance\r\n    AND mw.wait_type_id = d.wait_type_id\r\nLEFT JOIN sqlwatch_config_wait_stats cw\r\n    ON cw.wait_type = mw.wait_type\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance = @SqlInstance\r\n    AND d.wait_time_ms_delta \u003E 0\r\nGROUP BY h.report_time, [Category], mw.wait_type, d.sql_instance\r\nORDER BY h.report_time DESC, [Wait Time (ms)] DESC"
+    },
+    "waits.sqltext": {
+      "sqlServer": "\r\nSELECT\r\n    COALESCE(qph.statement_for_query_plan_hash, \u0027\u0027) AS sql_text,\r\n    qph.query_plan_for_query_plan_hash AS query_plan\r\nFROM dbo.sqlwatch_meta_query_plan_hash qph WITH (NOLOCK)\r\nWHERE qph.query_plan_hash = @PlanHash\r\n    AND qph.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))",
+      "sqlite": "\r\nSELECT\r\n    COALESCE(qph.statement_for_query_plan_hash, \u0027\u0027) AS sql_text,\r\n    qph.query_plan_for_query_plan_hash AS query_plan\r\nFROM sqlwatch_meta_query_plan_hash qph\r\nWHERE qph.query_plan_hash = @PlanHash\r\n    AND qph.sql_instance = @SqlInstance"
+    }
+  }
+}

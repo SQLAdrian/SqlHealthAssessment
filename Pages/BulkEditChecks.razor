@@ -1,0 +1,906 @@
+@page "/bulkeditchecks"
+@using System
+@using System.Collections.Generic
+@using Microsoft.Data.SqlClient
+@using System.IO
+@using System.Linq
+@using System.Text.Json
+@using System.Threading.Tasks
+@using SqlHealthAssessment.Data.Models
+@using SqlHealthAssessment.Data
+@inject CheckRepositoryService CheckRepository
+
+<div class="bulk-edit-page">
+    <h2 style="margin-bottom: 20px;">🔧 Bulk Edit Checks</h2>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="categoryFilter">Category:</label>
+                <select id="categoryFilter" class="form-input" @bind="SelectedCategory">
+                    <option value="">All Categories</option>
+                    @foreach (var cat in Categories)
+                    {
+                        <option value="@cat">@cat</option>
+                    }
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="statusFilter">Status:</label>
+                <select id="statusFilter" class="form-input" @bind="SelectedStatus">
+                    <option value="">All</option>
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="searchFilter">Search:</label>
+                <input id="searchFilter" class="form-input" type="text" @bind="SearchText" placeholder="Search checks..." />
+            </div>
+            <button class="btn btn-primary" @onclick="LoadChecks" disabled="@isLoading">
+                @(isLoading ? "Loading..." : "🔍 Load Checks")
+            </button>
+        </div>
+    </div>
+
+    <!-- Selection Actions -->
+    <div class="selection-actions">
+        <span class="selection-info">
+            Selected: <strong>@SelectedCount</strong> of <strong>@FilteredChecks.Count</strong> checks
+        </span>
+        <div class="selection-buttons">
+            <button class="btn btn-sm" @onclick="SelectAll">Select All</button>
+            <button class="btn btn-sm" @onclick="DeselectAll">Deselect All</button>
+            <button class="btn btn-sm" @onclick="SelectEnabled">Select Enabled</button>
+            <button class="btn btn-sm" @onclick="SelectDisabled">Select Disabled</button>
+        </div>
+    </div>
+
+    <!-- Bulk Operations -->
+    <div class="bulk-operations">
+        <h3>Bulk Operations</h3>
+        <div class="operation-row">
+            <button class="btn btn-success" @onclick="(() => ApplyOperation(BulkEditOperation.Enable))" disabled="@(SelectedCount == 0 || isSaving)">
+                ✅ Enable Selected
+            </button>
+            <button class="btn btn-warning" @onclick="(() => ApplyOperation(BulkEditOperation.Disable))" disabled="@(SelectedCount == 0 || isSaving)">
+                ⏸️ Disable Selected
+            </button>
+            <button class="btn btn-danger" @onclick="(() => ApplyOperation(BulkEditOperation.Delete))" disabled="@(SelectedCount == 0 || isSaving)">
+                🗑️ Delete Selected
+            </button>
+        </div>
+        <div class="operation-row">
+            <div class="operation-with-input">
+                <button class="btn btn-info" @onclick="(() => ApplyOperation(BulkEditOperation.SetAlertLevel))" disabled="@(SelectedCount == 0 || isSaving)">
+                    Set Alert Level:
+                </button>
+                <select class="form-input small" @bind="NewAlertLevel">
+                    <option value="0">Info</option>
+                    <option value="1">Warning</option>
+                    <option value="2">Critical</option>
+                </select>
+            </div>
+            <div class="operation-with-input">
+                <button class="btn btn-info" @onclick="(() => ApplyOperation(BulkEditOperation.SetFrequency))" disabled="@(SelectedCount == 0 || isSaving)">
+                    Frequency (sec):
+                </button>
+                <input class="form-input small" type="number" @bind="NewFrequency" min="10" max="3600" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Checks Grid -->
+    <div class="checks-grid">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th class="checkbox-col">
+                        <input type="checkbox" @bind="SelectAllState" @onclick="ToggleSelectAll" />
+                    </th>
+                    <th class="id-col">ID</th>
+                    <th class="name-col">Check Name</th>
+                    <th class="status-col">Status</th>
+                    <th class="alert-col">Alert Level</th>
+                    <th class="freq-col">Freq (s)</th>
+                    <th class="category-col">Category</th>
+                    <th class="actions-col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var check in PaginatedChecks)
+                {
+                    <tr class="@(check.IsSelected ? "selected" : "")">
+                        <td>
+                            <input type="checkbox" @bind="check.IsSelected" />
+                        </td>
+                        <td>@check.CheckId</td>
+                        <td>
+                            <div class="check-name">@check.CheckName</div>
+                            @if (!string.IsNullOrEmpty(check.CheckDescription))
+                            {
+                                <div class="check-desc">@check.CheckDescription</div>
+                            }
+                        </td>
+                        <td>
+                            <span class="status-badge @(check.IsEnabled ? "enabled" : "disabled")">
+                                @(check.IsEnabled ? "Enabled" : "Disabled")
+                            </span>
+                        </td>
+                        <td>
+                            <span class="alert-badge level-@check.AlertLevel">
+                                @check.AlertType
+                            </span>
+                        </td>
+                        <td>@check.FrequencySeconds</td>
+                        <td>@check.CheckCategory</td>
+                        <td>
+                            <button class="btn btn-xs" @onclick="(() => EditCheck(check))">
+                                ✏️ Edit
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+        <button class="btn btn-sm" @onclick="PreviousPage" disabled="@(CurrentPage == 1)">
+            ← Previous
+        </button>
+        <span class="page-info">
+            Page <strong>@CurrentPage</strong> of <strong>@TotalPages</strong>
+        </span>
+        <button class="btn btn-sm" @onclick="NextPage" disabled="@(CurrentPage == TotalPages)">
+            Next →
+        </button>
+    </div>
+
+    <!-- Status Message -->
+    @if (!string.IsNullOrEmpty(StatusMessage))
+    {
+        <div class="status-message @(StatusSuccess ? "success" : "error")">
+            @StatusMessage
+        </div>
+    }
+</div>
+
+<!-- Edit Check Modal -->
+@if (ShowEditModal && EditingCheck != null)
+{
+    <div class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Edit Check: @EditingCheck.CheckName</h3>
+                <button class="close-btn" @onclick="CloseModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Check ID:</label>
+                    <input class="form-input" type="text" @bind="EditingCheck.CheckId" readonly />
+                </div>
+                <div class="form-group">
+                    <label>Check Name:</label>
+                    <input class="form-input" type="text" @bind="EditingCheck.CheckName" />
+                </div>
+                <div class="form-group">
+                    <label>Description:</label>
+                    <textarea class="form-input" @bind="EditingCheck.CheckDescription" rows="2"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" @bind="EditingCheck.IsEnabled" />
+                            Enabled
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Alert Level:</label>
+                        <select class="form-input" @bind="EditingCheck.AlertLevel">
+                            <option value="0">Info</option>
+                            <option value="1">Warning</option>
+                            <option value="2">Critical</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Frequency (seconds):</label>
+                        <input class="form-input" type="number" @bind="EditingCheck.FrequencySeconds" min="10" max="3600" />
+                    </div>
+                    <div class="form-group">
+                        <label>Category:</label>
+                        <input class="form-input" type="text" @bind="EditingCheck.CheckCategory" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveCheck" disabled="@isSaving">
+                    💾 Save
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .bulk-edit-page {
+        padding: 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .filter-section {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .filter-row {
+        display: flex;
+        gap: 15px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        flex: 1;
+        min-width: 150px;
+    }
+
+    .filter-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+
+    .selection-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 15px;
+    }
+
+    .selection-buttons {
+        display: flex;
+        gap: 10px;
+    }
+
+    .bulk-operations {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .bulk-operations h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+    }
+
+    .operation-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    .operation-with-input {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+    }
+
+    .checks-grid {
+        overflow-x: auto;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .data-table th {
+        background: var(--surface);
+        font-weight: 600;
+    }
+
+    .data-table tr.selected {
+        background: rgba(33, 150, 243, 0.1);
+    }
+
+    .check-name {
+        font-weight: 500;
+    }
+
+    .check-desc {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .status-badge {
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+    }
+
+    .status-badge.enabled {
+        background: rgba(34, 197, 94, 0.2);
+        color: var(--green);
+    }
+
+    .status-badge.disabled {
+        background: rgba(107, 114, 128, 0.2);
+        color: var(--gray);
+    }
+
+    .alert-badge {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+
+    .alert-badge.level-0 {
+        background: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .alert-badge.level-1 {
+        background: rgba(234, 179, 8, 0.2);
+        color: #eab308;
+    }
+
+    .alert-badge.level-2 {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    .checkbox-col,
+    .id-col,
+    .status-col,
+    .alert-col,
+    .freq-col,
+    .actions-col {
+        width: 1%;
+        white-space: nowrap;
+    }
+
+    .category-col {
+        width: 15%;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 15px;
+        padding: 15px 0;
+    }
+
+    .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-sm {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+
+    .btn-xs {
+        padding: 3px 8px;
+        font-size: 11px;
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-success {
+        background: var(--green);
+        color: white;
+    }
+
+    .btn-warning {
+        background: #f59e0b;
+        color: white;
+    }
+
+    .btn-danger {
+        background: var(--red);
+        color: white;
+    }
+
+    .btn-info {
+        background: #3b82f6;
+        color: white;
+    }
+
+    .btn-secondary {
+        background: var(--border);
+        color: var(--text);
+    }
+
+    .form-input {
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--input-bg);
+        color: var(--text);
+    }
+
+    .form-input.small {
+        width: 80px;
+        padding: 5px 8px;
+    }
+
+    .status-message {
+        padding: 10px;
+        border-radius: 4px;
+        margin-top: 15px;
+    }
+
+    .status-message.success {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid var(--green);
+        color: var(--green);
+    }
+
+    .status-message.error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid var(--red);
+        color: var(--red);
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .modal {
+        background: var(--surface);
+        border-radius: 8px;
+        width: 500px;
+        max-width: 90%;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h3 {
+        margin: 0;
+    }
+
+    .close-btn {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: var(--text-muted);
+    }
+
+    .modal-body {
+        padding: 20px;
+    }
+
+    .modal-footer {
+        padding: 15px 20px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .form-row {
+        display: flex;
+        gap: 15px;
+    }
+
+    .form-row .form-group {
+        flex: 1;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+</style>
+
+@code {
+    private List<CheckConfiguration> AllChecks { get; set; } = new();
+    private List<CheckConfiguration> FilteredChecks { get; set; } = new();
+    private List<string> Categories { get; set; } = new();
+
+    private string SelectedCategory { get; set; } = "";
+    private string SelectedStatus { get; set; } = "";
+    private string SearchText { get; set; } = "";
+
+    private int CurrentPage { get; set; } = 1;
+    private int PageSize { get; set; } = 25;
+    private int TotalPages => (int)Math.Ceiling(FilteredChecks.Count / (double)PageSize);
+
+    private List<CheckConfiguration> PaginatedChecks =>
+        FilteredChecks.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+    private int SelectedCount => AllChecks.Count(c => c.IsSelected);
+
+    private bool SelectAllState { get; set; }
+
+    private string StatusMessage { get; set; } = "";
+    private bool StatusSuccess { get; set; }
+    private bool isLoading { get; set; }
+    private bool isSaving { get; set; }
+
+    // Bulk edit values
+    private int NewAlertLevel { get; set; } = 1;
+    private int NewFrequency { get; set; } = 60;
+
+    // Edit modal
+    private bool ShowEditModal { get; set; }
+    private CheckConfiguration? EditingCheck { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChecks();
+    }
+
+    private async Task LoadChecks()
+    {
+        isLoading = true;
+        StatusMessage = "";
+
+        try
+        {
+            await CheckRepository.LoadChecksAsync();
+            Categories = CheckRepository.GetCategories();
+
+            // Convert SqlCheck to CheckConfiguration for UI
+            AllChecks = CheckRepository.Checks.Select(ConvertToCheckConfiguration).ToList();
+            ApplyFilters();
+
+            StatusMessage = $"Loaded {AllChecks.Count} checks from sql-checks.json";
+            StatusSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error loading checks: {ex.Message}";
+            StatusSuccess = false;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private CheckConfiguration ConvertToCheckConfiguration(SqlCheck sqlCheck)
+    {
+        return new CheckConfiguration
+        {
+            CheckId = sqlCheck.Id,
+            CheckName = sqlCheck.Name,
+            CheckDescription = sqlCheck.Description,
+            IsEnabled = sqlCheck.Enabled,
+            AlertLevel = MapSeverityToLevel(sqlCheck.Severity),
+            AlertType = sqlCheck.Severity ?? "Warning",
+            FrequencySeconds = 60, // Default frequency since sql-checks.json doesn't have this field
+            CheckCategory = sqlCheck.Category,
+            SqlQuery = sqlCheck.SqlQuery,
+            IsSelected = false
+        };
+    }
+
+    private int MapSeverityToLevel(string? severity)
+    {
+        return severity?.ToLowerInvariant() switch
+        {
+            "critical" => 2,
+            "warning" => 1,
+            "info" or _ => 0
+        };
+    }
+
+    private string MapLevelToSeverity(int level)
+    {
+        return level switch
+        {
+            2 => "Critical",
+            1 => "Warning",
+            _ => "Info"
+        };
+    }
+
+    private void ApplyFilters()
+    {
+        FilteredChecks = AllChecks
+            .Where(c =>
+                (string.IsNullOrEmpty(SelectedCategory) || c.CheckCategory == SelectedCategory) &&
+                (string.IsNullOrEmpty(SelectedStatus) ||
+                    (SelectedStatus == "enabled" && c.IsEnabled) ||
+                    (SelectedStatus == "disabled" && !c.IsEnabled)) &&
+                (string.IsNullOrEmpty(SearchText) ||
+                    c.CheckName.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
+                    c.CheckDescription?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) == true))
+            .ToList();
+
+        CurrentPage = 1;
+    }
+
+    private void SelectAll()
+    {
+        foreach (var check in FilteredChecks)
+        {
+            check.IsSelected = true;
+        }
+        SelectAllState = true;
+    }
+
+    private void DeselectAll()
+    {
+        foreach (var check in FilteredChecks)
+        {
+            check.IsSelected = false;
+        }
+        SelectAllState = false;
+    }
+
+    private void SelectEnabled()
+    {
+        foreach (var check in FilteredChecks.Where(c => c.IsEnabled))
+        {
+            check.IsSelected = true;
+        }
+        UpdateSelectAllState();
+    }
+
+    private void SelectDisabled()
+    {
+        foreach (var check in FilteredChecks.Where(c => !c.IsEnabled))
+        {
+            check.IsSelected = true;
+        }
+        UpdateSelectAllState();
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (SelectAllState)
+            DeselectAll();
+        else
+            SelectAll();
+    }
+
+    private void UpdateSelectAllState()
+    {
+        SelectAllState = SelectedCount == FilteredChecks.Count;
+    }
+
+    private async void ApplyOperation(BulkEditOperation operation)
+    {
+        var selectedChecks = AllChecks.Where(c => c.IsSelected).ToList();
+
+        if (selectedChecks.Count == 0)
+        {
+            StatusMessage = "No checks selected";
+            StatusSuccess = false;
+            return;
+        }
+
+        isSaving = true;
+        int affected = 0;
+
+        try
+        {
+            switch (operation)
+            {
+                case BulkEditOperation.Enable:
+                    foreach (var check in selectedChecks)
+                    {
+                        check.IsEnabled = true;
+                        affected++;
+                    }
+                    StatusMessage = $"Enabled {affected} check(s)";
+                    break;
+
+                case BulkEditOperation.Disable:
+                    foreach (var check in selectedChecks)
+                    {
+                        check.IsEnabled = false;
+                        affected++;
+                    }
+                    StatusMessage = $"Disabled {affected} check(s)";
+                    break;
+
+                case BulkEditOperation.SetAlertLevel:
+                    foreach (var check in selectedChecks)
+                    {
+                        check.AlertLevel = NewAlertLevel;
+                        check.AlertType = MapLevelToSeverity(NewAlertLevel);
+                        affected++;
+                    }
+                    StatusMessage = $"Set alert level to {MapLevelToSeverity(NewAlertLevel)} for {affected} check(s)";
+                    break;
+
+                case BulkEditOperation.SetFrequency:
+                    foreach (var check in selectedChecks)
+                    {
+                        check.FrequencySeconds = NewFrequency;
+                        affected++;
+                    }
+                    StatusMessage = $"Set frequency to {NewFrequency}s for {affected} check(s)";
+                    break;
+
+                case BulkEditOperation.Delete:
+                    foreach (var check in selectedChecks.ToList())
+                    {
+                        AllChecks.Remove(check);
+                        affected++;
+                    }
+                    ApplyFilters();
+                    StatusMessage = $"Deleted {affected} check(s)";
+                    break;
+            }
+
+            // Save to file
+            await SaveToFileAsync();
+            StatusSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error saving changes: {ex.Message}";
+            StatusSuccess = false;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task SaveToFileAsync()
+    {
+        // Update the repository with current changes
+        var checks = AllChecks.Select(c => new SqlCheck
+        {
+            Id = c.CheckId,
+            Name = c.CheckName,
+            Description = c.CheckDescription,
+            Enabled = c.IsEnabled,
+            Severity = c.AlertType,
+            Category = c.CheckCategory,
+            SqlQuery = c.SqlQuery
+        }).ToList();
+
+        await Task.Run(() =>
+        {
+            // Directly save to file
+            var checksFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sql-checks.json");
+            var backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sql-checks.backup.json");
+
+            // Create backup
+            if (File.Exists(checksFilePath))
+            {
+                File.Copy(checksFilePath, backupPath, overwrite: true);
+            }
+
+            var json = JsonSerializer.Serialize(checks, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+            File.WriteAllText(checksFilePath, json);
+        });
+    }
+
+    private void EditCheck(CheckConfiguration check)
+    {
+        EditingCheck = new CheckConfiguration
+        {
+            CheckId = check.CheckId,
+            CheckName = check.CheckName,
+            CheckDescription = check.CheckDescription,
+            IsEnabled = check.IsEnabled,
+            AlertLevel = check.AlertLevel,
+            AlertType = check.AlertType,
+            FrequencySeconds = check.FrequencySeconds,
+            CheckCategory = check.CheckCategory,
+            SqlQuery = check.SqlQuery
+        };
+        ShowEditModal = true;
+    }
+
+    private void CloseModal()
+    {
+        ShowEditModal = false;
+        EditingCheck = null;
+    }
+
+    private async void SaveCheck()
+    {
+        if (EditingCheck == null) return;
+
+        isSaving = true;
+
+        try
+        {
+            var original = AllChecks.FirstOrDefault(c => c.CheckId == EditingCheck.CheckId);
+            if (original != null)
+            {
+                original.CheckName = EditingCheck.CheckName;
+                original.CheckDescription = EditingCheck.CheckDescription;
+                original.IsEnabled = EditingCheck.IsEnabled;
+                original.AlertLevel = EditingCheck.AlertLevel;
+                original.AlertType = MapLevelToSeverity(EditingCheck.AlertLevel);
+                original.FrequencySeconds = EditingCheck.FrequencySeconds;
+                original.CheckCategory = EditingCheck.CheckCategory;
+            }
+
+            StatusMessage = $"Saved changes to check: {EditingCheck.CheckName}";
+            StatusSuccess = true;
+
+            // Save to file
+            await SaveToFileAsync();
+            CloseModal();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error saving check: {ex.Message}";
+            StatusSuccess = false;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (CurrentPage > 1) CurrentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (CurrentPage < TotalPages) CurrentPage++;
+    }
+}

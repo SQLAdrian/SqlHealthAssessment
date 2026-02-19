@@ -1,0 +1,65 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="app-container" tabindex="0" @onkeydown="HandleKeyDown">
+    <Router AppAssembly="@typeof(MainLayout).Assembly">
+    <Found Context="routeData">
+        <div class="app-layout">
+            <NavMenu />
+            <div class="app-content">
+                <ErrorBoundary>
+                    <RouteView RouteData="@routeData" />
+                </ErrorBoundary>
+            </div>
+        </div>
+    </Found>
+    <NotFound>
+        <div class="app-layout">
+            <NavMenu />
+            <div class="app-content">
+                <div class="not-found">
+                    <h2>Page not found</h2>
+                    <p>The page you're looking for doesn't exist.</p>
+                </div>
+            </div>
+        </div>
+    </NotFound>
+</Router>
+</div>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    private void HandleKeyDown(KeyboardEventArgs args)
+    {
+        // Ctrl+1-9 for quick navigation
+        if (args.CtrlKey)
+        {
+            var key = args.Key;
+            string? route = key switch
+            {
+                "1" => "/",
+                "2" => "/instance",
+                "3" => "/checks",
+                "4" => "/fullaudit",
+                "5" => "/health",
+                "6" => "/settings",
+                "7" => "/dashboard-editor",
+                "8" => "/servers",
+                "9" => "/bulkeditchecks",
+                _ => null
+            };
+            
+            if (route != null)
+            {
+                Navigation.NavigateTo(route);
+            }
+        }
+        
+        // Ctrl+R for refresh
+        if (args.CtrlKey && args.Key == "r")
+        {
+            Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+        }
+    }
+}

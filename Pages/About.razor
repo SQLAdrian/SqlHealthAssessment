@@ -1,0 +1,358 @@
+@page "/about"
+
+@inject NavigationManager Navigation
+
+<div class="about-container">
+    <h1>About SQLHealthAssessment</h1>
+    
+    <div class="about-section">
+        <h2>📖 Introduction</h2>
+        <p>
+            SQLHealthAssessment is a comprehensive SQL Server monitoring and health assessment tool. 
+            It helps database administrators monitor multiple SQL Server instances, run health checks, 
+            analyze performance, and identify potential issues before they become critical.
+        </p>
+    </div>
+
+    <div class="about-section">
+        <h2>🚀 Deploying SQLWatch Database</h2>
+        
+        <h3>Option 1: Deploy via Application (Recommended)</h3>
+        <ol>
+            <li>Go to <strong>Monitoring new server</strong> from the navigation menu</li>
+            <li>Enter your SQL Server connection details (server name, authentication method)</li>
+            <li>Select the database name (default: SQLWATCH)</li>
+            <li>Click <strong>Deploy</strong> - the application will create the database and tables automatically</li>
+            <li>Once deployed, the server will appear in your servers list</li>
+        </ol>
+
+        <h3>Option 2: Manual Deployment</h3>
+        <ol>
+            <li>Locate the SQLWATCH deployment scripts in the application directory</li>
+            <li>Run <code>01_CreateSQLWATCHDB.sql</code> to create the database and tables</li>
+            <li>Run <code>02_PostSQLWATCHDBcreate.sql</code> to add post-creation objects</li>
+            <li>Configure SQL Agent jobs for data collection (optional)</li>
+        </ol>
+
+        <div class="alert alert-info">
+            <strong>Note:</strong> The application requires at least SQL Server 2016 or later for full functionality.
+        </div>
+    </div>
+
+    <div class="about-section">
+        <h2>⚡ Running Quick Checks</h2>
+        
+        <h3>Quick Check (Ctrl+0)</h3>
+        <p>
+            The Quick Check page provides instant health assessment of your SQL Server instance:
+        </p>
+        <ul>
+            <li><strong>CPU Usage</strong> - Current CPU utilization</li>
+            <li><strong>Memory Pressure</strong> - Memory usage analysis</li>
+            <li><strong>Active Sessions</strong> - Currently running queries</li>
+            <li><strong>Blocking Queries</strong> - Identify blocked processes</li>
+            <li><strong>Index Health</strong> - Missing and unused indexes</li>
+        </ul>
+        
+        <h3>Full Audit</h3>
+        <p>
+            For comprehensive analysis, use the Full Audit page which performs:
+        </p>
+        <ul>
+            <li>Configuration review</li>
+            <li>Performance baseline analysis</li>
+            <li>Security assessment</li>
+            <li>Backup verification</li>
+            <li>Index fragmentation analysis</li>
+        </ul>
+    </div>
+
+    <div class="about-section">
+        <h2>📊 Available Dashboards</h2>
+        
+        <table class="dashboards-table">
+            <thead>
+                <tr>
+                    <th>Dashboard</th>
+                    <th>Description</th>
+                    <th>Shortcut</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Repository</td>
+                    <td>Overview of all monitored servers</td>
+                    <td>Ctrl+1</td>
+                </tr>
+                <tr>
+                    <td>Instance Overview</td>
+                    <td>Detailed metrics for selected instance</td>
+                    <td>Ctrl+2</td>
+                </tr>
+                <tr>
+                    <td>Long Queries</td>
+                    <td>Queries running longer than threshold</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Wait Events</td>
+                    <td>SQL Server wait statistics</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Blocking Queries</td>
+                    <td>Current blocking chains</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Checks</td>
+                    <td>Health check results</td>
+                    <td>Ctrl+3</td>
+                </tr>
+                <tr>
+                    <td>Quick Check</td>
+                    <td>Fast health assessment</td>
+                    <td>Ctrl+0</td>
+                </tr>
+                <tr>
+                    <td>Full Audit</td>
+                    <td>Comprehensive audit</td>
+                    <td>Ctrl+4</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="about-section">
+        <h2>❓ Frequently Asked Questions</h2>
+        
+        <details>
+            <summary><strong>Q: How do I add a new SQL Server to monitor?</strong></summary>
+            <p>
+                Go to <strong>Servers</strong> page (Ctrl+8), click <strong>Add Server</strong>, 
+                enter the connection details, and click Save. You can then deploy the SQLWatch 
+                database to start monitoring.
+            </p>
+        </details>
+        
+        <details>
+            <summary><strong>Q: What permissions does the monitoring user need?</strong></summary>
+            <p>
+                The monitoring user needs at least:
+            </p>
+            <ul>
+                <li>VIEW SERVER STATE permission</li>
+                <li>VIEW DATABASE STATE permission</li>
+                <li>db_owner role on the SQLWATCH database</li>
+            </ul>
+        </details>
+        
+        <details>
+            <summary><strong>Q: How often is data collected?</strong></summary>
+            <p>
+                By default, data is collected every minute. You can adjust this in Settings 
+                or configure SQL Agent jobs for custom collection intervals.
+            </p>
+        </details>
+        
+        <details>
+            <summary><strong>Q: Can I monitor multiple servers from one dashboard?</strong></summary>
+            <p>
+                Yes! Use the Instance dropdown to select different servers, or select "All Instances" 
+                to see aggregated data across all monitored servers.
+            </p>
+        </details>
+        
+        <details>
+            <summary><strong>Q: How do I troubleshoot connection issues?</strong></summary>
+            <p>
+                1. Verify SQL Server is running and accessible<br/>
+                2. Check firewall settings<br/>
+                3. Ensure Trust Server Certificate is enabled in Settings (for encrypted connections)<br/>
+                4. Verify authentication method matches your SQL Server configuration
+            </p>
+        </details>
+        
+        <details>
+            <summary><strong>Q: Where is the data stored?</strong></summary>
+            <p>
+                Application settings are stored in appsettings.json and user-settings.json. 
+                Dashboard cache is stored in SQLite (SqlHealthAssessment-cache.db). 
+                Monitoring data is stored in the SQLWATCH database on your SQL Server.
+            </p>
+        </details>
+    </div>
+
+    <div class="about-section">
+        <h2>⌨️ Keyboard Shortcuts</h2>
+        
+        <table class="shortcuts-table">
+            <thead>
+                <tr>
+                    <th>Shortcut</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Ctrl+1</td><td>Repository Dashboard</td></tr>
+                <tr><td>Ctrl+2</td><td>Instance Overview</td></tr>
+                <tr><td>Ctrl+3</td><td>Checks Page</td></tr>
+                <tr><td>Ctrl+4</td><td>Full Audit</td></tr>
+                <tr><td>Ctrl+5</td><td>Health Page</td></tr>
+                <tr><td>Ctrl+6</td><td>Settings</td></tr>
+                <tr><td>Ctrl+7</td><td>Dashboard Editor</td></tr>
+                <tr><td>Ctrl+8</td><td>Servers</td></tr>
+                <tr><td>Ctrl+9</td><td>Bulk Edit Checks</td></tr>
+                <tr><td>Ctrl+0</td><td>Quick Check</td></tr>
+                <tr><td>Ctrl+R</td><td>Refresh Current Page</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="about-section">
+        <h2>📞 Support</h2>
+        <p>
+            For issues and feedback, please visit the project repository or contact the development team.
+        </p>
+    </div>
+
+    <div class="about-actions">
+        <button class="btn btn-primary" @onclick="GoToQuickCheck">
+            ⚡ Run Quick Check
+        </button>
+        <button class="btn btn-secondary" @onclick="GoToMonitoring">
+            🔬 Deploy Monitoring
+        </button>
+    </div>
+</div>
+
+@code {
+    private void GoToQuickCheck()
+    {
+        Navigation.NavigateTo("/quickcheck");
+    }
+
+    private void GoToMonitoring()
+    {
+        Navigation.NavigateTo("/databasedeploy");
+    }
+}
+
+<style>
+    .about-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .about-container h1 {
+        color: #2c3e50;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 10px;
+        margin-bottom: 30px;
+    }
+
+    .about-section {
+        margin-bottom: 35px;
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+    }
+
+    .about-section h2 {
+        color: #2980b9;
+        margin-top: 0;
+    }
+
+    .about-section h3 {
+        color: #34495e;
+        margin-top: 20px;
+    }
+
+    .about-section ol, .about-section ul {
+        line-height: 1.8;
+    }
+
+    .alert {
+        padding: 15px;
+        border-radius: 4px;
+        margin: 15px 0;
+    }
+
+    .alert-info {
+        background: #d1ecf1;
+        border-left: 4px solid #17a2b8;
+        color: #0c5460;
+    }
+
+    details {
+        margin: 10px 0;
+        padding: 10px;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    details summary {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    details[open] summary {
+        margin-bottom: 10px;
+    }
+
+    .dashboards-table, .shortcuts-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+    }
+
+    .dashboards-table th, .dashboards-table td,
+    .shortcuts-table th, .shortcuts-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .dashboards-table th, .shortcuts-table th {
+        background: #3498db;
+        color: white;
+    }
+
+    .about-actions {
+        display: flex;
+        gap: 15px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #eee;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .btn-primary {
+        background: #3498db;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #2980b9;
+    }
+
+    .btn-secondary {
+        background: #27ae60;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #219a52;
+    }
+</style>

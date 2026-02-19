@@ -1,0 +1,20 @@
+<div class="logviewer-panel">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="logviewer-title">@Title</div>
+    }
+
+    @if (!string.IsNullOrEmpty(Text))
+    {
+        <pre class="logviewer-content">@Text</pre>
+    }
+    else
+    {
+        <div class="logviewer-empty">Select a row above to view details</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Text { get; set; }
+}

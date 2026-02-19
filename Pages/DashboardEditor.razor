@@ -1,0 +1,1123 @@
+@page "/dashboard-editor"
+@using System.Data
+@using System.IO
+@using System.Text.Json
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject DashboardConfigService ConfigService
+@inject NavigationManager Navigation
+@inject IDbConnectionFactory ConnectionFactory
+@inject SQLiteTableService SQLiteTableService
+
+<div class="dashboard-editor">
+    <div class="editor-header">
+        <h2>Dashboard Editor</h2>
+        <div class="header-actions">
+            <button class="btn btn-secondary" @onclick="Undo" disabled="@(!CanUndo)">↩ Undo</button>
+            <button class="btn btn-secondary" @onclick="Redo" disabled="@(!CanRedo)">↪ Redo</button>
+            <button class="btn btn-secondary" @onclick="ExportConfig">📤 Export</button>
+            <button class="btn btn-secondary" @onclick="ShowImportDialog">📥 Import</button>
+            <button class="btn btn-primary" @onclick="SaveAll">💾 Save All</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(StatusMessage))
+    {
+        <div class="status-message @(IsSuccess ? "success" : "error")">
+            @StatusMessage
+        </div>
+    }
+
+    <div class="editor-content">
+        <!-- Dashboard List -->
+        <div class="dashboard-list-panel">
+            <div class="panel-header">
+                <h3>Dashboards</h3>
+                <button class="btn btn-sm" @onclick="AddDashboard">+ Add</button>
+            </div>
+            <div class="dashboard-list">
+                @foreach (var dashboard in EditedConfig.Dashboards)
+                {
+                    <div class="dashboard-item @(SelectedDashboard?.Id == dashboard.Id ? "selected" : "")" 
+                         @onclick="() => SelectDashboard(dashboard)">
+                        <div class="dashboard-info">
+                            <span class="dashboard-title">@dashboard.Title</span>
+                            <span class="dashboard-route">@dashboard.Route</span>
+                        </div>
+                        <div class="dashboard-actions">
+                            <label class="toggle">
+                                <input type="checkbox" @bind="dashboard.Enabled" />
+                            </label>
+                            <button class="btn-icon" @onclick="() => DeleteDashboard(dashboard)" @onclick:stopPropagation title="Delete">🗑</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Panel List -->
+        <div class="panel-list-panel">
+            @if (SelectedDashboard != null)
+            {
+                <div class="panel-header">
+                    <h3>Panels - @SelectedDashboard.Title</h3>
+                    <button class="btn btn-sm" @onclick="AddPanel">+ Add Panel</button>
+                </div>
+                
+                <div class="panel-list">
+                    @foreach (var panel in SelectedDashboard.Panels)
+                    {
+                        <div class="panel-item @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")" 
+                             draggable="true"
+                             @ondragstart="() => OnDragStart(panel)"
+                             @ondragover:preventDefault="true"
+                             @ondragover="() => OnDragOver(panel)"
+                             @ondragleave="() => OnDragLeave(panel)"
+                             @ondrop:preventDefault="true"
+                             @ondrop="() => OnDrop(panel)"
+                             @onclick="() => SelectPanel(panel)">
+                            <div class="panel-reorder">
+                                <span class="drag-handle" title="Drag to reorder">☰</span>
+                            </div>
+                            <div class="panel-info">
+                                <span class="panel-title">@panel.Title</span>
+                                <span class="panel-type">@panel.PanelType</span>
+                            </div>
+                            <div class="panel-actions">
+                                <label class="toggle">
+                                    <input type="checkbox" @bind="panel.Enabled" />
+                                </label>
+                                <button class="btn-icon" @onclick="() => DuplicatePanel(panel)" @onclick:stopPropagation title="Duplicate">📋</button>
+                                <button class="btn-icon" @onclick="() => DeletePanel(panel)" @onclick:stopPropagation title="Delete">🗑</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    Select a dashboard to edit its panels
+                </div>
+            }
+        </div>
+
+        <!-- Panel Editor -->
+        <div class="panel-editor-panel">
+            @if (SelectedPanel != null)
+            {
+                <div class="panel-header">
+                    <h3>Edit Panel</h3>
+                    <button class="btn btn-sm btn-primary" @onclick="PreviewPanel">👁 Preview</button>
+                </div>
+
+                <div class="editor-form">
+                    <div class="form-section">
+                        <h4>Basic Properties</h4>
+                        <div class="form-group">
+                            <label>Panel ID</label>
+                            <input type="text" @bind="SelectedPanel.Id" placeholder="unique-panel-id" />
+                        </div>
+                        <div class="form-group">
+                            <label>Title</label>
+                            <input type="text" @bind="SelectedPanel.Title" placeholder="Panel Title" />
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea @bind="SelectedPanel.Description" rows="2" placeholder="Description shown below chart"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Enabled</label>
+                            <input type="checkbox" @bind="SelectedPanel.Enabled" />
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h4>Display</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Panel Type</label>
+                                <select @bind="SelectedPanel.PanelType">
+                                    <option value="TimeSeries">Time Series Chart</option>
+                                    <option value="StatCard">Stat Card</option>
+                                    <option value="BarGauge">Bar Gauge</option>
+                                    <option value="DataGrid">Data Grid</option>
+                                    <option value="CheckStatus">Check Status</option>
+                                    <option value="TextCard">Text Card</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Chart Type</label>
+                                <select @bind="SelectedPanel.ChartType">
+                                    <option value="Line">Line</option>
+                                    <option value="Bar">Bar</option>
+                                    <option value="Area">Area</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Height (px)</label>
+                                <input type="number" @bind="SelectedPanel.Height" min="100" max="800" />
+                            </div>
+                            <div class="form-group">
+                                <label>Refresh (sec)</label>
+                                <input type="number" @bind="SelectedPanel.RefreshIntervalSeconds" min="5" max="3600" placeholder="Auto" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h4>Layout</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Column</label>
+                                <select @bind="SelectedPanel.Layout.Column">
+                                    <option value="0">Special (Stats/Gauges)</option>
+                                    <option value="1">Left Column</option>
+                                    <option value="2">Right Column</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Order</label>
+                                <input type="number" @bind="SelectedPanel.Layout.Order" min="0" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" @bind="SelectedPanel.Layout.SpanColumns" />
+                                Span Full Width
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (SelectedPanel.PanelType == "StatCard")
+                    {
+                        <div class="form-section">
+                            <h4>Stat Card Settings</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Unit</label>
+                                    <input type="text" @bind="SelectedPanel.StatUnit" placeholder="%, MB, etc." />
+                                </div>
+                                <div class="form-group">
+                                    <label>Threshold Key</label>
+                                    <input type="text" @bind="SelectedPanel.StatThresholdKey" placeholder="cpu, memory, etc." />
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Value Format</label>
+                                <select @bind="SelectedPanel.ValueFormat">
+                                    <option value="">Default (no formatting)</option>
+                                    <option value="N0">Integer (1,234)</option>
+                                    <option value="N1">1 Decimal (1,234.5)</option>
+                                    <option value="N2">2 Decimals (1,234.56)</option>
+                                    <option value="N3">3 Decimals (1,234.567)</option>
+                                    <option value="P0">Percent 0 (100%)</option>
+                                    <option value="P1">Percent 1 (99.9%)</option>
+                                    <option value="P2">Percent 2 (99.99%)</option>
+                                    <option value="C0">Currency 0 ($1,234)</option>
+                                    <option value="C2">Currency 2 ($1,234.56)</option>
+                                    <option value="0 B">Bytes (1 KB)</option>
+                                    <option value="0.## B">Bytes Precise (1.23 KB)</option>
+                                    <option value="0.## GB">GB (1.23 GB)</option>
+                                    <option value="0.## MB">MB (1,234.56 MB)</option>
+                                    <option value="0.## TB">TB (1.23 TB)</option>
+                                    <option value="0.## ms">Milliseconds (123.45 ms)</option>
+                                    <option value="0.## s">Seconds (1.23 s)</option>
+                                    <option value="0.## 'ms/sec'">ms/sec (123.45 ms/sec)</option>
+                                    <option value="0.## 'requests/sec'">req/sec (123.45 req/sec)</option>
+                                </select>
+                                <small style="color: var(--text-muted); font-size: 11px;">
+                                    Standard .NET format strings: N# = number, P# = percent, C# = currency
+                                </small>
+                            </div>
+                        </div>
+                    }
+
+                    @if (SelectedPanel.PanelType == "BarGauge")
+                    {
+                        <div class="form-section">
+                            <h4>Bar Gauge Settings</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Threshold Key</label>
+                                    <input type="text" @bind="SelectedPanel.BarGaugeThresholdKey" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Unit Suffix</label>
+                                    <input type="text" @bind="SelectedPanel.BarGaugeUnitSuffix" placeholder="%" />
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Value Format</label>
+                                <select @bind="SelectedPanel.ValueFormat">
+                                    <option value="">Default (no formatting)</option>
+                                    <option value="N0">Integer (1,234)</option>
+                                    <option value="N1">1 Decimal (1,234.5)</option>
+                                    <option value="N2">2 Decimals (1,234.56)</option>
+                                    <option value="P0">Percent 0 (100%)</option>
+                                    <option value="P1">Percent 1 (99.9%)</option>
+                                    <option value="0.## GB">GB (1.23 GB)</option>
+                                    <option value="0.## MB">MB (1,234.56 MB)</option>
+                                </select>
+                            </div>
+                        </div>
+                    }
+
+                    @if (SelectedPanel.PanelType == "DataGrid")
+                    {
+                        <div class="form-section">
+                            <h4>Data Grid Settings</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" @bind="SelectedPanel.DataGridIsClickable" />
+                                        Clickable Rows
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label>Max Rows</label>
+                                    <input type="number" @bind="SelectedPanel.DataGridMaxRows" min="10" max="10000" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="form-section">
+                        <h4>SQL Queries</h4>
+
+                        @* ── SQL Server Query ── *@
+                        <div class="form-group">
+                            <label>SQL Server Query</label>
+                            <textarea @bind="SelectedPanel.Query.SqlServer" rows="4" placeholder="SELECT..."></textarea>
+                            <div class="button-row">
+                                <button class="btn btn-sm" @onclick="TestSqlServerQuery" disabled="@IsQueryRunning">🧪 Test Query</button>
+                                <input type="datetime-local" @bind="TestTimeFrom" class="param-input" title="Time From" />
+                                <input type="datetime-local" @bind="TestTimeTo" class="param-input" title="Time To" />
+                                <input type="text" @bind="TestSqlInstance" class="param-input" placeholder="SqlInstance (comma-separated)" title="SQL Instance(s)" />
+                            </div>
+                        </div>
+
+                        @* ── SQLite Query ── *@
+                        <div class="form-group">
+                            <label>SQLite Query</label>
+                            <textarea @bind="SelectedPanel.Query.Sqlite" rows="4" placeholder="SELECT..."></textarea>
+                            <div class="button-row">
+                                <button class="btn btn-sm" @onclick="TestSqliteQuery" disabled="@IsQueryRunning">🧪 Test SQLite Query</button>
+                                <button class="btn btn-sm" @onclick="ValidateSqliteQuery" disabled="@IsQueryRunning">✅ Validate & Create Table</button>
+                            </div>
+                        </div>
+
+                        @* ── Result message ── *@
+                        @if (!string.IsNullOrEmpty(QueryTestResult))
+                        {
+                            <div class="query-result @(QueryTestIsError ? "error" : "")">
+                                <strong>Result:</strong> @QueryTestResult
+                            </div>
+                        }
+
+                        @* ── DDL Preview ── *@
+                        @if (!string.IsNullOrEmpty(QueryDdlPreview))
+                        {
+                            <div class="query-ddl-preview">
+                                <strong>SQLite DDL:</strong>
+                                <pre>@QueryDdlPreview</pre>
+                            </div>
+                        }
+
+                        @* ── Data Grid Results ── *@
+                        @if (QueryResultTable != null && QueryResultTable.Rows.Count > 0)
+                        {
+                            <div class="query-result-grid">
+                                <div class="result-grid-header">
+                                    <strong>@QueryResultSource Results</strong>
+                                    <span class="result-row-count">@QueryResultTable.Rows.Count row(s)</span>
+                                </div>
+                                <div class="result-grid-scroll">
+                                    <table class="result-table">
+                                        <thead>
+                                            <tr>
+                                                @foreach (System.Data.DataColumn col in QueryResultTable.Columns)
+                                                {
+                                                    <th>@col.ColumnName</th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (System.Data.DataRow row in QueryResultTable.Rows)
+                                            {
+                                                <tr>
+                                                    @foreach (System.Data.DataColumn col in QueryResultTable.Columns)
+                                                    {
+                                                        <td>@row[col]</td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4>Color Thresholds</h4>
+                            <button class="btn btn-sm" @onclick="AddColorThreshold">+ Add Rule</button>
+                        </div>
+                        @foreach (var rule in SelectedPanel.ColorThresholds)
+                        {
+                            <div class="threshold-rule">
+                                <input type="text" @bind="rule.Label" placeholder="Label" />
+                                <select @bind="rule.Operator">
+                                    <option value=">=">>=</option>
+                                    <option value=">">></option>
+                                    <option value="&lt;=">&lt;=</option>
+                                    <option value="&lt;">&lt;</option>
+                                    <option value="==">==</option>
+                                </select>
+                                <input type="number" @bind="rule.Value" step="0.1" />
+                                <input type="text" @bind="rule.Color" placeholder="#color" style="width: 80px;" />
+                                <button class="btn-icon" @onclick="() => RemoveColorThreshold(rule)">🗑</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    Select a panel to edit its properties
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    @if (ShowPreview)
+    {
+        <div class="modal-overlay" @onclick="ClosePreview">
+            <div class="modal preview-modal" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Preview: @(SelectedPanel?.Title)</h3>
+                    <button class="close-btn" @onclick="ClosePreview">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="preview-info">
+                        <span>Type: @SelectedPanel?.PanelType</span>
+                        <span>Chart: @SelectedPanel?.ChartType</span>
+                        <span>Height: @SelectedPanel?.Height px</span>
+                    </div>
+                    <div class="preview-placeholder">
+                        [Live preview would render here with actual data]
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Import Modal -->
+    @if (ShowImport)
+    {
+        <div class="modal-overlay" @onclick="CloseImportDialog">
+            <div class="modal import-modal" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Import Dashboard Configuration</h3>
+                    <button class="close-btn" @onclick="CloseImportDialog">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Paste JSON configuration:</label>
+                        <textarea @bind="ImportJson" rows="10" placeholder='{"dashboards": [...]}'></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseImportDialog">Cancel</button>
+                    <button class="btn btn-primary" @onclick="ImportConfig">Import</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (ShowAddDashboardDialog)
+{
+    <div class="modal-overlay" @onclick="CancelAddDashboard">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Add New Dashboard</h3>
+                <button class="close-btn" @onclick="CancelAddDashboard">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="dashboardTitle">Dashboard Name</label>
+                    <input id="dashboardTitle" type="text" @bind="NewDashboardTitle" placeholder="e.g., My Custom Dashboard" />
+                </div>
+                <div class="form-group">
+                    <label for="dashboardRoute">Page Name (Route)</label>
+                    <input id="dashboardRoute" type="text" @bind="NewDashboardRoute" placeholder="e.g., /my-dashboard" />
+                    <small>The URL path for this dashboard (must start with /)</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CancelAddDashboard">Cancel</button>
+                <button class="btn btn-primary" @onclick="ConfirmAddDashboard">Add Dashboard</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardConfigRoot EditedConfig = new();
+    private DashboardDefinition? SelectedDashboard;
+    private PanelDefinition? SelectedPanel;
+    private string StatusMessage = "";
+    private bool IsSuccess;
+    private string QueryTestResult = "";
+    private bool QueryTestIsError;
+    private DataTable? QueryResultTable;
+    private string QueryResultSource = "";
+    private string? QueryDdlPreview;
+    private bool IsQueryRunning;
+    
+    // Add Dashboard Dialog
+    private bool ShowAddDashboardDialog;
+    private string NewDashboardTitle = "";
+    private string NewDashboardRoute = "";
+    private bool ShowPreview;
+    private bool ShowImport;
+    private string ImportJson = "";
+
+    // Undo/Redo stacks
+    private Stack<DashboardConfigRoot> UndoStack = new();
+    private Stack<DashboardConfigRoot> RedoStack = new();
+    private const int MaxUndoSteps = 50;
+
+    private bool CanUndo => UndoStack.Count > 0;
+    private bool CanRedo => RedoStack.Count > 0;
+
+    // Test query parameters
+    private DateTime TestTimeFrom = DateTime.Now.AddHours(-1);
+    private DateTime TestTimeTo = DateTime.Now;
+    private string TestSqlInstance = "";
+
+    protected override void OnInitialized()
+    {
+        LoadConfig();
+    }
+
+    private void LoadConfig()
+    {
+        EditedConfig = new DashboardConfigRoot
+        {
+            Version = ConfigService.Config.Version,
+            Dashboards = ConfigService.Config.Dashboards.Select(d => new DashboardDefinition
+            {
+                Id = d.Id,
+                Title = d.Title,
+                Route = d.Route,
+                Enabled = d.Enabled,
+                ShowAllOption = d.ShowAllOption,
+                Panels = d.Panels.Select(p => ClonePanel(p)).ToList()
+            }).ToList(),
+            SupportQueries = new Dictionary<string, QueryPair>(ConfigService.Config.SupportQueries)
+        };
+    }
+
+    private PanelDefinition ClonePanel(PanelDefinition original)
+    {
+        return new PanelDefinition
+        {
+            Id = original.Id,
+            Title = original.Title,
+            Description = original.Description,
+            Enabled = original.Enabled,
+            PanelType = original.PanelType,
+            ChartType = original.ChartType,
+            Height = original.Height,
+            RefreshIntervalSeconds = original.RefreshIntervalSeconds,
+            Layout = new PanelLayout
+            {
+                Column = original.Layout.Column,
+                Order = original.Layout.Order,
+                SpanColumns = original.Layout.SpanColumns
+            },
+            Query = new QueryPair
+            {
+                SqlServer = original.Query.SqlServer,
+                Sqlite = original.Query.Sqlite
+            },
+            StatUnit = original.StatUnit,
+            StatThresholdKey = original.StatThresholdKey,
+            BarGaugeThresholdKey = original.BarGaugeThresholdKey,
+            BarGaugeUnitSuffix = original.BarGaugeUnitSuffix,
+            ValueFormat = original.ValueFormat,
+            ColorThresholds = original.ColorThresholds.Select(c => new ColorThresholdRule
+            {
+                Operator = c.Operator,
+                Value = c.Value,
+                Color = c.Color,
+                Label = c.Label
+            }).ToList(),
+            DataGridIsClickable = original.DataGridIsClickable,
+            DataGridMaxRows = original.DataGridMaxRows
+        };
+    }
+
+    private void SaveState()
+    {
+        var snapshot = new DashboardConfigRoot
+        {
+            Version = EditedConfig.Version,
+            Dashboards = EditedConfig.Dashboards.Select(d => new DashboardDefinition
+            {
+                Id = d.Id,
+                Title = d.Title,
+                Route = d.Route,
+                Enabled = d.Enabled,
+                ShowAllOption = d.ShowAllOption,
+                Panels = d.Panels.Select(p => ClonePanel(p)).ToList()
+            }).ToList(),
+            SupportQueries = new Dictionary<string, QueryPair>(EditedConfig.SupportQueries)
+        };
+
+        UndoStack.Push(snapshot);
+        if (UndoStack.Count > MaxUndoSteps)
+        {
+            var temp = UndoStack.ToArray().Take(MaxUndoSteps).ToArray();
+            UndoStack = new Stack<DashboardConfigRoot>(temp.Reverse());
+        }
+        RedoStack.Clear();
+    }
+
+    private void Undo()
+    {
+        if (!CanUndo) return;
+        RedoStack.Push(CloneConfig(EditedConfig));
+        EditedConfig = UndoStack.Pop();
+        RefreshSelection();
+    }
+
+    private void Redo()
+    {
+        if (!CanRedo) return;
+        UndoStack.Push(CloneConfig(EditedConfig));
+        EditedConfig = RedoStack.Pop();
+        RefreshSelection();
+    }
+
+    private DashboardConfigRoot CloneConfig(DashboardConfigRoot original)
+    {
+        return new DashboardConfigRoot
+        {
+            Version = original.Version,
+            Dashboards = original.Dashboards.Select(d => new DashboardDefinition
+            {
+                Id = d.Id,
+                Title = d.Title,
+                Route = d.Route,
+                Enabled = d.Enabled,
+                ShowAllOption = d.ShowAllOption,
+                Panels = d.Panels.Select(p => ClonePanel(p)).ToList()
+            }).ToList(),
+            SupportQueries = new Dictionary<string, QueryPair>(original.SupportQueries)
+        };
+    }
+
+    private void RefreshSelection()
+    {
+        if (SelectedDashboard != null)
+        {
+            SelectedDashboard = EditedConfig.Dashboards.FirstOrDefault(d => d.Id == SelectedDashboard.Id);
+            if (SelectedDashboard != null && SelectedPanel != null)
+            {
+                SelectedPanel = SelectedDashboard.Panels.FirstOrDefault(p => p.Id == SelectedPanel.Id);
+            }
+        }
+    }
+
+    private void SelectDashboard(DashboardDefinition dashboard)
+    {
+        SelectedDashboard = dashboard;
+        SelectedPanel = dashboard.Panels.FirstOrDefault();
+    }
+
+    private void SelectPanel(PanelDefinition panel)
+    {
+        SelectedPanel = panel;
+    }
+
+    private void AddDashboard()
+    {
+        NewDashboardTitle = "New Dashboard";
+        NewDashboardRoute = "/new-dashboard";
+        ShowAddDashboardDialog = true;
+    }
+
+    private void ConfirmAddDashboard()
+    {
+        if (string.IsNullOrWhiteSpace(NewDashboardTitle))
+        {
+            StatusMessage = "Dashboard name is required";
+            IsSuccess = false;
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(NewDashboardRoute))
+        {
+            StatusMessage = "Page name (route) is required";
+            IsSuccess = false;
+            return;
+        }
+        
+        // Ensure route starts with /
+        if (!NewDashboardRoute.StartsWith("/"))
+        {
+            NewDashboardRoute = "/" + NewDashboardRoute;
+        }
+        
+        SaveState();
+        var newDashboard = new DashboardDefinition
+        {
+            Id = $"dashboard-{DateTime.Now:yyyyMMddHHmmss}",
+            Title = NewDashboardTitle.Trim(),
+            Route = NewDashboardRoute.Trim(),
+            Enabled = true,
+            Panels = new List<PanelDefinition>()
+        };
+        EditedConfig.Dashboards.Add(newDashboard);
+        SelectDashboard(newDashboard);
+        ShowAddDashboardDialog = false;
+        NewDashboardTitle = "";
+        NewDashboardRoute = "";
+    }
+
+    private void CancelAddDashboard()
+    {
+        ShowAddDashboardDialog = false;
+        NewDashboardTitle = "";
+        NewDashboardRoute = "";
+    }
+
+    private void DeleteDashboard(DashboardDefinition dashboard)
+    {
+        SaveState();
+        EditedConfig.Dashboards.Remove(dashboard);
+        if (SelectedDashboard == dashboard)
+        {
+            SelectedDashboard = EditedConfig.Dashboards.FirstOrDefault();
+            SelectedPanel = SelectedDashboard?.Panels.FirstOrDefault();
+        }
+    }
+
+    private void AddPanel()
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var newPanel = new PanelDefinition
+        {
+            Id = $"panel-{DateTime.Now:yyyyMMddHHmmss}",
+            Title = "New Panel",
+            PanelType = "TimeSeries",
+            ChartType = "Line",
+            Height = 250,
+            Layout = new PanelLayout { Column = 1, Order = SelectedDashboard.Panels.Count }
+        };
+        SelectedDashboard.Panels.Add(newPanel);
+        SelectPanel(newPanel);
+    }
+
+    private void DuplicatePanel(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var duplicate = ClonePanel(panel);
+        duplicate.Id = $"{panel.Id}-copy";
+        duplicate.Title = $"{panel.Title} (Copy)";
+        SelectedDashboard.Panels.Add(duplicate);
+        SelectPanel(duplicate);
+    }
+
+    private void DeletePanel(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        SelectedDashboard.Panels.Remove(panel);
+        SelectedPanel = SelectedDashboard.Panels.FirstOrDefault();
+    }
+
+    private void MovePanelUp(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var index = SelectedDashboard.Panels.IndexOf(panel);
+        if (index > 0)
+        {
+            SelectedDashboard.Panels.RemoveAt(index);
+            SelectedDashboard.Panels.Insert(index - 1, panel);
+            UpdatePanelOrders(SelectedDashboard.Panels);
+        }
+    }
+
+    private void MovePanelDown(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var index = SelectedDashboard.Panels.IndexOf(panel);
+        if (index < SelectedDashboard.Panels.Count - 1)
+        {
+            SelectedDashboard.Panels.RemoveAt(index);
+            SelectedDashboard.Panels.Insert(index + 1, panel);
+            UpdatePanelOrders(SelectedDashboard.Panels);
+        }
+    }
+
+    private PanelDefinition? _draggedPanel;
+    private PanelDefinition? _dragOverPanel;
+
+    private void OnDragStart(PanelDefinition panel)
+    {
+        _draggedPanel = panel;
+    }
+
+    private void OnDragOver(PanelDefinition panel)
+    {
+        _dragOverPanel = panel;
+    }
+
+    private void OnDragLeave(PanelDefinition panel)
+    {
+        if (_dragOverPanel == panel)
+        {
+            _dragOverPanel = null;
+        }
+    }
+
+    private void OnDrop(PanelDefinition targetPanel)
+    {
+        if (SelectedDashboard == null || _draggedPanel == null || targetPanel == null)
+            return;
+
+        if (_draggedPanel.Id == targetPanel.Id)
+            return;
+
+        SaveState();
+
+        var draggedIndex = SelectedDashboard.Panels.IndexOf(_draggedPanel);
+        var targetIndex = SelectedDashboard.Panels.IndexOf(targetPanel);
+
+        SelectedDashboard.Panels.RemoveAt(draggedIndex);
+        SelectedDashboard.Panels.Insert(targetIndex, _draggedPanel);
+
+        UpdatePanelOrders(SelectedDashboard.Panels);
+
+        _draggedPanel = null;
+        _dragOverPanel = null;
+    }
+
+    private void UpdatePanelOrders(List<PanelDefinition> panels)
+    {
+        for (int i = 0; i < panels.Count; i++)
+        {
+            panels[i].Layout.Order = i;
+        }
+    }
+
+    private void AddColorThreshold()
+    {
+        if (SelectedPanel == null) return;
+        SaveState();
+        SelectedPanel.ColorThresholds.Add(new ColorThresholdRule
+        {
+            Operator = ">=",
+            Value = 80,
+            Color = "#ff9800",
+            Label = "Warning"
+        });
+    }
+
+    private void RemoveColorThreshold(ColorThresholdRule rule)
+    {
+        if (SelectedPanel == null) return;
+        SaveState();
+        SelectedPanel.ColorThresholds.Remove(rule);
+    }
+
+    /// <summary>
+    /// Clears previous query test results before running a new test.
+    /// </summary>
+    private void ClearQueryResults()
+    {
+        QueryTestResult = "";
+        QueryTestIsError = false;
+        QueryResultTable = null;
+        QueryResultSource = "";
+        QueryDdlPreview = null;
+    }
+
+    /// <summary>
+    /// Executes the SQL Server query and shows the results in a data grid
+    /// so the user can manually confirm the data.
+    /// </summary>
+    private async Task TestSqlServerQuery()
+    {
+        if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.SqlServer))
+        {
+            ClearQueryResults();
+            QueryTestResult = "Please enter a SQL Server query";
+            QueryTestIsError = true;
+            return;
+        }
+
+        ClearQueryResults();
+        QueryTestResult = "Executing SQL Server query...";
+        QueryResultSource = "SQL Server";
+        IsQueryRunning = true;
+        StateHasChanged();
+
+        try
+        {
+            // Create dashboard filter with test parameters
+            var filter = new DashboardFilter
+            {
+                TimeFrom = TestTimeFrom,
+                TimeTo = TestTimeTo,
+                Instances = string.IsNullOrWhiteSpace(TestSqlInstance) 
+                    ? Array.Empty<string>() 
+                    : TestSqlInstance.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            };
+
+            var (success, message, results) = await SQLiteTableService.ExecuteSqlServerQueryAsync(
+                ConnectionFactory, SelectedPanel.Query.SqlServer, filter);
+
+            QueryTestResult = message;
+            QueryTestIsError = !success;
+            QueryResultTable = results;
+        }
+        catch (Exception ex)
+        {
+            QueryTestResult = $"Error: {ex.Message}";
+            QueryTestIsError = true;
+        }
+        finally
+        {
+            IsQueryRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Executes the SQLite query against SqlHealthAssessment.db and shows the results
+    /// in a data grid so the user can manually confirm the cached data.
+    /// </summary>
+    private async Task TestSqliteQuery()
+    {
+        if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.Sqlite))
+        {
+            ClearQueryResults();
+            QueryTestResult = "Please enter a SQLite query";
+            QueryTestIsError = true;
+            return;
+        }
+
+        ClearQueryResults();
+        QueryTestResult = "Executing SQLite query...";
+        QueryResultSource = "SQLite";
+        IsQueryRunning = true;
+        StateHasChanged();
+
+        try
+        {
+            var (success, message, results) = await SQLiteTableService.ExecuteSqliteQueryAsync(
+                SelectedPanel.Query.Sqlite);
+
+            QueryTestResult = message;
+            QueryTestIsError = !success;
+            QueryResultTable = results;
+        }
+        catch (Exception ex)
+        {
+            QueryTestResult = $"Error: {ex.Message}";
+            QueryTestIsError = true;
+        }
+        finally
+        {
+            IsQueryRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Validates the SQL Server query, generates and shows the CREATE TABLE DDL,
+    /// creates/updates the SQLite table, and inserts initial data.
+    /// </summary>
+    private async Task ValidateSqliteQuery()
+    {
+        if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.SqlServer))
+        {
+            ClearQueryResults();
+            QueryTestResult = "Please enter a SQL Server query first";
+            QueryTestIsError = true;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SelectedPanel.Id))
+        {
+            ClearQueryResults();
+            QueryTestResult = "Please save the panel first (panel ID is required for table name)";
+            QueryTestIsError = true;
+            return;
+        }
+
+        ClearQueryResults();
+        QueryTestResult = "Generating DDL and creating table...";
+        IsQueryRunning = true;
+        StateHasChanged();
+
+        try
+        {
+            // Step 1: Generate and display the DDL so the user can review it
+            var (ddlOk, ddlMsg, ddl) = await SQLiteTableService.GenerateCreateTableDdlAsync(
+                ConnectionFactory, SelectedPanel.Id, SelectedPanel.Query.SqlServer);
+
+            if (ddlOk && !string.IsNullOrEmpty(ddl))
+            {
+                QueryDdlPreview = ddl;
+            }
+            else if (!ddlOk)
+            {
+                QueryTestResult = ddlMsg;
+                QueryTestIsError = true;
+                return;
+            }
+
+            // Step 2: Actually create/update the table and insert data
+            var serverName = ".";
+            if (ConnectionFactory is SqlServerConnectionFactory sqlFactory)
+            {
+                serverName = sqlFactory.ServerName ?? ".";
+            }
+
+            var (success, message) = await SQLiteTableService.ValidateAndCreateTableAsync(
+                ConnectionFactory,
+                SelectedPanel.Id,
+                SelectedPanel.Query.SqlServer,
+                serverName);
+
+            QueryTestResult = message;
+            QueryTestIsError = !success;
+
+            // Step 3: If the SQLite query is defined, run it to show the inserted data
+            if (success && !string.IsNullOrWhiteSpace(SelectedPanel.Query.Sqlite))
+            {
+                var (sqliteOk, sqliteMsg, sqliteResults) = await SQLiteTableService.ExecuteSqliteQueryAsync(
+                    SelectedPanel.Query.Sqlite);
+
+                if (sqliteOk && sqliteResults != null)
+                {
+                    QueryResultTable = sqliteResults;
+                    QueryResultSource = "SQLite (after insert)";
+                    QueryTestResult = message + $" SQLite query returned {sqliteResults.Rows.Count} row(s).";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            QueryTestResult = $"Error: {ex.Message}";
+            QueryTestIsError = true;
+        }
+        finally
+        {
+            IsQueryRunning = false;
+        }
+    }
+
+    private void PreviewPanel()
+    {
+        ShowPreview = true;
+    }
+
+    private void ClosePreview()
+    {
+        ShowPreview = false;
+    }
+
+    private void ShowImportDialog()
+    {
+        ShowImport = true;
+        ImportJson = "";
+    }
+
+    private void CloseImportDialog()
+    {
+        ShowImport = false;
+    }
+
+    private void ImportConfig()
+    {
+        try
+        {
+            SaveState();
+            var imported = JsonSerializer.Deserialize<DashboardConfigRoot>(ImportJson);
+            if (imported != null)
+            {
+                EditedConfig = imported;
+                SelectedDashboard = EditedConfig.Dashboards.FirstOrDefault();
+                SelectedPanel = SelectedDashboard?.Panels.FirstOrDefault();
+                StatusMessage = "Configuration imported successfully!";
+                IsSuccess = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Import failed: {ex.Message}";
+            IsSuccess = false;
+        }
+        CloseImportDialog();
+    }
+
+    private void ExportConfig()
+    {
+        var json = JsonSerializer.Serialize(EditedConfig, new JsonSerializerOptions { WriteIndented = true });
+        // In a real app, we'd trigger a file download
+        StatusMessage = $"Exported {json.Length} characters to clipboard (simulated)";
+        IsSuccess = true;
+        System.Windows.Clipboard.SetText(json);
+    }
+
+    private async Task SaveAll()
+    {
+        try
+        {
+            SaveState();
+
+            // Update config service with edited config - this will also save to file and notify subscribers
+            ConfigService.UpdateConfig(EditedConfig);
+
+            // Automatically create/update SQLite tables for all panels that have SQL Server queries.
+            // This ensures the underlying local cache table exists whenever panels are added or modified.
+            var (succeeded, failed, errors) = await SQLiteTableService.EnsureTablesForAllPanelsAsync(
+                ConnectionFactory, EditedConfig);
+
+            if (failed > 0)
+            {
+                StatusMessage = $"Configuration saved. SQLite tables: {succeeded} OK, {failed} failed — {string.Join("; ", errors)}";
+                IsSuccess = true; // Config save itself succeeded
+            }
+            else if (succeeded > 0)
+            {
+                StatusMessage = $"Configuration saved successfully! ({succeeded} SQLite table(s) verified)";
+                IsSuccess = true;
+            }
+            else
+            {
+                StatusMessage = "Configuration saved successfully!";
+                IsSuccess = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Save failed: {ex.Message}";
+            IsSuccess = false;
+        }
+    }
+}

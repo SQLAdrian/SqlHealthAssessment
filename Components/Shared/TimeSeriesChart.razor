@@ -1,0 +1,178 @@
+@using ApexCharts
+@using SqlHealthAssessment.Data.Models
+@using System.Linq
+@using System.Collections.Generic
+
+<div class="chart-panel">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="chart-title">@Title</div>
+    }
+
+    @if (Data != null && Data.Any())
+    {
+        @* Cache distinct series to avoid repeated LINQ operations *@
+        var adjustedData = GetAdjustedData();
+        var seriesList = _distinctSeries ??= adjustedData.Select(d => d.Series).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        
+        <ApexChart TItem="TimeSeriesPoint"
+                   Height="@Height"
+                   Options="@GetChartOptions()">
+
+            @foreach (var series in seriesList)
+            {
+                @* Use pre-grouped data to avoid repeated Where() calls *@
+                var seriesData = _seriesDataCache?.TryGetValue(series, out var data) == true ? data : GetSeriesData(series, adjustedData);
+                <ApexPointSeries TItem="TimeSeriesPoint"
+                                 Items="@seriesData"
+                                 Name="@series"
+                                 SeriesType="@ChartSeriesType"
+                                 XValue="@(p => p.Time)"
+                                 YValue="@(p => (decimal)p.Value)" />
+            }
+        </ApexChart>
+    }
+    else
+    {
+        <div class="chart-empty">No data available</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public List<TimeSeriesPoint>? Data { get; set; }
+    [Parameter] public string YAxisUnit { get; set; } = "";
+    [Parameter] public int Height { get; set; } = 250;
+    [Parameter] public SeriesType ChartSeriesType { get; set; } = SeriesType.Line;
+    
+    // Timezone offset in hours from UTC (e.g., 13 for UTC+13 like Pacific/Auckland)
+    [Parameter] public double TimezoneOffsetHours { get; set; } = 0;
+
+    // Cached values for performance
+    private List<string>? _distinctSeries;
+    private Dictionary<string, List<TimeSeriesPoint>>? _seriesDataCache;
+    private ApexChartOptions<TimeSeriesPoint>? _cachedOptions;
+    private List<TimeSeriesPoint>? _adjustedDataCache;
+    private int _lastOffset;
+
+    // Get data with timezone adjustment applied
+    private List<TimeSeriesPoint> GetAdjustedData()
+    {
+        if (Data == null) return new List<TimeSeriesPoint>();
+        
+        int offsetMinutes = (int)(TimezoneOffsetHours * 60);
+        
+        // Reset cache if offset changed
+        if (_lastOffset != offsetMinutes || _adjustedDataCache == null)
+        {
+            _lastOffset = offsetMinutes;
+            _adjustedDataCache = Data.Select(p => new TimeSeriesPoint
+            {
+                Time = p.Time == DateTime.MinValue ? DateTime.MinValue : p.Time.AddMinutes(offsetMinutes),
+                Value = p.Value,
+                Series = p.Series
+            }).ToList();
+        }
+        
+        return _adjustedDataCache ?? new List<TimeSeriesPoint>();
+    }
+
+    // Memoized chart options
+    private ApexChartOptions<TimeSeriesPoint> GetChartOptions()
+    {
+        return _cachedOptions ??= new ApexChartOptions<TimeSeriesPoint>
+        {
+            Chart = new Chart
+            {
+                Background = "transparent",
+                ForeColor = "#a0a0a0",
+                Toolbar = new Toolbar { Show = false },
+                Zoom = new Zoom { Enabled = true },
+                Animations = new Animations
+                {
+                    Enabled = true,
+                    Easing = Easing.Easeinout,
+                    Speed = 500
+                }
+            },
+            Theme = new Theme { Mode = Mode.Dark },
+            Xaxis = new XAxis
+            {
+                Type = XAxisType.Datetime,
+                Labels = new XAxisLabels
+                {
+                    DatetimeFormatter = new DatetimeFormatter
+                    {
+                        Hour = "HH:mm",
+                        Minute = "HH:mm",
+                        Day = "MMM dd"
+                    }
+                }
+            },
+            Yaxis = new List<YAxis>
+            {
+                new YAxis
+                {
+                    Labels = new YAxisLabels
+                    {
+                        Formatter = "function(val) { return val != null ? val.toFixed(1) : ''; }"
+                    }
+                }
+            },
+            Stroke = new Stroke
+            {
+                Width = 2,
+                Curve = Curve.Smooth
+            },
+            Grid = new Grid
+            {
+                BorderColor = "#333",
+                StrokeDashArray = 3
+            },
+            Tooltip = new Tooltip
+            {
+                Theme = Mode.Dark,
+                X = new TooltipX { Format = "yyyy-MM-dd HH:mm:ss" }
+            },
+            Legend = new Legend
+            {
+                Position = LegendPosition.Bottom,
+                FontSize = "11px"
+            },
+            Colors = new List<string> { "#4caf50", "#2196f3", "#ff9800", "#f44336", "#9c27b0", "#00bcd4", "#ffeb3b", "#e91e63" }
+        };
+    }
+
+    // Cache series data on parameters set
+    protected override void OnParametersSet()
+    {
+        _cachedOptions = null; // Invalidate options cache
+        
+        if (Data != null && Data.Any())
+        {
+            // Pre-compute distinct series
+            _distinctSeries = Data
+                .Select(d => d.Series)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Pre-group data by series
+            _seriesDataCache = _distinctSeries
+                .ToDictionary(
+                    series => series,
+                    series => Data.Where(d => string.Equals(d.Series, series, StringComparison.OrdinalIgnoreCase)).ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            _distinctSeries = null;
+            _seriesDataCache = null;
+        }
+    }
+
+    private List<TimeSeriesPoint> GetSeriesData(string series, List<TimeSeriesPoint> data)
+    {
+        if (data == null) return new List<TimeSeriesPoint>();
+        return data.Where(d => string.Equals(d.Series, series, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+}

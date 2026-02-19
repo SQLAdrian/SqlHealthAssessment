@@ -1,0 +1,430 @@
+using ApexCharts;
+using SqlHealthAssessment.Data.Models;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using Microsoft.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace SqlHealthAssessment.Data
+{
+    public class DiagnosticScriptRunner
+    {
+        private readonly ServerConnectionManager _connectionManager;
+        private readonly ILogger<DiagnosticScriptRunner> _logger;
+        private List<ScriptConfiguration>? _scriptConfigurations;
+        private readonly object _lock = new();
+        private string FiletimeStamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+        /// <summary>
+        /// Maximum number of rows to read from any single script result set.
+        /// Prevents unbounded memory consumption from runaway queries.
+        /// </summary>
+        public int MaxResultRows { get; set; } = 10_000;
+
+        /// <summary>
+        /// Maximum number of scripts to execute concurrently when running all enabled scripts.
+        /// </summary>
+        public int MaxConcurrency { get; set; } = 3;
+
+        private static readonly JsonSerializerOptions ScriptConfigSerializerOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        public DiagnosticScriptRunner(ServerConnectionManager connectionManager, ILogger<DiagnosticScriptRunner> logger)
+        {
+            _connectionManager = connectionManager;
+            _logger = logger;
+        }
+
+        public List<ScriptConfiguration> LoadScriptConfigurations()
+        {
+            lock (_lock)
+            {
+                if (_scriptConfigurations != null)
+                    return _scriptConfigurations;
+
+                try
+                {
+                    var configPath = Path.Combine(AppContext.BaseDirectory, "script-configurations.json");
+                    if (!File.Exists(configPath))
+                    {
+                        _logger.LogWarning("Script configurations file not found at {Path}", configPath);
+                        _scriptConfigurations = new List<ScriptConfiguration>();
+                        return _scriptConfigurations;
+                    }
+
+                    var json = File.ReadAllText(configPath);
+                    _scriptConfigurations = JsonSerializer.Deserialize<List<ScriptConfiguration>>(json, ScriptConfigSerializerOptions)
+                        ?? new List<ScriptConfiguration>();
+
+                    _logger.LogInformation("Loaded {Count} script configurations", _scriptConfigurations.Count);
+                    return _scriptConfigurations;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error loading script configurations");
+                    _scriptConfigurations = new List<ScriptConfiguration>();
+                    return _scriptConfigurations;
+                }
+            }
+        }
+
+        public ScriptConfiguration? GetScriptConfiguration(string id)
+        {
+            var configs = LoadScriptConfigurations();
+            return configs.FirstOrDefault(c => c.Id == id);
+        }
+
+        public async Task<ScriptExecutionResult> ExecuteScriptAsync(
+            ScriptConfiguration config,
+            ServerConnection connection,
+            string targetServer,
+            CancellationToken cancellationToken = default)
+        {
+            var result = new ScriptExecutionResult
+            {
+                ScriptName = config.Name,
+                ServerName = targetServer,
+                Success = false
+            };
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            try
+            {
+                // Create connection to MASTER database for audit scripts
+                var masterConnectionString = connection.GetConnectionString(targetServer, "master");
+                using var dbConnection = new SqlConnection(masterConnectionString);
+                await dbConnection.OpenAsync(cancellationToken);
+
+                // If ExecutionParameters is a stored procedure call, check if it exists
+                if (!string.IsNullOrEmpty(config.ExecutionParameters))
+                {
+                    var procedureName = ExtractProcedureName(config.ExecutionParameters);
+                    if (!string.IsNullOrEmpty(procedureName))
+                    {
+                        if (!await ProcedureExistsAsync(dbConnection, procedureName, cancellationToken))
+                        {
+                            result.Success = false;
+                            stopwatch.Stop();
+                            result.ExecutionTime = stopwatch.Elapsed;
+                            result.ErrorMessage = $"Stored procedure '{procedureName}' not found on this server. " +
+                                "This procedure needs to be installed first. Visit https://www.brentozar.com/first-aid/sql-server-diagnostic-scripts/ for sp_Blitz.";
+                            _logger.LogWarning("Procedure {Procedure} not found on {Server}", procedureName, targetServer);
+                            return result;
+                        }
+                    }
+                }
+
+                // Load and validate the script file
+                var scriptPath = Path.Combine("scripts", config.ScriptPath);
+                if (!File.Exists(scriptPath))
+                    throw new FileNotFoundException($"Script not found: {scriptPath}");
+
+                var scriptContent = await File.ReadAllTextAsync(scriptPath, cancellationToken);
+
+                // --- SQL SAFETY VALIDATION ---
+                // Validate the script content before execution
+                SqlSafetyValidator.ValidateOrThrow(scriptContent, config.Name);
+
+                // Validate database scope
+                var scopeResult = SqlSafetyValidator.ValidateDatabaseScope(scriptContent);
+                if (!scopeResult.IsSafe)
+                {
+                    throw new SqlSafetyException(
+                        $"Script '{config.Name}' blocked: {scopeResult.Reason}",
+                        config.Name,
+                        scopeResult.Reason);
+                }
+
+                // Also validate ExecutionParameters and SqlQueryForOutput
+                if (!string.IsNullOrEmpty(config.ExecutionParameters))
+                {
+                    SqlSafetyValidator.ValidateOrThrow(config.ExecutionParameters, $"{config.Name} (ExecutionParameters)");
+                }
+                if (!string.IsNullOrEmpty(config.SqlQueryForOutput))
+                {
+                    SqlSafetyValidator.ValidateOrThrow(config.SqlQueryForOutput, $"{config.Name} (SqlQueryForOutput)");
+                }
+
+                _logger.LogInformation("Script {Name} passed safety validation for {Server}", config.Name, targetServer);
+                // --- END SQL SAFETY VALIDATION ---
+
+                // Split script on GO batch separators using regex (GO must be on its own line)
+                var batches = System.Text.RegularExpressions.Regex.Split(
+                    scriptContent,
+                    @"^\s*GO\s*$",
+                    System.Text.RegularExpressions.RegexOptions.Multiline |
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                foreach (string batch in batches)
+                {
+                    string trimmed = batch.Trim();
+                    if (string.IsNullOrWhiteSpace(trimmed))
+                        continue;
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        using var command = dbConnection.CreateCommand();
+                        command.CommandText = batch;
+                        command.CommandTimeout = config.TimeoutSeconds;
+                        command.CommandType = CommandType.Text;
+                        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                        // Don't need results from script creation
+                    }
+                    catch (SqlException ex) when (ex.Number == 2714 || ex.Number == 15233)
+                    {
+                        // 2714 = Object already exists, 15233 = Property doesn't exist
+                        // Continue with next batch
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw; // Re-throw cancellation
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Batch execution warning in script {Name} on {Server}", config.Name, targetServer);
+                        // Log but continue - some batches may fail due to version differences
+                    }
+                }
+
+                // Execute the stored procedure / execution parameters
+                if (!string.IsNullOrEmpty(config.ExecutionParameters))
+                {
+                    using var command = dbConnection.CreateCommand();
+                    command.CommandText = config.ExecutionParameters;
+                    command.CommandTimeout = config.TimeoutSeconds;
+                    command.CommandType = CommandType.Text;
+                    using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                    // Don't need results from immediate execution
+                }
+
+                // Select the results
+                if (!string.IsNullOrEmpty(config.SqlQueryForOutput))
+                {
+                    using var command = dbConnection.CreateCommand();
+                    command.CommandText = config.SqlQueryForOutput;
+                    command.CommandTimeout = config.TimeoutSeconds;
+                    command.CommandType = CommandType.Text;
+
+                    using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                    result.Results = new List<Dictionary<string, object>>();
+
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        // Enforce MaxRows limit to prevent unbounded memory usage
+                        if (result.RowsAffected >= MaxResultRows)
+                        {
+                            _logger.LogWarning(
+                                "Script {Name} on {Server} hit MaxResultRows limit ({MaxRows}). Truncating results.",
+                                config.Name, targetServer, MaxResultRows);
+                            break;
+                        }
+
+                        var row = new Dictionary<string, object>();
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            row[reader.GetName(i)] = reader.IsDBNull(i) ? null! : reader.GetValue(i);
+                        }
+                        result.Results.Add(row);
+                        result.RowsAffected++;
+                    }
+                }
+
+                stopwatch.Stop();
+                result.ExecutionTime = stopwatch.Elapsed;
+                ExportScriptToCsv(result);
+
+                result.Success = true;
+
+                _logger.LogInformation("Script {Name} executed successfully on {Server} in {ElapsedMs}ms ({Rows} rows)",
+                    config.Name, targetServer, stopwatch.ElapsedMilliseconds, result.RowsAffected);
+            }
+            catch (SqlSafetyException ex)
+            {
+                stopwatch.Stop();
+                result.ExecutionTime = stopwatch.Elapsed;
+                result.ErrorMessage = $"BLOCKED: {ex.BlockedReason}";
+                _logger.LogError("Script {Name} blocked by safety validator: {Reason}", config.Name, ex.BlockedReason);
+            }
+            catch (OperationCanceledException)
+            {
+                stopwatch.Stop();
+                result.ExecutionTime = stopwatch.Elapsed;
+                result.ErrorMessage = "Execution was cancelled.";
+                _logger.LogWarning("Script {Name} execution cancelled on {Server}", config.Name, targetServer);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                result.ExecutionTime = stopwatch.Elapsed;
+                result.ErrorMessage = ex.Message;
+                _logger.LogError(ex, "Error executing script {Name} on {Server}", config.Name, targetServer);
+            }
+
+            return result;
+        }
+
+        public async Task<List<ScriptExecutionResult>> ExecuteAllEnabledScriptsAsync(
+            ServerConnection connection,
+            string targetServer,
+            CancellationToken cancellationToken = default)
+        {
+            var configs = LoadScriptConfigurations()
+                .Where(c => c.Enabled)
+                .OrderBy(c => c.ExecutionOrder)
+                .ToList();
+
+            // Use SemaphoreSlim for concurrent execution with a limit
+            using var semaphore = new SemaphoreSlim(MaxConcurrency);
+            var tasks = configs.Select(async config =>
+            {
+                await semaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    return await ExecuteScriptAsync(config, connection, targetServer, cancellationToken);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(tasks);
+            return results.ToList();
+        }
+
+        public string ExportToCsv(ScriptExecutionResult result)
+        {
+            if (result.Results == null || result.Results.Count == 0)
+                return string.Empty;
+
+            var sb = new StringBuilder();
+
+            // Get headers from first row and add ServerName as first column
+            var headers = result.Results.First().Keys.ToList();
+            headers.Insert(0, "ServerName");
+            sb.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
+
+            // Add data rows with ServerName as first column
+            foreach (var row in result.Results)
+            {
+                var values = new List<string> { $"\"{result.ServerName}\"" };
+                foreach (var h in headers.Skip(1))
+                {
+                    if (row.TryGetValue(h, out var value))
+                    {
+                        values.Add($"\"{value?.ToString()?.Replace("\"", "\"\"") ?? ""}\"");
+                    }
+                    else
+                    {
+                        values.Add("\"\"");
+                    }
+                }
+                sb.AppendLine(string.Join(",", values));
+            }
+
+            return sb.ToString();
+        }
+
+        private void ExportScriptToCsv(ScriptExecutionResult result)
+        {
+            if (result.Results == null || result.Results.Count == 0)
+                return;
+
+            var csv = ExportToCsv(result);
+            var outputFolder = Path.Combine(AppContext.BaseDirectory, "output");
+
+            // Ensure output directory exists
+            if (!Directory.Exists(outputFolder))
+                Directory.CreateDirectory(outputFolder);
+
+            var fileName = Path.Combine(outputFolder,
+                $"{result.ServerName.Replace("\\", "_")}_{result.ScriptName.Replace(" ", "_")}_{FiletimeStamp}.csv");
+
+            try
+            {
+                // Write CSV directly - no need to re-read the file afterward
+                File.WriteAllText(fileName, csv, Encoding.UTF8);
+                _logger.LogInformation("CSV exported to {FileName}", fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting CSV to {FileName}", fileName);
+            }
+        }
+
+        public void DownloadCsv(string csvContent, string fileName)
+        {
+            var bytes = Encoding.UTF8.GetBytes(csvContent);
+            var base64 = Convert.ToBase64String(bytes);
+
+            // In Blazor, we'll return the bytes and let the UI handle download
+            // This is a placeholder for the actual download logic
+            _logger.LogInformation("CSV content generated for {FileName}, {Size} bytes", fileName, csvContent.Length);
+        }
+
+        private string? ExtractProcedureName(string sql)
+        {
+            // Try to extract procedure name from patterns like:
+            // EXEC [dbo].[sp_Blitz] @Param1 = 1
+            // EXEC dbo.stpSecurity_Checklist
+            // EXEC  [dbo].[sp_triage(c)]
+
+            var match = System.Text.RegularExpressions.Regex.Match(
+                sql,
+                @"EXEC\s+(?:\[?\w+\]?\.?\[?)([^\s\]@]+)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            return match.Success ? match.Groups[1].Value.Trim('[', ']') : null;
+        }
+
+        private async Task<bool> ProcedureExistsAsync(SqlConnection connection, string procedureName, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // First try without schema
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT COUNT(*) FROM sys.objects
+                    WHERE type = 'P' AND name = @ProcName
+                    AND is_ms_shipped = 0";
+                command.Parameters.AddWithValue("@ProcName", procedureName);
+                var count = (int)(await command.ExecuteScalarAsync(cancellationToken))!;
+
+                if (count > 0) return true;
+
+                // Try with common schema prefixes
+                foreach (var schema in new[] { "dbo", "guest", "sys" })
+                {
+                    using var cmd2 = connection.CreateCommand();
+                    cmd2.CommandText = @"
+                        SELECT COUNT(*) FROM sys.objects o
+                        INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                        WHERE o.type = 'P' AND o.name = @ProcName
+                        AND s.name = @Schema AND o.is_ms_shipped = 0";
+                    cmd2.Parameters.AddWithValue("@ProcName", procedureName);
+                    cmd2.Parameters.AddWithValue("@Schema", schema);
+                    if ((int)(await cmd2.ExecuteScalarAsync(cancellationToken))! > 0) return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error checking if procedure {Proc} exists", procedureName);
+                return true; // If we can't check, assume it exists to avoid false negatives
+            }
+        }
+    }
+}

@@ -1,0 +1,597 @@
+@page "/fullaudit"
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@using System.IO
+@using System.Text
+@using Microsoft.Extensions.Logging
+@inject DiagnosticScriptRunner ScriptRunner
+@inject ServerConnectionManager ConnectionManager
+@inject FullAuditStateService AuditState
+@inject IJSRuntime JSRuntime
+@inject ILogger<FullAudit> Logger
+@using System.Diagnostics;
+<PageTitle>Full Audit - SQLHealthAssessment</PageTitle>
+
+<div class="full-audit-container">
+    <h1>Full Audit / Diagnostic Scripts</h1>
+    <p class="description">Run diagnostic scripts on SQL servers and export results to CSV</p>
+
+    @if (_isLoading)
+    {
+        <div class="loading">
+            <p>Loading...</p>
+        </div>
+    }
+    else
+    {
+        <!-- Server Connection Section -->
+        <div class="connection-section">
+            <div class="section-header">
+                <h2>Server Connections</h2>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" @onclick="TestAllConnections" disabled="@_isTesting">
+                        @(_isTesting ? "Testing..." : "Test All")
+                    </button>
+                    <button class="btn btn-primary" @onclick="ShowAddConnectionDialog">
+                        + Add Connections
+                    </button>
+                </div>
+            </div>
+
+            @if (_connections.Count == 0)
+            {
+                <div class="no-connections">
+                    <p>No server connections configured. Add server names to get started.</p>
+                </div>
+            }
+            else
+            {
+                <div class="connection-list">
+                    @foreach (var conn in _connections)
+                    {
+                        <div class="connection-card @(SelectedConnection?.Id == conn.Id ? "selected" : "")"
+                             @onclick="() => SelectConnection(conn)">
+                            <div class="connection-info">
+                                <div class="connection-name">
+                                    @conn.GetServerCount() Servers
+                                    @if (conn.IsConnected)
+                                    {
+                                        <span class="badge success">@conn.SuccessfulServers.Count Connected</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge">Not Tested</span>
+                                    }
+                                </div>
+                                <div class="connection-details">
+                                    Database: @conn.Database | Auth: @(conn.UseWindowsAuthentication ? "Windows" : "SQL")
+                                </div>
+                                @if (conn.SuccessfulServers.Count > 0)
+                                {
+                                    <div class="successful-servers">
+                                        <small>Connected: @string.Join(", ", conn.SuccessfulServers.Take(3))@(conn.SuccessfulServers.Count > 3 ? "..." : "")</small>
+                                    </div>
+                                }
+                            </div>
+                            <div class="connection-actions">
+                                <button class="btn btn-sm" @onclick="() => EditConnection(conn)" 
+                                        @onclick:stopPropagation>
+                                    Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteConnection(conn.Id)"
+                                        @onclick:stopPropagation>
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Server Selector -->
+        @if (SelectedConnection != null && SelectedConnection.SuccessfulServers.Count > 0)
+        {
+            <div class="server-selector">
+                <h3>Select Target Server</h3>
+                <div class="server-buttons">
+                    @foreach (var server in SelectedConnection.SuccessfulServers)
+                    {
+                        <button class="server-btn @(SelectedServer == server ? "selected" : "")"
+                                @onclick="() => SelectServer(server)">
+                            @server
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Scripts Section -->
+        @if (SelectedConnection != null && SelectedServer != null)
+        {
+            <div class="scripts-section">
+                <div class="section-header">
+                    <h2>Diagnostic Scripts - @SelectedServer</h2>
+                    <div class="script-actions">
+                        <button class="btn btn-primary" @onclick="RunAllEnabledScripts" disabled="@_isRunning">
+                            @(_isRunning ? "Running..." : "Run All Enabled Scripts")
+                        </button>
+                        <!--<button class="btn btn-secondary" @onclick="ExportAllToCsv" disabled="@(_executionResults.Count == 0)">
+                            Export All to CSV
+                        </button>-->
+                    </div>
+                </div>
+
+                <div class="script-list">
+                    @foreach (var script in _scripts)
+                    {
+                        <div class="script-card @(script.Enabled ? "enabled" : "disabled")">
+                            <div class="script-header">
+                                <div class="script-info">
+                                    <h3>@script.Name</h3>
+                                    <p>@script.Description</p>
+                                </div>
+                                <div class="script-actions">
+                                    <button class="btn btn-sm" @onclick="() => RunScript(script)" disabled="@_isRunning">
+                                        @(_isRunning ? "Running..." : "Run")
+                                    </button>
+                                    <!--
+                                        @if (GetResultForScript(script.Name) != null)
+                                    {
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => ExportScriptToCsv(GetResultForScript(script.Name)!)">
+                                            Export CSV
+                                        </button>
+                                    }-->
+                                </div>
+                            </div>
+                            
+                            @if (GetResultForScript(script.Name) != null)
+                            {
+                                var result = GetResultForScript(script.Name)!;
+                                <div class="script-result @(result.Success ? "success" : "error")">
+                                    <div class="result-header">
+                                        <span class="status">@(result.Success ? "✓ Success" : "✗ Error")</span>
+                                        <span class="execution-time">@result.ExecutionTime.TotalSeconds.ToString("F2")s</span>
+                                        <span class="rows">@result.RowsAffected rows</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(result.ErrorMessage))
+                                    {
+                                        <p class="error-details">@result.ErrorMessage</p>
+                                    }
+                                    @if (result.Results != null && result.Results.Count > 0)
+                                    {
+                                        <div class="result-preview">
+                                            <h4>Preview (first 5 rows):</h4>
+                                            <table class="preview-table">
+                                                <thead>
+                                                    <tr>
+                                                        @foreach (var key in result.Results.First().Keys)
+                                                        {
+                                                            <th>@key</th>
+                                                        }
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var row in result.Results.Take(5))
+                                                    {
+                                                        <tr>
+                                                            @foreach (var value in row.Values)
+                                                            {
+                                                                <td>@(value?.ToString() ?? "NULL")</td>
+                                                            }
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Summary Section -->
+            @if (_executionResults.Count > 0)
+            {
+                <div class="summary-section">
+                    <div class="summary-header">
+                        <button class="btn btn-sm btn-secondary"@onclick="() => openfolder()">
+                            Open output folder
+                        </button>
+                        <button class="btn btn-sm btn-danger" @onclick="ClearResults">
+                            Clear Results
+                        </button>
+                    </div>
+                    <h2>Execution Summary</h2>
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Server</th>
+                                <th>Script</th>
+                                <th>Status</th>
+                                <th>Execution Time</th>
+                                <th>Rows</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var result in _executionResults)
+                            {
+                                <tr>
+                                    <td>@result.ServerName</td>
+                                    <td>@result.ScriptName</td>
+                                    <td>@(result.Success ? "✓ Success" : "✗ Error")</td>
+                                    <td>@result.ExecutionTime.TotalSeconds.ToString("F2")s</td>
+                                    <td>@result.RowsAffected</td>
+                                    <td>
+                                        @if (result.Success && result.Results != null)
+                                        {
+                                                <a>Exported to CSV</a>
+                                        }
+                                    </td>
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+        else if (SelectedConnection != null)
+        {
+            <div class="no-selection">
+                <p>No connected servers. Click "Test All" to test server connections, or edit the connection to add/remove servers.</p>
+            </div>
+        }
+    }
+
+    <!-- Connection Dialog -->
+    <ConnectionDialog 
+        @bind-Show="_showConnectionDialog"
+        EditingConnection="_editingConnection"
+        OnConnectionSaved="OnConnectionSaved" />
+</div>
+
+@code {
+    private List<ServerConnection> _connections = new();
+    private List<ScriptConfiguration> _scripts = new();
+    private ServerConnection? SelectedConnection { get; set; }
+    private string? SelectedServer { get; set; }
+    private bool _isLoading = true;
+    private bool _showConnectionDialog = false;
+    private ServerConnection? _editingConnection;
+    private string StatusMessage = string.Empty;
+    private string StatusMessageClass = string.Empty;
+    private string FiletimeStamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+    // Properties that use the state service for persistence
+    private List<ScriptExecutionResult> _executionResults 
+    { 
+        get => AuditState.GetAllExecutionResults();
+    }
+    private bool _isRunning 
+    { 
+        get => AuditState.IsRunning;
+        set => AuditState.IsRunning = value;
+    }
+    private bool _isTesting 
+    { 
+        get => AuditState.IsTesting;
+        set => AuditState.IsTesting = value;
+    }
+
+    protected override void OnInitialized()
+    {
+        LoadConnections();
+        RestoreState();
+    }
+
+    private void RestoreState()
+    {
+        // Restore selected connection and server from state
+        if (!string.IsNullOrEmpty(AuditState.SelectedConnectionId))
+        {
+            var conn = _connections.FirstOrDefault(c => c.Id == AuditState.SelectedConnectionId);
+            if (conn != null)
+            {
+                SelectedConnection = conn;
+                if (!string.IsNullOrEmpty(AuditState.SelectedServer))
+                {
+                    SelectedServer = AuditState.SelectedServer;
+                }
+            }
+        }
+    }
+
+    private void SaveState()
+    {
+        AuditState.SelectedConnectionId = SelectedConnection?.Id;
+        AuditState.SelectedServer = SelectedServer;
+    }
+
+    private void openfolder()
+    {
+        var outputFolder = Path.Combine(AppContext.BaseDirectory, "output");
+        Process.Start("explorer.exe", outputFolder);
+        //Process.Start(@".\output");
+    }
+
+    private void ClearResults()
+    {
+        AuditState.ClearExecutionResults();
+    }
+
+    private void LoadConnections()
+    {
+        _connections = ConnectionManager.GetConnections();
+
+        if (SelectedConnection == null && _connections.Count > 0)
+        {
+            SelectedConnection = _connections.First();
+            if (SelectedConnection.SuccessfulServers.Count > 0)
+            {
+                SelectedServer = SelectedConnection.SuccessfulServers.First();
+            }
+        }
+
+        LoadScripts();
+    }
+
+    private void LoadScripts()
+    {
+        try
+        {
+            _scripts = ScriptRunner.LoadScriptConfigurations();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading script configurations");
+        }
+        _isLoading = false;
+    }
+
+    private void SelectConnection(ServerConnection connection)
+    {
+        SelectedConnection = connection;
+        SelectedServer = null;
+        AuditState.ClearExecutionResults();
+
+        if (connection.SuccessfulServers.Count > 0)
+        {
+            SelectedServer = connection.SuccessfulServers.First();
+        }
+        SaveState();
+    }
+
+    private void SelectServer(string server)
+    {
+        SelectedServer = server;
+        AuditState.ClearExecutionResults();
+        SaveState();
+    }
+
+    private void ShowAddConnectionDialog()
+    {
+        _editingConnection = null;
+        _showConnectionDialog = true;
+    }
+
+    private void EditConnection(ServerConnection connection)
+    {
+        _editingConnection = connection;
+        _showConnectionDialog = true;
+    }
+
+    private void DeleteConnection(string id)
+    {
+        if (SelectedConnection?.Id == id)
+        {
+            SelectedConnection = null;
+            SelectedServer = null;
+        }
+        ConnectionManager.RemoveConnection(id);
+        _connections = ConnectionManager.GetConnections();
+    }
+
+    private async Task OnConnectionSaved()
+    {
+        _connections = ConnectionManager.GetConnections();
+
+        if (_editingConnection != null)
+        {
+            var updated = ConnectionManager.GetConnection(_editingConnection.Id);
+            if (updated != null)
+            {
+                SelectedConnection = updated;
+                SelectedServer = null;
+                if (updated.SuccessfulServers.Count > 0)
+                {
+                    SelectedServer = updated.SuccessfulServers.First();
+                }
+            }
+        }
+        else if (SelectedConnection == null && _connections.Count > 0)
+        {
+            SelectedConnection = _connections.First();
+            if (SelectedConnection.SuccessfulServers.Count > 0)
+            {
+                SelectedServer = SelectedConnection.SuccessfulServers.First();
+            }
+        }
+        SaveState();
+    }
+
+    private async Task TestAllConnections()
+    {
+        _isTesting = true;
+
+        foreach (var conn in _connections)
+        {
+            var successfulServers = new List<string>();
+            foreach (var server in conn.GetServerList())
+            {
+                try
+                {
+                    await Task.Run(() =>
+                    {
+                        using var connection = new Microsoft.Data.SqlClient.SqlConnection(conn.GetConnectionString(server));
+                        connection.Open();
+                        using var command = connection.CreateCommand();
+                        command.CommandText = "SELECT @@VERSION";
+                        var version = command.ExecuteScalar();
+                        if (version != null)
+                        {
+                            successfulServers.Add(server);
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Connection test failed for {Server}", server);
+                }
+            }
+
+            conn.SuccessfulServers = successfulServers;
+            conn.IsConnected = successfulServers.Count > 0;
+            conn.LastConnected = successfulServers.Count > 0 ? DateTime.Now : null;
+        }
+
+        ConnectionManager.UpdateSuccessfulServers(SelectedConnection?.Id ?? "", 
+            SelectedConnection?.SuccessfulServers ?? new List<string>());
+
+        if (SelectedConnection != null && SelectedConnection.SuccessfulServers.Count > 0)
+        {
+            SelectedServer = SelectedConnection.SuccessfulServers.First();
+        }
+
+        _isTesting = false;
+    }
+
+    private async Task RunAllEnabledScripts()
+    {
+        if (SelectedServer == null || SelectedConnection == null) return;
+
+        _isRunning = true;
+        AuditState.ClearExecutionResults();
+
+        try
+        {
+            var results = await ScriptRunner.ExecuteAllEnabledScriptsAsync(SelectedConnection, SelectedServer);
+            AuditState.ClearAndAddResults(results);
+        }
+        finally
+        {
+            _isRunning = false;
+        }
+    }
+
+    private async Task RunScript(ScriptConfiguration script)
+    {
+        if (SelectedServer == null || SelectedConnection == null) return;
+
+        _isRunning = true;
+
+        try
+        {
+            var result = await ScriptRunner.ExecuteScriptAsync(script, SelectedConnection, SelectedServer);
+            AuditState.RemoveExecutionResult(script.Name);
+            AuditState.AddExecutionResult(result);
+        }
+        finally
+        {
+            _isRunning = false;
+        }
+    }
+
+    private ScriptExecutionResult? GetResultForScript(string scriptName)
+    {
+        return _executionResults.FirstOrDefault(r => r.ScriptName == scriptName);
+    }
+
+    //private void ExportScriptToCsv(ScriptExecutionResult result)
+    //{
+    //    if (result.Results == null || result.Results.Count == 0)
+    //        return;
+    //
+    //    var csv = ScriptRunner.ExportToCsv(result);
+    //    var outputFolder = Path.Combine(AppContext.BaseDirectory, "output");
+    //    var fileName = outputFolder + $"\\{result.ServerName.Replace("\\", "_")}_{result.ScriptName.Replace(" ", "_")}_{FiletimeStamp}.csv";
+    //
+    //    //DownloadFile(csv, fileName);
+    //    //string file_path = @"file.txt";
+    //
+    //    try {
+    //        // Creating a new file, or overwrite
+    //        // if the file already exists.
+    //        using (FileStream fs = File.Create(fileName))
+    //        {
+    //            // Adding some info into the file
+    //            byte[] info = new UTF8Encoding(true).GetBytes(csv);
+    //            fs.Write(info, 0, info.Length);
+    //        }
+    //
+    //        // Reading the file contents
+    //        using (StreamReader sr = File.OpenText(fileName))
+    //        {
+    //            string s = "";
+    //            while ((s = sr.ReadLine()) != null) {
+    //                Console.WriteLine(s);
+    //            }
+    //        }
+    //    }
+    //    finally
+    //    {
+    //        
+    //    }
+    //}
+
+    //private void ExportAllToCsv()
+    //{
+    //    if (_executionResults.Count == 0)
+    //        return;
+    //
+    //    // Create output folder in application directory
+    //    var outputFolder = Path.Combine(AppContext.BaseDirectory, "output");
+    //    if (!Directory.Exists(outputFolder))
+    //    {
+    //        Directory.CreateDirectory(outputFolder);
+    //    }
+    //
+    //    var serverName = (SelectedServer ?? "Unknown").Replace("\\", "_").Replace(" ", "_");
+    //    var timestamp = FiletimeStamp;// DateTime.Now.ToString("yyyyMMdd_HHmmss");
+    //
+    //    foreach (var result in _executionResults)
+    //    {
+    //        if (result.Success && result.Results != null && result.Results.Count > 0)
+    //        {
+    //            var scriptName = result.ScriptName.Replace(" ", "_").Replace("/", "_").Replace("\\", "_");
+    //            var fileName = $"{scriptName}_{serverName}_{timestamp}.csv";
+    //            var filePath = Path.Combine(outputFolder, fileName);
+    //
+    //            var csv = ScriptRunner.ExportToCsv(result);
+    //            File.WriteAllText(filePath, csv);
+    //            Logger.LogInformation("Saved CSV to {FilePath}", filePath);
+    //        }
+    //    }
+    //
+    //    StatusMessage = $"Exported {_executionResults.Count} files to {outputFolder}";
+    //}
+
+    private async void DownloadFile(string content, string fileName)
+    {
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(content);
+            var base64 = Convert.ToBase64String(bytes);
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, base64);
+            Logger.LogInformation("Download triggered for {FileName}", fileName);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error triggering download for {FileName}", fileName);
+        }
+    }
+}

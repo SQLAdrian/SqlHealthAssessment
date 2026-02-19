@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SQLHealthAssessment</title>
+    <base href="/" />
+    <link href="css/app.css" rel="stylesheet" />
+</head>
+<body>
+    <!-- Tech-Inspired Loading Screen -->
+    <div id="loading-screen">
+        <div class="loader-container">
+            <div class="loader-ring"></div>
+            <div class="loader-ring"></div>
+            <div class="loader-ring"></div>
+            <div class="loader-core">
+                <div class="core-inner"></div>
+                <div class="core-pulse"></div>
+            </div>
+            <div class="loader-particles">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="loader-text">
+                <span class="letter">L</span>
+                <span class="letter">O</span>
+                <span class="letter">A</span>
+                <span class="letter">D</span>
+                <span class="letter">I</span>
+                <span class="letter">N</span>
+                <span class="letter">G</span>
+            </div>
+            <div class="loader-progress">
+                <div class="progress-bar"></div>
+            </div>
+            <div class="loader-subtitle">Initializing SQLHealthAssessment</div>
+        </div>
+    </div>
+
+    <div id="app">Loading...</div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">Dismiss</a>
+    </div>
+
+    <script src="_framework/blazor.webview.js"></script>
+    <script src="scripts/download.js"></script>
+    <script src="themes.js"></script>
+    
+    <script>
+        // Loading screen with 2 second display
+        (function() {
+            const loadingScreen = document.getElementById('loading-screen');
+            
+            // Load saved theme immediately
+            if (typeof loadSavedTheme === 'function') {
+                loadSavedTheme();
+            }
+            
+            // Hide loading screen after 2 seconds
+            setTimeout(function() {
+                loadingScreen.style.opacity = '0';
+                loadingScreen.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(function() {
+                    loadingScreen.style.display = 'none';
+                }, 500);
+            }, 2000);
+        })();
+    </script>
+</body>
+</html>

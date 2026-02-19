@@ -1,0 +1,524 @@
+@page "/settings"
+@using Microsoft.Extensions.Configuration
+@using System.IO
+@using System.Text.Json
+@using Microsoft.Data.SqlClient
+@using Microsoft.JSInterop
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject IDbConnectionFactory ConnectionFactory
+@inject SqlServerConnectionFactory SqlServerConnectionFactory
+@inject IConfiguration Configuration
+@inject AlertingService Alerting
+@inject IJSRuntime JS
+@inject UserSettingsService UserSettings
+
+<div class="settings-page">
+    <h2 style="margin-bottom: 20px;">Settings</h2>
+
+
+<!-- Should use this connection
+    <div class="settings-group">
+        <h3>Data Source</h3>
+        <div class="settings-field">
+            <label>Data Source</label>
+            <select value="@SelectedDataSource" @onchange="OnDataSourceChanged">
+                <option value="SqlServer">SQL Server</option>
+                @* <option value="Sqlite">SQLite</option> *@
+            </select>
+        </div>
+        @if (RestartRequired)
+        {
+            <p style="color: var(--yellow); font-size: 12px;">
+                Data source changed. Restart the application for the change to take effect.
+            </p>
+        }
+    </div>
+    -->
+
+<!-- server selection has been moved
+    <div class="settings-group">
+        <h3>Connection Strings</h3>
+        <div class="settings-field">
+            <label>SQL Server</label>
+            @if (_isEditingConnectionString)
+            {
+                <input type="text" @bind="SqlServerConnectionString" />
+            }
+            else
+            {
+                <input type="password" @bind="SqlServerConnectionString" style="width: 100%;" />
+            }
+            <small style="display: block; margin-top: 4px;">
+                <button class="btn-link" @onclick="ToggleConnectionStringVisibility" style="background: none; border: none; color: var(--blue); cursor: pointer; padding: 0; font-size: 12px;">
+                    @(_isEditingConnectionString ? "Hide (password visible)" : "Show/Edit Connection String")
+                </button>
+            </small>
+        </div>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="trustCert" @bind="TrustServerCertificate" style="width: auto;" />
+            <label for="trustCert" style="margin: 0; font-weight: normal;">Trust Server Certificate (use for self-signed SSL certificates)</label>
+        </div>
+        <button class="settings-btn" style="margin-top: 10px;" @onclick="SaveConnectionString">Save Connection String</button>
+        @if (SaveResult != null)
+        {
+            <p style="margin-top: 8px; color: @(SaveSuccess ? "var(--green)" : "var(--red)");">@SaveResult</p>
+        }
+    </div>
+    -->
+
+    <div class="settings-group">
+        <h3>Refresh</h3>
+        <div class="settings-field">
+            <label>Auto-Refresh Interval (seconds)</label>
+            <input type="text" value="@(Configuration["RefreshIntervalSeconds"] ?? "5")" readonly />
+        </div>
+        <div class="settings-field">
+            <label>Default Time Range (minutes)</label>
+            <input type="text" value="@(Configuration["DefaultTimeRangeMinutes"] ?? "60")" readonly />
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Quick Check</h3>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="showDiagnosticPane" checked="@ShowDiagnosticPane"
+                   @onchange="ToggleDiagnosticPane" style="width: auto;" />
+            <label for="showDiagnosticPane" style="margin: 0; font-weight: normal;">
+                Show Diagnostic Output Pane (real-time per-check execution log)
+            </label>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Connection Test</h3>
+        <button class="settings-btn" @onclick="TestConnection">Test Connection</button>
+        @if (TestResult != null)
+        {
+            <p style="margin-top: 8px; color: @(TestSuccess ? "var(--green)" : "var(--red)");">@TestResult</p>
+        }
+    </div>
+
+    <!-- Alerting Section -->
+    <div class="settings-group">
+        <div class="section-header">
+            <h3>Alerting</h3>
+            <button class="btn btn-sm" @onclick="ShowAddAlertDialog">+ Add Alert</button>
+        </div>
+        
+        @if (AlertNotifications.Count > 0)
+        {
+            <div class="alert-notifications">
+                <h4>Recent Alerts</h4>
+                @foreach (var notification in AlertNotifications.Take(5))
+                {
+                    <div class="alert-notification @notification.Severity">
+                        <span class="alert-badge">@notification.Severity.ToUpper()</span>
+                        <span>@notification.Message</span>
+                        <small>@notification.TriggeredAt.ToString("g")</small>
+                    </div>
+                }
+                <button class="btn btn-sm" style="margin-top: 8px;" @onclick="ClearAlerts">Clear Alerts</button>
+            </div>
+        }
+
+        <div class="alert-thresholds">
+            <h4>Alert Thresholds</h4>
+            @foreach (var threshold in AlertThresholds)
+            {
+                <div class="alert-threshold @(threshold.Enabled ? "enabled" : "disabled")">
+                    <div class="threshold-info">
+                        <strong>@threshold.Name</strong>
+                        <span class="threshold-condition">
+                            @threshold.Metric @threshold.Condition.Replace("_", " ") @threshold.ThresholdValue
+                        </span>
+                        <span class="severity-badge @threshold.Severity">@threshold.Severity</span>
+                    </div>
+                    <div class="threshold-actions">
+                        <button class="btn btn-sm" @onclick="() => ToggleThreshold(threshold)">
+                            @(threshold.Enabled ? "Disable" : "Enable")
+                        </button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteThreshold(threshold.Id)">Delete</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (ShowAlertDialog)
+        {
+            <div class="modal-overlay">
+                <div class="modal">
+                    <h3>Add Alert Threshold</h3>
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" @bind="NewAlert.Name" placeholder="High CPU Alert" />
+                    </div>
+                    <div class="form-group">
+                        <label>Metric</label>
+                        <select @bind="NewAlert.Metric">
+                            <option value="cpu">CPU Usage (%)</option>
+                            <option value="memory">Memory Usage (%)</option>
+                            <option value="connections">Connections</option>
+                            <option value="deadlocks">Deadlocks</option>
+                            <option value="batch_requests">Batch Requests/sec</option>
+                            <option value="page_life_expectancy">Page Life Expectancy</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Condition</label>
+                        <select @bind="NewAlert.Condition">
+                            <option value="greater_than">Greater than</option>
+                            <option value="less_than">Less than</option>
+                            <option value="equals">Equals</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Threshold Value</label>
+                        <input type="number" @bind="NewAlert.ThresholdValue" />
+                    </div>
+                    <div class="form-group">
+                        <label>Severity</label>
+                        <select @bind="NewAlert.Severity">
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" @bind="NewAlert.Description" />
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn" @onclick="() => ShowAlertDialog = false">Cancel</button>
+                        <button class="btn btn-primary" @onclick="SaveNewAlert">Save</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Theme Section -->
+    <div class="settings-group">
+        <h3>Appearance</h3>
+        <div class="settings-field">
+            <label>Theme</label>
+            <div class="theme-grid">
+                <button class="theme-btn @(SelectedTheme == "sakura" ? "selected" : "")" @onclick="@(() => ApplyTheme("sakura"))">
+                    <span class="theme-preview sakura"></span>
+                    <span class="theme-name">Sakura</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "colonial" ? "selected" : "")" @onclick="@(() => ApplyTheme("colonial"))">
+                    <span class="theme-preview colonial"></span>
+                    <span class="theme-name">Colonial</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "africanSunset" ? "selected" : "")" @onclick="@(() => ApplyTheme("africanSunset"))">
+                    <span class="theme-preview african-sunset"></span>
+                    <span class="theme-name">African Sunset</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "nordicFrost" ? "selected" : "")" @onclick="@(() => ApplyTheme("nordicFrost"))">
+                    <span class="theme-preview nordic-frost"></span>
+                    <span class="theme-name">Nordic Frost</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "carnival" ? "selected" : "")" @onclick="@(() => ApplyTheme("carnival"))">
+                    <span class="theme-preview carnival"></span>
+                    <span class="theme-name">Carnival</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "hawaiian" ? "selected" : "")" @onclick="@(() => ApplyTheme("hawaiian"))">
+                    <span class="theme-preview hawaiian"></span>
+                    <span class="theme-name">Hawaiian</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "cyberpunk" ? "selected" : "")" @onclick="@(() => ApplyTheme("cyberpunk"))">
+                    <span class="theme-preview cyberpunk"></span>
+                    <span class="theme-name">Cyberpunk</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "englishGarden" ? "selected" : "")" @onclick="@(() => ApplyTheme("englishGarden"))">
+                    <span class="theme-preview english-garden"></span>
+                    <span class="theme-name">English Garden</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "indianFestival" ? "selected" : "")" @onclick="@(() => ApplyTheme("indianFestival"))">
+                    <span class="theme-preview indian-festival"></span>
+                    <span class="theme-name">Indian Festival</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "oceanDeep" ? "selected" : "")" @onclick="@(() => ApplyTheme("oceanDeep"))">
+                    <span class="theme-preview ocean-deep"></span>
+                    <span class="theme-name">Ocean Deep</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? TestResult;
+    private bool TestSuccess;
+    private string SelectedTheme = "cyberpunk";
+    private string SelectedDataSource = "SqlServer";
+    private bool RestartRequired;
+    private string SqlServerConnectionString = "";
+    private bool TrustServerCertificate = false;
+    private bool _isEditingConnectionString = false;
+    private string? SaveResult;
+    private bool SaveSuccess;
+    private bool ShowDiagnosticPane;
+
+    protected override void OnInitialized()
+    {
+        // Load saved theme from localStorage via JS
+        LoadSavedTheme();
+
+        // Load configuration
+        SelectedDataSource = Configuration["DataSource"] ?? "SqlServer";
+        var connStr = Configuration.GetConnectionString("SqlServer") ?? "";
+        TrustServerCertificate = Configuration.GetValue<bool>("TrustServerCertificate", false);
+
+        // Mask the password in the connection string for display
+        SqlServerConnectionString = MaskConnectionStringPassword(connStr);
+        LoadAlerts();
+
+        // Load user settings
+        ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
+    }
+
+    private void ToggleDiagnosticPane(ChangeEventArgs e)
+    {
+        ShowDiagnosticPane = (bool)(e.Value ?? false);
+        UserSettings.SetShowDiagnosticPane(ShowDiagnosticPane);
+    }
+
+    private async void LoadSavedTheme()
+    {
+        try
+        {
+            var theme = await JS.InvokeAsync<string>("localStorage.getItem", "SqlHealthAssessment-theme");
+            if (!string.IsNullOrEmpty(theme))
+            {
+                SelectedTheme = theme;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private async Task ApplyTheme(string themeName)
+    {
+        SelectedTheme = themeName;
+        await JS.InvokeVoidAsync("applyTheme", themeName);
+    }
+
+    private string MaskConnectionStringPassword(string connStr)
+    {
+        if (string.IsNullOrEmpty(connStr))
+            return "";
+        
+        try
+        {
+            var builder = new SqlConnectionStringBuilder(connStr);
+            if (!string.IsNullOrEmpty(builder.Password))
+            {
+                builder.Password = "********";
+                return builder.ConnectionString;
+            }
+        }
+        catch
+        {
+            // If parsing fails, return as-is
+        }
+        return connStr;
+    }
+
+    private void ToggleConnectionStringVisibility()
+    {
+        _isEditingConnectionString = !_isEditingConnectionString;
+    }
+
+    private async Task OnDataSourceChanged(ChangeEventArgs e)
+    {
+        var newValue = e.Value?.ToString() ?? "SqlServer";
+        if (newValue == SelectedDataSource)
+            return;
+
+        SelectedDataSource = newValue;
+
+        var appSettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+        var json = await File.ReadAllTextAsync(appSettingsPath);
+        using var doc = JsonDocument.Parse(json);
+        var root = new Dictionary<string, object>();
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            if (prop.Name == "DataSource")
+                root[prop.Name] = newValue;
+            else
+                root[prop.Name] = prop.Value;
+        }
+
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var updatedJson = JsonSerializer.Serialize(root, options);
+        await File.WriteAllTextAsync(appSettingsPath, updatedJson);
+
+        RestartRequired = true;
+    }
+
+    //private async Task SaveConnectionString()
+    //{
+    //    if (string.IsNullOrWhiteSpace(SqlServerConnectionString))
+    //    {
+    //        SaveResult = "Connection string cannot be empty";
+    //        SaveSuccess = false;
+    //        return;
+    //    }
+//
+    //    try
+    //    {
+    //        var appSettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+    //        var json = await File.ReadAllTextAsync(appSettingsPath);
+    //        using var doc = JsonDocument.Parse(json);
+    //        
+    //        // Get the original connection string to preserve the password if user entered ********
+    //        var originalConnStr = doc.RootElement
+    //            .GetProperty("ConnectionStrings")
+    //            .GetProperty("SqlServer")
+    //            .GetString() ?? "";
+    //        
+    //        // Parse both to check if user provided new password or kept the placeholder
+    //        var newConnStr = SqlServerConnectionString;
+    //        try
+    //        {
+    //            var newBuilder = new SqlConnectionStringBuilder(newConnStr);
+    //            var originalBuilder = new SqlConnectionStringBuilder(originalConnStr);
+    //            
+    //            // If new password is placeholder, keep the original password
+    //            if (newBuilder.Password == "********" && !string.IsNullOrEmpty(originalBuilder.Password))
+    //            {
+    //                newBuilder.Password = originalBuilder.Password;
+    //                newConnStr = newBuilder.ConnectionString;
+    //            }
+    //        }
+    //        catch
+    //        {
+    //            // If parsing fails, use what the user provided
+    //        }
+//
+    //        var root = new Dictionary<string, object>();
+    //        foreach (var prop in doc.RootElement.EnumerateObject())
+    //        {
+    //            if (prop.Name == "ConnectionStrings")
+    //            {
+    //                var connStrings = new Dictionary<string, string>();
+    //                foreach (var connProp in prop.Value.EnumerateObject())
+    //                {
+    //                    if (connProp.Name == "SqlServer")
+    //                        connStrings[connProp.Name] = newConnStr;
+    //                    else if (connProp.Name == "Sqlite")
+    //                        connStrings[connProp.Name] = connProp.Value.GetString() ?? "";
+    //                }
+    //                root[prop.Name] = connStrings;
+    //            }
+    //            else if (prop.Name == "DataSource")
+    //            {
+    //                root[prop.Name] = prop.Value.GetString() ?? "SqlServer";
+    //            }
+    //            else if (prop.Name == "TrustServerCertificate")
+    //            {
+    //                root[prop.Name] = TrustServerCertificate;
+    //            }
+    //            else if (prop.Name == "RefreshIntervalSeconds")
+    //            {
+    //                root[prop.Name] = prop.Value.GetInt32();
+    //            }
+    //            else if (prop.Name == "DefaultTimeRangeMinutes")
+    //            {
+    //                root[prop.Name] = prop.Value.GetInt32();
+    //            }
+    //        }
+//
+    //        // Ensure TrustServerCertificate is in the config
+    //        if (!root.ContainsKey("TrustServerCertificate"))
+    //        {
+    //            root["TrustServerCertificate"] = TrustServerCertificate;
+    //        }
+//
+    //        var options = new JsonSerializerOptions { WriteIndented = true };
+    //        var updatedJson = JsonSerializer.Serialize(root, options);
+    //        await File.WriteAllTextAsync(appSettingsPath, updatedJson);
+//
+    //        SaveResult = "Connection string saved and applied. No restart required.";
+    //        SaveSuccess = true;
+    //        RestartRequired = false;
+    //        
+    //        // Apply the new connection string without restart
+    //        SqlServerConnectionFactory.UpdateConnectionString(newConnStr, TrustServerCertificate);
+    //        
+    //        // Re-mask the password in the UI
+    //        SqlServerConnectionString = MaskConnectionStringPassword(newConnStr);
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        SaveResult = $"Failed to save: {ex.Message}";
+    //        SaveSuccess = false;
+    //    }
+    //}
+
+    private async Task TestConnection()
+    {
+        TestResult = "Testing...";
+        try
+        {
+            using var conn = ConnectionFactory.CreateConnection();
+            conn.Open();
+            TestResult = $"Connected successfully to {ConnectionFactory.DataSourceType}";
+            TestSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            TestResult = $"Connection failed: {ex.Message}";
+            TestSuccess = false;
+        }
+    }
+
+    // Alerting methods
+    private List<AlertThreshold> AlertThresholds = new();
+    private List<AlertNotification> AlertNotifications = new();
+    private bool ShowAlertDialog = false;
+    private AlertThreshold NewAlert = new();
+
+    private void LoadAlerts()
+    {
+        AlertThresholds = Alerting.GetThresholds();
+        AlertNotifications = Alerting.GetNotifications();
+    }
+
+    private void ShowAddAlertDialog()
+    {
+        NewAlert = new AlertThreshold();
+        ShowAlertDialog = true;
+    }
+
+    private void SaveNewAlert()
+    {
+        if (string.IsNullOrWhiteSpace(NewAlert.Name))
+            return;
+        
+        Alerting.AddThreshold(NewAlert);
+        LoadAlerts();
+        ShowAlertDialog = false;
+    }
+
+    private void ToggleThreshold(AlertThreshold threshold)
+    {
+        threshold.Enabled = !threshold.Enabled;
+        Alerting.UpdateThreshold(threshold);
+        LoadAlerts();
+    }
+
+    private void DeleteThreshold(string id)
+    {
+        Alerting.RemoveThreshold(id);
+        LoadAlerts();
+    }
+
+    private void ClearAlerts()
+    {
+        Alerting.ClearNotifications();
+        LoadAlerts();
+    }
+}

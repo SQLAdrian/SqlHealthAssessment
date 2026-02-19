@@ -1,0 +1,587 @@
+@using System.Data
+@using System.Collections.Concurrent
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Caching
+@using SqlHealthAssessment.Data.Models
+@inject DashboardConfigService ConfigService
+@inject DashboardDataService DataService
+@inject QueryExecutor QueryExecutor
+@inject CachingQueryExecutor CachingExecutor
+@inject AutoRefreshService RefreshService
+@inject UserSettingsService UserSettings
+@inject ServerConnectionManager ConnectionManager
+@inject GlobalInstanceSelector InstanceSelector
+@implements IDisposable
+
+
+@if (ConnectionManager.CurrentServer != null)
+{
+    <div class="server-context-header">
+        <span class="server-context-icon">🖥️</span>
+        <span class="server-context-label">Connected to:</span>
+        <span class="server-context-name">@ConnectionManager.CurrentServer.ServerNames</span>
+        <span class="server-context-db">(@ConnectionManager.CurrentServer.Database)</span>
+    </div>
+}
+
+<DashboardToolbar @bind-TimeRangeMinutes="TimeRangeMinutes"
+                  @bind-SelectedInstance="SelectedInstance"
+                  @bind-AutoRefresh="AutoRefresh"
+                  @bind-TimezoneOffsetHours="TimezoneOffsetHours"
+                  Instances="Instances"
+                  ShowAllOption="@(Dashboard?.ShowAllOption ?? false)"
+                  OnRefreshRequested="OnManualRefresh" />
+
+<div class="dashboard-content">
+    @if (CachingExecutor.IsServingStaleData)
+    {
+        <div class="chart-empty" style="color: #ff9800; background: #2a2000; border: 1px solid #ff9800; padding: 10px; margin: 8px; border-radius: 4px;">
+            &#9888; SQL Server unreachable. Showing cached data from @(CachingExecutor.LastSuccessfulFetch?.ToString("HH:mm:ss") ?? "unknown")
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="chart-empty" style="color: #f44336; background: #2a1a1a; border: 1px solid #f44336; padding: 12px; margin: 8px; border-radius: 4px;">
+            @ErrorMessage
+        </div>
+    }
+
+    @* Show panel errors *@
+    @if (_panelErrors.Any())
+    {
+        <div class="chart-empty" style="color: #ff9800; background: #2a2000; border: 1px solid #ff9800; padding: 12px; margin: 8px; border-radius: 4px;">
+            <strong>&#9888; Data Load Warnings:</strong>
+            <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                @foreach (var err in _panelErrors)
+                {
+                    <li>@err.Key: @err.Value</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (IsLoading)
+    {
+        <div class="chart-empty">Loading data...</div>
+    }
+    else if (Dashboard != null)
+    {
+        @* Stat cards section *@
+        @if (StatPanels.Any())
+        {
+            <div class="stat-grid">
+                @foreach (var panel in StatPanels)
+                {
+                    @if (panel.PanelType == "CheckStatus" && _checkResults.TryGetValue(panel.Id, out var checks))
+                    {
+                        <DynamicPanel Panel="panel" CheckData="checks" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                    }
+                    else if (panel.PanelType == "StatCard" && _statResults.TryGetValue(panel.Id, out var stat))
+                    {
+                        <DynamicPanel Panel="panel" StatData="stat" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                    }
+                }
+            </div>
+        }
+
+        @* Details section *@
+        @if (DetailsPanels.Any())
+        {
+            <div class="details-section">
+                @foreach (var panel in DetailsPanels)
+                {
+                    @if (_gridResults.TryGetValue(panel.Id, out var grid))
+                    {
+                        <DynamicPanel Panel="panel" GridData="grid" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                    }
+                }
+            </div>
+        }
+
+        @* Bar gauge panels *@
+        @foreach (var panel in GaugePanels)
+        {
+            if (_barGaugeResults.TryGetValue(panel.Id, out var gaugeData))
+            {
+                <div class="chart-grid-item" style="position: relative;">
+                    <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
+                    <DynamicPanel Panel="panel" BarGaugeData="gaugeData" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                </div>
+            }
+        }
+
+        @* Maximized panel overlay *@
+        @if (_maximizedPanel != null)
+        {
+            <div class="panel-maximize-overlay" @onclick="RestorePanel">
+                <div class="panel-maximize-content" @onclick:stopPropagation>
+                    <div class="panel-maximize-header">
+                        <span class="panel-maximize-title">@_maximizedPanel.Title</span>
+                        <button class="panel-maximize-close" @onclick="RestorePanel" title="Restore">✕</button>
+                    </div>
+                    <div class="panel-maximize-body">
+                        <DynamicPanel Panel="@_maximizedPanelExpanded"
+                                      TimeSeriesData="@(_timeSeriesResults.TryGetValue(_maximizedPanel.Id, out var mts) ? mts : null)"
+                                      GridData="@(_gridResults.TryGetValue(_maximizedPanel.Id, out var mgd) ? mgd : null)"
+                                      BarGaugeData="@(_barGaugeResults.TryGetValue(_maximizedPanel.Id, out var mbg) ? mbg : null)"
+                                      TimezoneOffsetHours="@TimezoneOffsetHours" />
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Chart grid - 2 column layout *@
+        @if (ChartPanels.Any())
+        {
+            <div class="chart-grid">
+                @foreach (var panel in ChartPanels)
+                {
+                    @if (panel.Layout.SpanColumns)
+                    {
+                        <div class="chart-grid-full chart-grid-item">
+                            <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
+                            @RenderChartOrGrid(panel)
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="chart-grid-item">
+                            <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
+                            @RenderChartOrGrid(panel)
+                        </div>
+                    }
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    // Fixed to load longqueries dashboard
+    [Parameter] public string DashboardId { get; set; } = "";
+
+    private DashboardDefinition? Dashboard;
+    private string[] Instances = Array.Empty<string>();
+    private string SelectedInstance = "";
+    private int TimeRangeMinutes = 60;
+    private double TimezoneOffsetHours = 0;
+    private bool AutoRefresh = true;
+    private bool IsLoading = true;
+    private string? ErrorMessage;
+
+    // Data results keyed by panel ID - using ConcurrentDictionary for thread-safe updates
+    private ConcurrentDictionary<string, List<TimeSeriesPoint>> _timeSeriesResults = new();
+    private ConcurrentDictionary<string, StatValue> _statResults = new();
+    private ConcurrentDictionary<string, List<StatValue>> _barGaugeResults = new();
+    private ConcurrentDictionary<string, DataTable> _gridResults = new();
+    private ConcurrentDictionary<string, List<CheckStatus>> _checkResults = new();
+    private ConcurrentDictionary<string, string> _panelErrors = new(); // Track panel errors
+
+    // Maximize state
+    private PanelDefinition? _maximizedPanel;
+    private PanelDefinition? _maximizedPanelExpanded;
+
+    // Debounce timer for rapid refresh requests
+    private System.Threading.Timer? _debounceTimer;
+    private int _pendingRefreshCount;
+    private bool _isLoadingInProgress;
+
+    private void MaximizePanel(PanelDefinition panel)
+    {
+        _maximizedPanel = panel;
+        // Create an expanded copy with larger height
+        _maximizedPanelExpanded = new PanelDefinition
+        {
+            Id = panel.Id,
+            Title = panel.Title,
+            PanelType = panel.PanelType,
+            ChartType = panel.ChartType,
+            Height = 550,
+            Layout = panel.Layout,
+            Query = panel.Query,
+            StatUnit = panel.StatUnit,
+            StatThresholdKey = panel.StatThresholdKey,
+            BarGaugeThresholdKey = panel.BarGaugeThresholdKey,
+            BarGaugeUnitSuffix = panel.BarGaugeUnitSuffix,
+            DataGridIsClickable = panel.DataGridIsClickable,
+            DataGridMaxRows = panel.DataGridMaxRows,
+            ColorThresholds = panel.ColorThresholds
+        };
+    }
+
+    private void RestorePanel()
+    {
+        _maximizedPanel = null;
+        _maximizedPanelExpanded = null;
+    }
+
+    // Computed panel lists
+    private List<PanelDefinition> EnabledPanels => (Dashboard?.Panels?.Where(p => p.Enabled).ToList() ?? new()) ?? new();
+    private List<PanelDefinition> StatPanels => EnabledPanels
+        .Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "CheckStatus"))
+        .OrderBy(p => p.Layout.Order).ToList();
+    private List<PanelDefinition> DetailsPanels => EnabledPanels
+        .Where(p => p.Layout.Column == 0 && p.PanelType == "TextCard")
+        .OrderBy(p => p.Layout.Order).ToList();
+    private List<PanelDefinition> GaugePanels => EnabledPanels
+        .Where(p => p.PanelType == "BarGauge")
+        .OrderBy(p => p.Layout.Order).ToList();
+    private List<PanelDefinition> ChartPanels => EnabledPanels
+        .Where(p => p.PanelType == "TimeSeries" || p.PanelType == "DataGrid"
+            || (p.PanelType != "StatCard" && p.PanelType != "CheckStatus" && p.PanelType != "BarGauge" && p.PanelType != "TextCard" && p.Layout.Column > 0))
+        .OrderBy(p => p.Layout.Order).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        RefreshService.OnRefresh += OnAutoRefresh;
+        ConfigService.OnConfigChanged += OnConfigChanged;
+        InstanceSelector.OnInstanceChanged += OnGlobalInstanceChanged;
+
+        // Load user settings including timezone
+        TimezoneOffsetHours = UserSettings.GetTimezoneOffset();
+        
+        Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => d.Id == DashboardId);
+
+        // IMPORTANT: Get instances from SQLWATCH database, not from connection names
+        // SQLWATCH stores data under @@SERVERNAME which may differ from connection server name
+        // For example, connection might be "localhost" but SQLWATCH stores "MSI"
+        try
+        {
+            Instances = await DataService.GetInstancesAsync();
+            if (Instances.Length > 0)
+            {
+                // Use global instance selector if available, otherwise use first instance
+                var globalInstance = InstanceSelector.SelectedInstance;
+                if (!string.IsNullOrEmpty(globalInstance) && Instances.Contains(globalInstance))
+                {
+                    SelectedInstance = globalInstance;
+                }
+                else
+                {
+                    SelectedInstance = Instances[0];
+                    InstanceSelector.SetSelectedInstance(SelectedInstance);
+                }
+            }
+            else
+            {
+                // Fallback: use enabled connections if no SQLWATCH instances found
+                var enabledConnections = ConnectionManager.GetEnabledServerNames();
+                if (enabledConnections.Length > 0)
+                {
+                    Instances = enabledConnections;
+                    SelectedInstance = Instances[0];
+                    InstanceSelector.SetSelectedInstance(SelectedInstance);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Fallback: use enabled connections if SQLWATCH query fails
+            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] GetInstances from SQLWATCH failed: {ex.Message}. Using connection server names.");
+            var enabledConnections = ConnectionManager.GetEnabledServerNames();
+            if (enabledConnections.Length > 0)
+            {
+                Instances = enabledConnections;
+                var globalInstance = InstanceSelector.SelectedInstance;
+                if (!string.IsNullOrEmpty(globalInstance) && Instances.Contains(globalInstance))
+                {
+                    SelectedInstance = globalInstance;
+                }
+                else
+                {
+                    SelectedInstance = Instances[0];
+                    InstanceSelector.SetSelectedInstance(SelectedInstance);
+                }
+            }
+        }
+
+        await LoadData();
+        if (AutoRefresh) RefreshService.Start();
+    }
+
+    private async void OnGlobalInstanceChanged(string instanceName)
+    {
+        // Update local selected instance and refresh data
+        if (SelectedInstance != instanceName && Instances.Contains(instanceName))
+        {
+            SelectedInstance = instanceName;
+            await InvokeAsync(async () =>
+            {
+                await LoadData();
+                StateHasChanged();
+            });
+        }
+    }
+
+    private DashboardFilter BuildFilter()
+    {
+        var now = DateTime.Now;
+        return new DashboardFilter
+        {
+            TimeFrom = now.AddMinutes(-TimeRangeMinutes),
+            TimeTo = now,
+            Instances = string.IsNullOrEmpty(SelectedInstance) || SelectedInstance == "ALL"
+                ? Instances
+                : new[] { SelectedInstance }
+        };
+    }
+
+    private async Task LoadData(System.Threading.CancellationToken cancellationToken = default)
+    {
+        if (Dashboard == null) 
+        {
+            ErrorMessage = $"Dashboard '{DashboardId}' not found in configuration.";
+            IsLoading = false;
+            return;
+        }
+
+        // Debounce rapid refresh requests
+        var refreshCount = ++_pendingRefreshCount;
+        if (refreshCount > 1)
+        {
+            // Another refresh was requested, skip this one
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            _panelErrors.Clear(); // Clear previous panel errors
+
+            var filter = BuildFilter();
+
+            // Prepare caching layer: detect filter changes, run eviction
+            await CachingExecutor.PrepareRefreshCycle(DashboardId, TimeRangeMinutes, SelectedInstance);
+
+            // Use ConcurrentDictionary for thread-safe, lock-free updates
+            var tsResults = new ConcurrentDictionary<string, List<TimeSeriesPoint>>();
+            var statResults = new ConcurrentDictionary<string, StatValue>();
+            var bgResults = new ConcurrentDictionary<string, List<StatValue>>();
+            var gridResults = new ConcurrentDictionary<string, DataTable>();
+            var checkResults = new ConcurrentDictionary<string, List<CheckStatus>>();
+
+            var panels = EnabledPanels.ToList();
+            var tasks = new List<Task>(panels.Count);
+
+            foreach (var panel in panels)
+            {
+                // Skip cancelled panels early
+                cancellationToken.ThrowIfCancellationRequested();
+                
+                tasks.Add(LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, cancellationToken));
+            }
+
+            await Task.WhenAll(tasks);
+
+            // Atomic swap of results
+            _timeSeriesResults = tsResults;
+            _statResults = statResults;
+            _barGaugeResults = bgResults;
+            _gridResults = gridResults;
+            _checkResults = checkResults;
+        }
+        catch (OperationCanceledException)
+        {
+            // Refresh was cancelled, no error
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading data: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] LoadData error: {ex}");
+        }
+        finally
+        {
+            _pendingRefreshCount = 0;
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadPanelDataAsync(
+        PanelDefinition panel,
+        DashboardFilter filter,
+        ConcurrentDictionary<string, List<TimeSeriesPoint>> tsResults,
+        ConcurrentDictionary<string, StatValue> statResults,
+        ConcurrentDictionary<string, List<StatValue>> bgResults,
+        ConcurrentDictionary<string, DataTable> gridResults,
+        ConcurrentDictionary<string, List<CheckStatus>> checkResults,
+        System.Threading.CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (panel.PanelType)
+            {
+                case "TimeSeries":
+                    {
+                        var data = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, MapTimeSeriesPoint, null, cancellationToken);
+                        tsResults[panel.Id] = data;
+                    }
+                    break;
+
+                case "StatCard":
+                    {
+                        var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
+                        if (dt.Rows.Count > 0)
+                        {
+                            var val = Convert.ToDouble(dt.Rows[0]["Value"]);
+                            string color;
+                            if (panel.ColorThresholds != null && panel.ColorThresholds.Count > 0)
+                                color = panel.GetThresholdColor(val);
+                            else if (!string.IsNullOrEmpty(panel.StatThresholdKey))
+                                color = ThresholdConfig.GetColor(panel.StatThresholdKey, val);
+                            else
+                                color = ThresholdConfig.Blue;
+
+                            var sv = new StatValue
+                            {
+                                Label = panel.Title,
+                                Value = val,
+                                Unit = panel.StatUnit,
+                                Color = color
+                            };
+                            statResults[panel.Id] = sv;
+                        }
+                    }
+                    break;
+
+                case "BarGauge":
+                    {
+                        var data = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader =>
+                        {
+                            var val = Convert.ToDouble(reader["Value"]);
+                            string color;
+                            if (panel.ColorThresholds != null && panel.ColorThresholds.Count > 0)
+                                color = panel.GetThresholdColor(val);
+                            else
+                                color = ThresholdConfig.GetColor(panel.BarGaugeThresholdKey ?? "", val);
+
+                            return new StatValue
+                            {
+                                Label = reader["Label"]?.ToString() ?? "",
+                                Value = val,
+                                Unit = reader["Unit"]?.ToString() ?? "%",
+                                Instance = reader["Instance"]?.ToString() ?? "",
+                                Color = color
+                            };
+                        }, null, cancellationToken);
+                        bgResults[panel.Id] = data;
+                    }
+                    break;
+
+                case "DataGrid":
+                    {
+                        var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
+                        gridResults[panel.Id] = dt;
+                    }
+                    break;
+
+                case "CheckStatus":
+                    {
+                        var data = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader => new CheckStatus
+                        {
+                            Status = reader["Status"]?.ToString() ?? "OK",
+                            Count = Convert.ToInt32(reader["Count"])
+                        }, null, cancellationToken);
+                        checkResults[panel.Id] = data;
+                    }
+                    break;
+
+                case "TextCard":
+                    {
+                        var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
+                        gridResults[panel.Id] = dt;
+                    }
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Panel load was cancelled, skip silently
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = $"Panel '{panel.Id}' error: {ex.Message}";
+            _panelErrors[panel.Id] = errorMsg;
+            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] {errorMsg}");
+        }
+    }
+
+    private RenderFragment RenderChartOrGrid(PanelDefinition panel) => builder =>
+    {
+        builder.OpenComponent<DynamicPanel>(0);
+        builder.AddAttribute(1, "Panel", panel);
+        builder.AddAttribute(5, "TimezoneOffsetHours", TimezoneOffsetHours);
+
+        if (panel.PanelType == "TimeSeries" && _timeSeriesResults.TryGetValue(panel.Id, out var tsData))
+            builder.AddAttribute(2, "TimeSeriesData", tsData);
+        else if (panel.PanelType == "DataGrid" && _gridResults.TryGetValue(panel.Id, out var gridData))
+            builder.AddAttribute(3, "GridData", gridData);
+        else if (panel.PanelType == "TextCard" && _gridResults.TryGetValue(panel.Id, out var textData))
+            builder.AddAttribute(4, "GridData", textData);
+
+        builder.CloseComponent();
+    };
+
+    private async Task OnManualRefresh()
+    {
+        await LoadData();
+    }
+
+    private async void OnAutoRefresh()
+    {
+        try
+        {
+            using var cts = new System.Threading.CancellationTokenSource();
+            cts.CancelAfter(TimeSpan.FromSeconds(30)); // Timeout after 30 seconds
+            await InvokeAsync(async () => await LoadData(cts.Token));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] AutoRefresh error: {ex}");
+        }
+    }
+
+    private async void OnConfigChanged()
+    {
+        try
+        {
+            Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => d.Id == DashboardId);
+            using var cts = new System.Threading.CancellationTokenSource();
+            cts.CancelAfter(TimeSpan.FromSeconds(30));
+            await InvokeAsync(async () => await LoadData(cts.Token));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] ConfigChanged error: {ex}");
+        }
+    }
+
+    public void Dispose()
+    {
+        RefreshService.OnRefresh -= OnAutoRefresh;
+        RefreshService.Stop();
+        ConfigService.OnConfigChanged -= OnConfigChanged;
+        InstanceSelector.OnInstanceChanged -= OnGlobalInstanceChanged;
+        _debounceTimer?.Dispose();
+    }
+
+    private static TimeSeriesPoint MapTimeSeriesPoint(System.Data.IDataReader reader)
+    {
+            return new TimeSeriesPoint
+                {
+                    Time = ParseDateTime(reader["Time"]),
+                    Series = reader["Series"]?.ToString() ?? "",
+                    Value = reader["Value"] != DBNull.Value ? Convert.ToDouble(reader["Value"]) : 0.0 
+                };
+    }
+
+    private static DateTime ParseDateTime(object? value)
+    {
+        if (value == null || value == DBNull.Value) return DateTime.MinValue;
+        if (value is DateTime dt) return dt;
+        if (DateTime.TryParse(value.ToString(), out var parsed)) return parsed;
+        return DateTime.MinValue;
+    }
+}

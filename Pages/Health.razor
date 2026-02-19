@@ -1,0 +1,168 @@
+@page "/health"
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject HealthCheckService HealthCheckService
+@inject IDbConnectionFactory ConnectionFactory
+
+<div class="health-page">
+    <h2>Server Health Status</h2>
+    
+    @if (HealthStatus == null)
+    {
+        <div class="loading">Loading health status...</div>
+    }
+    else
+    {
+        <div class="health-grid">
+            <!-- Connection Status -->
+            <div class="health-card @GetSeverityClass(HealthStatus.ConnectionSeverity)">
+                <div class="card-header">
+                    <span class="card-icon">🔌</span>
+                    <span class="card-title">Connection</span>
+                </div>
+                <div class="card-value">@HealthStatus.ConnectionStatusText</div>
+                <div class="card-detail">@HealthStatus.LastUpdatedDisplay</div>
+                @if (!string.IsNullOrEmpty(HealthStatus.ErrorMessage))
+                {
+                    <div class="card-error">@HealthStatus.ErrorMessage</div>
+                }
+            </div>
+
+            <!-- CPU -->
+            <div class="health-card @GetSeverityClass(HealthStatus.CpuSeverity)">
+                <div class="card-header">
+                    <span class="card-icon">💻</span>
+                    <span class="card-title">CPU</span>
+                </div>
+                <div class="card-value">@HealthStatus.CpuDisplayText</div>
+                <div class="card-detail">SQL Server Process</div>
+            </div>
+
+            <!-- Memory -->
+            <div class="health-card @GetSeverityClass(HealthStatus.MemorySeverity)">
+                <div class="card-header">
+                    <span class="card-icon">🧠</span>
+                    <span class="card-title">Memory</span>
+                </div>
+                <div class="card-value">@HealthStatus.MemoryDisplayText</div>
+                <div class="card-detail">Buffer Pool</div>
+            </div>
+
+            <!-- Blocking -->
+            <div class="health-card @GetSeverityClass(HealthStatus.BlockingSeverity)">
+                <div class="card-header">
+                    <span class="card-icon">🚫</span>
+                    <span class="card-title">Blocking</span>
+                </div>
+                <div class="card-value">@HealthStatus.BlockingDisplayText</div>
+                <div class="card-detail">@HealthStatus.LongestBlockedSeconds.ToString("F0")s max</div>
+            </div>
+
+            <!-- Threads -->
+            <div class="health-card @GetSeverityClass(HealthStatus.ThreadsSeverity)">
+                <div class="card-header">
+                    <span class="card-icon">🧵</span>
+                    <span class="card-title">Threads</span>
+                </div>
+                <div class="card-value">@HealthStatus.ThreadsDisplayText</div>
+                <div class="card-detail">@HealthStatus.AvailableThreads/@HealthStatus.TotalThreads available</div>
+            </div>
+
+            <!-- Deadlocks -->
+            <div class="health-card @GetSeverityClass(HealthStatus.DeadlockSeverity)">
+                <div class="card-header">
+                    <span class="card-icon">💀</span>
+                    <span class="card-title">Deadlocks</span>
+                </div>
+                <div class="card-value">@HealthStatus.DeadlockDisplayText</div>
+                <div class="card-detail">Since last check</div>
+            </div>
+
+            <!-- Top Wait -->
+            <div class="health-card @GetSeverityClass(HealthStatus.WaitSeverity)">
+                <div class="card-header">
+                    <span class="card-icon">⏳</span>
+                    <span class="card-title">Top Wait</span>
+                </div>
+                <div class="card-value">@HealthStatus.WaitDisplayText</div>
+                <div class="card-detail">Wait Type</div>
+            </div>
+
+            <!-- Overall Health -->
+            <div class="health-card overall @GetSeverityClass(HealthStatus.OverallSeverity)">
+                <div class="card-header">
+                    <span class="card-icon">❤️</span>
+                    <span class="card-title">Overall Health</span>
+                </div>
+                <div class="card-value">@GetSeverityText(HealthStatus.OverallSeverity)</div>
+                <div class="card-detail">@(HealthStatus.LastUpdated.HasValue ? "Last updated: " + HealthStatus.LastUpdatedDisplay : "")</div>
+            </div>
+        </div>
+        
+        <div class="refresh-section">
+            <button class="btn btn-primary" @onclick="RefreshHealth">
+                🔄 Refresh Now
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private ServerHealthStatus? HealthStatus;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshHealth();
+    }
+
+    private async Task RefreshHealth()
+    {
+        try
+        {
+            if (ConnectionFactory is SqlServerConnectionFactory sqlFactory)
+            {
+                HealthStatus = await HealthCheckService.GetHealthStatusAsync(sqlFactory.ServerName ?? ".");
+            }
+            else
+            {
+                HealthStatus = new ServerHealthStatus
+                {
+                    ServerName = "Unknown",
+                    IsOnline = false,
+                    ErrorMessage = "Not connected to SQL Server"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            HealthStatus = new ServerHealthStatus
+            {
+                ServerName = "Error",
+                IsOnline = false,
+                ErrorMessage = ex.Message
+            };
+        }
+    }
+
+    private string GetSeverityClass(HealthSeverity severity)
+    {
+        return severity switch
+        {
+            HealthSeverity.Critical => "severity-critical",
+            HealthSeverity.Warning => "severity-warning",
+            HealthSeverity.Healthy => "severity-healthy",
+            _ => "severity-unknown"
+        };
+    }
+
+    private string GetSeverityText(HealthSeverity severity)
+    {
+        return severity switch
+        {
+            HealthSeverity.Critical => "Critical",
+            HealthSeverity.Warning => "Warning",
+            HealthSeverity.Healthy => "Healthy",
+            _ => "Unknown"
+        };
+    }
+}
