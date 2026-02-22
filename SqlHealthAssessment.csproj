@@ -46,10 +46,13 @@
   <ItemGroup>
     <Compile Remove="SqlWatch.Monitor\**" />
     <Compile Remove="Tests\**" />
+    <Compile Remove="BenchmarkSuite1\**" />
     <EmbeddedResource Remove="SqlWatch.Monitor\**" />
     <EmbeddedResource Remove="Tests\**" />
+    <EmbeddedResource Remove="BenchmarkSuite1\**" />
     <None Remove="SqlWatch.Monitor\**" />
     <None Remove="Tests\**" />
+    <None Remove="BenchmarkSuite1\**" />
   </ItemGroup>
 
   <ItemGroup>

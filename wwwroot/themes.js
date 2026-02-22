@@ -241,7 +241,7 @@ const themes = {
         info: "#c19a6b",
         navBg: "rgba(45, 32, 21, 0.95)",
         shadow: "0 4px 20px rgba(212, 175, 55, 0.2)"
->>>>>>> origin/master
+
     }
 };
 

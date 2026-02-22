@@ -1,9 +1,6 @@
 /* In the name of God, the Merciful, the Compassionate */
 
-<<<<<<< HEAD
-=======
 using System.Collections.Generic;
->>>>>>> origin/master
 namespace SqlHealthAssessment.Data
 {
     public class Threshold

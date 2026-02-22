@@ -92,14 +92,11 @@ namespace SqlHealthAssessment
             services.AddSingleton<SessionManager>();
             services.AddSingleton<RateLimiter>();
             services.AddSingleton<UserSettingsService>();
-<<<<<<< HEAD
             services.AddSingleton<SessionDataService>();
-=======
             services.AddSingleton<ToastService>();
             services.AddSingleton<MemoryMonitorService>();
             services.AddSingleton<ConfigurationValidator>();
             services.AddSingleton<AutoUpdateService>();
->>>>>>> origin/master
 
             // Local log service for debug logging
             var maxLogSize = configuration.GetValue<long>("LogMaxFileSizeBytes", 5 * 1024 * 1024);

@@ -1,13 +1,10 @@
-<<<<<<< HEAD
-<!--/* In the name of God, the Merciful, the Compassionate */-->`r`n@page "/servers"
-=======
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/servers"
->>>>>>> origin/master
+@inject ServerConnectionManager ConnectionManager
 @using Microsoft.Data.SqlClient
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
-@inject ServerConnectionManager ConnectionManager
+
 
 <div class="servers-page">
     <h2>Server Management</h2>
@@ -240,6 +237,7 @@
     private string EditingAuthType = AuthenticationTypes.Windows;
     private string EditingPassword = "";
     private bool _isTestingAll = false;
+    private string[] Instances = Array.Empty<string>();
 
     private void SetAuthType(string authType)
     {
@@ -438,7 +436,7 @@
         }
     }
 
-<<<<<<< HEAD
+
     /// <summary>
     /// Tests all connections silently on page load without showing status messages.
     /// Only non-MFA connections are tested automatically to avoid unexpected browser popups.
@@ -482,7 +480,8 @@
         LoadConnections();
         await InvokeAsync(StateHasChanged);
         _isTestingAll = false;
-=======
+    }
+
     private async Task CheckSqlWatchDatabase(ServerConnection conn)
     {
         try
@@ -504,33 +503,26 @@
         {
             SqlWatchStatus[conn.Id] = false;
         }
->>>>>>> origin/master
     }
 
     private async Task RefreshAllConnections()
     {
         StatusMessage = "Refreshing all connections...";
-<<<<<<< HEAD
-
-=======
         var totalConnections = Connections.Count;
         var successfulConnections = 0;
         var totalServers = 0;
         var successfulServers = 0;
-        
->>>>>>> origin/master
+
         foreach (var conn in Connections)
         {
             var serverList = conn.GetServerList();
             totalServers += serverList.Count;
-            
-            // Call TestConnection but suppress the status message update
             var isMfa = conn.EffectiveAuthType == AuthenticationTypes.EntraMFA;
-            
+
             try
             {
                 if (isMfa) await MfaAuthenticationHelper.MfaAuthLock.WaitAsync();
-                
+
                 try
                 {
                     var successfulForThisConn = new List<string>();
@@ -542,7 +534,7 @@
                         successfulForThisConn.Add(serverName);
                         successfulServers++;
                     }
-                    
+
                     ConnectionManager.UpdateSuccessfulServers(conn.Id, successfulForThisConn);
                     if (successfulForThisConn.Count == serverList.Count)
                     {
@@ -559,10 +551,9 @@
                 ConnectionManager.UpdateSuccessfulServers(conn.Id, new List<string>());
             }
         }
-        
+
         LoadConnections();
-        
-        // Show aggregated results
+
         if (successfulConnections == totalConnections && successfulServers == totalServers)
         {
             StatusMessage = $"Successfully connected to all {totalServers} server(s)!";

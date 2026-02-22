@@ -1,9 +1,6 @@
-<<<<<<< HEAD
-<!--/* In the name of God, the Merciful, the Compassionate */-->`r`n@using System.Data
-=======
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @using System.Data
->>>>>>> origin/master
+
 @using System.Collections.Concurrent
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Caching
@@ -74,12 +71,12 @@
     else if (Dashboard != null)
     {
         @* Stat cards section *@
-        @if (StatPanels.Any())
+        @if (_statPanelsCache?.Any() == true)
         {
             <div class="stat-grid">
-                @foreach (var panel in StatPanels)
+                @foreach (var panel in _statPanelsCache)
                 {
-                    @if (panel.PanelType == "CheckStatus" && _checkResults.TryGetValue(panel.Id, out var checks))
+                    if (panel.PanelType == "CheckStatus" && _checkResults.TryGetValue(panel.Id, out var checks))
                     {
                         <DynamicPanel Panel="panel" CheckData="checks" TimezoneOffsetHours="@TimezoneOffsetHours" />
                     }
@@ -92,12 +89,12 @@
         }
 
         @* Details section *@
-        @if (DetailsPanels.Any())
+        @if (_detailsPanelsCache?.Any() == true)
         {
             <div class="details-section">
-                @foreach (var panel in DetailsPanels)
+                @foreach (var panel in _detailsPanelsCache)
                 {
-                    @if (_gridResults.TryGetValue(panel.Id, out var grid))
+                    if (_gridResults.TryGetValue(panel.Id, out var grid))
                     {
                         <DynamicPanel Panel="panel" GridData="grid" TimezoneOffsetHours="@TimezoneOffsetHours" />
                     }
@@ -106,14 +103,17 @@
         }
 
         @* Bar gauge panels *@
-        @foreach (var panel in GaugePanels)
+        @if (_gaugePanelsCache?.Any() == true)
         {
-            if (_barGaugeResults.TryGetValue(panel.Id, out var gaugeData))
+            @foreach (var panel in _gaugePanelsCache)
             {
-                <div class="chart-grid-item" style="position: relative;">
-                    <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
-                    <DynamicPanel Panel="panel" BarGaugeData="gaugeData" TimezoneOffsetHours="@TimezoneOffsetHours" />
-                </div>
+                if (_barGaugeResults.TryGetValue(panel.Id, out var gaugeData))
+                {
+                    <div class="chart-grid-item" style="position: relative;">
+                        <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
+                        <DynamicPanel Panel="panel" BarGaugeData="gaugeData" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                    </div>
+                }
             }
         }
 
@@ -138,10 +138,10 @@
         }
 
         @* Chart grid - 2 column layout *@
-        @if (ChartPanels.Any())
+        @if (_chartPanelsCache?.Any() == true)
         {
             <div class="chart-grid">
-                @foreach (var panel in ChartPanels)
+                @foreach (var panel in _chartPanelsCache)
                 {
                     @if (panel.Layout.SpanColumns)
                     {
@@ -168,6 +168,7 @@
 
     private DashboardDefinition? Dashboard;
     private string SelectedInstance = "";
+    private string[] Instances = Array.Empty<string>();
     private int TimeRangeMinutes = 60;
     private double TimezoneOffsetHours = 0;
     private bool AutoRefresh = true;
@@ -182,6 +183,13 @@
     private ConcurrentDictionary<string, List<CheckStatus>> _checkResults = new();
     private ConcurrentDictionary<string, string> _panelErrors = new();
 
+    // Cached panel lists to avoid repeated LINQ on each render
+    private List<PanelDefinition>? _enabledPanelsCache;
+    private List<PanelDefinition>? _statPanelsCache;
+    private List<PanelDefinition>? _detailsPanelsCache;
+    private List<PanelDefinition>? _gaugePanelsCache;
+    private List<PanelDefinition>? _chartPanelsCache;
+
     // Maximize state
     private PanelDefinition? _maximizedPanel;
     private PanelDefinition? _maximizedPanelExpanded;
@@ -189,7 +197,28 @@
     private void MaximizePanel(PanelDefinition panel)
     {
         _maximizedPanel = panel;
-        _maximizedPanelExpanded = new PanelDefinition { /* ... copy properties ... */ };
+        // Create a lightweight copy to avoid accidental mutation of original panel
+        _maximizedPanelExpanded = new PanelDefinition
+        {
+            Id = panel.Id,
+            Title = panel.Title,
+            Description = panel.Description,
+            Enabled = panel.Enabled,
+            PanelType = panel.PanelType,
+            ChartType = panel.ChartType,
+            Height = panel.Height,
+            RefreshIntervalSeconds = panel.RefreshIntervalSeconds,
+            Layout = panel.Layout != null ? new PanelLayout { Column = panel.Layout.Column, Order = panel.Layout.Order, SpanColumns = panel.Layout.SpanColumns } : new PanelLayout(),
+            Query = panel.Query != null ? new QueryPair { SqlServer = panel.Query.SqlServer, Sqlite = panel.Query.Sqlite } : new QueryPair(),
+            StatUnit = panel.StatUnit,
+            StatThresholdKey = panel.StatThresholdKey,
+            BarGaugeThresholdKey = panel.BarGaugeThresholdKey,
+            BarGaugeUnitSuffix = panel.BarGaugeUnitSuffix,
+            ValueFormat = panel.ValueFormat,
+            ColorThresholds = panel.ColorThresholds != null ? new List<ColorThresholdRule>(panel.ColorThresholds) : new List<ColorThresholdRule>(),
+            DataGridIsClickable = panel.DataGridIsClickable,
+            DataGridMaxRows = panel.DataGridMaxRows
+        };
     }
 
     private void RestorePanel()
@@ -198,11 +227,14 @@
         _maximizedPanelExpanded = null;
     }
 
-    private List<PanelDefinition> EnabledPanels => Dashboard?.Panels?.Where(p => p.Enabled).ToList() ?? new();
-    private List<PanelDefinition> StatPanels => EnabledPanels.Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "CheckStatus")).OrderBy(p => p.Layout.Order).ToList();
-    private List<PanelDefinition> DetailsPanels => EnabledPanels.Where(p => p.Layout.Column == 0 && p.PanelType == "TextCard").OrderBy(p => p.Layout.Order).ToList();
-    private List<PanelDefinition> GaugePanels => EnabledPanels.Where(p => p.PanelType == "BarGauge").OrderBy(p => p.Layout.Order).ToList();
-    private List<PanelDefinition> ChartPanels => EnabledPanels.Where(p => p.PanelType == "TimeSeries" || p.PanelType == "DataGrid" || (p.PanelType != "StatCard" && p.PanelType != "CheckStatus" && p.PanelType != "BarGauge" && p.PanelType != "TextCard" && p.Layout.Column > 0)).OrderBy(p => p.Layout.Order).ToList();
+    private void RefreshPanelCaches()
+    {
+        _enabledPanelsCache = Dashboard?.Panels?.Where(p => p.Enabled).ToList() ?? new List<PanelDefinition>();
+        _statPanelsCache = _enabledPanelsCache.Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "CheckStatus")).OrderBy(p => p.Layout.Order).ToList();
+        _detailsPanelsCache = _enabledPanelsCache.Where(p => p.Layout.Column == 0 && p.PanelType == "TextCard").OrderBy(p => p.Layout.Order).ToList();
+        _gaugePanelsCache = _enabledPanelsCache.Where(p => p.PanelType == "BarGauge").OrderBy(p => p.Layout.Order).ToList();
+        _chartPanelsCache = _enabledPanelsCache.Where(p => p.PanelType == "TimeSeries" || p.PanelType == "DataGrid" || (p.PanelType != "StatCard" && p.PanelType != "CheckStatus" && p.PanelType != "BarGauge" && p.PanelType != "TextCard" && p.Layout.Column > 0)).OrderBy(p => p.Layout.Order).ToList();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -212,7 +244,7 @@
 
         TimezoneOffsetHours = UserSettings.GetTimezoneOffset();
         Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => string.Equals(d.Id, DashboardId, StringComparison.OrdinalIgnoreCase));
-        
+
         if (Dashboard == null)
         {
             System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Dashboard '{DashboardId}' not found. Available dashboards:");
@@ -221,6 +253,9 @@
                 System.Diagnostics.Debug.WriteLine($"[DynamicDashboard]   - {d.Id}");
             }
         }
+
+        // Cache panel lists
+        RefreshPanelCaches();
 
         // Set initial server context
         var connections = ConnectionManager.GetConnections();
@@ -291,7 +326,9 @@
         var gridResults = new ConcurrentDictionary<string, DataTable>();
         var checkResults = new ConcurrentDictionary<string, List<CheckStatus>>();
 
-        var tasks = EnabledPanels.Select(async panel =>
+        var panelsToLoad = _enabledPanelsCache ?? Dashboard.Panels;
+
+        var tasks = panelsToLoad.Select(async panel =>
             await QueryThrottle.ExecuteAsync(async () => 
             {
                 await LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, cancellationToken);
@@ -301,11 +338,15 @@
 
         await Task.WhenAll(tasks);
 
+        // Swap references after all tasks complete
         _timeSeriesResults = tsResults;
         _statResults = statResults;
         _barGaugeResults = bgResults;
         _gridResults = gridResults;
         _checkResults = checkResults;
+
+        // Refresh caches in case panels changed (config reloads will also call RefreshPanelCaches)
+        RefreshPanelCaches();
 
         IsLoading = false;
         await InvokeAsync(StateHasChanged);
@@ -390,7 +431,6 @@
         builder.CloseComponent();
     };
 
-<<<<<<< HEAD
     private async Task OnManualRefresh()
     {
         await LoadData();
@@ -405,7 +445,7 @@
         // Reset instances — they belong to the newly-selected server
         Instances = Array.Empty<string>();
         SelectedInstance = "";
-        InstanceSelector.SetSelectedInstance("");
+        InstanceSelector.SetSelectedInstance = "";
 
         try
         {
@@ -446,7 +486,7 @@
         try
         {
             using var cts = new System.Threading.CancellationTokenSource();
-            cts.CancelAfter(TimeSpan.FromSeconds(30)); // Timeout after 30 seconds
+            cts.CancelAfter(TimeSpan.FromSeconds(30));
             await InvokeAsync(async () => await LoadData(cts.Token));
         }
         catch (Exception ex)
@@ -455,13 +495,10 @@
         }
     }
 
-=======
-    private async Task OnManualRefresh() => await LoadData();
-    private async void OnAutoRefresh() => await InvokeAsync(() => LoadData());
->>>>>>> origin/master
     private async void OnConfigChanged()
     {
         Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => string.Equals(d.Id, DashboardId, StringComparison.OrdinalIgnoreCase));
+        RefreshPanelCaches();
         await InvokeAsync(() => LoadData());
     }
 
