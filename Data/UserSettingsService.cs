@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.IO;
 using System.Text.Json;

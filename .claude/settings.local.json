@@ -18,7 +18,9 @@
       "Bash(findstr:*)",
       "Bash(Select-String -Pattern \"error CS|Build succeeded|Error\\\\\\(s\\\\\\)|Warning\\\\\\(s\\\\\\)\")",
       "Bash(python:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(ls \"C:\\\\Users\\\\afsul\\\\OneDrive - sqldba.org\\\\GitHub\\\\sqlwatch-main\\\\LiveMonitor\\\\LiveMonitor\\\\.claude\\\\worktrees\\\\nice-merkle\\\\wwwroot\"\" 2>/dev/null || dir \"C:UsersafsulOneDrive - sqldba.orgGitHubsqlwatch-mainLiveMonitorLiveMonitor.claudeworktreesnice-merklewwwroot\"\")",
+      "Bash(git add:*)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-@using System.IO
+<!--/* In the name of God, the Merciful, the Compassionate */-->`r`n@using System.IO
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
 @inject IDbConnectionFactory ConnectionFactory
@@ -7,6 +7,7 @@
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @inject UserSettingsService UserSettings
 @inject GlobalInstanceSelector InstanceSelector
+@inject ServerConnectionManager ConnectionManager
 
 <div class="toolbar">
     <div class="toolbar-group">
@@ -31,6 +32,21 @@
             <option value="10080" selected="@(TimeRangeMinutes == 10080)">Last 7 days</option>
         </select>
     </div>
+
+    @if (ServerConnections.Count > 0)
+    {
+        <div class="toolbar-group">
+            <label class="toolbar-label">Server:</label>
+            <select class="toolbar-select" @onchange="OnServerConnectionChanged">
+                @foreach (var conn in ServerConnections)
+                {
+                    <option value="@conn.Id" selected="@(SelectedServerId == conn.Id)">
+                        @(string.IsNullOrWhiteSpace(conn.ServerNames) ? "(unnamed)" : conn.ServerNames.Split('\n', ',')[0].Trim())
+                    </option>
+                }
+            </select>
+        </div>
+    }
 
     <div class="toolbar-group">
         <label class="toolbar-label">Instance:</label>
@@ -105,13 +121,23 @@
     [Parameter] public EventCallback<bool> AutoRefreshChanged { get; set; }
     [Parameter] public EventCallback OnRefreshRequested { get; set; }
     [Parameter] public bool ShowAllOption { get; set; } = false;
-    
+
     // Timezone offset in hours from UTC
     [Parameter] public double TimezoneOffsetHours { get; set; } = 0;
     [Parameter] public EventCallback<double> TimezoneOffsetHoursChanged { get; set; }
 
+    /// <summary>
+    /// Raised when the user changes the server connection in the toolbar dropdown.
+    /// Dashboards should subscribe to reload data against the newly selected server.
+    /// </summary>
+    [Parameter] public EventCallback OnServerChanged { get; set; }
+
     private string ServerDisplayName = "SqlServer";
     private int RefreshIntervalSeconds = 35;
+
+    // Server connection dropdown state
+    private List<ServerConnection> ServerConnections = new();
+    private string SelectedServerId = "";
 
     protected override void OnInitialized()
     {
@@ -122,12 +148,58 @@
             if (!string.IsNullOrEmpty(serverName))
                 ServerDisplayName = serverName;
         }
-        
+
         // Load refresh interval from configuration
         RefreshIntervalSeconds = int.TryParse(Configuration["RefreshIntervalSeconds"], out var seconds) ? seconds : 35;
-        
+
         // Load timezone from user settings (default to UTC+13 for NZ)
         TimezoneOffsetHours = UserSettings.GetTimezoneOffset();
+
+        // Populate server connection list from the manager
+        ServerConnections = ConnectionManager.GetEnabledConnections();
+
+        // Select the current server, or the first enabled one
+        var current = ConnectionManager.CurrentServer;
+        if (current != null)
+        {
+            SelectedServerId = current.Id;
+        }
+        else if (ServerConnections.Count > 0)
+        {
+            SelectedServerId = ServerConnections[0].Id;
+            ConnectionManager.SetCurrentServer(SelectedServerId);
+        }
+
+        // Keep display name in sync with selected server
+        UpdateServerDisplayName();
+    }
+
+    private void UpdateServerDisplayName()
+    {
+        var conn = ConnectionManager.CurrentServer;
+        if (conn != null && !string.IsNullOrWhiteSpace(conn.ServerNames))
+        {
+            ServerDisplayName = conn.ServerNames.Split('\n', ',')[0].Trim();
+        }
+        else if (ConnectionFactory is SqlServerConnectionFactory sqlFactory)
+        {
+            var sn = sqlFactory.ServerName;
+            if (!string.IsNullOrEmpty(sn))
+                ServerDisplayName = sn;
+        }
+    }
+
+    private async Task OnServerConnectionChanged(ChangeEventArgs e)
+    {
+        var serverId = e.Value?.ToString() ?? "";
+        if (serverId == SelectedServerId) return;
+
+        SelectedServerId = serverId;
+        ConnectionManager.SetCurrentServer(serverId);
+        UpdateServerDisplayName();
+
+        // Notify the parent dashboard to reload data with the new connection context
+        await OnServerChanged.InvokeAsync();
     }
 
     private async Task OnRefreshIntervalChanged(ChangeEventArgs e)

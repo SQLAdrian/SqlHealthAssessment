@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 // Theme Configuration for SqlHealthAssessment
 // 10 unique themes with distinct color palettes and visual effects
 
@@ -190,6 +192,26 @@ const themes = {
         error: "#f87171",
         navBg: "rgba(3, 10, 20, 0.95)",
         shadow: "0 4px 20px rgba(0, 119, 182, 0.2)"
+    },
+
+    // 11. Middle Eastern (Arabian Nights)
+    middleEastern: {
+        name: "Arabian Nights",
+        primary: "#c9a84c",
+        secondary: "#e8d5a3",
+        accent: "#8b1a1a",
+        background: "linear-gradient(135deg, #0d0a05 0%, #1a1205 50%, #0d0a05 100%)",
+        backgroundImage: "url('arabicpattern.svg')",
+        backgroundSize: "400px 400px",
+        cardBg: "rgba(201, 168, 76, 0.07)",
+        textPrimary: "#f5ead8",
+        textSecondary: "#c4a96a",
+        border: "rgba(201, 168, 76, 0.3)",
+        success: "#4caf50",
+        warning: "#e8a020",
+        error: "#c0392b",
+        navBg: "rgba(13, 10, 5, 0.97)",
+        shadow: "0 4px 20px rgba(201, 168, 76, 0.2)"
     }
 };
 
@@ -219,7 +241,7 @@ function applyTheme(themeName) {
     // Apply background
     document.body.style.background = theme.background;
     document.body.style.backgroundImage = theme.backgroundImage;
-    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundSize = theme.backgroundSize || 'cover';
     document.body.style.backgroundAttachment = 'fixed';
 
     // Store selected theme

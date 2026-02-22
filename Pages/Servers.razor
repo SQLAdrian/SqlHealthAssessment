@@ -1,4 +1,4 @@
-@page "/servers"
+<!--/* In the name of God, the Merciful, the Compassionate */-->`r`n@page "/servers"
 @using Microsoft.Data.SqlClient
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
@@ -215,6 +215,7 @@
     private ServerConnection EditingConnection = new();
     private string EditingAuthType = AuthenticationTypes.Windows;
     private string EditingPassword = "";
+    private bool _isTestingAll = false;
 
     private void SetAuthType(string authType)
     {
@@ -225,6 +226,15 @@
     protected override void OnInitialized()
     {
         LoadConnections();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Connections.Any() && !_isTestingAll)
+        {
+            _isTestingAll = true;
+            await TestAllConnectionsSilently();
+        }
     }
 
     private void LoadConnections()
@@ -403,10 +413,55 @@
         }
     }
 
+    /// <summary>
+    /// Tests all connections silently on page load without showing status messages.
+    /// Only non-MFA connections are tested automatically to avoid unexpected browser popups.
+    /// </summary>
+    private async Task TestAllConnectionsSilently()
+    {
+        var connsToTest = Connections
+            .Where(c => c.IsEnabled && c.EffectiveAuthType != AuthenticationTypes.EntraMFA)
+            .ToList();
+
+        foreach (var conn in connsToTest)
+        {
+            try
+            {
+                var serverList = conn.GetServerList();
+                var successfulServers = new List<string>();
+
+                foreach (var serverName in serverList)
+                {
+                    try
+                    {
+                        var connectionString = conn.GetConnectionString(serverName);
+                        using var connection = new SqlConnection(connectionString);
+                        await connection.OpenAsync();
+                        successfulServers.Add(serverName);
+                    }
+                    catch
+                    {
+                        // Individual server failed — don't stop testing others
+                    }
+                }
+
+                ConnectionManager.UpdateSuccessfulServers(conn.Id, successfulServers);
+            }
+            catch
+            {
+                ConnectionManager.UpdateSuccessfulServers(conn.Id, new List<string>());
+            }
+        }
+
+        LoadConnections();
+        await InvokeAsync(StateHasChanged);
+        _isTestingAll = false;
+    }
+
     private async Task RefreshAllConnections()
     {
         StatusMessage = "Refreshing all connections...";
-        
+
         foreach (var conn in Connections)
         {
             await TestConnection(conn);

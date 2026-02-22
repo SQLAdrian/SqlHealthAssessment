@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System.Text.Json.Serialization;
 
 namespace SqlHealthAssessment.Data.Models

@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -61,6 +63,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<SessionManager>();
             services.AddSingleton<RateLimiter>();
             services.AddSingleton<UserSettingsService>();
+            services.AddSingleton<SessionDataService>();
 
             // Local log service for debug logging
             var maxLogSize = configuration.GetValue<long>("LogMaxFileSizeBytes", 5 * 1024 * 1024);

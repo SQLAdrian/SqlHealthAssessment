@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Threading.Tasks;

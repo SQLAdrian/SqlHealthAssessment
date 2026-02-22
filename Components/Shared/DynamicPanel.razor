@@ -1,4 +1,4 @@
-@using System.Data
+<!--/* In the name of God, the Merciful, the Compassionate */-->`r`n@using System.Data
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
 
@@ -84,6 +84,18 @@
                 </div>
             }
         }
+        break;
+
+    case "SessionBubble":
+        <div class="text-card-container" style="text-align: center; padding: 24px;">
+            <h4 class="text-card-title">@Panel.Title</h4>
+            <p style="color: var(--text-secondary); margin: 12px 0;">
+                The live session bubble view is available as a dedicated page.
+            </p>
+            <a href="/sessions" style="color: var(--accent); text-decoration: underline;">
+                Open Live Sessions
+            </a>
+        </div>
         break;
 }
 

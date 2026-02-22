@@ -1,4 +1,4 @@
-@page "/settings"
+<!--/* In the name of God, the Merciful, the Compassionate */-->`r`n@page "/settings"
 @using Microsoft.Extensions.Configuration
 @using System.IO
 @using System.Text.Json
@@ -242,6 +242,10 @@
                 <button class="theme-btn @(SelectedTheme == "oceanDeep" ? "selected" : "")" @onclick="@(() => ApplyTheme("oceanDeep"))">
                     <span class="theme-preview ocean-deep"></span>
                     <span class="theme-name">Ocean Deep</span>
+                </button>
+                <button class="theme-btn @(SelectedTheme == "middleEastern" ? "selected" : "")" @onclick="@(() => ApplyTheme("middleEastern"))">
+                    <span class="theme-preview middle-eastern"></span>
+                    <span class="theme-name">Arabian Nights</span>
                 </button>
             </div>
         </div>

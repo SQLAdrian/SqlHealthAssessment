@@ -1,0 +1,201 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@using SqlHealthAssessment.Data.Models
+
+<div class="bubble-view-container">
+    @if (Sessions == null || Sessions.Count == 0)
+    {
+        <div class="chart-empty" style="padding: 60px;">No sessions to display</div>
+    }
+    else
+    {
+        <svg width="100%" height="@SvgHeight" viewBox="0 0 @SvgWidth @SvgHeight"
+             xmlns="http://www.w3.org/2000/svg" class="bubble-svg">
+
+            @* Background gradient *@
+            <defs>
+                <radialGradient id="bubbleGradNormal" cx="40%" cy="35%" r="60%">
+                    <stop offset="0%" stop-color="#5ba3e6" stop-opacity="1" />
+                    <stop offset="100%" stop-color="#1565c0" stop-opacity="0.9" />
+                </radialGradient>
+                <radialGradient id="bubbleGradBlocked" cx="40%" cy="35%" r="60%">
+                    <stop offset="0%" stop-color="#ef5350" stop-opacity="1" />
+                    <stop offset="100%" stop-color="#b71c1c" stop-opacity="0.9" />
+                </radialGradient>
+                <radialGradient id="bubbleGradIdle" cx="40%" cy="35%" r="60%">
+                    <stop offset="0%" stop-color="#66bb6a" stop-opacity="0.7" />
+                    <stop offset="100%" stop-color="#2e7d32" stop-opacity="0.5" />
+                </radialGradient>
+                <filter id="glowSelected">
+                    <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+                    <feMerge>
+                        <feMergeNode in="coloredBlur" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+                <filter id="shadow3d">
+                    <feDropShadow dx="2" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.4" />
+                </filter>
+            </defs>
+
+            @* Blocking lines — draw first so they're behind bubbles *@
+            @foreach (var session in Sessions.Where(s => s.IsBlocked))
+            {
+                var blocker = Sessions.FirstOrDefault(s => s.SPID == session.BlockingSessionId);
+                if (blocker != null)
+                {
+                    var blockedPos = GetPosition(session.SPID);
+                    var blockerPos = GetPosition(blocker.SPID);
+                    <line x1="@blockerPos.x" y1="@blockerPos.y"
+                          x2="@blockedPos.x" y2="@blockedPos.y"
+                          class="blocking-line" />
+                }
+            }
+
+            @* Bubbles *@
+            @foreach (var session in Sessions)
+            {
+                var pos = GetPosition(session.SPID);
+                var radius = GetRadius(session);
+                var fill = GetFill(session);
+                var strokeColor = GetStrokeColor(session);
+                var strokeWidth = GetStrokeWidth(session);
+                var isSelected = SelectedSpid == session.SPID;
+                var filterAttr = isSelected ? "url(#glowSelected)" : "url(#shadow3d)";
+                var opacity = isSelected ? "1" : "0.9";
+
+                <g class="session-bubble @(isSelected ? "selected" : "")"
+                   @onclick="() => OnBubbleClicked(session)"
+                   style="cursor: pointer;">
+
+                    @* Main circle *@
+                    <circle cx="@pos.x" cy="@pos.y" r="@radius"
+                            fill="@fill" opacity="@opacity"
+                            stroke="@strokeColor" stroke-width="@strokeWidth"
+                            filter="@filterAttr" />
+
+                    @* 3D highlight arc *@
+                    <circle cx="@(pos.x - radius * 0.2)" cy="@(pos.y - radius * 0.2)"
+                            r="@(radius * 0.5)"
+                            fill="white" opacity="0.12" />
+
+                    @* SPID label *@
+                    <text x="@pos.x" y="@(pos.y + 4)"
+                          text-anchor="middle" dominant-baseline="middle"
+                          fill="white" font-size="@GetFontSize(radius)"
+                          font-weight="bold" pointer-events="none">
+                        @session.SPID
+                    </text>
+                </g>
+            }
+        </svg>
+    }
+</div>
+
+@code {
+    [Parameter] public List<SessionInfo>? Sessions { get; set; }
+    [Parameter] public EventCallback<SessionInfo> OnSessionClicked { get; set; }
+    [Parameter] public int? SelectedSpid { get; set; }
+
+    private int SvgWidth = 900;
+    private int SvgHeight = 500;
+    private const double GoldenAngle = 2.39996322972865; // 137.508 degrees in radians
+
+    // Cache positions so blocking lines can look up coordinates
+    private Dictionary<int, (double x, double y)> _positionCache = new();
+
+    protected override void OnParametersSet()
+    {
+        // Rebuild position cache whenever sessions change
+        _positionCache.Clear();
+        if (Sessions == null || Sessions.Count == 0) return;
+
+        // Sort: biggest (most active) sessions in the center
+        var sorted = Sessions.OrderByDescending(s => s.ActivityScore).ToList();
+        var centerX = SvgWidth / 2.0;
+        var centerY = SvgHeight / 2.0;
+
+        // Spiral placement using golden angle
+        double angle = 0;
+        double spiralSpacing = 3.5; // Controls how spread-out the spiral is
+
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            var session = sorted[i];
+            var radius = GetRadius(session);
+
+            if (i == 0)
+            {
+                // First (most active) session goes dead center
+                _positionCache[session.SPID] = (centerX, centerY);
+            }
+            else
+            {
+                // Spiral out from center
+                var dist = spiralSpacing * Math.Sqrt(i) * (radius + 10);
+                var x = centerX + dist * Math.Cos(angle);
+                var y = centerY + dist * Math.Sin(angle);
+
+                // Clamp to SVG bounds with padding
+                var pad = radius + 5;
+                x = Math.Clamp(x, pad, SvgWidth - pad);
+                y = Math.Clamp(y, pad, SvgHeight - pad);
+
+                _positionCache[session.SPID] = (x, y);
+            }
+            angle += GoldenAngle;
+        }
+    }
+
+    private (double x, double y) GetPosition(int spid)
+    {
+        return _positionCache.TryGetValue(spid, out var pos) ? pos : (SvgWidth / 2.0, SvgHeight / 2.0);
+    }
+
+    private double GetRadius(SessionInfo session)
+    {
+        var activity = session.ActivityScore;
+        // Log-scale: minimum 14px radius, maximum 45px
+        if (activity <= 0) return 14;
+        return Math.Clamp(14 + Math.Log10(activity + 1) * 6, 14, 45);
+    }
+
+    private string GetFill(SessionInfo session)
+    {
+        if (session.IsBlocked || session.IsIdleInTransaction)
+            return "url(#bubbleGradBlocked)";
+        if (session.IsSleeping && !session.IsActive)
+            return "url(#bubbleGradIdle)";
+        return "url(#bubbleGradNormal)";
+    }
+
+    private string GetStrokeColor(SessionInfo session)
+    {
+        if (session.IsIdleInTransaction)
+            return "#ff0000"; // Dangerous: idle in transaction
+        if (session.OpenTransactionCount > 0)
+            return "#ffd700"; // In transaction (gold)
+        return "none";
+    }
+
+    private int GetStrokeWidth(SessionInfo session)
+    {
+        if (session.IsIdleInTransaction)
+            return 4; // Thick red border = dangerous
+        if (session.OpenTransactionCount > 0)
+            return 2; // Thin gold border = active in txn
+        return 0;
+    }
+
+    private int GetFontSize(double radius)
+    {
+        if (radius >= 35) return 14;
+        if (radius >= 25) return 12;
+        if (radius >= 18) return 10;
+        return 8;
+    }
+
+    private async Task OnBubbleClicked(SessionInfo session)
+    {
+        await OnSessionClicked.InvokeAsync(session);
+    }
+}
