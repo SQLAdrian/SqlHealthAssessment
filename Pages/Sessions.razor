@@ -1,0 +1,239 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/sessions"
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject SessionDataService SessionService
+@inject ServerConnectionManager ConnectionManager
+@inject IDbConnectionFactory ConnectionFactory
+@implements IDisposable
+
+<div class="sessions-page">
+
+    @* Server context header *@
+    @if (ConnectionManager.CurrentServer != null)
+    {
+        <div class="server-context-header">
+            <span class="server-context-icon">🔵</span>
+            <span class="server-context-label">Live Sessions on:</span>
+            <span class="server-context-name">@ConnectionManager.CurrentServer.ServerNames</span>
+            <span class="server-context-db">(@ConnectionManager.CurrentServer.Database)</span>
+        </div>
+    }
+
+    @* Toolbar *@
+    <div class="sessions-toolbar">
+        <div class="toolbar-group">
+            <label class="toolbar-label">Refresh:</label>
+            <select class="toolbar-select" value="@RefreshIntervalSeconds" @onchange="OnRefreshIntervalChanged">
+                <option value="2">2 sec</option>
+                <option value="5">5 sec</option>
+                <option value="10">10 sec</option>
+                <option value="15">15 sec</option>
+                <option value="30">30 sec</option>
+            </select>
+        </div>
+
+        <div class="toolbar-group">
+            <button class="toolbar-btn @(AutoRefresh ? "active" : "")" @onclick="ToggleAutoRefresh">
+                @(AutoRefresh ? "⏸ Pause" : "▶ Auto-Refresh")
+            </button>
+            <button class="toolbar-btn" @onclick="ManualRefresh">
+                🔄 Refresh
+            </button>
+        </div>
+
+        <div class="toolbar-group" style="margin-left: 16px;">
+            <button class="sessions-filter-btn @(HideSleeping ? "active" : "")" @onclick="ToggleHideSleeping">
+                @(HideSleeping ? "👁 Show Sleeping" : "🙈 Hide Sleeping")
+            </button>
+            <button class="sessions-filter-btn @(ShowOnlyBlocked ? "active" : "")" @onclick="ToggleShowOnlyBlocked">
+                @(ShowOnlyBlocked ? "🔓 Show All" : "🔒 Only Blocked")
+            </button>
+        </div>
+
+        <div class="toolbar-status">
+            <span style="font-size: 11px; color: var(--text-muted);">
+                @FilteredSessions.Count sessions
+                @if (AllSessions.Count != FilteredSessions.Count)
+                {
+                    <span>(@AllSessions.Count total)</span>
+                }
+                @if (!string.IsNullOrEmpty(LastRefreshTime))
+                {
+                    <span>&nbsp;| Last: @LastRefreshTime</span>
+                }
+            </span>
+        </div>
+    </div>
+
+    @* Error display *@
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="chart-empty" style="color: #f44336; background: #2a1a1a; border: 1px solid #f44336; padding: 12px; margin: 8px; border-radius: 4px;">
+            @ErrorMessage
+        </div>
+    }
+
+    @* Loading indicator *@
+    @if (IsLoading && AllSessions.Count == 0)
+    {
+        <div class="chart-empty">Loading sessions...</div>
+    }
+
+    @* Main content area *@
+    <div class="sessions-content">
+        @* Bubble view area *@
+        <div class="sessions-bubble-area">
+            <SessionLegend />
+            <SessionBubbleView Sessions="@FilteredSessions"
+                               OnSessionClicked="OnSessionClicked"
+                               SelectedSpid="@SelectedSession?.SPID" />
+        </div>
+
+        @* Detail panel *@
+        @if (SelectedSession != null)
+        {
+            <SessionDetailPanel Session="@SelectedSession" OnClose="CloseDetail" />
+        }
+    </div>
+</div>
+
+@code {
+    private List<SessionInfo> AllSessions = new();
+    private SessionInfo? SelectedSession;
+    private bool IsLoading = false;
+    private string? ErrorMessage;
+    private string? LastRefreshTime;
+
+    // Filter state
+    private bool HideSleeping = false;
+    private bool ShowOnlyBlocked = false;
+
+    // Refresh state
+    private bool AutoRefresh = true;
+    private int RefreshIntervalSeconds = 5;
+    private System.Threading.Timer? _refreshTimer;
+
+    private List<SessionInfo> FilteredSessions
+    {
+        get
+        {
+            IEnumerable<SessionInfo> result = AllSessions;
+
+            if (HideSleeping)
+                result = result.Where(s => !s.IsSleeping || s.IsActive);
+
+            if (ShowOnlyBlocked)
+            {
+                // Show blocked sessions AND the sessions that are blocking them
+                var blockedSpids = new HashSet<int>(AllSessions.Where(s => s.IsBlocked).Select(s => s.SPID));
+                var blockerSpids = new HashSet<int>(AllSessions.Where(s => s.IsBlocked).Select(s => s.BlockingSessionId));
+                result = result.Where(s => blockedSpids.Contains(s.SPID) || blockerSpids.Contains(s.SPID));
+            }
+
+            return result.ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSessions();
+        StartTimer();
+    }
+
+    private void StartTimer()
+    {
+        _refreshTimer?.Dispose();
+        if (AutoRefresh)
+        {
+            _refreshTimer = new System.Threading.Timer(
+                async _ => await InvokeAsync(async () =>
+                {
+                    await LoadSessions();
+                    StateHasChanged();
+                }),
+                null,
+                TimeSpan.FromSeconds(RefreshIntervalSeconds),
+                TimeSpan.FromSeconds(RefreshIntervalSeconds));
+        }
+    }
+
+    private async Task LoadSessions()
+    {
+        try
+        {
+            IsLoading = true;
+            var sessions = await SessionService.GetLiveSessionsAsync();
+            AllSessions = sessions;
+            ErrorMessage = null;
+            LastRefreshTime = DateTime.Now.ToString("HH:mm:ss");
+
+            // If selected session no longer exists, deselect
+            if (SelectedSession != null && !sessions.Any(s => s.SPID == SelectedSession.SPID))
+            {
+                SelectedSession = null;
+            }
+            else if (SelectedSession != null)
+            {
+                // Update selected session with latest data
+                SelectedSession = sessions.FirstOrDefault(s => s.SPID == SelectedSession.SPID);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load sessions: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OnSessionClicked(SessionInfo session)
+    {
+        SelectedSession = SelectedSession?.SPID == session.SPID ? null : session;
+    }
+
+    private void CloseDetail()
+    {
+        SelectedSession = null;
+    }
+
+    private void ToggleHideSleeping()
+    {
+        HideSleeping = !HideSleeping;
+    }
+
+    private void ToggleShowOnlyBlocked()
+    {
+        ShowOnlyBlocked = !ShowOnlyBlocked;
+    }
+
+    private void ToggleAutoRefresh()
+    {
+        AutoRefresh = !AutoRefresh;
+        if (AutoRefresh)
+            StartTimer();
+        else
+            _refreshTimer?.Dispose();
+    }
+
+    private void OnRefreshIntervalChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            RefreshIntervalSeconds = seconds;
+            if (AutoRefresh) StartTimer();
+        }
+    }
+
+    private async Task ManualRefresh()
+    {
+        await LoadSessions();
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

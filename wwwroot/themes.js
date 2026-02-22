@@ -204,6 +204,26 @@ const themes = {
         shadow: "0 4px 20px rgba(0, 119, 182, 0.2)"
     },
 
+<<<<<<< HEAD
+    // 11. Middle Eastern (Arabian Nights)
+    middleEastern: {
+        name: "Arabian Nights",
+        primary: "#c9a84c",
+        secondary: "#e8d5a3",
+        accent: "#8b1a1a",
+        background: "linear-gradient(135deg, #0d0a05 0%, #1a1205 50%, #0d0a05 100%)",
+        backgroundImage: "url('arabicpattern.svg')",
+        backgroundSize: "400px 400px",
+        cardBg: "rgba(201, 168, 76, 0.07)",
+        textPrimary: "#f5ead8",
+        textSecondary: "#c4a96a",
+        border: "rgba(201, 168, 76, 0.3)",
+        success: "#4caf50",
+        warning: "#e8a020",
+        error: "#c0392b",
+        navBg: "rgba(13, 10, 5, 0.97)",
+        shadow: "0 4px 20px rgba(201, 168, 76, 0.2)"
+=======
     middleEast: {
         name: "Middle East",
         primary: "#d4af37",
@@ -221,6 +241,7 @@ const themes = {
         info: "#c19a6b",
         navBg: "rgba(45, 32, 21, 0.95)",
         shadow: "0 4px 20px rgba(212, 175, 55, 0.2)"
+>>>>>>> origin/master
     }
 };
 
@@ -251,7 +272,7 @@ function applyTheme(themeName) {
     // Apply background
     document.body.style.background = theme.background;
     document.body.style.backgroundImage = theme.backgroundImage;
-    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundSize = theme.backgroundSize || 'cover';
     document.body.style.backgroundAttachment = 'fixed';
 
     // Store selected theme

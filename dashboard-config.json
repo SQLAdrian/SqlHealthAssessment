@@ -1732,6 +1732,42 @@
           "dataGridMaxRows": 500
         }
       ]
+    },
+    {
+      "id": "sessions",
+      "title": "Live Sessions",
+      "route": "/sessions",
+      "enabled": true,
+      "showAllOption": false,
+      "panels": [
+        {
+          "id": "sessions.bubble",
+          "title": "Live Sessions Bubble View",
+          "description": "Real-time visualization of active SQL Server sessions. Each bubble represents a SPID. Size indicates activity, color indicates state (blue=active, red=blocked, green=idle). Red lines show blocking chains.",
+          "enabled": true,
+          "panelType": "SessionBubble",
+          "chartType": "Line",
+          "height": 500,
+          "refreshIntervalSeconds": 5,
+          "layout": {
+            "column": 1,
+            "order": 1,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "SELECT s.session_id AS SPID, s.login_name AS LoginName, ISNULL(s.host_name, '') AS HostName, ISNULL(DB_NAME(s.database_id), '') AS DatabaseName, s.status AS SessionStatus, s.cpu_time AS CpuTime, s.reads AS LogicalReads, s.writes AS Writes, s.open_transaction_count AS OpenTransactionCount, r.status AS RequestStatus, r.command AS Command, r.wait_type AS WaitType, ISNULL(r.wait_time, 0) AS WaitTime, ISNULL(r.blocking_session_id, 0) AS BlockingSessionId, ISNULL(r.total_elapsed_time, 0) AS TotalElapsedTime, ISNULL(s.program_name, '') AS ProgramName, t.text AS QueryText FROM sys.dm_exec_sessions s WITH (NOLOCK) LEFT JOIN sys.dm_exec_requests r WITH (NOLOCK) ON s.session_id = r.session_id OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t WHERE s.is_user_process = 1 ORDER BY s.cpu_time + s.reads DESC",
+            "sqlite": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500
+        }
+      ]
     }
   ],
   "supportQueries": {
