@@ -1,17 +1,22 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @using Microsoft.AspNetCore.Components.Routing
+@using SqlHealthAssessment.Data
+@inject AutoUpdateService UpdateService
 
 <div class="nav-menu">
     <div class="nav-brand">
         <span class="nav-brand-icon">📊</span>
-        <span class="nav-brand-text">SQLHealthAssessment</span>
-        <span class="nav-version">v1.0</span>
-		<br>The Dashboards require a SQLWATCH DB implemented<br/>
+        <span class="nav-brand-text"><p>SQL Health Assessment</p></span>
+    </div>
+    <div>
+        <span class="nav-version">v@UpdateService.GetCurrentVersion()</span>
     </div>
     <br />
     <nav>
-        <NavLink href="/" class="nav-link" Match="NavLinkMatch.All" title="Ctrl+1">
-            <span class="nav-icon">🏠</span> Repository
-        </NavLink>
+        <br />
+        <div class="nav-divider">Dashboards require a SQLWATCH DB implemented</div>
+        <br />
+        <br />
         <NavLink href="/instance" class="nav-link" title="Ctrl+2">
             <span class="nav-icon">🖥️</span> Instance Overview
         </NavLink>
@@ -21,8 +26,11 @@
         <NavLink href="/waitevents" class="nav-link">
             <span class="nav-icon">⏳</span> Wait Events
         </NavLink>
-        <NavLink href="/blocking" class="nav-link">
+        <!--<NavLink href="/blocking" class="nav-link">
             <span class="nav-icon">🧱</span> Blocking Queries
+        </NavLink>-->
+        <NavLink href="/live" class="nav-link">
+            <span class="nav-icon">📡</span> Live Monitor
         </NavLink>
 
         <br />
@@ -42,9 +50,6 @@
         <br />
         <NavLink href="/databasedeploy" class="nav-link">
             <span class="nav-icon">🔬</span> Monitoring new server
-        </NavLink>
-                <NavLink href="/importfromserver" class="nav-link">
-            <span class="nav-icon">⛏</span> Import from another server
         </NavLink>
         <br />
         <div class="nav-divider">Configure</div>

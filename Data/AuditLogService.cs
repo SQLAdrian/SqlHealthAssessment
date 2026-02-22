@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -20,7 +22,6 @@ namespace SqlHealthAssessment.Data
         private readonly string _logDirectory;
         private readonly ConcurrentQueue<AuditLogEntry> _pendingEntries = new();
         private readonly Timer _flushTimer;
-        private readonly Timer _retentionTimer;
         private readonly object _writeLock = new();
         private bool _disposed;
 
@@ -180,6 +181,44 @@ namespace SqlHealthAssessment.Data
             });
         }
 
+        /// <summary>
+        /// Logs a custom query execution (from dashboard editor).
+        /// </summary>
+        public void LogQueryExecution(string queryId, string serverName, bool success, TimeSpan duration, int rowCount = 0, string? errorMessage = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.QueryExecution,
+                Severity = success ? AuditSeverity.Info : AuditSeverity.Warning,
+                Message = success
+                    ? $"Query '{queryId}' executed on '{serverName}' in {duration.TotalMilliseconds:F0}ms ({rowCount} rows)"
+                    : $"Query '{queryId}' failed on '{serverName}': {errorMessage}",
+                Details = new Dictionary<string, string>
+                {
+                    ["QueryId"] = queryId,
+                    ["ServerName"] = serverName,
+                    ["Success"] = success.ToString(),
+                    ["DurationMs"] = duration.TotalMilliseconds.ToString("F0"),
+                    ["RowCount"] = rowCount.ToString(),
+                    ["Error"] = errorMessage ?? string.Empty
+                }
+            });
+        }
+
+        /// <summary>
+        /// Logs a security event (authentication, authorization, suspicious activity).
+        /// </summary>
+        public void LogSecurityEvent(string eventDescription, AuditSeverity severity = AuditSeverity.Warning, Dictionary<string, string>? details = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.SecurityEvent,
+                Severity = severity,
+                Message = eventDescription,
+                Details = details ?? new Dictionary<string, string>()
+            });
+        }
+
         // ================================================================
         // CORE INFRASTRUCTURE
         // ================================================================
@@ -321,7 +360,9 @@ namespace SqlHealthAssessment.Data
     {
         ConnectionAttempt,
         ScriptExecution,
+        QueryExecution,
         SecurityBlock,
+        SecurityEvent,
         ConfigurationChange,
         Deployment,
         ApplicationLifecycle

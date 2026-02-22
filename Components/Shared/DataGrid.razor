@@ -1,26 +1,31 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @using System.Data
 @using System.Linq
 
-<div class="datagrid-panel">
+<div class="datagrid-panel" role="region" aria-label="@(string.IsNullOrEmpty(Title) ? "Data table" : Title)">
     @if (!string.IsNullOrEmpty(Title))
     {
-        <div class="datagrid-title">@Title</div>
+        <div class="datagrid-title" id="@($"grid-title-{Title.GetHashCode()}")">@Title</div>
     }
 
     @if (Data != null && Data.Rows.Count > 0)
     {
-        <div class="datagrid-scroll">
-            <table class="datagrid-table">
+        <div class="datagrid-scroll" tabindex="0">
+            <table class="datagrid-table" role="table" aria-labelledby="@($"grid-title-{Title.GetHashCode()}")">
                 <thead>
-                    <tr>
+                    <tr role="row">
                         @foreach (DataColumn col in Data.Columns)
                         {
                             <th @onclick="() => SortBy(col.ColumnName)"
+                                role="columnheader"
+                                tabindex="0"
+                                @onkeydown="@(e => HandleHeaderKeyDown(e, col.ColumnName))"
+                                aria-sort="@GetAriaSortValue(col.ColumnName)"
                                 class="@(SortColumn == col.ColumnName ? "sorted" : "")">
                                 @col.ColumnName
                                 @if (SortColumn == col.ColumnName)
                                 {
-                                    <span>@(SortAscending ? " ▲" : " ▼")</span>
+                                    <span aria-hidden="true">@(SortAscending ? " ▲" : " ▼")</span>
                                 }
                             </th>
                         }
@@ -30,10 +35,13 @@
                     @foreach (var row in GetSortedRows())
                     {
                         <tr @onclick="() => HandleRowClick(row)"
+                            role="row"
+                            tabindex="@(IsClickable ? "0" : "-1")"
+                            @onkeydown="@(e => HandleRowKeyDown(e, row))"
                             class="@(IsClickable ? "clickable" : "")">
                             @foreach (DataColumn col in Data.Columns)
                             {
-                                <td title="@row[col]?.ToString()">
+                                <td role="cell" title="@row[col]?.ToString()">
                                     @try
                                     {
                                         @FormatCell(row[col], col.ColumnName)
@@ -49,13 +57,13 @@
                 </tbody>
             </table>
         </div>
-        <div class="datagrid-footer">
+        <div class="datagrid-footer" role="status" aria-live="polite">
             @Data.Rows.Count row(s)
         </div>
     }
     else
     {
-        <div class="datagrid-empty">No data available</div>
+        <div class="datagrid-empty" role="status">No data available</div>
     }
 </div>
 
@@ -140,6 +148,28 @@
     {
         if (OnRowClick.HasDelegate)
             await OnRowClick.InvokeAsync(row);
+    }
+
+    private async Task HandleRowKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e, DataRow row)
+    {
+        if (e.Key == "Enter" || e.Key == " ")
+        {
+            await HandleRowClick(row);
+        }
+    }
+
+    private void HandleHeaderKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e, string columnName)
+    {
+        if (e.Key == "Enter" || e.Key == " ")
+        {
+            SortBy(columnName);
+        }
+    }
+
+    private string GetAriaSortValue(string columnName)
+    {
+        if (SortColumn != columnName) return "none";
+        return SortAscending ? "ascending" : "descending";
     }
 
     private string FormatCell(object? value, string columnName)

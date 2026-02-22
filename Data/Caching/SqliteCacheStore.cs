@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -540,6 +542,34 @@ namespace SqlHealthAssessment.Data.Caching
         }
 
         // ──────────────────────── Eviction / Invalidation ───────────────
+
+        /// <summary>
+        /// Gets the current cache database size in bytes.
+        /// </summary>
+        public async Task<long> GetCacheSizeBytes()
+        {
+            using var conn = CreateConnection();
+            await conn.OpenAsync();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()";
+            var result = await cmd.ExecuteScalarAsync();
+            return result != null ? Convert.ToInt64(result) : 0;
+        }
+
+        /// <summary>
+        /// Enforces a maximum cache size by evicting oldest data if limit is exceeded.
+        /// </summary>
+        public async Task EnforceSizeLimitAsync(long maxSizeBytes)
+        {
+            var currentSize = await GetCacheSizeBytes();
+            if (currentSize > maxSizeBytes)
+            {
+                // Evict oldest 25% of data
+                var cutoff = DateTime.UtcNow.AddHours(-6);
+                await EvictOlderThanAsync(TimeSpan.FromHours(6));
+                await RunMaintenanceAsync(includeIntegrityCheck: false);
+            }
+        }
 
         /// <summary>
         /// Removes all cached data older than the specified age across all tables.

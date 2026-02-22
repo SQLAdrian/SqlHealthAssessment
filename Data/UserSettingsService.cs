@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.IO;
 using System.Text.Json;
@@ -30,6 +32,7 @@ namespace SqlHealthAssessment.Data
             public bool AutoRefresh { get; set; } = true;
             public int DefaultTimeRangeMinutes { get; set; } = 60;
             public bool ShowDiagnosticPane { get; set; } = false;
+            public string DefaultDashboardId { get; set; } = "";
         }
 
         /// <summary>
@@ -175,6 +178,23 @@ namespace SqlHealthAssessment.Data
         public void SetShowDiagnosticPane(bool enabled)
         {
             _settings.ShowDiagnosticPane = enabled;
+            SaveSettings();
+        }
+
+        /// <summary>
+        /// Get default dashboard ID
+        /// </summary>
+        public string GetDefaultDashboardId()
+        {
+            return _settings.DefaultDashboardId;
+        }
+
+        /// <summary>
+        /// Set default dashboard ID and save
+        /// </summary>
+        public void SetDefaultDashboardId(string dashboardId)
+        {
+            _settings.DefaultDashboardId = dashboardId;
             SaveSettings();
         }
     }

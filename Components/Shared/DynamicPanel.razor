@@ -1,3 +1,4 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @using System.Data
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
@@ -20,6 +21,17 @@
                       Unit="@Panel.StatUnit"
                       Color="@StatData.Color"
                       ValueFormat="@Panel.ValueFormat" />
+        }
+        break;
+
+    case "DeltaStatCard":
+        @if (StatData != null)
+        {
+            <DeltaStatCard Label="@Panel.Title"
+                           Value="@StatData.Value"
+                           Unit="@Panel.StatUnit"
+                           Color="@StatData.Color"
+                           ValueFormat="@Panel.ValueFormat" />
         }
         break;
 

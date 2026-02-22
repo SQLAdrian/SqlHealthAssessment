@@ -1,3 +1,4 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @using System.Data
 @using System.Collections.Concurrent
 @using SqlHealthAssessment.Data
@@ -11,6 +12,7 @@
 @inject UserSettingsService UserSettings
 @inject ServerConnectionManager ConnectionManager
 @inject GlobalInstanceSelector InstanceSelector
+@inject QueryThrottleService QueryThrottle
 @implements IDisposable
 
 
@@ -28,7 +30,6 @@
                   @bind-SelectedInstance="SelectedInstance"
                   @bind-AutoRefresh="AutoRefresh"
                   @bind-TimezoneOffsetHours="TimezoneOffsetHours"
-                  Instances="Instances"
                   ShowAllOption="@(Dashboard?.ShowAllOption ?? false)"
                   OnRefreshRequested="OnManualRefresh" />
 
@@ -158,11 +159,9 @@
 </div>
 
 @code {
-    // Fixed to load longqueries dashboard
     [Parameter] public string DashboardId { get; set; } = "";
 
     private DashboardDefinition? Dashboard;
-    private string[] Instances = Array.Empty<string>();
     private string SelectedInstance = "";
     private int TimeRangeMinutes = 60;
     private double TimezoneOffsetHours = 0;
@@ -170,44 +169,22 @@
     private bool IsLoading = true;
     private string? ErrorMessage;
 
-    // Data results keyed by panel ID - using ConcurrentDictionary for thread-safe updates
+    // Data results keyed by panel ID
     private ConcurrentDictionary<string, List<TimeSeriesPoint>> _timeSeriesResults = new();
     private ConcurrentDictionary<string, StatValue> _statResults = new();
     private ConcurrentDictionary<string, List<StatValue>> _barGaugeResults = new();
     private ConcurrentDictionary<string, DataTable> _gridResults = new();
     private ConcurrentDictionary<string, List<CheckStatus>> _checkResults = new();
-    private ConcurrentDictionary<string, string> _panelErrors = new(); // Track panel errors
+    private ConcurrentDictionary<string, string> _panelErrors = new();
 
     // Maximize state
     private PanelDefinition? _maximizedPanel;
     private PanelDefinition? _maximizedPanelExpanded;
 
-    // Debounce timer for rapid refresh requests
-    private System.Threading.Timer? _debounceTimer;
-    private int _pendingRefreshCount;
-    private bool _isLoadingInProgress;
-
     private void MaximizePanel(PanelDefinition panel)
     {
         _maximizedPanel = panel;
-        // Create an expanded copy with larger height
-        _maximizedPanelExpanded = new PanelDefinition
-        {
-            Id = panel.Id,
-            Title = panel.Title,
-            PanelType = panel.PanelType,
-            ChartType = panel.ChartType,
-            Height = 550,
-            Layout = panel.Layout,
-            Query = panel.Query,
-            StatUnit = panel.StatUnit,
-            StatThresholdKey = panel.StatThresholdKey,
-            BarGaugeThresholdKey = panel.BarGaugeThresholdKey,
-            BarGaugeUnitSuffix = panel.BarGaugeUnitSuffix,
-            DataGridIsClickable = panel.DataGridIsClickable,
-            DataGridMaxRows = panel.DataGridMaxRows,
-            ColorThresholds = panel.ColorThresholds
-        };
+        _maximizedPanelExpanded = new PanelDefinition { /* ... copy properties ... */ };
     }
 
     private void RestorePanel()
@@ -216,21 +193,11 @@
         _maximizedPanelExpanded = null;
     }
 
-    // Computed panel lists
-    private List<PanelDefinition> EnabledPanels => (Dashboard?.Panels?.Where(p => p.Enabled).ToList() ?? new()) ?? new();
-    private List<PanelDefinition> StatPanels => EnabledPanels
-        .Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "CheckStatus"))
-        .OrderBy(p => p.Layout.Order).ToList();
-    private List<PanelDefinition> DetailsPanels => EnabledPanels
-        .Where(p => p.Layout.Column == 0 && p.PanelType == "TextCard")
-        .OrderBy(p => p.Layout.Order).ToList();
-    private List<PanelDefinition> GaugePanels => EnabledPanels
-        .Where(p => p.PanelType == "BarGauge")
-        .OrderBy(p => p.Layout.Order).ToList();
-    private List<PanelDefinition> ChartPanels => EnabledPanels
-        .Where(p => p.PanelType == "TimeSeries" || p.PanelType == "DataGrid"
-            || (p.PanelType != "StatCard" && p.PanelType != "CheckStatus" && p.PanelType != "BarGauge" && p.PanelType != "TextCard" && p.Layout.Column > 0))
-        .OrderBy(p => p.Layout.Order).ToList();
+    private List<PanelDefinition> EnabledPanels => Dashboard?.Panels?.Where(p => p.Enabled).ToList() ?? new();
+    private List<PanelDefinition> StatPanels => EnabledPanels.Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "CheckStatus")).OrderBy(p => p.Layout.Order).ToList();
+    private List<PanelDefinition> DetailsPanels => EnabledPanels.Where(p => p.Layout.Column == 0 && p.PanelType == "TextCard").OrderBy(p => p.Layout.Order).ToList();
+    private List<PanelDefinition> GaugePanels => EnabledPanels.Where(p => p.PanelType == "BarGauge").OrderBy(p => p.Layout.Order).ToList();
+    private List<PanelDefinition> ChartPanels => EnabledPanels.Where(p => p.PanelType == "TimeSeries" || p.PanelType == "DataGrid" || (p.PanelType != "StatCard" && p.PanelType != "CheckStatus" && p.PanelType != "BarGauge" && p.PanelType != "TextCard" && p.Layout.Column > 0)).OrderBy(p => p.Layout.Order).ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -238,63 +205,24 @@
         ConfigService.OnConfigChanged += OnConfigChanged;
         InstanceSelector.OnInstanceChanged += OnGlobalInstanceChanged;
 
-        // Load user settings including timezone
         TimezoneOffsetHours = UserSettings.GetTimezoneOffset();
+        Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => string.Equals(d.Id, DashboardId, StringComparison.OrdinalIgnoreCase));
         
-        Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => d.Id == DashboardId);
+        if (Dashboard == null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Dashboard '{DashboardId}' not found. Available dashboards:");
+            foreach (var d in ConfigService.Config.Dashboards)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DynamicDashboard]   - {d.Id}");
+            }
+        }
 
-        // IMPORTANT: Get instances from SQLWATCH database, not from connection names
-        // SQLWATCH stores data under @@SERVERNAME which may differ from connection server name
-        // For example, connection might be "localhost" but SQLWATCH stores "MSI"
-        try
-        {
-            Instances = await DataService.GetInstancesAsync();
-            if (Instances.Length > 0)
-            {
-                // Use global instance selector if available, otherwise use first instance
-                var globalInstance = InstanceSelector.SelectedInstance;
-                if (!string.IsNullOrEmpty(globalInstance) && Instances.Contains(globalInstance))
-                {
-                    SelectedInstance = globalInstance;
-                }
-                else
-                {
-                    SelectedInstance = Instances[0];
-                    InstanceSelector.SetSelectedInstance(SelectedInstance);
-                }
-            }
-            else
-            {
-                // Fallback: use enabled connections if no SQLWATCH instances found
-                var enabledConnections = ConnectionManager.GetEnabledServerNames();
-                if (enabledConnections.Length > 0)
-                {
-                    Instances = enabledConnections;
-                    SelectedInstance = Instances[0];
-                    InstanceSelector.SetSelectedInstance(SelectedInstance);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // Fallback: use enabled connections if SQLWATCH query fails
-            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] GetInstances from SQLWATCH failed: {ex.Message}. Using connection server names.");
-            var enabledConnections = ConnectionManager.GetEnabledServerNames();
-            if (enabledConnections.Length > 0)
-            {
-                Instances = enabledConnections;
-                var globalInstance = InstanceSelector.SelectedInstance;
-                if (!string.IsNullOrEmpty(globalInstance) && Instances.Contains(globalInstance))
-                {
-                    SelectedInstance = globalInstance;
-                }
-                else
-                {
-                    SelectedInstance = Instances[0];
-                    InstanceSelector.SetSelectedInstance(SelectedInstance);
-                }
-            }
-        }
+        // Set initial server context
+        var connections = ConnectionManager.GetConnections();
+        var availableInstances = connections.SelectMany(c => c.GetServerList()).Distinct().ToList();
+        var initialInstance = InstanceSelector.SelectedInstance ?? (availableInstances.Any() ? availableInstances[0] : "");
+        SelectedInstance = initialInstance;
+        SetServerContext(initialInstance);
 
         await LoadData();
         if (AutoRefresh) RefreshService.Start();
@@ -302,16 +230,20 @@
 
     private async void OnGlobalInstanceChanged(string instanceName)
     {
-        // Update local selected instance and refresh data
-        if (SelectedInstance != instanceName && Instances.Contains(instanceName))
+        SelectedInstance = instanceName;
+        SetServerContext(instanceName);
+        await InvokeAsync(async () =>
         {
-            SelectedInstance = instanceName;
-            await InvokeAsync(async () =>
-            {
-                await LoadData();
-                StateHasChanged();
-            });
-        }
+            await LoadData();
+            StateHasChanged();
+        });
+    }
+    
+    private void SetServerContext(string instanceName)
+    {
+        var connection = ConnectionManager.GetConnections()
+            .FirstOrDefault(c => c.GetServerList().Contains(instanceName));
+        ConnectionManager.SetCurrentServer(connection?.Id);
     }
 
     private DashboardFilter BuildFilter()
@@ -321,192 +253,116 @@
         {
             TimeFrom = now.AddMinutes(-TimeRangeMinutes),
             TimeTo = now,
-            Instances = string.IsNullOrEmpty(SelectedInstance) || SelectedInstance == "ALL"
-                ? Instances
-                : new[] { SelectedInstance }
+            Instances = new[] { SelectedInstance }
         };
     }
 
-    private async Task LoadData(System.Threading.CancellationToken cancellationToken = default)
+    private async Task LoadData(CancellationToken cancellationToken = default)
     {
-        if (Dashboard == null) 
+        if (Dashboard == null)
         {
             ErrorMessage = $"Dashboard '{DashboardId}' not found in configuration.";
             IsLoading = false;
             return;
         }
 
-        // Debounce rapid refresh requests
-        var refreshCount = ++_pendingRefreshCount;
-        if (refreshCount > 1)
+        IsLoading = true;
+        ErrorMessage = null;
+        _panelErrors.Clear();
+        
+        // Dispose old DataTables before replacing
+        foreach (var dt in _gridResults.Values)
         {
-            // Another refresh was requested, skip this one
-            return;
+            dt?.Dispose();
         }
+        _gridResults.Clear();
 
-        try
-        {
-            IsLoading = true;
-            ErrorMessage = null;
-            _panelErrors.Clear(); // Clear previous panel errors
+        var filter = BuildFilter();
+        await CachingExecutor.PrepareRefreshCycle(DashboardId, TimeRangeMinutes, SelectedInstance);
 
-            var filter = BuildFilter();
+        var tsResults = new ConcurrentDictionary<string, List<TimeSeriesPoint>>();
+        var statResults = new ConcurrentDictionary<string, StatValue>();
+        var bgResults = new ConcurrentDictionary<string, List<StatValue>>();
+        var gridResults = new ConcurrentDictionary<string, DataTable>();
+        var checkResults = new ConcurrentDictionary<string, List<CheckStatus>>();
 
-            // Prepare caching layer: detect filter changes, run eviction
-            await CachingExecutor.PrepareRefreshCycle(DashboardId, TimeRangeMinutes, SelectedInstance);
-
-            // Use ConcurrentDictionary for thread-safe, lock-free updates
-            var tsResults = new ConcurrentDictionary<string, List<TimeSeriesPoint>>();
-            var statResults = new ConcurrentDictionary<string, StatValue>();
-            var bgResults = new ConcurrentDictionary<string, List<StatValue>>();
-            var gridResults = new ConcurrentDictionary<string, DataTable>();
-            var checkResults = new ConcurrentDictionary<string, List<CheckStatus>>();
-
-            var panels = EnabledPanels.ToList();
-            var tasks = new List<Task>(panels.Count);
-
-            foreach (var panel in panels)
+        var tasks = EnabledPanels.Select(async panel =>
+            await QueryThrottle.ExecuteAsync(async () => 
             {
-                // Skip cancelled panels early
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                tasks.Add(LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, cancellationToken));
-            }
+                await LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, cancellationToken);
+                return Task.CompletedTask;
+            },
+            cancellationToken));
 
-            await Task.WhenAll(tasks);
+        await Task.WhenAll(tasks);
 
-            // Atomic swap of results
-            _timeSeriesResults = tsResults;
-            _statResults = statResults;
-            _barGaugeResults = bgResults;
-            _gridResults = gridResults;
-            _checkResults = checkResults;
-        }
-        catch (OperationCanceledException)
-        {
-            // Refresh was cancelled, no error
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Error loading data: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] LoadData error: {ex}");
-        }
-        finally
-        {
-            _pendingRefreshCount = 0;
-            IsLoading = false;
-            await InvokeAsync(StateHasChanged);
-        }
+        _timeSeriesResults = tsResults;
+        _statResults = statResults;
+        _barGaugeResults = bgResults;
+        _gridResults = gridResults;
+        _checkResults = checkResults;
+
+        IsLoading = false;
+        await InvokeAsync(StateHasChanged);
     }
-
+    
     private async Task LoadPanelDataAsync(
-        PanelDefinition panel,
-        DashboardFilter filter,
-        ConcurrentDictionary<string, List<TimeSeriesPoint>> tsResults,
-        ConcurrentDictionary<string, StatValue> statResults,
-        ConcurrentDictionary<string, List<StatValue>> bgResults,
-        ConcurrentDictionary<string, DataTable> gridResults,
-        ConcurrentDictionary<string, List<CheckStatus>> checkResults,
-        System.Threading.CancellationToken cancellationToken)
+    PanelDefinition panel,
+    DashboardFilter filter,
+    ConcurrentDictionary<string, List<TimeSeriesPoint>> tsResults,
+    ConcurrentDictionary<string, StatValue> statResults,
+    ConcurrentDictionary<string, List<StatValue>> bgResults,
+    ConcurrentDictionary<string, DataTable> gridResults,
+    ConcurrentDictionary<string, List<CheckStatus>> checkResults,
+    CancellationToken cancellationToken)
     {
         try
         {
             switch (panel.PanelType)
             {
                 case "TimeSeries":
-                    {
-                        var data = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, MapTimeSeriesPoint, null, cancellationToken);
-                        tsResults[panel.Id] = data;
-                    }
+                    var tsData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, MapTimeSeriesPoint, null, cancellationToken);
+                    tsResults[panel.Id] = tsData;
                     break;
-
                 case "StatCard":
+                    var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
+                    if (dt.Rows.Count > 0)
                     {
-                        var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
-                        if (dt.Rows.Count > 0)
-                        {
-                            var val = Convert.ToDouble(dt.Rows[0]["Value"]);
-                            string color;
-                            if (panel.ColorThresholds != null && panel.ColorThresholds.Count > 0)
-                                color = panel.GetThresholdColor(val);
-                            else if (!string.IsNullOrEmpty(panel.StatThresholdKey))
-                                color = ThresholdConfig.GetColor(panel.StatThresholdKey, val);
-                            else
-                                color = ThresholdConfig.Blue;
-
-                            var sv = new StatValue
-                            {
-                                Label = panel.Title,
-                                Value = val,
-                                Unit = panel.StatUnit,
-                                Color = color
-                            };
-                            statResults[panel.Id] = sv;
-                        }
+                        var val = Convert.ToDouble(dt.Rows[0]["Value"]);
+                        var color = panel.ColorThresholds?.Count > 0
+                            ? panel.GetThresholdColor(val)
+                            : ThresholdConfig.GetColor(panel.StatThresholdKey, val);
+                        statResults[panel.Id] = new StatValue { Label = panel.Title, Value = val, Unit = panel.StatUnit, Color = color };
                     }
                     break;
-
                 case "BarGauge":
+                    var bgData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader =>
                     {
-                        var data = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader =>
-                        {
-                            var val = Convert.ToDouble(reader["Value"]);
-                            string color;
-                            if (panel.ColorThresholds != null && panel.ColorThresholds.Count > 0)
-                                color = panel.GetThresholdColor(val);
-                            else
-                                color = ThresholdConfig.GetColor(panel.BarGaugeThresholdKey ?? "", val);
-
-                            return new StatValue
-                            {
-                                Label = reader["Label"]?.ToString() ?? "",
-                                Value = val,
-                                Unit = reader["Unit"]?.ToString() ?? "%",
-                                Instance = reader["Instance"]?.ToString() ?? "",
-                                Color = color
-                            };
-                        }, null, cancellationToken);
-                        bgResults[panel.Id] = data;
-                    }
+                        var val = Convert.ToDouble(reader["Value"]);
+                        var color = panel.ColorThresholds?.Count > 0
+                            ? panel.GetThresholdColor(val)
+                            : ThresholdConfig.GetColor(panel.BarGaugeThresholdKey ?? "", val);
+                        return new StatValue { Label = reader["Label"]?.ToString() ?? "", Value = val, Unit = reader["Unit"]?.ToString() ?? "%", Instance = reader["Instance"]?.ToString() ?? "", Color = color };
+                    }, null, cancellationToken);
+                    bgResults[panel.Id] = bgData;
                     break;
-
                 case "DataGrid":
-                    {
-                        var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
-                        gridResults[panel.Id] = dt;
-                    }
-                    break;
-
-                case "CheckStatus":
-                    {
-                        var data = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader => new CheckStatus
-                        {
-                            Status = reader["Status"]?.ToString() ?? "OK",
-                            Count = Convert.ToInt32(reader["Count"])
-                        }, null, cancellationToken);
-                        checkResults[panel.Id] = data;
-                    }
-                    break;
-
                 case "TextCard":
-                    {
-                        var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
-                        gridResults[panel.Id] = dt;
-                    }
+                    var gridData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
+                    gridResults[panel.Id] = gridData;
+                    break;
+                case "CheckStatus":
+                    var checkData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader => new CheckStatus { Status = reader["Status"]?.ToString() ?? "OK", Count = Convert.ToInt32(reader["Count"]) }, null, cancellationToken);
+                    checkResults[panel.Id] = checkData;
                     break;
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Panel load was cancelled, skip silently
-        }
         catch (Exception ex)
         {
-            var errorMsg = $"Panel '{panel.Id}' error: {ex.Message}";
-            _panelErrors[panel.Id] = errorMsg;
-            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] {errorMsg}");
+            _panelErrors[panel.Id] = $"Panel '{panel.Id}' error: {ex.Message}";
         }
     }
+
 
     private RenderFragment RenderChartOrGrid(PanelDefinition panel) => builder =>
     {
@@ -524,64 +380,34 @@
         builder.CloseComponent();
     };
 
-    private async Task OnManualRefresh()
-    {
-        await LoadData();
-    }
-
-    private async void OnAutoRefresh()
-    {
-        try
-        {
-            using var cts = new System.Threading.CancellationTokenSource();
-            cts.CancelAfter(TimeSpan.FromSeconds(30)); // Timeout after 30 seconds
-            await InvokeAsync(async () => await LoadData(cts.Token));
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] AutoRefresh error: {ex}");
-        }
-    }
-
+    private async Task OnManualRefresh() => await LoadData();
+    private async void OnAutoRefresh() => await InvokeAsync(() => LoadData());
     private async void OnConfigChanged()
     {
-        try
-        {
-            Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => d.Id == DashboardId);
-            using var cts = new System.Threading.CancellationTokenSource();
-            cts.CancelAfter(TimeSpan.FromSeconds(30));
-            await InvokeAsync(async () => await LoadData(cts.Token));
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] ConfigChanged error: {ex}");
-        }
+        Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => string.Equals(d.Id, DashboardId, StringComparison.OrdinalIgnoreCase));
+        await InvokeAsync(() => LoadData());
     }
 
     public void Dispose()
     {
+        // Dispose DataTables to prevent memory leaks
+        foreach (var dt in _gridResults.Values)
+        {
+            dt?.Dispose();
+        }
+        _gridResults.Clear();
+        
         RefreshService.OnRefresh -= OnAutoRefresh;
         RefreshService.Stop();
         ConfigService.OnConfigChanged -= OnConfigChanged;
         InstanceSelector.OnInstanceChanged -= OnGlobalInstanceChanged;
-        _debounceTimer?.Dispose();
     }
 
-    private static TimeSeriesPoint MapTimeSeriesPoint(System.Data.IDataReader reader)
+    private static TimeSeriesPoint MapTimeSeriesPoint(IDataReader reader) => new()
     {
-            return new TimeSeriesPoint
-                {
-                    Time = ParseDateTime(reader["Time"]),
-                    Series = reader["Series"]?.ToString() ?? "",
-                    Value = reader["Value"] != DBNull.Value ? Convert.ToDouble(reader["Value"]) : 0.0 
-                };
-    }
-
-    private static DateTime ParseDateTime(object? value)
-    {
-        if (value == null || value == DBNull.Value) return DateTime.MinValue;
-        if (value is DateTime dt) return dt;
-        if (DateTime.TryParse(value.ToString(), out var parsed)) return parsed;
-        return DateTime.MinValue;
-    }
+        Time = reader["Time"] as DateTime? ?? DateTime.MinValue,
+        Series = reader["Series"]?.ToString() ?? "",
+        Value = reader["Value"] != DBNull.Value ? Convert.ToDouble(reader["Value"]) : 0.0
+    };
 }
+

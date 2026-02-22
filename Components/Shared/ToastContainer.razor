@@ -1,0 +1,79 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@using Microsoft.AspNetCore.Components
+@using SqlHealthAssessment.Data
+@inject ToastService ToastService
+@implements IDisposable
+
+<div class="toast-container">
+    @foreach (var toast in _toasts)
+    {
+        <div class="toast toast-@toast.Type.ToString().ToLower() @(toast.IsVisible ? "show" : "")" 
+             @key="toast.Id">
+            <div class="toast-icon">@GetIcon(toast.Type)</div>
+            <div class="toast-content">
+                <div class="toast-title">@toast.Title</div>
+                @if (!string.IsNullOrEmpty(toast.Message))
+                {
+                    <div class="toast-message">@toast.Message</div>
+                }
+            </div>
+            <button class="toast-close" @onclick="() => RemoveToast(toast.Id)">&times;</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ToastNotification> _toasts = new();
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += ShowToast;
+    }
+
+    private void ShowToast(ToastNotification toast)
+    {
+        _toasts.Add(toast);
+        toast.IsVisible = true;
+        StateHasChanged();
+
+        _ = Task.Delay(toast.Duration).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                RemoveToast(toast.Id);
+            });
+        });
+    }
+
+    private void RemoveToast(string id)
+    {
+        var toast = _toasts.FirstOrDefault(t => t.Id == id);
+        if (toast != null)
+        {
+            toast.IsVisible = false;
+            StateHasChanged();
+            _ = Task.Delay(300).ContinueWith(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    _toasts.Remove(toast);
+                    StateHasChanged();
+                });
+            });
+        }
+    }
+
+    private string GetIcon(ToastType type) => type switch
+    {
+        ToastType.Success => "✓",
+        ToastType.Error => "✕",
+        ToastType.Warning => "⚠",
+        ToastType.Info => "ℹ",
+        _ => "ℹ"
+    };
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= ShowToast;
+    }
+}

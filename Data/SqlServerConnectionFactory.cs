@@ -1,4 +1,7 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System.Data;
+using System.Linq;
 using Microsoft.Data.SqlClient;
 using System.Threading.Tasks;
 using SqlHealthAssessment.Data.Models;
@@ -8,6 +11,7 @@ namespace SqlHealthAssessment.Data
     public class SqlServerConnectionFactory : IDbConnectionFactory
     {
         private readonly ServerConnectionManager? _serverConnectionManager;
+        private readonly GlobalInstanceSelector? _instanceSelector;
         private string _fallbackConnectionString;
         private bool _trustServerCertificate;
 
@@ -25,9 +29,10 @@ namespace SqlHealthAssessment.Data
         /// <summary>
         /// Constructor with ServerConnectionManager - uses the current server from the manager.
         /// </summary>
-        public SqlServerConnectionFactory(ServerConnectionManager serverConnectionManager, string fallbackConnectionString, bool trustServerCertificate = false)
+        public SqlServerConnectionFactory(ServerConnectionManager serverConnectionManager, GlobalInstanceSelector instanceSelector, string fallbackConnectionString, bool trustServerCertificate = false)
         {
             _serverConnectionManager = serverConnectionManager;
+            _instanceSelector = instanceSelector;
             _fallbackConnectionString = BuildConnectionString(fallbackConnectionString, trustServerCertificate);
             _trustServerCertificate = trustServerCertificate;
         }
@@ -36,6 +41,12 @@ namespace SqlHealthAssessment.Data
         {
             var builder = new SqlConnectionStringBuilder(baseConnectionString);
             builder.TrustServerCertificate = trustServerCertificate;
+
+            // Enterprise Polish: Set Application Name for better observability in SQL traces/Audit
+            if (string.IsNullOrEmpty(builder.ApplicationName) || builder.ApplicationName == ".Net SqlClient Data Provider")
+            {
+                builder.ApplicationName = "SQL Health Assessment";
+            }
             return builder.ConnectionString;
         }
 
@@ -63,16 +74,40 @@ namespace SqlHealthAssessment.Data
         /// </summary>
         private string GetCurrentConnectionString()
         {
+            // Check GlobalInstanceSelector first (dropdown selection)
+            var selectedInstance = _instanceSelector?.SelectedInstance;
+            if (!string.IsNullOrEmpty(selectedInstance) && _serverConnectionManager != null)
+            {
+                var connections = _serverConnectionManager.GetEnabledConnections();
+                foreach (var conn in connections)
+                {
+                    var servers = conn.GetServerList();
+                    if (servers.Contains(selectedInstance, System.StringComparer.OrdinalIgnoreCase))
+                    {
+                        return conn.GetConnectionStringForDashboard(selectedInstance);
+                    }
+                }
+            }
+
             var currentServer = _serverConnectionManager?.CurrentServer;
+            System.Diagnostics.Debug.WriteLine($"[SqlServerConnectionFactory] GetCurrentConnectionString called. CurrentServer is null: {currentServer == null}");
+            
             if (currentServer != null)
             {
                 // Get the first server from the connection's server list
                 var serverList = currentServer.GetServerList();
+                System.Diagnostics.Debug.WriteLine($"[SqlServerConnectionFactory] CurrentServer found: {currentServer.ServerNames}, ServerList count: {serverList.Count}");
                 if (serverList.Count > 0)
                 {
                     var serverName = serverList[0];
-                    return currentServer.GetConnectionString(serverName);
+                    var connStr = currentServer.GetConnectionStringForDashboard(serverName);
+                    System.Diagnostics.Debug.WriteLine($"[SqlServerConnectionFactory] Using server-specific connection: {serverName}");
+                    return connStr;
                 }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[SqlServerConnectionFactory] CurrentServer is null. Using fallback: {_fallbackConnectionString}");
             }
 
             // Fall back to configured connection string

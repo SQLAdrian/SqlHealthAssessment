@@ -1,7 +1,11 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Web
+@using SqlHealthAssessment.Components.Shared
 
 <div class="app-container" tabindex="0" @onkeydown="HandleKeyDown">
+    <ToastContainer />
+    <ShortcutsDialog IsVisible="@showShortcuts" OnClose="@(() => showShortcuts = false)" />
     <Router AppAssembly="@typeof(MainLayout).Assembly">
     <Found Context="routeData">
         <div class="app-layout">
@@ -29,9 +33,24 @@
 
 @code {
     [Inject] private NavigationManager Navigation { get; set; } = null!;
+    private bool showShortcuts = false;
 
     private void HandleKeyDown(KeyboardEventArgs args)
     {
+        // ? for shortcuts help
+        if (args.Key == "?" && !args.CtrlKey && !args.AltKey)
+        {
+            showShortcuts = !showShortcuts;
+            return;
+        }
+
+        // Esc to close dialogs
+        if (args.Key == "Escape")
+        {
+            showShortcuts = false;
+            return;
+        }
+
         // Ctrl+1-9 for quick navigation
         if (args.CtrlKey)
         {
@@ -47,6 +66,9 @@
                 "7" => "/dashboard-editor",
                 "8" => "/servers",
                 "9" => "/bulkeditchecks",
+                "h" or "H" => "/health",
+                "q" or "Q" => "/checks",
+                "e" or "E" => "/dashboard-editor",
                 _ => null
             };
             
@@ -54,12 +76,6 @@
             {
                 Navigation.NavigateTo(route);
             }
-        }
-        
-        // Ctrl+R for refresh
-        if (args.CtrlKey && args.Key == "r")
-        {
-            Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
         }
     }
 }

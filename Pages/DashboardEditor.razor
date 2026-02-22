@@ -1,3 +1,4 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/dashboard-editor"
 @using System.Data
 @using System.IO
@@ -13,20 +14,26 @@
     <div class="editor-header">
         <h2>Dashboard Editor</h2>
         <div class="header-actions">
-            <button class="btn btn-secondary" @onclick="Undo" disabled="@(!CanUndo)">↩ Undo</button>
-            <button class="btn btn-secondary" @onclick="Redo" disabled="@(!CanRedo)">↪ Redo</button>
-            <button class="btn btn-secondary" @onclick="ExportConfig">📤 Export</button>
-            <button class="btn btn-secondary" @onclick="ShowImportDialog">📥 Import</button>
-            <button class="btn btn-primary" @onclick="SaveAll">💾 Save All</button>
+            <table>
+                <tr>
+                    <td><button class="btn btn-secondary" @onclick="Undo" disabled="@(!CanUndo)">↩ Undo</button></td>
+                    <td><button class="btn btn-secondary" @onclick="Redo" disabled="@(!CanRedo)">↪ Redo</button></td>
+                    <td><button class="btn btn-secondary" @onclick="ExportConfig">📤 Export</button></td>
+                    <td><button class="btn btn-secondary" @onclick="ShowImportDialog">📥 Import</button></td>
+                    <td><button class="btn btn-primary" @onclick="SaveAll">💾 Save All</button></td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(StatusMessage))
+                        {
+                            <span class="autosave-status @(IsSuccess ? "success" : "error")">
+                                @StatusMessage
+                            </span>
+                        }
+                    </td>
+                </tr>
+            </table>
+         
         </div>
     </div>
-
-    @if (!string.IsNullOrEmpty(StatusMessage))
-    {
-        <div class="status-message @(IsSuccess ? "success" : "error")">
-            @StatusMessage
-        </div>
-    }
 
     <div class="editor-content">
         <!-- Dashboard List -->
@@ -38,7 +45,12 @@
             <div class="dashboard-list">
                 @foreach (var dashboard in EditedConfig.Dashboards)
                 {
-                    <div class="dashboard-item @(SelectedDashboard?.Id == dashboard.Id ? "selected" : "")" 
+                    <div class="dashboard-item @(SelectedDashboard?.Id == dashboard.Id ? "selected" : "") @(dashboard == _dragOverDashboard ? "drag-over" : "")" 
+                         @ondragover:preventDefault="true"
+                         @ondragover="() => OnDashboardDragOver(dashboard)"
+                         @ondragleave="() => OnDashboardDragLeave(dashboard)"
+                         @ondrop:preventDefault="true"
+                         @ondrop="() => OnDashboardDrop(dashboard)"
                          @onclick="() => SelectDashboard(dashboard)">
                         <div class="dashboard-info">
                             <span class="dashboard-title">@dashboard.Title</span>
@@ -102,7 +114,6 @@
             }
         </div>
 
-        <!-- Panel Editor -->
         <div class="panel-editor-panel">
             @if (SelectedPanel != null)
             {
@@ -140,6 +151,7 @@
                                 <select @bind="SelectedPanel.PanelType">
                                     <option value="TimeSeries">Time Series Chart</option>
                                     <option value="StatCard">Stat Card</option>
+                                    <option value="DeltaStatCard">Delta Stat Card (per/sec)</option>
                                     <option value="BarGauge">Bar Gauge</option>
                                     <option value="DataGrid">Data Grid</option>
                                     <option value="CheckStatus">Check Status</option>
@@ -299,15 +311,7 @@
                             </div>
                         </div>
 
-                        @* ── SQLite Query ── *@
-                        <div class="form-group">
-                            <label>SQLite Query</label>
-                            <textarea @bind="SelectedPanel.Query.Sqlite" rows="4" placeholder="SELECT..."></textarea>
-                            <div class="button-row">
-                                <button class="btn btn-sm" @onclick="TestSqliteQuery" disabled="@IsQueryRunning">🧪 Test SQLite Query</button>
-                                <button class="btn btn-sm" @onclick="ValidateSqliteQuery" disabled="@IsQueryRunning">✅ Validate & Create Table</button>
-                            </div>
-                        </div>
+
 
                         @* ── Result message ── *@
                         @if (!string.IsNullOrEmpty(QueryTestResult))
@@ -389,6 +393,131 @@
             {
                 <div class="empty-state">
                     Select a panel to edit its properties
+                </div>
+            }
+        </div>
+
+        <!-- Preview Pane -->
+        <div class="preview-pane-panel">
+            @if (SelectedDashboard != null)
+            {
+                <div class="panel-header">
+                    <h3>Preview - @SelectedDashboard.Title</h3>
+                    <button class="btn btn-sm" @onclick="RefreshPreview">🔄 Refresh</button>
+                </div>
+                <div class="preview-container">
+                    <!-- Stats/Gauges Section (Column 0) -->
+                    @{
+                        var statsGauges = SelectedDashboard.Panels.Where(p => p.Layout.Column == 0 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                    }
+                    @if (statsGauges.Any())
+                    {
+                        <div class="preview-stats-section">
+                            @foreach (var panel in statsGauges)
+                            {
+                                <div class="preview-stat-card @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                                     draggable="true"
+                                     @ondragstart="() => OnDragStart(panel)"
+                                     @ondragover:preventDefault="true"
+                                     @ondragover="() => OnDragOver(panel)"
+                                     @ondragleave="() => OnDragLeave(panel)"
+                                     @ondrop:preventDefault="true"
+                                     @ondrop="() => OnDrop(panel)"
+                                     @onclick="() => SelectPanel(panel)">
+                                    <div class="preview-stat-label">@panel.Title</div>
+                                    <div class="preview-stat-type">@panel.PanelType</div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Two-Column Layout -->
+                    <div class="preview-columns">
+                        @{
+                            var leftColumn = SelectedDashboard.Panels.Where(p => p.Layout.Column == 1 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                            var rightColumn = SelectedDashboard.Panels.Where(p => p.Layout.Column == 2 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                            var fullWidth = SelectedDashboard.Panels.Where(p => p.Layout.SpanColumns && p.Layout.Column != 0 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                        }
+
+                        <!-- Left Column -->
+                        <div class="preview-column">
+                            @foreach (var panel in leftColumn)
+                            {
+                                <div class="preview-panel @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                                     draggable="true"
+                                     @ondragstart="() => OnDragStart(panel)"
+                                     @ondragover:preventDefault="true"
+                                     @ondragover="() => OnDragOver(panel)"
+                                     @ondragleave="() => OnDragLeave(panel)"
+                                     @ondrop:preventDefault="true"
+                                     @ondrop="() => OnDrop(panel)"
+                                     @onclick="() => SelectPanel(panel)"
+                                     style="height: @(panel.Height)px;">
+                                    <div class="preview-panel-header">
+                                        <span class="preview-panel-title">@panel.Title</span>
+                                        <span class="preview-panel-type">@panel.PanelType</span>
+                                    </div>
+                                    <div class="preview-panel-body">
+                                        <div class="preview-placeholder">@panel.PanelType</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="preview-column">
+                            @foreach (var panel in rightColumn)
+                            {
+                                <div class="preview-panel @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                                     draggable="true"
+                                     @ondragstart="() => OnDragStart(panel)"
+                                     @ondragover:preventDefault="true"
+                                     @ondragover="() => OnDragOver(panel)"
+                                     @ondragleave="() => OnDragLeave(panel)"
+                                     @ondrop:preventDefault="true"
+                                     @ondrop="() => OnDrop(panel)"
+                                     @onclick="() => SelectPanel(panel)"
+                                     style="height: @(panel.Height)px;">
+                                    <div class="preview-panel-header">
+                                        <span class="preview-panel-title">@panel.Title</span>
+                                        <span class="preview-panel-type">@panel.PanelType</span>
+                                    </div>
+                                    <div class="preview-panel-body">
+                                        <div class="preview-placeholder">@panel.PanelType</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Full Width Panels -->
+                    @foreach (var panel in fullWidth)
+                    {
+                        <div class="preview-panel preview-panel-full @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                             draggable="true"
+                             @ondragstart="() => OnDragStart(panel)"
+                             @ondragover:preventDefault="true"
+                             @ondragover="() => OnDragOver(panel)"
+                             @ondragleave="() => OnDragLeave(panel)"
+                             @ondrop:preventDefault="true"
+                             @ondrop="() => OnDrop(panel)"
+                             @onclick="() => SelectPanel(panel)"
+                             style="height: @(panel.Height)px;">
+                            <div class="preview-panel-header">
+                                <span class="preview-panel-title">@panel.Title</span>
+                                <span class="preview-panel-type">@panel.PanelType</span>
+                            </div>
+                            <div class="preview-panel-body">
+                                <div class="preview-placeholder">@panel.PanelType</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    Select a dashboard to preview
                 </div>
             }
         </div>
@@ -488,6 +617,8 @@
     private bool ShowPreview;
     private bool ShowImport;
     private string ImportJson = "";
+    private System.Timers.Timer? _autoSaveTimer;
+    private bool _hasUnsavedChanges;
 
     // Undo/Redo stacks
     private Stack<DashboardConfigRoot> UndoStack = new();
@@ -505,6 +636,11 @@
     protected override void OnInitialized()
     {
         LoadConfig();
+        
+        // Auto-save timer: save 2 seconds after last edit
+        _autoSaveTimer = new System.Timers.Timer(2000);
+        _autoSaveTimer.AutoReset = false;
+        _autoSaveTimer.Elapsed += async (s, e) => await InvokeAsync(AutoSave);
     }
 
     private void LoadConfig()
@@ -565,6 +701,11 @@
         };
     }
 
+    private void RefreshPreview()
+    {
+        StateHasChanged();
+    }
+
     private void SaveState()
     {
         var snapshot = new DashboardConfigRoot
@@ -589,6 +730,11 @@
             UndoStack = new Stack<DashboardConfigRoot>(temp.Reverse());
         }
         RedoStack.Clear();
+        
+        // Mark as having unsaved changes and trigger auto-save timer
+        _hasUnsavedChanges = true;
+        _autoSaveTimer?.Stop();
+        _autoSaveTimer?.Start();
     }
 
     private void Undo()
@@ -774,11 +920,14 @@
     }
 
     private PanelDefinition? _draggedPanel;
+    private DashboardDefinition? _draggedPanelDashboard;
     private PanelDefinition? _dragOverPanel;
+    private DashboardDefinition? _dragOverDashboard;
 
     private void OnDragStart(PanelDefinition panel)
     {
         _draggedPanel = panel;
+        _draggedPanelDashboard = SelectedDashboard;
     }
 
     private void OnDragOver(PanelDefinition panel)
@@ -794,9 +943,46 @@
         }
     }
 
+    private void OnDashboardDragOver(DashboardDefinition dashboard)
+    {
+        _dragOverDashboard = dashboard;
+    }
+
+    private void OnDashboardDragLeave(DashboardDefinition dashboard)
+    {
+        if (_dragOverDashboard == dashboard)
+        {
+            _dragOverDashboard = null;
+        }
+    }
+
+    private void OnDashboardDrop(DashboardDefinition targetDashboard)
+    {
+        if (_draggedPanel == null || _draggedPanelDashboard == null || targetDashboard == null)
+            return;
+
+        if (_draggedPanelDashboard.Id == targetDashboard.Id)
+            return;
+
+        SaveState();
+
+        _draggedPanelDashboard.Panels.Remove(_draggedPanel);
+        UpdatePanelOrders(_draggedPanelDashboard.Panels);
+
+        targetDashboard.Panels.Add(_draggedPanel);
+        UpdatePanelOrders(targetDashboard.Panels);
+
+        SelectDashboard(targetDashboard);
+        SelectPanel(_draggedPanel);
+
+        _draggedPanel = null;
+        _draggedPanelDashboard = null;
+        _dragOverDashboard = null;
+    }
+
     private void OnDrop(PanelDefinition targetPanel)
     {
-        if (SelectedDashboard == null || _draggedPanel == null || targetPanel == null)
+        if (_draggedPanel == null || _draggedPanelDashboard == null || targetPanel == null)
             return;
 
         if (_draggedPanel.Id == targetPanel.Id)
@@ -804,15 +990,25 @@
 
         SaveState();
 
-        var draggedIndex = SelectedDashboard.Panels.IndexOf(_draggedPanel);
-        var targetIndex = SelectedDashboard.Panels.IndexOf(targetPanel);
+        var targetDashboard = EditedConfig.Dashboards.FirstOrDefault(d => d.Panels.Contains(targetPanel));
+        if (targetDashboard == null)
+            return;
 
-        SelectedDashboard.Panels.RemoveAt(draggedIndex);
-        SelectedDashboard.Panels.Insert(targetIndex, _draggedPanel);
+        _draggedPanelDashboard.Panels.Remove(_draggedPanel);
+        UpdatePanelOrders(_draggedPanelDashboard.Panels);
 
-        UpdatePanelOrders(SelectedDashboard.Panels);
+        var targetIndex = targetDashboard.Panels.IndexOf(targetPanel);
+        targetDashboard.Panels.Insert(targetIndex, _draggedPanel);
+        UpdatePanelOrders(targetDashboard.Panels);
+
+        if (_draggedPanelDashboard.Id != targetDashboard.Id)
+        {
+            SelectDashboard(targetDashboard);
+        }
+        SelectPanel(_draggedPanel);
 
         _draggedPanel = null;
+        _draggedPanelDashboard = null;
         _dragOverPanel = null;
     }
 
@@ -1090,34 +1286,42 @@
         {
             SaveState();
 
-            // Update config service with edited config - this will also save to file and notify subscribers
             ConfigService.UpdateConfig(EditedConfig);
 
-            // Automatically create/update SQLite tables for all panels that have SQL Server queries.
-            // This ensures the underlying local cache table exists whenever panels are added or modified.
-            var (succeeded, failed, errors) = await SQLiteTableService.EnsureTablesForAllPanelsAsync(
-                ConnectionFactory, EditedConfig);
-
-            if (failed > 0)
-            {
-                StatusMessage = $"Configuration saved. SQLite tables: {succeeded} OK, {failed} failed — {string.Join("; ", errors)}";
-                IsSuccess = true; // Config save itself succeeded
-            }
-            else if (succeeded > 0)
-            {
-                StatusMessage = $"Configuration saved successfully! ({succeeded} SQLite table(s) verified)";
-                IsSuccess = true;
-            }
-            else
-            {
-                StatusMessage = "Configuration saved successfully!";
-                IsSuccess = true;
-            }
+            StatusMessage = "Configuration saved successfully!";
+            IsSuccess = true;
+            _hasUnsavedChanges = false;
+            _autoSaveTimer?.Stop();
         }
         catch (Exception ex)
         {
             StatusMessage = $"Save failed: {ex.Message}";
             IsSuccess = false;
+        }
+    }
+    
+    private async Task AutoSave()
+    {
+        if (!_hasUnsavedChanges) return;
+        
+        try
+        {
+            ConfigService.UpdateConfig(EditedConfig);
+            _hasUnsavedChanges = false;
+            StatusMessage = "Auto-saved";
+            IsSuccess = true;
+            StateHasChanged();
+            
+            // Clear status message after 2 seconds
+            await Task.Delay(2000);
+            StatusMessage = "";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Auto-save failed: {ex.Message}";
+            IsSuccess = false;
+            StateHasChanged();
         }
     }
 }

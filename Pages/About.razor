@@ -1,17 +1,66 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/about"
 
 @inject NavigationManager Navigation
+@inject AutoUpdateService UpdateService
 
 <div class="about-container">
-    <h1>About SQLHealthAssessment</h1>
+    <h1>About SQL Health Assessment</h1>
     
     <div class="about-section">
-        <h2>📖 Introduction</h2>
+        <h2>📖 Overview</h2>
         <p>
-            SQLHealthAssessment is a comprehensive SQL Server monitoring and health assessment tool. 
-            It helps database administrators monitor multiple SQL Server instances, run health checks, 
-            analyze performance, and identify potential issues before they become critical.
+            <strong>SQL Health Assessment</strong> is an enterprise-grade SQL Server monitoring and health assessment tool 
+            built with .NET 8, WPF, and Blazor. It provides real-time monitoring, comprehensive health checks, 
+            and performance analysis for multiple SQL Server instances.
         </p>
+        <p>
+            <strong>Version:</strong> @UpdateService.GetCurrentVersion() | 
+            <strong>Build:</strong> Self-Contained Optimized | 
+            <strong>Size:</strong> ~100-120 MB
+        </p>
+    </div>
+
+    <div class="about-section">
+        <h2>✨ Enterprise Features</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <h3>🔒 Security</h3>
+                <ul>
+                    <li>DPAPI credential encryption</li>
+                    <li>SQL injection prevention</li>
+                    <li>Comprehensive audit logging</li>
+                    <li>Security event tracking</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>⚡ Performance</h3>
+                <ul>
+                    <li>Configurable query timeouts (60s)</li>
+                    <li>Memory pressure monitoring</li>
+                    <li>Automatic cache eviction</li>
+                    <li>SQLite caching layer</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>📊 Observability</h3>
+                <ul>
+                    <li>Serilog structured logging</li>
+                    <li>Query execution tracking</li>
+                    <li>Performance metrics</li>
+                    <li>30-day log retention</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>🎨 User Experience</h3>
+                <ul>
+                    <li>Toast notifications</li>
+                    <li>Keyboard shortcuts (Ctrl+1-9)</li>
+                    <li>WCAG 2.1 AA accessibility</li>
+                    <li>10 theme options</li>
+                </ul>
+            </div>
+        </div>
     </div>
 
     <div class="about-section">
@@ -36,6 +85,21 @@
 
         <div class="alert alert-info">
             <strong>Note:</strong> The application requires at least SQL Server 2016 or later for full functionality.
+        </div>
+
+        <h3>🔐 Trust Server Certificate Option</h3>
+        <p>
+            If you encounter SSL/TLS connection errors when deploying to a SQL Server with encryption enabled,
+            you can enable the <strong>Trust Server Certificate</strong> option:
+        </p>
+        <ul>
+            <li><strong>Via Application Settings</strong>: Go to Settings and enable "Trust Server Certificate"</li>
+            <li><strong>For New Servers</strong>: When adding a server in the Servers page, check "Trust Server Certificate"</li>
+            <li><strong>Connection String</strong>: Add <code>TrustServerCertificate=True</code> to your connection string</li>
+        </ul>
+        <div class="alert alert-warning">
+            <strong>Security Note:</strong> Only enable Trust Server Certificate in trusted environments.
+            In production, ensure the SQL Server has a valid SSL certificate installed.
         </div>
     </div>
 
@@ -185,7 +249,7 @@
 
     <div class="about-section">
         <h2>⌨️ Keyboard Shortcuts</h2>
-        
+        <p>Press <kbd>?</kbd> to show the shortcuts dialog, or use these quick keys:</p>
         <table class="shortcuts-table">
             <thead>
                 <tr>
@@ -194,19 +258,38 @@
                 </tr>
             </thead>
             <tbody>
-                <tr><td>Ctrl+1</td><td>Repository Dashboard</td></tr>
-                <tr><td>Ctrl+2</td><td>Instance Overview</td></tr>
-                <tr><td>Ctrl+3</td><td>Checks Page</td></tr>
-                <tr><td>Ctrl+4</td><td>Full Audit</td></tr>
-                <tr><td>Ctrl+5</td><td>Health Page</td></tr>
-                <tr><td>Ctrl+6</td><td>Settings</td></tr>
-                <tr><td>Ctrl+7</td><td>Dashboard Editor</td></tr>
-                <tr><td>Ctrl+8</td><td>Servers</td></tr>
-                <tr><td>Ctrl+9</td><td>Bulk Edit Checks</td></tr>
-                <tr><td>Ctrl+0</td><td>Quick Check</td></tr>
-                <tr><td>Ctrl+R</td><td>Refresh Current Page</td></tr>
+                <tr><td><kbd>Ctrl+1-9</kbd></td><td>Navigate to dashboards 1-9</td></tr>
+                <tr><td><kbd>Ctrl+H</kbd></td><td>Health Page</td></tr>
+                <tr><td><kbd>Ctrl+Q</kbd></td><td>Quick Check</td></tr>
+                <tr><td><kbd>Ctrl+E</kbd></td><td>Dashboard Editor</td></tr>
+                <tr><td><kbd>Ctrl+S</kbd></td><td>Save (in editor)</td></tr>
+                <tr><td><kbd>?</kbd></td><td>Show shortcuts help</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Close dialogs</td></tr>
             </tbody>
         </table>
+    </div>
+
+    <div class="about-section">
+        <h2>🔧 Configuration</h2>
+        <p>Application settings are managed through environment-specific configuration files:</p>
+        <ul>
+            <li><strong>appsettings.json</strong> - Base configuration</li>
+            <li><strong>appsettings.Development.json</strong> - Development overrides</li>
+            <li><strong>appsettings.Production.json</strong> - Production overrides</li>
+        </ul>
+        <p>Key settings include query timeouts, cache limits, refresh intervals, and logging levels.</p>
+    </div>
+
+    <div class="about-section">
+        <h2>📦 Deployment</h2>
+        <p><strong>Build Type:</strong> Self-Contained Optimized</p>
+        <ul>
+            <li>No .NET Runtime required on target machines</li>
+            <li>Single executable deployment</li>
+            <li>ReadyToRun compilation for fast startup</li>
+            <li>Compressed for optimal size (~100-120 MB)</li>
+        </ul>
+        <p>Check for updates in <strong>Settings → Updates</strong></p>
     </div>
 
     <div class="about-section">
@@ -247,27 +330,66 @@
     }
 
     .about-container h1 {
-        color: #2c3e50;
-        border-bottom: 3px solid #3498db;
+        color: var(--text-primary);
+        border-bottom: 3px solid var(--accent);
         padding-bottom: 10px;
         margin-bottom: 30px;
     }
 
     .about-section {
         margin-bottom: 35px;
-        background: #f8f9fa;
+        background: var(--bg-panel);
         padding: 20px;
         border-radius: 8px;
+        border: 1px solid var(--border);
     }
 
     .about-section h2 {
-        color: #2980b9;
+        color: var(--accent);
         margin-top: 0;
     }
 
     .about-section h3 {
-        color: #34495e;
+        color: var(--text-primary);
         margin-top: 20px;
+    }
+
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+    }
+
+    .feature-card {
+        background: var(--bg-secondary);
+        padding: 16px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+    }
+
+    .feature-card h3 {
+        margin-top: 0;
+        font-size: 16px;
+        color: var(--accent);
+    }
+
+    .feature-card ul {
+        margin: 8px 0 0 0;
+        padding-left: 20px;
+        font-size: 13px;
+        line-height: 1.8;
+    }
+
+    kbd {
+        display: inline-block;
+        padding: 3px 6px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        font-family: 'Consolas', monospace;
+        font-size: 11px;
+        box-shadow: 0 1px 0 var(--border);
     }
 
     .about-section ol, .about-section ul {
@@ -281,26 +403,29 @@
     }
 
     .alert-info {
-        background: #d1ecf1;
-        border-left: 4px solid #17a2b8;
-        color: #0c5460;
+        background: rgba(33, 150, 243, 0.1);
+        border-left: 4px solid var(--accent);
+        color: var(--text-primary);
+    }
+
+    .alert-warning {
+        background: rgba(255, 152, 0, 0.1);
+        border-left: 4px solid var(--orange);
+        color: var(--text-primary);
     }
 
     details {
         margin: 10px 0;
         padding: 10px;
-        background: white;
+        background: var(--bg-secondary);
         border-radius: 4px;
         cursor: pointer;
+        border: 1px solid var(--border);
     }
 
     details summary {
         font-weight: 600;
-        color: #2c3e50;
-    }
-
-    details[open] summary {
-        margin-bottom: 10px;
+        color: var(--text-primary);
     }
 
     .dashboards-table, .shortcuts-table {
@@ -313,20 +438,12 @@
     .shortcuts-table th, .shortcuts-table td {
         padding: 10px;
         text-align: left;
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid var(--border);
     }
 
     .dashboards-table th, .shortcuts-table th {
-        background: #3498db;
+        background: var(--accent);
         color: white;
-    }
-
-    .about-actions {
-        display: flex;
-        gap: 15px;
-        margin-top: 30px;
-        padding-top: 20px;
-        border-top: 2px solid #eee;
     }
 
     .btn {
@@ -339,20 +456,20 @@
     }
 
     .btn-primary {
-        background: #3498db;
+        background: var(--accent);
         color: white;
     }
 
     .btn-primary:hover {
-        background: #2980b9;
+        opacity: 0.9;
     }
 
     .btn-secondary {
-        background: #27ae60;
+        background: var(--green);
         color: white;
     }
 
     .btn-secondary:hover {
-        background: #219a52;
+        opacity: 0.9;
     }
 </style>

@@ -1,3 +1,6 @@
+/* In the name of God, the Merciful, the Compassionate */
+
+using System.Collections.Generic;
 namespace SqlHealthAssessment.Data
 {
     public class Threshold
@@ -18,7 +21,7 @@ namespace SqlHealthAssessment.Data
         public const string Blue = "#2196f3";
         public const string Gray = "#616161";
 
-        private static readonly Dictionary<string, Threshold[]> _thresholds = new()
+        private static Dictionary<string, Threshold[]> _thresholds = new()
         {
             ["CPU Usage %"] = new[] { new Threshold { Value = 0, Color = DarkGreen }, new Threshold { Value = 80, Color = LightOrange }, new Threshold { Value = 95, Color = Red } },
             ["Latency"] = new[] { new Threshold { Value = 0, Color = DarkGreen }, new Threshold { Value = 20, Color = LightOrange }, new Threshold { Value = 50, Color = Red } },
@@ -41,7 +44,7 @@ namespace SqlHealthAssessment.Data
 
         public static string GetColor(string metric, double value)
         {
-            if (!_thresholds.TryGetValue(metric, out var thresholds))
+            if (string.IsNullOrEmpty(metric) || !_thresholds.TryGetValue(metric, out var thresholds))
                 return Green;
 
             string color = Green;
@@ -55,7 +58,19 @@ namespace SqlHealthAssessment.Data
 
         public static Threshold[] GetThresholds(string metric)
         {
+            if (string.IsNullOrEmpty(metric)) return new[] { new Threshold { Value = 0, Color = Green } };
             return _thresholds.TryGetValue(metric, out var t) ? t : new[] { new Threshold { Value = 0, Color = Green } };
+        }
+
+        /// <summary>
+        /// Updates the global thresholds. Useful for loading enterprise customizations from config.
+        /// </summary>
+        public static void UpdateThresholds(Dictionary<string, Threshold[]> newThresholds)
+        {
+            if (newThresholds != null)
+            {
+                _thresholds = newThresholds;
+            }
         }
     }
 }

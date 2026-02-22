@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -29,6 +31,7 @@ namespace SqlHealthAssessment.Data.Caching
         private readonly CacheStateTracker _stateTracker;
         private readonly DashboardConfigService _configService;
         private readonly TimeSpan _evictionThreshold;
+        private readonly SemaphoreSlim _invalidationLock = new(1, 1);
 
         /// <summary>
         /// True when the most recent SQL Server query failed and we are serving stale cached data.
@@ -66,11 +69,19 @@ namespace SqlHealthAssessment.Data.Caching
         /// </summary>
         public async Task PrepareRefreshCycle(string dashboardId, int timeRangeMinutes, string selectedInstance)
         {
-            if (_stateTracker.RequiresFullReload(dashboardId, timeRangeMinutes, selectedInstance))
+            await _invalidationLock.WaitAsync();
+            try
             {
-                await _cache.InvalidateAllAsync();
+                if (_stateTracker.RequiresFullReload(dashboardId, timeRangeMinutes, selectedInstance))
+                {
+                    await _cache.InvalidateAllAsync();
+                }
+                _stateTracker.RecordFilterState(dashboardId, timeRangeMinutes, selectedInstance);
             }
-            _stateTracker.RecordFilterState(dashboardId, timeRangeMinutes, selectedInstance);
+            finally
+            {
+                _invalidationLock.Release();
+            }
         }
 
         /// <summary>

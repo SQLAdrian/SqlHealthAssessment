@@ -1,9 +1,12 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.Collections.Generic;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Threading.Tasks;
 using SqlHealthAssessment.Data.Models;
+using Microsoft.Extensions.Configuration;
 
 namespace SqlHealthAssessment.Data
 {
@@ -13,16 +16,20 @@ namespace SqlHealthAssessment.Data
     /// </summary>
     public class QueryExecutor
     {
-        // Default command timeout: 2 minutes for long-running queries
-        private const int DefaultCommandTimeout = 120;
-
+        private readonly int _commandTimeout;
+        private readonly int _maxRows;
         private readonly IDbConnectionFactory _connectionFactory;
         private readonly QueryStore _queryStore;
+        private readonly AuditLogService? _auditLog;
 
-        public QueryExecutor(IDbConnectionFactory connectionFactory, QueryStore queryStore)
+        public QueryExecutor(IDbConnectionFactory connectionFactory, QueryStore queryStore, IConfiguration configuration, AuditLogService? auditLog = null)
         {
             _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
             _queryStore = queryStore ?? throw new ArgumentNullException(nameof(queryStore));
+            _auditLog = auditLog;
+            
+            _commandTimeout = configuration.GetValue<int>("QueryTimeoutSeconds", 60);
+            _maxRows = configuration.GetValue<int>("MaxQueryRows", 10000);
         }
 
         /// <summary>
@@ -37,14 +44,14 @@ namespace SqlHealthAssessment.Data
         {
             var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType);
             var dt = new DataTable();
+            var startTime = DateTime.UtcNow;
 
-            // Use direct async - I/O operations don't need Task.Run() wrapper
             using var conn = (SqlConnection)_connectionFactory.CreateConnection();
             await conn.OpenAsync(cancellationToken);
 
             using var cmd = (SqlCommand)conn.CreateCommand();
             cmd.CommandText = sql;
-            cmd.CommandTimeout = DefaultCommandTimeout;
+            cmd.CommandTimeout = _commandTimeout;
             cmd.Connection = conn;
 
             AddFilterParameters(cmd, filter);
@@ -57,10 +64,39 @@ namespace SqlHealthAssessment.Data
                 }
             }
 
-            // Use async reader for non-blocking I/O
             using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-            dt.Load(reader); // DataTable.Load is synchronous but fast
-
+            int rowCount = 0;
+            dt.BeginLoadData();
+            
+            var schemaTable = reader.GetSchemaTable();
+            if (schemaTable != null)
+            {
+                foreach (DataRow schemaRow in schemaTable.Rows)
+                {
+                    dt.Columns.Add(schemaRow["ColumnName"].ToString(), (Type)schemaRow["DataType"]);
+                }
+            }
+            
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (++rowCount > _maxRows)
+                {
+                    dt.EndLoadData();
+                    _auditLog?.LogQueryExecution(queryId, (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown", false, DateTime.UtcNow - startTime, rowCount, $"Exceeded max rows ({_maxRows})");
+                    throw new InvalidOperationException(
+                        $"Query '{queryId}' returned more than {_maxRows} rows. Consider adding filters or pagination.");
+                }
+                
+                var row = dt.NewRow();
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    row[i] = reader.IsDBNull(i) ? DBNull.Value : reader.GetValue(i);
+                }
+                dt.Rows.Add(row);
+            }
+            
+            dt.EndLoadData();
+            _auditLog?.LogQueryExecution(queryId, (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown", true, DateTime.UtcNow - startTime, rowCount);
             return dt;
         }
 
@@ -82,7 +118,7 @@ namespace SqlHealthAssessment.Data
 
             using var cmd = (SqlCommand)conn.CreateCommand();
             cmd.CommandText = sql;
-            cmd.CommandTimeout = DefaultCommandTimeout;
+            cmd.CommandTimeout = _commandTimeout;
             cmd.Connection = conn;
 
             AddFilterParameters(cmd, filter);
@@ -120,7 +156,7 @@ namespace SqlHealthAssessment.Data
 
             using var cmd = (SqlCommand)conn.CreateCommand();
             cmd.CommandText = sql;
-            cmd.CommandTimeout = DefaultCommandTimeout;
+            cmd.CommandTimeout = _commandTimeout;
             cmd.Connection = conn;
 
             AddFilterParameters(cmd, filter);

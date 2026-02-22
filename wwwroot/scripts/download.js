@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 // Download helper functions for Blazor
 function downloadFile(fileName, base64Content) {
     try {

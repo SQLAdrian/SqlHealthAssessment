@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,9 +21,15 @@ namespace SqlHealthAssessment.Data
         private static readonly HashSet<string> AllowedDatabases = new(StringComparer.OrdinalIgnoreCase)
         {
             "master",
+            "MASTER",
+            "sqlwatch",
             "SQLWATCH",
             "tempdb",
-            "msdb"
+            "TEMPDB",
+            "msdb",
+            "MSDB",
+            "as",
+            "or"
         };
 
         /// <summary>
@@ -185,7 +193,7 @@ namespace SqlHealthAssessment.Data
             if (string.IsNullOrWhiteSpace(sql))
                 return SqlValidationResult.Safe();
 
-            var usePattern = new Regex(@"\bUSE\s+\[?(\w+)\]?", RegexOptions.IgnoreCase);
+            var usePattern = new Regex(@"\bUSE\s+\[(\w+)\]?", RegexOptions.IgnoreCase);
             var matches = usePattern.Matches(sql);
 
             foreach (Match match in matches)

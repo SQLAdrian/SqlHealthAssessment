@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SqlHealthAssessment.Data.Models;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 
 namespace SqlHealthAssessment.Data
 {
@@ -25,6 +28,7 @@ namespace SqlHealthAssessment.Data
     {
         private readonly CheckRepositoryService _checkRepo;
         private readonly ServerConnectionManager _connectionManager;
+        private readonly IConfiguration _configuration;
 
         /// <summary>Max concurrent queries per instance (mirrors PerformanceMonitor's SemaphoreSlim(7)).</summary>
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _instanceThrottles = new();
@@ -36,7 +40,7 @@ namespace SqlHealthAssessment.Data
         /// <summary>Per-instance execution summaries.</summary>
         private readonly ConcurrentDictionary<string, CheckExecutionSummary> _lastSummary = new();
 
-        private const int MaxResultsPerInstance = 500;
+        private readonly int _maxResultsPerInstance;
         private const int CheckCommandTimeoutSeconds = 30;
 
         private bool _disposed;
@@ -49,10 +53,13 @@ namespace SqlHealthAssessment.Data
 
         public CheckExecutionService(
             CheckRepositoryService checkRepo,
-            ServerConnectionManager connectionManager)
+            ServerConnectionManager connectionManager,
+            IConfiguration configuration)
         {
             _checkRepo = checkRepo ?? throw new ArgumentNullException(nameof(checkRepo));
             _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _maxResultsPerInstance = _configuration.GetValue("CheckExecution:MaxResultsPerInstance", 500);
         }
 
         // ────────────────────── Execution ──────────────────────
@@ -266,7 +273,16 @@ namespace SqlHealthAssessment.Data
                     result.ActualValue = scalar != null && scalar != DBNull.Value
                         ? Convert.ToInt32(scalar)
                         : 0;
-                    result.Passed = result.ActualValue == check.ExpectedValue;
+                    
+                    // Info severity always passes
+                    if (check.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result.Passed = true;
+                    }
+                    else
+                    {
+                        result.Passed = result.ActualValue == check.ExpectedValue;
+                    }
                 }
 
                 result.Message = result.Passed
@@ -323,8 +339,7 @@ namespace SqlHealthAssessment.Data
             lock (list)
             {
                 list.Insert(0, result);
-                // Trim to max history depth
-                while (list.Count > MaxResultsPerInstance)
+                while (list.Count > _maxResultsPerInstance)
                     list.RemoveAt(list.Count - 1);
             }
         }

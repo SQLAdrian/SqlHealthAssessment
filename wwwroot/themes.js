@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 // Theme Configuration for SqlHealthAssessment
 // 10 unique themes with distinct color palettes and visual effects
 
@@ -14,9 +16,10 @@ const themes = {
         textPrimary: "#f5e6ea",
         textSecondary: "#c9a0ad",
         border: "rgba(196, 92, 126, 0.3)",
-        success: "#7cb87c",
+        success: "#90c695",
         warning: "#e8c547",
         error: "#d66a7c",
+        info: "#7eb8d4",
         navBg: "rgba(45, 21, 32, 0.95)",
         shadow: "0 4px 20px rgba(196, 92, 126, 0.15)"
     },
@@ -36,6 +39,7 @@ const themes = {
         success: "#6b8e23",
         warning: "#daa520",
         error: "#b22222",
+        info: "#5b8db8",
         navBg: "rgba(42, 32, 21, 0.95)",
         shadow: "0 4px 20px rgba(139, 69, 19, 0.2)"
     },
@@ -55,6 +59,7 @@ const themes = {
         success: "#4ade80",
         warning: "#fbbf24",
         error: "#ef4444",
+        info: "#f7c59f",
         navBg: "rgba(45, 24, 5, 0.95)",
         shadow: "0 4px 20px rgba(255, 107, 53, 0.2)"
     },
@@ -74,6 +79,7 @@ const themes = {
         success: "#22d3ee",
         warning: "#fbbf24",
         error: "#f87171",
+        info: "#a8e6ff",
         navBg: "rgba(10, 22, 40, 0.95)",
         shadow: "0 4px 20px rgba(0, 212, 255, 0.15)"
     },
@@ -93,6 +99,7 @@ const themes = {
         success: "#00ff7f",
         warning: "#ffd700",
         error: "#ff1493",
+        info: "#ff69b4",
         navBg: "rgba(45, 10, 32, 0.95)",
         shadow: "0 4px 20px rgba(255, 20, 147, 0.2)"
     },
@@ -112,6 +119,7 @@ const themes = {
         success: "#4ade80",
         warning: "#fbbf24",
         error: "#ff5252",
+        info: "#64ffda",
         navBg: "rgba(10, 31, 26, 0.95)",
         shadow: "0 4px 20px rgba(0, 191, 165, 0.2)"
     },
@@ -131,6 +139,7 @@ const themes = {
         success: "#00ff88",
         warning: "#ffff00",
         error: "#ff0055",
+        info: "#00ffff",
         navBg: "rgba(13, 0, 26, 0.95)",
         shadow: "0 4px 30px rgba(255, 0, 255, 0.25)"
     },
@@ -150,6 +159,7 @@ const themes = {
         success: "#4caf50",
         warning: "#ffeb3b",
         error: "#f44336",
+        info: "#90ee90",
         navBg: "rgba(20, 40, 20, 0.95)",
         shadow: "0 4px 20px rgba(34, 139, 34, 0.2)"
     },
@@ -169,6 +179,7 @@ const themes = {
         success: "#4caf50",
         warning: "#ffa000",
         error: "#d32f2f",
+        info: "#ffd700",
         navBg: "rgba(45, 16, 8, 0.95)",
         shadow: "0 4px 20px rgba(255, 69, 0, 0.2)"
     },
@@ -188,8 +199,28 @@ const themes = {
         success: "#22d3ee",
         warning: "#fbbf24",
         error: "#f87171",
+        info: "#48cae4",
         navBg: "rgba(3, 10, 20, 0.95)",
         shadow: "0 4px 20px rgba(0, 119, 182, 0.2)"
+    },
+
+    middleEast: {
+        name: "Middle East",
+        primary: "#d4af37",
+        secondary: "#c19a6b",
+        accent: "#8b4513",
+        background: "linear-gradient(135deg, #1a1410 0%, #2d2015 50%, #1a1410 100%)",
+        backgroundImage: "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIj48ZGVmcz48cGF0dGVybiBpZD0iaXNsYW1pYyIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNMzAgMGwxNSAzMC0xNSAzMC0xNS0zMHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2Q0YWYzNyIgc3Ryb2tlLXdpZHRoPSIwLjUiIG9wYWNpdHk9IjAuMiIvPjxjaXJjbGUgY3g9IjMwIiBjeT0iMzAiIHI9IjE1IiBmaWxsPSJub25lIiBzdHJva2U9IiNjMTlhNmIiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjE1Ii8+PHBhdGggZD0iTTAgMzBoNjBNMzAgMHY2MCIgc3Ryb2tlPSIjOGI0NTEzIiBzdHJva2Utd2lkdGg9IjAuMyIgb3BhY2l0eT0iMC4xIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2lzbGFtaWMpIi8+PC9zdmc+')",
+        cardBg: "rgba(212, 175, 55, 0.08)",
+        textPrimary: "#f5e6d3",
+        textSecondary: "#c9a876",
+        border: "rgba(212, 175, 55, 0.3)",
+        success: "#6b8e23",
+        warning: "#daa520",
+        error: "#cd5c5c",
+        info: "#c19a6b",
+        navBg: "rgba(45, 32, 21, 0.95)",
+        shadow: "0 4px 20px rgba(212, 175, 55, 0.2)"
     }
 };
 
@@ -213,6 +244,7 @@ function applyTheme(themeName) {
     root.style.setProperty('--green', theme.success);
     root.style.setProperty('--yellow', theme.warning);
     root.style.setProperty('--red', theme.error);
+    root.style.setProperty('--blue', theme.info || theme.accent);
     root.style.setProperty('--nav-bg', theme.navBg);
     root.style.setProperty('--shadow', theme.shadow);
 

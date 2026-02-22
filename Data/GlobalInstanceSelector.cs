@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 
 namespace SqlHealthAssessment.Data
@@ -51,6 +53,7 @@ namespace SqlHealthAssessment.Data
 
             if (changed && instanceName != null)
             {
+                System.Diagnostics.Debug.WriteLine($"[GlobalInstanceSelector] Instance changed to: {instanceName}");
                 OnInstanceChanged?.Invoke(instanceName);
             }
         }

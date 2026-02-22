@@ -1,3 +1,4 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/settings"
 @using Microsoft.Extensions.Configuration
 @using System.IO
@@ -12,6 +13,10 @@
 @inject AlertingService Alerting
 @inject IJSRuntime JS
 @inject UserSettingsService UserSettings
+@inject DashboardConfigService DashboardConfig
+@inject MemoryMonitorService MemoryMonitor
+@inject ConfigurationValidator ConfigValidator
+@inject AutoUpdateService UpdateService
 
 <div class="settings-page">
     <h2 style="margin-bottom: 20px;">Settings</h2>
@@ -77,6 +82,79 @@
             <label>Default Time Range (minutes)</label>
             <input type="text" value="@(Configuration["DefaultTimeRangeMinutes"] ?? "60")" readonly />
         </div>
+        <div class="settings-field">
+            <label>Query Timeout (seconds)</label>
+            <input type="text" value="@(Configuration["QueryTimeoutSeconds"] ?? "60")" readonly />
+            <small style="display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px;">
+                Maximum time to wait for query execution before timeout
+            </small>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Performance</h3>
+        <div class="settings-field">
+            <label>Memory Usage</label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="flex: 1; background: var(--bg-secondary); border-radius: 4px; height: 24px; overflow: hidden;">
+                    <div style="background: @(MemoryMonitor.IsUnderPressure ? "var(--red)" : "var(--green)"); height: 100%; width: @((MemoryMonitor.MemoryUsagePercent * 100).ToString("F1"))%; transition: width 0.3s, background 0.3s;"></div>
+                </div>
+                <span style="min-width: 120px; font-size: 13px;">@((MemoryMonitor.CurrentMemoryUsage / 1024.0 / 1024.0).ToString("N0")) MB (@((MemoryMonitor.MemoryUsagePercent * 100).ToString("F1"))%)</span>
+            </div>
+            @if (MemoryMonitor.IsUnderPressure)
+            {
+                <small style="display: block; margin-top: 4px; color: var(--red); font-size: 11px;">
+                    ⚠️ High memory usage detected. Cache will be automatically cleared.
+                </small>
+            }
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Configuration</h3>
+        <div class="settings-field">
+            <label>Environment</label>
+            <input type="text" value="@(Configuration["Environment"] ?? "Production")" readonly />
+        </div>
+        <button class="settings-btn" @onclick="ValidateConfig">Validate Configuration</button>
+        @if (ConfigValidationResult != null)
+        {
+            <p style="margin-top: 8px; color: @(ConfigValidationSuccess ? "var(--green)" : "var(--red)");">@ConfigValidationResult</p>
+            @if (!ConfigValidationSuccess && ConfigErrors.Any())
+            {
+                <ul style="margin-top: 8px; color: var(--red); font-size: 12px;">
+                    @foreach (var error in ConfigErrors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            }
+        }
+    </div>
+
+    <div class="settings-group">
+        <h3>Updates</h3>
+        <div class="settings-field">
+            <label>Current Version</label>
+            <input type="text" value="@UpdateService.GetCurrentVersion()" readonly />
+        </div>
+        <button class="settings-btn" @onclick="CheckForUpdates" disabled="@IsCheckingUpdates">@(IsCheckingUpdates ? "Checking..." : "Check for Updates")</button>
+        @if (UpdateCheckResult != null)
+        {
+            <p style="margin-top: 8px; color: @(UpdateAvailable ? "var(--orange)" : "var(--green)");">@UpdateCheckResult</p>
+            @if (UpdateAvailable && UpdateInfo != null)
+            {
+                <div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 4px;">
+                    <p style="font-weight: 600; margin-bottom: 8px;">Version @UpdateInfo.Version Available</p>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Released: @UpdateInfo.ReleasedAt.ToString("yyyy-MM-dd")</p>
+                    @if (!string.IsNullOrEmpty(UpdateInfo.ReleaseNotes))
+                    {
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">@UpdateInfo.ReleaseNotes</p>
+                    }
+                    <a href="@UpdateInfo.DownloadUrl" target="_blank" class="settings-btn" style="display: inline-block; text-decoration: none;">Download Update</a>
+                </div>
+            }
+        }
     </div>
 
     <div class="settings-group">
@@ -88,6 +166,67 @@
                 Show Diagnostic Output Pane (real-time per-check execution log)
             </label>
         </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Default Dashboard</h3>
+        <div class="settings-field">
+            <label>Dashboard to Display First</label>
+            <select @bind="DefaultDashboardId">
+                <option value="">None (use first available)</option>
+                @foreach (var dashboard in DashboardConfig.Config.Dashboards.Where(d => d.Enabled))
+                {
+                    <option value="@dashboard.Id">@dashboard.Title</option>
+                }
+            </select>
+        </div>
+        <button class="settings-btn" style="margin-top: 10px;" @onclick="SaveDefaultDashboard">Save Default Dashboard</button>
+        @if (DashboardSaveResult != null)
+        {
+            <p style="margin-top: 8px; color: var(--green);">@DashboardSaveResult</p>
+        }
+    </div>
+
+    <div class="settings-group">
+        <h3>Cache Management</h3>
+        <div class="settings-field">
+            <label>SQLite Dashboard Cache</label>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                Clear all cached dashboard data from the local SQLite database. This will force fresh data to be loaded from SQL Server on next dashboard refresh.
+            </p>
+        </div>
+        <div class="settings-field">
+            <label>Cache File Size</label>
+            <input type="text" value="@CacheFileSize" readonly />
+        </div>
+        <div class="settings-field">
+            <label>Max Cache Size</label>
+            <input type="text" value="@((Configuration.GetValue<long>("MaxCacheSizeBytes", 524288000) / 1024.0 / 1024.0).ToString("N0")) MB" readonly />
+        </div>
+        <div class="settings-field">
+            <label>Cache Eviction Interval</label>
+            <input type="text" value="@(Configuration.GetValue<int>("CacheEvictionHours", 24)) hours" readonly />
+        </div>
+        <div class="settings-field">
+            <label>SQLite Maintenance Interval</label>
+            <input type="text" value="@(Configuration.GetValue<int>("SqliteMaintenanceIntervalHours", 4)) hours" readonly />
+        </div>
+        <div class="settings-field">
+            <label>SQLite Integrity Check Frequency</label>
+            <input type="text" value="Every @(Configuration.GetValue<int>("SqliteIntegrityCheckEveryNRuns", 6)) maintenance runs" readonly />
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button class="settings-btn" @onclick="FlushCache" disabled="@IsFlushingCache">@(IsFlushingCache ? "Flushing..." : "Flush All Cache")</button>
+            <button class="settings-btn" @onclick="RunMaintenance" disabled="@IsRunningMaintenance">@(IsRunningMaintenance ? "Running..." : "Run Maintenance")</button>
+        </div>
+        @if (FlushCacheResult != null)
+        {
+            <p style="margin-top: 8px; color: @(FlushCacheSuccess ? "var(--green)" : "var(--red)");">@FlushCacheResult</p>
+        }
+        @if (MaintenanceResult != null)
+        {
+            <p style="margin-top: 8px; color: @(MaintenanceSuccess ? "var(--green)" : "var(--red)");">@MaintenanceResult</p>
+        }
     </div>
 
     <div class="settings-group">
@@ -260,6 +399,22 @@
     private string? SaveResult;
     private bool SaveSuccess;
     private bool ShowDiagnosticPane;
+    private string DefaultDashboardId = "";
+    private string? DashboardSaveResult;
+    private string? ConfigValidationResult;
+    private bool ConfigValidationSuccess;
+    private List<string> ConfigErrors = new();
+    private bool IsCheckingUpdates;
+    private string? UpdateCheckResult;
+    private bool UpdateAvailable;
+    private UpdateInfo? UpdateInfo;
+    private bool IsFlushingCache;
+    private string? FlushCacheResult;
+    private bool FlushCacheSuccess;
+    private bool IsRunningMaintenance;
+    private string? MaintenanceResult;
+    private bool MaintenanceSuccess;
+    private string CacheFileSize = "N/A";
 
     protected override void OnInitialized()
     {
@@ -277,12 +432,23 @@
 
         // Load user settings
         ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
+        DefaultDashboardId = UserSettings.GetDefaultDashboardId();
+        
+        // Get cache file size
+        UpdateCacheFileSize();
     }
 
     private void ToggleDiagnosticPane(ChangeEventArgs e)
     {
         ShowDiagnosticPane = (bool)(e.Value ?? false);
         UserSettings.SetShowDiagnosticPane(ShowDiagnosticPane);
+    }
+
+    private void SaveDefaultDashboard()
+    {
+        UserSettings.SetDefaultDashboardId(DefaultDashboardId);
+        DashboardSaveResult = "Default dashboard saved successfully";
+        StateHasChanged();
     }
 
     private async void LoadSavedTheme()
@@ -521,4 +687,162 @@
         Alerting.ClearNotifications();
         LoadAlerts();
     }
+
+    private void ValidateConfig()
+    {
+        var (isValid, errors) = ConfigValidator.Validate();
+        ConfigValidationSuccess = isValid;
+        ConfigErrors = errors;
+        ConfigValidationResult = isValid ? "Configuration is valid" : "Configuration validation failed";
+    }
+
+    private async Task CheckForUpdates()
+    {
+        IsCheckingUpdates = true;
+        UpdateCheckResult = null;
+        StateHasChanged();
+
+        var (available, info) = await UpdateService.CheckForUpdatesAsync();
+        UpdateAvailable = available;
+        UpdateInfo = info;
+        UpdateCheckResult = available ? $"Update available: Version {info?.Version}" : "You are running the latest version";
+        
+        IsCheckingUpdates = false;
+        StateHasChanged();
+    }
+
+    private async Task FlushCache()
+    {
+        IsFlushingCache = true;
+        FlushCacheResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment.db");
+            if (System.IO.File.Exists(dbPath))
+            {
+                // Close all SQLite connections and clear the pool
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                
+                System.IO.File.Delete(dbPath);
+                FlushCacheResult = "Cache flushed successfully. All dashboard tables will be recreated on next refresh.";
+                FlushCacheSuccess = true;
+                UpdateCacheFileSize();
+            }
+            else
+            {
+                FlushCacheResult = "No cache file found.";
+                FlushCacheSuccess = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            FlushCacheResult = $"Failed to flush cache: {ex.Message}";
+            FlushCacheSuccess = false;
+        }
+        finally
+        {
+            IsFlushingCache = false;
+            StateHasChanged();
+        }
+    }
+    
+    private void UpdateCacheFileSize()
+    {
+        try
+        {
+            var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment.db");
+            if (System.IO.File.Exists(dbPath))
+            {
+                var fileInfo = new System.IO.FileInfo(dbPath);
+                var sizeMB = fileInfo.Length / 1024.0 / 1024.0;
+                CacheFileSize = sizeMB < 1 ? $"{(fileInfo.Length / 1024.0):N1} KB" : $"{sizeMB:N1} MB";
+            }
+            else
+            {
+                CacheFileSize = "No cache file";
+            }
+        }
+        catch
+        {
+            CacheFileSize = "N/A";
+        }
+    }
+    
+    private async Task RunMaintenance()
+    {
+        IsRunningMaintenance = true;
+        MaintenanceResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment.db");
+            if (!System.IO.File.Exists(dbPath))
+            {
+                MaintenanceResult = "No cache file to maintain.";
+                MaintenanceSuccess = true;
+                return;
+            }
+
+            var sizeBefore = new System.IO.FileInfo(dbPath).Length;
+            var connStr = $"Data Source={dbPath}";
+
+            using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
+            {
+                await conn.OpenAsync();
+                
+                // PRAGMA optimize - query planner optimization
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "PRAGMA optimize;";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                
+                // ANALYZE - update query planner statistics
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "ANALYZE;";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            
+            // VACUUM must run outside transaction with closed connection
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
+            {
+                await conn.OpenAsync();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "VACUUM;";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            var sizeAfter = new System.IO.FileInfo(dbPath).Length;
+            var savedMB = (sizeBefore - sizeAfter) / 1024.0 / 1024.0;
+            
+            UpdateCacheFileSize();
+            MaintenanceResult = $"Maintenance completed. Reclaimed {savedMB:N1} MB.";
+            MaintenanceSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            MaintenanceResult = $"Maintenance failed: {ex.Message}";
+            MaintenanceSuccess = false;
+        }
+        finally
+        {
+            IsRunningMaintenance = false;
+            StateHasChanged();
+        }
+    }
 }
+
+                <button class="theme-btn @(SelectedTheme == "middleEast" ? "selected" : "")" @onclick="@(() => ApplyTheme("middleEast"))">
+                    <span class="theme-preview middle-east"></span>
+                    <span class="theme-name">Middle East</span>
+                </button>

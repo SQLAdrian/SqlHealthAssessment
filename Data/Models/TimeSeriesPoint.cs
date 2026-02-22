@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 namespace SqlHealthAssessment.Data.Models
 {
     public class TimeSeriesPoint

@@ -1,3 +1,4 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/quickcheck"
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
@@ -192,10 +193,17 @@
                 <div class="results-filter">
                     <label>Status:</label>
                     <select @bind="SelectedFilter" class="filter-select">
-                        <option value="all">All Results</option>
-                        <option value="passed">Passed Only</option>
-                        <option value="failed">Failed Only</option>
-                        <option value="errors">Errors Only</option>
+                        <option value="all">All (@Results.Count)</option>
+                        <option value="passed">Passed (@PassedCount)</option>
+                        <option value="failed">Failed (@FailedCount)</option>
+                        <option value="errors">Errors (@ErrorCount)</option>
+                    </select>
+                    <label>Severity:</label>
+                    <select @bind="SelectedSeverity" class="filter-select">
+                        <option value="">All Severities</option>
+                        <option value="Critical">Critical</option>
+                        <option value="Warning">Warning</option>
+                        <option value="Info">Info</option>
                     </select>
                     <label>Category:</label>
                     <select @bind="SelectedCategory" class="filter-select">
@@ -213,13 +221,6 @@
                             <option value="@srv">@srv</option>
                         }
                     </select>
-                    <label>Severity:</label>
-                    <select @bind="SelectedSeverity" class="filter-select">
-                        <option value="">All Severities</option>
-                        <option value="Critical">Critical</option>
-                        <option value="Warning">Warning</option>
-                        <option value="Info">Info</option>
-                    </select>
                     <span class="filter-count">@FilteredResults.Count() results</span>
                 </div>
 
@@ -233,9 +234,9 @@
                                 <th>Check</th>
                                 <th>Category</th>
                                 <th>Severity</th>
-                                <th>Duration</th>
+                                <!--<th>Duration</th>-->
                                 <th>Description</th>
-                                <th>Message</th>
+                                <!--<th>Message</th>-->
                             </tr>
                         </thead>
                         <tbody>
@@ -268,9 +269,9 @@
                                             @result.Severity
                                         </span>
                                     </td>
-                                    <td class="duration-cell">@(result.DurationMs)ms</td>
+                                    <!--<td class="duration-cell">@(result.DurationMs)ms</td>-->
                                     <td class="description-cell">@result.Description</td>
-                                    <td class="message-cell">@result.Message</td>
+                                    <!--<td class="message-cell">@result.Message</td>-->
                                 </tr>
                                 @if (ExpandedResults.Contains(result.CheckId + result.InstanceName) && !string.IsNullOrEmpty(result.RecommendedAction))
                                 {
@@ -454,9 +455,9 @@
             Level = level
         });
 
-        // Keep max 2000 entries
-        if (DiagLog.Count > 2000)
-            DiagLog.RemoveRange(0, DiagLog.Count - 2000);
+        // Keep max 500 entries
+        if (DiagLog.Count > 500)
+            DiagLog.RemoveRange(0, DiagLog.Count - 500);
 
         // Auto-scroll and refresh UI on the UI thread
         InvokeAsync(StateHasChanged);
@@ -506,17 +507,12 @@
 
     private async Task RunChecks()
     {
+        ClearResults();
         IsRunning = true;
-        HasRun = false;
-        Results = new();
-        ServerSummaries = new();
-        ExpandedResults = new();
         Progress = 0;
         ProgressMessage = "Starting...";
-        StatusMessage = string.Empty;
         ExecutionTime = DateTime.Now;
         ServersTested = 0;
-        SelectedFilter = "all";
 
         var overallStart = DateTime.UtcNow;
 

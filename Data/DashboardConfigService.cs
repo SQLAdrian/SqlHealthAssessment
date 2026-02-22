@@ -1,3 +1,5 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,7 +29,9 @@ namespace SqlHealthAssessment.Data
         private static readonly JsonSerializerOptions SerializerOptions = new()
         {
             WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
         };
 
         /// <summary>
@@ -72,15 +76,24 @@ namespace SqlHealthAssessment.Data
                     var config = JsonSerializer.Deserialize<DashboardConfigRoot>(json, SerializerOptions);
                     if (config != null)
                     {
+                        _config = config;
+                        if (PatchMissingDashboards(config))
+                        {
+                            Save();
+                        }
                         RebuildQueryCache(config);
                         return config;
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log the deserialization error instead of silently swallowing it
+                    // Enterprise Polish: Backup the corrupt file for analysis instead of just swallowing the error
+                    var corruptPath = _configPath + $".corrupt.{DateTime.Now:yyyyMMddHHmmss}.json";
+                    try { File.Copy(_configPath, corruptPath, true); } catch { /* Best effort */ }
+
                     System.Diagnostics.Debug.WriteLine(
-                        $"[DashboardConfigService] Error deserializing config from '{_configPath}': {ex.Message}. Falling back to defaults.");
+                        $"[DashboardConfigService] Error deserializing config from '{_configPath}': {ex.Message}. " +
+                        $"Corrupt file backed up to '{corruptPath}'. Falling back to defaults.");
                 }
             }
 
@@ -89,6 +102,29 @@ namespace SqlHealthAssessment.Data
             RebuildQueryCache(defaultConfig);
             Save();
             return defaultConfig;
+        }
+
+        /// <summary>
+        /// Ensures that dashboards defined in the default configuration exist in the loaded configuration.
+        /// Returns true if any dashboards were added.
+        /// </summary>
+        private bool PatchMissingDashboards(DashboardConfigRoot loadedConfig)
+        {
+            var defaultConfig = DefaultConfigGenerator.Generate();
+            bool modified = false;
+
+            if (loadedConfig.Dashboards == null) loadedConfig.Dashboards = new List<DashboardDefinition>();
+            if (loadedConfig.SupportQueries == null) loadedConfig.SupportQueries = new Dictionary<string, QueryPair>();
+
+            foreach (var defaultDashboard in defaultConfig.Dashboards)
+            {
+                if (!loadedConfig.Dashboards.Any(d => string.Equals(d.Id, defaultDashboard.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    loadedConfig.Dashboards.Add(defaultDashboard);
+                    modified = true;
+                }
+            }
+            return modified;
         }
 
         /// <summary>

@@ -16,7 +16,8 @@ MODIFY FILE
 ( NAME = N'SQLWATCH_log', SIZE = 8192KB , MAXSIZE = 2048GB , FILEGROWTH = 262144KB )
 
 GO
-
+USE [SQLWATCH]
+GO
 IF (1 = FULLTEXTSERVICEPROPERTY('IsFullTextInstalled'))
 begin
 EXEC [SQLWATCH].[dbo].[sp_fulltext_database] @action = 'disable'

@@ -1,3 +1,4 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/databasedeploy"
 @using Microsoft.Data.SqlClient
 @using Microsoft.SqlServer.Dac
@@ -5,6 +6,8 @@
 @using System.IO
 @using System.Diagnostics
 @using SqlHealthAssessment.Data.Services
+@using SqlHealthAssessment.Data.Models
+@inject ServerConnectionManager ConnectionManager
 
 
 <div class="database-deploy-page">
@@ -12,8 +15,21 @@
 
     <div class="deploy-section">
         <h3>SQL Server Configuration</h3>
+        
+        @* Existing servers dropdown *@
         <div class="form-group">
-            <label for="serverName">Server Name:</label>
+            <label for="existingServer">Select Existing Server:</label>
+            <select id="existingServer" class="form-input" @onchange="OnExistingServerChanged">
+                <option value="">-- Select an existing server --</option>
+                @foreach (var server in ExistingServers)
+                {
+                    <option value="@server.ServerNames">@server.ServerNames</option>
+                }
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="serverName">Or enter Server Name:</label>
             <input id="serverName" class="form-input" type="text" @bind="ServerName" placeholder="localhost\SQLEXPRESS" />
         </div>
         <div class="form-group">
@@ -126,6 +142,68 @@
 
     private bool CanDeploy = false;
 
+    // Existing servers from ServerConnectionManager
+    private List<ServerConnection> ExistingServers = new();
+    private ServerConnection? SelectedExistingServer;
+
+    protected override void OnInitialized()
+    {
+        // Load existing servers from ServerConnectionManager
+        ExistingServers = ConnectionManager.GetEnabledConnections();
+    }
+
+    private void OnExistingServerChanged(ChangeEventArgs e)
+    {
+        var serverNames = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrEmpty(serverNames))
+        {
+            SelectedExistingServer = ExistingServers.FirstOrDefault(s => s.ServerNames == serverNames);
+            if (SelectedExistingServer != null)
+            {
+                // Auto-fill from existing server
+                ServerName = SelectedExistingServer.GetServerList().FirstOrDefault() ?? "";
+                AuthType = SelectedExistingServer.UseWindowsAuthentication ? "windows" : "sql";
+                Username = SelectedExistingServer.Username ?? "";
+                Password = "";
+                
+                // Check if SQLWATCH already exists on this server
+                _ = CheckIfSqlWatchExists();
+            }
+        }
+        else
+        {
+            SelectedExistingServer = null;
+        }
+    }
+
+    private async Task CheckIfSqlWatchExists()
+    {
+        if (string.IsNullOrEmpty(ServerName))
+            return;
+
+        try
+        {
+            var connectionString = BuildConnectionString();
+            using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
+
+            // Check if SQLWATCH database exists
+            using var cmd = new SqlCommand(
+                "SELECT COUNT(*) FROM sys.databases WHERE name = @dbName", connection);
+            cmd.Parameters.AddWithValue("@dbName", DatabaseName);
+            var count = (int)await cmd.ExecuteScalarAsync();
+            
+            if (count > 0)
+            {
+                ConnectionStatus = $"ℹ️ Database '{DatabaseName}' already exists on {ServerName}";
+            }
+        }
+        catch
+        {
+            // Ignore errors when checking - user can still deploy
+        }
+    }
+
     private void OnAuthTypeChanged(ChangeEventArgs e)
     {
         AuthType = e.Value?.ToString() ?? "windows";
@@ -175,7 +253,8 @@
             DataSource = ServerName,
             InitialCatalog = "master",
             IntegratedSecurity = AuthType == "windows",
-            ConnectTimeout = 30
+            ConnectTimeout = 30,
+            TrustServerCertificate = SelectedExistingServer?.TrustServerCertificate ?? false
         };
 
         if (AuthType == "sql")
@@ -194,7 +273,8 @@
             DataSource = ServerName,
             InitialCatalog = DatabaseName,
             IntegratedSecurity = AuthType == "windows",
-            ConnectTimeout = 30
+            ConnectTimeout = 30,
+            TrustServerCertificate = SelectedExistingServer?.TrustServerCertificate ?? false
         };
 
         if (AuthType == "sql")

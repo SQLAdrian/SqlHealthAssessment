@@ -1,3 +1,4 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/servers"
 @using Microsoft.Data.SqlClient
 @using SqlHealthAssessment.Data
@@ -25,9 +26,17 @@
             <div class="server-card @(conn.IsConnected ? "connected" : "disconnected")">
                 <div class="server-header">
                     <div class="server-status">
-                        @if (conn.IsConnected)
+                        @if (conn.SuccessfulServers != null && conn.SuccessfulServers.Count > 0)
                         {
-                            <span class="status-badge connected">🟢 Connected</span>
+                            var serverCount = conn.GetServerCount();
+                            @if (conn.SuccessfulServers.Count == serverCount)
+                            {
+                                <span class="status-badge connected">🟢 Connected (@conn.SuccessfulServers.Count/@serverCount)</span>
+                            }
+                            else
+                            {
+                                <span class="status-badge partial">🟡 Partial (@conn.SuccessfulServers.Count/@serverCount)</span>
+                            }
                         }
                         else
                         {
@@ -89,6 +98,15 @@
                             <span class="detail-value">@string.Join(", ", conn.SuccessfulServers)</span>
                         </div>
                     }
+                    @if (SqlWatchStatus.ContainsKey(conn.Id))
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">SQLWATCH:</span>
+                            <span class="detail-value" style="color: @(SqlWatchStatus[conn.Id] ? "var(--green)" : "var(--orange)")">
+                                @(SqlWatchStatus[conn.Id] ? "✓ Installed" : "✗ Not Found")
+                            </span>
+                        </div>
+                    }
                 </div>
             </div>
         }
@@ -117,6 +135,7 @@
                 <div class="form-group">
                     <label>Database</label>
                     <input type="text" @bind="EditingConnection.Database" placeholder="master" />
+                    <small>Use 'master' for quick checks, 'SQLWATCH' for dashboards (if SQLWATCH is installed)</small>
                 </div>
 
                 <div class="form-group">
@@ -206,6 +225,7 @@
 
 @code {
     private List<ServerConnection> Connections = new();
+    private Dictionary<string, bool> SqlWatchStatus = new();
     private string? StatusMessage;
     private bool IsSuccess;
     private bool ShowDialog;
@@ -375,6 +395,7 @@
                 }
 
                 ConnectionManager.UpdateSuccessfulServers(conn.Id, successfulServers);
+                await CheckSqlWatchDatabase(conn);
                 LoadConnections();
 
                 StatusMessage = successfulServers.Count == serverList.Count
@@ -403,13 +424,95 @@
         }
     }
 
+    private async Task CheckSqlWatchDatabase(ServerConnection conn)
+    {
+        try
+        {
+            var serverList = conn.GetServerList();
+            foreach (var serverName in serverList)
+            {
+                var connectionString = conn.GetConnectionString(serverName);
+                using var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM sys.databases WHERE name = 'SQLWATCH'";
+                var result = (int)await cmd.ExecuteScalarAsync();
+                SqlWatchStatus[conn.Id] = result > 0;
+                break; // Check first server only
+            }
+        }
+        catch
+        {
+            SqlWatchStatus[conn.Id] = false;
+        }
+    }
+
     private async Task RefreshAllConnections()
     {
         StatusMessage = "Refreshing all connections...";
+        var totalConnections = Connections.Count;
+        var successfulConnections = 0;
+        var totalServers = 0;
+        var successfulServers = 0;
         
         foreach (var conn in Connections)
         {
-            await TestConnection(conn);
+            var serverList = conn.GetServerList();
+            totalServers += serverList.Count;
+            
+            // Call TestConnection but suppress the status message update
+            var isMfa = conn.EffectiveAuthType == AuthenticationTypes.EntraMFA;
+            
+            try
+            {
+                if (isMfa) await MfaAuthenticationHelper.MfaAuthLock.WaitAsync();
+                
+                try
+                {
+                    var successfulForThisConn = new List<string>();
+                    foreach (var serverName in serverList)
+                    {
+                        var connectionString = conn.GetConnectionString(serverName);
+                        using var connection = new SqlConnection(connectionString);
+                        await connection.OpenAsync();
+                        successfulForThisConn.Add(serverName);
+                        successfulServers++;
+                    }
+                    
+                    ConnectionManager.UpdateSuccessfulServers(conn.Id, successfulForThisConn);
+                    if (successfulForThisConn.Count == serverList.Count)
+                    {
+                        successfulConnections++;
+                    }
+                }
+                finally
+                {
+                    if (isMfa) MfaAuthenticationHelper.MfaAuthLock.Release();
+                }
+            }
+            catch
+            {
+                ConnectionManager.UpdateSuccessfulServers(conn.Id, new List<string>());
+            }
+        }
+        
+        LoadConnections();
+        
+        // Show aggregated results
+        if (successfulConnections == totalConnections && successfulServers == totalServers)
+        {
+            StatusMessage = $"Successfully connected to all {totalServers} server(s)!";
+            IsSuccess = true;
+        }
+        else if (successfulServers > 0)
+        {
+            StatusMessage = $"Connected to {successfulServers} of {totalServers} servers";
+            IsSuccess = true;
+        }
+        else
+        {
+            StatusMessage = "Failed to connect to any server";
+            IsSuccess = false;
         }
     }
 }

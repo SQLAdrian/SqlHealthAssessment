@@ -1,6 +1,10 @@
+/* In the name of God, the Merciful, the Compassionate */
+
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Serilog;
 using SqlHealthAssessment.Data;
 using SqlHealthAssessment.Data.Caching;
 using SqlHealthAssessment.Data.Models;
@@ -15,6 +19,24 @@ namespace SqlHealthAssessment
         {
             base.OnStartup(e);
 
+            // Configure Serilog
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+                .Enrich.FromLogContext()
+                .Enrich.WithProperty("Application", "SqlHealthAssessment")
+                .Enrich.WithProperty("User", Environment.UserName)
+                .Enrich.WithProperty("Machine", Environment.MachineName)
+                .WriteTo.File(
+                    path: "logs/app-.log",
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 30,
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .WriteTo.Console()
+                .CreateLogger();
+
+            Log.Information("Application starting...");
+
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -23,10 +45,16 @@ namespace SqlHealthAssessment
             var services = new ServiceCollection();
 
             services.AddSingleton<IConfiguration>(configuration);
+            services.AddLogging(builder =>
+            {
+                builder.ClearProviders();
+                builder.AddSerilog(dispose: true);
+            });
             services.AddWpfBlazorWebView();
 
             // Register ServerConnectionManager first - it will be used by SqlServerConnectionFactory
             services.AddSingleton<ServerConnectionManager>();
+            services.AddSingleton<GlobalInstanceSelector>();
 
             // Register SQL Server connection - uses ServerConnectionManager for dynamic server selection
             var connStr = configuration.GetConnectionString("SqlServer") ?? "Server=.;Database=SQLWATCH;Integrated Security=true;";
@@ -36,16 +64,19 @@ namespace SqlHealthAssessment
             services.AddSingleton<IDbConnectionFactory>(sp =>
             {
                 var serverManager = sp.GetRequiredService<ServerConnectionManager>();
-                return new SqlServerConnectionFactory(serverManager, connStr, trustServerCert);
+                var instanceSelector = sp.GetRequiredService<GlobalInstanceSelector>();
+                return new SqlServerConnectionFactory(serverManager, instanceSelector, connStr, trustServerCert);
             });
             services.AddSingleton<SqlServerConnectionFactory>(sp =>
             {
                 var serverManager = sp.GetRequiredService<ServerConnectionManager>();
-                return new SqlServerConnectionFactory(serverManager, connStr, trustServerCert);
+                var instanceSelector = sp.GetRequiredService<GlobalInstanceSelector>();
+                return new SqlServerConnectionFactory(serverManager, instanceSelector, connStr, trustServerCert);
             });
 
             services.AddSingleton<DashboardConfigService>();
             services.AddSingleton<QueryStore>();
+            services.AddSingleton<QueryThrottleService>();
             services.AddSingleton<QueryExecutor>();
             services.AddScoped<DashboardDataService>();
             services.AddSingleton<AutoRefreshService>();
@@ -61,6 +92,10 @@ namespace SqlHealthAssessment
             services.AddSingleton<SessionManager>();
             services.AddSingleton<RateLimiter>();
             services.AddSingleton<UserSettingsService>();
+            services.AddSingleton<ToastService>();
+            services.AddSingleton<MemoryMonitorService>();
+            services.AddSingleton<ConfigurationValidator>();
+            services.AddSingleton<AutoUpdateService>();
 
             // Local log service for debug logging
             var maxLogSize = configuration.GetValue<long>("LogMaxFileSizeBytes", 5 * 1024 * 1024);
@@ -75,6 +110,17 @@ namespace SqlHealthAssessment
 
             Services = services.BuildServiceProvider();
 
+            // Validate configuration
+            var configValidator = Services.GetService<ConfigurationValidator>();
+            var (isValid, errors) = configValidator?.Validate() ?? (true, new List<string>());
+            if (!isValid)
+            {
+                Log.Warning("Configuration validation failed: {Errors}", string.Join(", ", errors));
+            }
+
+            // Start memory monitoring
+            Services.GetService<MemoryMonitorService>();
+
             // Start cache eviction timer (runs every 5 minutes)
             Services.GetService<CacheEvictionService>()?.Start();
 
@@ -84,6 +130,7 @@ namespace SqlHealthAssessment
             // Log application start for audit trail
             var auditLog = Services.GetService<AuditLogService>();
             auditLog?.LogApplicationStart();
+            Log.Information("Application started successfully");
 
             // Ensure SQLite tables exist for all panels on startup (best-effort, non-blocking)
             _ = Task.Run(async () =>
@@ -110,6 +157,13 @@ namespace SqlHealthAssessment
                     System.Diagnostics.Debug.WriteLine($"[App] SQLite table provisioning error: {ex.Message}");
                 }
             });
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            Log.Information("Application exiting...");
+            Log.CloseAndFlush();
+            base.OnExit(e);
         }
     }
 }
