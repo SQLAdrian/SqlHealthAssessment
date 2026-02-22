@@ -438,49 +438,6 @@
 
     /// <summary>
     /// Called when the user picks a different server connection in the toolbar.
-    /// Re-fetches instances from the new server and reloads all panel data.
-    /// </summary>
-    private async Task OnServerConnectionChanged()
-    {
-        // Reset instances — they belong to the newly-selected server
-        Instances = Array.Empty<string>();
-        SelectedInstance = "";
-        InstanceSelector.SetSelectedInstance = "";
-
-        try
-        {
-            Instances = await DataService.GetInstancesAsync();
-            if (Instances.Length > 0)
-            {
-                SelectedInstance = Instances[0];
-                InstanceSelector.SetSelectedInstance(SelectedInstance);
-            }
-            else
-            {
-                var enabledNames = ConnectionManager.GetEnabledServerNames();
-                if (enabledNames.Length > 0)
-                {
-                    Instances = enabledNames;
-                    SelectedInstance = Instances[0];
-                    InstanceSelector.SetSelectedInstance(SelectedInstance);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] OnServerConnectionChanged GetInstances failed: {ex.Message}");
-            var enabledNames = ConnectionManager.GetEnabledServerNames();
-            if (enabledNames.Length > 0)
-            {
-                Instances = enabledNames;
-                SelectedInstance = Instances[0];
-                InstanceSelector.SetSelectedInstance(SelectedInstance);
-            }
-        }
-
-        await LoadData();
-    }
-
     private async void OnAutoRefresh()
     {
         try
