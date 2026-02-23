@@ -363,10 +363,12 @@
                     <span class="theme-preview carnival"></span>
                     <span class="theme-name">Carnival</span>
                 </button>
+                <!--
                 <button class="theme-btn @(SelectedTheme == "hawaiian" ? "selected" : "")" @onclick="@(() => ApplyTheme("hawaiian"))">
                     <span class="theme-preview hawaiian"></span>
                     <span class="theme-name">Hawaiian</span>
                 </button>
+                -->
                 <button class="theme-btn @(SelectedTheme == "cyberpunk" ? "selected" : "")" @onclick="@(() => ApplyTheme("cyberpunk"))">
                     <span class="theme-preview cyberpunk"></span>
                     <span class="theme-name">Cyberpunk</span>
@@ -474,6 +476,7 @@
     {
         SelectedTheme = themeName;
         await JS.InvokeVoidAsync("applyTheme", themeName);
+        StateHasChanged();
     }
 
     private string MaskConnectionStringPassword(string connStr)

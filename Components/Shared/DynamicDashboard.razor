@@ -24,14 +24,23 @@
         <span class="server-context-label">Connected to:</span>
         <span class="server-context-name">@ConnectionManager.CurrentServer.ServerNames</span>
         <span class="server-context-db">(@ConnectionManager.CurrentServer.Database)</span>
+        <span class="server-context-label" style="margin-left: 16px;">Instance:</span>
+        <select class="toolbar-select" style="margin-left: 4px;" @onchange="OnInstanceChanged">
+            @if (Dashboard?.ShowAllOption ?? false)
+            {
+                <option value="ALL">All Instances</option>
+            }
+            @foreach (var instance in Instances)
+            {
+                <option value="@instance" selected="@(SelectedInstance == instance)">@instance</option>
+            }
+        </select>
     </div>
 }
 
 <DashboardToolbar @bind-TimeRangeMinutes="TimeRangeMinutes"
-                  @bind-SelectedInstance="SelectedInstance"
                   @bind-AutoRefresh="AutoRefresh"
                   @bind-TimezoneOffsetHours="TimezoneOffsetHours"
-                  ShowAllOption="@(Dashboard?.ShowAllOption ?? false)"
                   OnRefreshRequested="OnManualRefresh"
                   OnServerChanged="OnServerConnectionChanged" />
 
@@ -254,12 +263,11 @@
             }
         }
 
-        // Cache panel lists
         RefreshPanelCaches();
 
-        // Set initial server context
         var connections = ConnectionManager.GetConnections();
         var availableInstances = connections.SelectMany(c => c.GetServerList()).Distinct().ToList();
+        Instances = availableInstances.ToArray();
         var initialInstance = InstanceSelector.SelectedInstance ?? (availableInstances.Any() ? availableInstances[0] : "");
         SelectedInstance = initialInstance;
         SetServerContext(initialInstance);
@@ -277,6 +285,15 @@
             await LoadData();
             StateHasChanged();
         });
+    }
+
+    private async Task OnInstanceChanged(ChangeEventArgs e)
+    {
+        var instance = e.Value?.ToString() ?? "";
+        SelectedInstance = instance;
+        InstanceSelector.SetSelectedInstance(instance);
+        SetServerContext(instance);
+        await LoadData();
     }
     
     private void SetServerContext(string instanceName)
@@ -398,7 +415,7 @@
                     gridResults[panel.Id] = gridData;
                     break;
                 case "CheckStatus":
-                    var checkData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader => new CheckStatus { Status = reader["Status"]?.ToString() ?? "OK", Count = Convert.ToInt32(reader["Count"]) }, null, cancellationToken);
+                    var checkData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader => new CheckStatus { Status = reader["Status"]?.ToString() ?? "OK", Count = reader["Count"] != DBNull.Value ? Convert.ToInt32(reader["Count"]) : 0 }, null, cancellationToken);
                     checkResults[panel.Id] = checkData;
                     break;
 
@@ -436,8 +453,11 @@
         await LoadData();
     }
 
-    /// <summary>
-    /// Called when the user picks a different server connection in the toolbar.
+    private async Task OnServerConnectionChanged()
+    {
+        await LoadData();
+    }
+
     private async void OnAutoRefresh()
     {
         try

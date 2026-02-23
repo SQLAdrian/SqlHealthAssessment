@@ -204,7 +204,6 @@ const themes = {
         shadow: "0 4px 20px rgba(0, 119, 182, 0.2)"
     },
 
-<<<<<<< HEAD
     // 11. Middle Eastern (Arabian Nights)
     middleEastern: {
         name: "Arabian Nights",
@@ -212,7 +211,7 @@ const themes = {
         secondary: "#e8d5a3",
         accent: "#8b1a1a",
         background: "linear-gradient(135deg, #0d0a05 0%, #1a1205 50%, #0d0a05 100%)",
-        backgroundImage: "url('arabicpattern.svg')",
+        backgroundImage: "url('Arabian Nights.svg')",
         backgroundSize: "400px 400px",
         cardBg: "rgba(201, 168, 76, 0.07)",
         textPrimary: "#f5ead8",
@@ -221,27 +220,9 @@ const themes = {
         success: "#4caf50",
         warning: "#e8a020",
         error: "#c0392b",
+        info: "#c19a6b",
         navBg: "rgba(13, 10, 5, 0.97)",
         shadow: "0 4px 20px rgba(201, 168, 76, 0.2)"
-=======
-    middleEast: {
-        name: "Middle East",
-        primary: "#d4af37",
-        secondary: "#c19a6b",
-        accent: "#8b4513",
-        background: "linear-gradient(135deg, #1a1410 0%, #2d2015 50%, #1a1410 100%)",
-        backgroundImage: "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIj48ZGVmcz48cGF0dGVybiBpZD0iaXNsYW1pYyIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNMzAgMGwxNSAzMC0xNSAzMC0xNS0zMHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2Q0YWYzNyIgc3Ryb2tlLXdpZHRoPSIwLjUiIG9wYWNpdHk9IjAuMiIvPjxjaXJjbGUgY3g9IjMwIiBjeT0iMzAiIHI9IjE1IiBmaWxsPSJub25lIiBzdHJva2U9IiNjMTlhNmIiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjE1Ii8+PHBhdGggZD0iTTAgMzBoNjBNMzAgMHY2MCIgc3Ryb2tlPSIjOGI0NTEzIiBzdHJva2Utd2lkdGg9IjAuMyIgb3BhY2l0eT0iMC4xIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2lzbGFtaWMpIi8+PC9zdmc+')",
-        cardBg: "rgba(212, 175, 55, 0.08)",
-        textPrimary: "#f5e6d3",
-        textSecondary: "#c9a876",
-        border: "rgba(212, 175, 55, 0.3)",
-        success: "#6b8e23",
-        warning: "#daa520",
-        error: "#cd5c5c",
-        info: "#c19a6b",
-        navBg: "rgba(45, 32, 21, 0.95)",
-        shadow: "0 4px 20px rgba(212, 175, 55, 0.2)"
-
     }
 };
 

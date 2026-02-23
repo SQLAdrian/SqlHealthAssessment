@@ -5,6 +5,7 @@
 @inject SessionDataService SessionService
 @inject ServerConnectionManager ConnectionManager
 @inject IDbConnectionFactory ConnectionFactory
+@inject GlobalInstanceSelector InstanceSelector
 @implements IDisposable
 
 <div class="sessions-page">
@@ -17,6 +18,13 @@
             <span class="server-context-label">Live Sessions on:</span>
             <span class="server-context-name">@ConnectionManager.CurrentServer.ServerNames</span>
             <span class="server-context-db">(@ConnectionManager.CurrentServer.Database)</span>
+            <span class="server-context-label" style="margin-left: 16px;">Instance:</span>
+            <select class="toolbar-select" style="margin-left: 4px;" @onchange="OnInstanceChanged">
+                @foreach (var instance in Instances)
+                {
+                    <option value="@instance" selected="@(SelectedInstance == instance)">@instance</option>
+                }
+            </select>
         </div>
     }
 
@@ -105,11 +113,12 @@
     private string? ErrorMessage;
     private string? LastRefreshTime;
 
-    // Filter state
+    private string SelectedInstance = "";
+    private string[] Instances = Array.Empty<string>();
+
     private bool HideSleeping = false;
     private bool ShowOnlyBlocked = false;
 
-    // Refresh state
     private bool AutoRefresh = true;
     private int RefreshIntervalSeconds = 5;
     private System.Threading.Timer? _refreshTimer;
@@ -137,6 +146,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        InstanceSelector.OnInstanceChanged += OnGlobalInstanceChanged;
+
+        var connections = ConnectionManager.GetConnections();
+        var availableInstances = connections.SelectMany(c => c.GetServerList()).Distinct().ToList();
+        Instances = availableInstances.ToArray();
+        SelectedInstance = InstanceSelector.SelectedInstance ?? (availableInstances.Any() ? availableInstances[0] : "");
+
         await LoadSessions();
         StartTimer();
     }
@@ -232,8 +248,27 @@
         await LoadSessions();
     }
 
+    private async void OnGlobalInstanceChanged(string instanceName)
+    {
+        SelectedInstance = instanceName;
+        await InvokeAsync(async () =>
+        {
+            await LoadSessions();
+            StateHasChanged();
+        });
+    }
+
+    private async Task OnInstanceChanged(ChangeEventArgs e)
+    {
+        var instance = e.Value?.ToString() ?? "";
+        SelectedInstance = instance;
+        InstanceSelector.SetSelectedInstance(instance);
+        await LoadSessions();
+    }
+
     public void Dispose()
     {
         _refreshTimer?.Dispose();
+        InstanceSelector.OnInstanceChanged -= OnGlobalInstanceChanged;
     }
 }

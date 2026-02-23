@@ -49,20 +49,6 @@
     }
 
     <div class="toolbar-group">
-        <label class="toolbar-label">Instance:</label>
-        <select class="toolbar-select" @onchange="OnInstanceChanged">
-            @if (ShowAllOption)
-            {
-                <option value="ALL">All Instances</option>
-            }
-            @foreach (var instance in Instances)
-            {
-                <option value="@instance" selected="@(SelectedInstance == instance)">@instance</option>
-            }
-        </select>
-    </div>
-
-    <div class="toolbar-group">
         <label class="toolbar-label">Timezone:</label>
         <select class="toolbar-select" @onchange="OnTimezoneChanged">
             <option value="-12" selected="@(TimezoneOffsetHours == -12)">UTC-12</option>
@@ -114,22 +100,11 @@
 @code {
     [Parameter] public int TimeRangeMinutes { get; set; } = 60;
     [Parameter] public EventCallback<int> TimeRangeMinutesChanged { get; set; }
-    [Parameter] public string SelectedInstance { get; set; } = "";
-    [Parameter] public EventCallback<string> SelectedInstanceChanged { get; set; }
-    [Parameter] public string[] Instances { get; set; } = Array.Empty<string>();
     [Parameter] public bool AutoRefresh { get; set; } = true;
     [Parameter] public EventCallback<bool> AutoRefreshChanged { get; set; }
     [Parameter] public EventCallback OnRefreshRequested { get; set; }
-    [Parameter] public bool ShowAllOption { get; set; } = false;
-
-    // Timezone offset in hours from UTC
     [Parameter] public double TimezoneOffsetHours { get; set; } = 0;
     [Parameter] public EventCallback<double> TimezoneOffsetHoursChanged { get; set; }
-
-    /// <summary>
-    /// Raised when the user changes the server connection in the toolbar dropdown.
-    /// Dashboards should subscribe to reload data against the newly selected server.
-    /// </summary>
     [Parameter] public EventCallback OnServerChanged { get; set; }
 
     private string ServerDisplayName = "SqlServer";
@@ -272,17 +247,6 @@
             TimeRangeMinutes = minutes;
             await TimeRangeMinutesChanged.InvokeAsync(minutes);
         }
-    }
-
-    private async Task OnInstanceChanged(ChangeEventArgs e)
-    {
-        var instance = e.Value?.ToString() ?? "";
-        SelectedInstance = instance;
-        
-        // Update global instance selector so all dashboards use the same instance
-        InstanceSelector.SetSelectedInstance(instance);
-        
-        await SelectedInstanceChanged.InvokeAsync(instance);
     }
 
     private async Task OnTimezoneChanged(ChangeEventArgs e)

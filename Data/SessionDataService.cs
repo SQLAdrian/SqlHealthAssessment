@@ -65,7 +65,7 @@ namespace SqlHealthAssessment.Data
             {
                 sessions.Add(new SessionInfo
                 {
-                    SPID = reader.GetInt32(reader.GetOrdinal("SPID")),
+                    SPID = reader.GetInt16(reader.GetOrdinal("SPID")),
                     LoginName = reader.GetString(reader.GetOrdinal("LoginName")),
                     HostName = reader.GetString(reader.GetOrdinal("HostName")),
                     DatabaseName = reader.GetString(reader.GetOrdinal("DatabaseName")),
@@ -78,7 +78,7 @@ namespace SqlHealthAssessment.Data
                     Command = reader.IsDBNull(reader.GetOrdinal("Command")) ? null : reader.GetString(reader.GetOrdinal("Command")),
                     WaitType = reader.IsDBNull(reader.GetOrdinal("WaitType")) ? null : reader.GetString(reader.GetOrdinal("WaitType")),
                     WaitTime = reader.GetInt32(reader.GetOrdinal("WaitTime")),
-                    BlockingSessionId = reader.GetInt32(reader.GetOrdinal("BlockingSessionId")),
+                    BlockingSessionId = reader.GetInt16(reader.GetOrdinal("BlockingSessionId")),
                     TotalElapsedTime = reader.GetInt32(reader.GetOrdinal("TotalElapsedTime")),
                     ProgramName = reader.GetString(reader.GetOrdinal("ProgramName")),
                     QueryText = reader.IsDBNull(reader.GetOrdinal("QueryText")) ? null : reader.GetString(reader.GetOrdinal("QueryText"))
