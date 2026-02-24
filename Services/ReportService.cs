@@ -47,12 +47,21 @@ public class ReportService
         }
         catch (Exception ex)
         {
-            // Surface the error inside the iframe rather than crashing the page
+            // Walk the exception chain so inner messages (e.g. from the RDLC renderer) are visible.
+            var sb = new StringBuilder();
+            for (var e = ex; e != null; e = e.InnerException)
+            {
+                if (sb.Length > 0) sb.Append("\n→ ");
+                sb.Append(e.Message);
+            }
+
+            // Surface the full error inside the iframe rather than crashing the page
             var errorHtml = $"""
                 <html><body style="font-family:Segoe UI,sans-serif;padding:20px;background:#1a1a2e;color:#ccc">
                 <h3 style="color:#f44336">Report render error</h3>
-                <pre style="background:#0d0d1a;padding:14px;border-radius:6px;overflow:auto">{System.Net.WebUtility.HtmlEncode(ex.Message)}</pre>
-                <p style="color:#888">Tip: verify the DataSet name in the .rdl file is <code>{DataSetName}</code>.</p>
+                <pre style="background:#0d0d1a;padding:14px;border-radius:6px;overflow:auto;white-space:pre-wrap">{System.Net.WebUtility.HtmlEncode(sb.ToString())}</pre>
+                <p style="color:#888">Report file: <code>{System.Net.WebUtility.HtmlEncode(reportPath)}</code></p>
+                <p style="color:#888">DataSet name in .rdl must be <code>{DataSetName}</code>.</p>
                 </body></html>
                 """;
             return "data:text/html;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(errorHtml));
