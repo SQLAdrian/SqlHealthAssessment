@@ -9,7 +9,7 @@
 @inject DashboardConfigService ConfigService
 @inject NavigationManager Navigation
 @inject IDbConnectionFactory ConnectionFactory
-@inject SQLiteTableService SQLiteTableService
+@inject liveQueriesTableService liveQueriesTableService
 
 <div class="dashboard-editor">
     <div class="editor-header">
@@ -78,32 +78,39 @@
                 </div>
                 
                 <div class="panel-list">
-                    @foreach (var panel in SelectedDashboard.Panels)
+                    @{
+                        var panelsByType = SelectedDashboard.Panels.GroupBy(p => p.PanelType).OrderBy(g => g.Key);
+                    }
+                    @foreach (var group in panelsByType)
                     {
-                        <div class="panel-item @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")" 
-                             draggable="true"
-                             @ondragstart="() => OnDragStart(panel)"
-                             @ondragover:preventDefault="true"
-                             @ondragover="() => OnDragOver(panel)"
-                             @ondragleave="() => OnDragLeave(panel)"
-                             @ondrop:preventDefault="true"
-                             @ondrop="() => OnDrop(panel)"
-                             @onclick="() => SelectPanel(panel)">
-                            <div class="panel-reorder">
-                                <span class="drag-handle" title="Drag to reorder">☰</span>
+                        <div class="panel-group-header">@group.Key</div>
+                        @foreach (var panel in group)
+                        {
+                            <div class="panel-item panel-type-@panel.PanelType.ToLower() @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")" 
+                                 draggable="true"
+                                 @ondragstart="() => OnDragStart(panel)"
+                                 @ondragover:preventDefault="true"
+                                 @ondragover="() => OnDragOver(panel)"
+                                 @ondragleave="() => OnDragLeave(panel)"
+                                 @ondrop:preventDefault="true"
+                                 @ondrop="() => OnDrop(panel)"
+                                 @onclick="() => SelectPanel(panel)">
+                                <div class="panel-reorder">
+                                    <span class="drag-handle" title="Drag to reorder">☰</span>
+                                </div>
+                                <div class="panel-info">
+                                    <span class="panel-title">@panel.Title</span>
+                                    <span class="panel-type">@panel.PanelType</span>
+                                </div>
+                                <div class="panel-actions">
+                                    <label class="toggle">
+                                        <input type="checkbox" @bind="panel.Enabled" />
+                                    </label>
+                                    <button class="btn-icon" @onclick="() => DuplicatePanel(panel)" @onclick:stopPropagation title="Duplicate">📋</button>
+                                    <button class="btn-icon" @onclick="() => DeletePanel(panel)" @onclick:stopPropagation title="Delete">🗑</button>
+                                </div>
                             </div>
-                            <div class="panel-info">
-                                <span class="panel-title">@panel.Title</span>
-                                <span class="panel-type">@panel.PanelType</span>
-                            </div>
-                            <div class="panel-actions">
-                                <label class="toggle">
-                                    <input type="checkbox" @bind="panel.Enabled" />
-                                </label>
-                                <button class="btn-icon" @onclick="() => DuplicatePanel(panel)" @onclick:stopPropagation title="Duplicate">📋</button>
-                                <button class="btn-icon" @onclick="() => DeletePanel(panel)" @onclick:stopPropagation title="Delete">🗑</button>
-                            </div>
-                        </div>
+                        }
                     }
                 </div>
             }
@@ -326,7 +333,7 @@
                         @if (!string.IsNullOrEmpty(QueryDdlPreview))
                         {
                             <div class="query-ddl-preview">
-                                <strong>SQLite DDL:</strong>
+                                <strong>liveQueries DDL:</strong>
                                 <pre>@QueryDdlPreview</pre>
                             </div>
                         }
@@ -683,7 +690,7 @@
             Query = new QueryPair
             {
                 SqlServer = original.Query.SqlServer,
-                Sqlite = original.Query.Sqlite
+                LiveQueries = original.Query.LiveQueries
             },
             StatUnit = original.StatUnit,
             StatThresholdKey = original.StatThresholdKey,
@@ -1085,7 +1092,7 @@
                     : TestSqlInstance.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             };
 
-            var (success, message, results) = await SQLiteTableService.ExecuteSqlServerQueryAsync(
+            var (success, message, results) = await liveQueriesTableService.ExecuteSqlServerQueryAsync(
                 ConnectionFactory, SelectedPanel.Query.SqlServer, filter);
 
             QueryTestResult = message;
@@ -1104,29 +1111,29 @@
     }
 
     /// <summary>
-    /// Executes the SQLite query against SqlHealthAssessment.db and shows the results
+    /// Executes the liveQueries query against SqlHealthAssessment.db and shows the results
     /// in a data grid so the user can manually confirm the cached data.
     /// </summary>
-    private async Task TestSqliteQuery()
+    private async Task TestliveQueriesQuery()
     {
-        if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.Sqlite))
+        if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.LiveQueries))
         {
             ClearQueryResults();
-            QueryTestResult = "Please enter a SQLite query";
+            QueryTestResult = "Please enter a liveQueries query";
             QueryTestIsError = true;
             return;
         }
 
         ClearQueryResults();
-        QueryTestResult = "Executing SQLite query...";
-        QueryResultSource = "SQLite";
+        QueryTestResult = "Executing liveQueries query...";
+        QueryResultSource = "liveQueries";
         IsQueryRunning = true;
         StateHasChanged();
 
         try
         {
-            var (success, message, results) = await SQLiteTableService.ExecuteSqliteQueryAsync(
-                SelectedPanel.Query.Sqlite);
+            var (success, message, results) = await liveQueriesTableService.ExecuteliveQueriesQueryAsync(
+                SelectedPanel.Query.LiveQueries);
 
             QueryTestResult = message;
             QueryTestIsError = !success;
@@ -1145,9 +1152,9 @@
 
     /// <summary>
     /// Validates the SQL Server query, generates and shows the CREATE TABLE DDL,
-    /// creates/updates the SQLite table, and inserts initial data.
+    /// creates/updates the liveQueries table, and inserts initial data.
     /// </summary>
-    private async Task ValidateSqliteQuery()
+    private async Task ValidateliveQueriesQuery()
     {
         if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.SqlServer))
         {
@@ -1173,7 +1180,7 @@
         try
         {
             // Step 1: Generate and display the DDL so the user can review it
-            var (ddlOk, ddlMsg, ddl) = await SQLiteTableService.GenerateCreateTableDdlAsync(
+            var (ddlOk, ddlMsg, ddl) = await liveQueriesTableService.GenerateCreateTableDdlAsync(
                 ConnectionFactory, SelectedPanel.Id, SelectedPanel.Query.SqlServer);
 
             if (ddlOk && !string.IsNullOrEmpty(ddl))
@@ -1194,7 +1201,7 @@
                 serverName = sqlFactory.ServerName ?? ".";
             }
 
-            var (success, message) = await SQLiteTableService.ValidateAndCreateTableAsync(
+            var (success, message) = await liveQueriesTableService.ValidateAndCreateTableAsync(
                 ConnectionFactory,
                 SelectedPanel.Id,
                 SelectedPanel.Query.SqlServer,
@@ -1203,17 +1210,17 @@
             QueryTestResult = message;
             QueryTestIsError = !success;
 
-            // Step 3: If the SQLite query is defined, run it to show the inserted data
-            if (success && !string.IsNullOrWhiteSpace(SelectedPanel.Query.Sqlite))
+            // Step 3: If the liveQueries query is defined, run it to show the inserted data
+            if (success && !string.IsNullOrWhiteSpace(SelectedPanel.Query.LiveQueries))
             {
-                var (sqliteOk, sqliteMsg, sqliteResults) = await SQLiteTableService.ExecuteSqliteQueryAsync(
-                    SelectedPanel.Query.Sqlite);
+                var (liveQueriesOk, liveQueriesMsg, liveQueriesResults) = await liveQueriesTableService.ExecuteliveQueriesQueryAsync(
+                    SelectedPanel.Query.LiveQueries);
 
-                if (sqliteOk && sqliteResults != null)
+                if (liveQueriesOk && liveQueriesResults != null)
                 {
-                    QueryResultTable = sqliteResults;
-                    QueryResultSource = "SQLite (after insert)";
-                    QueryTestResult = message + $" SQLite query returned {sqliteResults.Rows.Count} row(s).";
+                    QueryResultTable = liveQueriesResults;
+                    QueryResultSource = "liveQueries (after insert)";
+                    QueryTestResult = message + $" liveQueries query returned {liveQueriesResults.Rows.Count} row(s).";
                 }
             }
         }
@@ -1326,3 +1333,4 @@
         }
     }
 }
+

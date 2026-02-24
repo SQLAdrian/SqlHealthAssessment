@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 namespace SqlHealthAssessment.Data.Caching
 {
     /// <summary>
-    /// Decorator around <see cref="QueryExecutor"/> that adds local SQLite caching
+    /// Decorator around <see cref="QueryExecutor"/> that adds local liveQueries caching
     /// with delta-fetch support.
     ///
     /// Caching strategy per panel type:
@@ -27,7 +27,7 @@ namespace SqlHealthAssessment.Data.Caching
     public class CachingQueryExecutor
     {
         private readonly QueryExecutor _inner;
-        private readonly SqliteCacheStore _cache;
+        private readonly liveQueriesCacheStore _cache;
         private readonly CacheStateTracker _stateTracker;
         private readonly DashboardConfigService _configService;
         private readonly TimeSpan _evictionThreshold;
@@ -45,7 +45,7 @@ namespace SqlHealthAssessment.Data.Caching
 
         public CachingQueryExecutor(
             QueryExecutor inner,
-            SqliteCacheStore cache,
+            liveQueriesCacheStore cache,
             CacheStateTracker stateTracker,
             DashboardConfigService configService,
             IConfiguration configuration)
@@ -182,9 +182,9 @@ namespace SqlHealthAssessment.Data.Caching
         ///   1. Look up last_fetch from cache_metadata.
         ///   2. If no prior fetch → full load from SQL Server, write to cache.
         ///   3. If prior fetch → modify filter.TimeFrom to last_fetch, fetch delta only.
-        ///   4. Upsert delta rows into SQLite.
+        ///   4. Upsert delta rows into liveQueries.
         ///   5. Trim cache rows older than filter.TimeFrom.
-        ///   6. Read full window from SQLite and return.
+        ///   6. Read full window from liveQueries and return.
         ///   7. On SQL Server failure → serve from cache (stale data).
         /// </summary>
         private async Task<List<T>> DeltaFetchTimeSeriesAsync<T>(

@@ -215,7 +215,7 @@
             Height = panel.Height,
             RefreshIntervalSeconds = panel.RefreshIntervalSeconds,
             Layout = panel.Layout != null ? new PanelLayout { Column = panel.Layout.Column, Order = panel.Layout.Order, SpanColumns = panel.Layout.SpanColumns } : new PanelLayout(),
-            Query = panel.Query != null ? new QueryPair { SqlServer = panel.Query.SqlServer, Sqlite = panel.Query.Sqlite } : new QueryPair(),
+            Query = panel.Query != null ? new QueryPair { SqlServer = panel.Query.SqlServer, LiveQueries = panel.Query.LiveQueries } : new QueryPair(),
             StatUnit = panel.StatUnit,
             StatThresholdKey = panel.StatThresholdKey,
             BarGaugeThresholdKey = panel.BarGaugeThresholdKey,

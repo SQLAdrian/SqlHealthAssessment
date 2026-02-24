@@ -7,21 +7,21 @@ using System.Threading.Tasks;
 namespace SqlHealthAssessment.Data
 {
     /// <summary>
-    /// Connection factory for SQLite databases.
-    /// Not used by the caching layer directly (SqliteCacheStore manages its own connections),
-    /// but available for the existing QueryPair.Sqlite query path if needed.
+    /// Connection factory for liveQueries databases.
+    /// Not used by the caching layer directly (liveQueriesCacheStore manages its own connections),
+    /// but available for the existing QueryPair.liveQueries query path if needed.
     /// </summary>
-    public class SqliteConnectionFactory : IDbConnectionFactory
+    public class liveQueriesConnectionFactory : IDbConnectionFactory
     {
         private readonly string _connectionString;
 
-        public SqliteConnectionFactory(string connectionString)
+        public liveQueriesConnectionFactory(string connectionString)
         {
             _connectionString = connectionString;
         }
 
         public IDbConnection CreateConnection() => new SqliteConnection(_connectionString);
-        public string DataSourceType => "Sqlite";
+        public string DataSourceType => "liveQueries";
 
         public async Task<IDbConnection> CreateConnectionAsync()
         {

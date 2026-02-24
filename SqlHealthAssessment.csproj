@@ -67,6 +67,7 @@
     <PackageReference Include="Serilog.Extensions.Logging" Version="8.*" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.*" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.*" />
+    <PackageReference Include="ReportViewerCore.NETCore" Version="15.*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -86,6 +87,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="Dacpacs\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="reports\BlitzReport.rdl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

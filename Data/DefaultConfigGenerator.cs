@@ -29,7 +29,7 @@ namespace SqlHealthAssessment.Data
         // Helper methods for panel creation
         // ================================================================
 
-        private static PanelDefinition TimeSeriesPanel(string id, string title, int column, int order, string sqlServer, string sqlite, string chartType = "Line", bool span = false)
+        private static PanelDefinition TimeSeriesPanel(string id, string title, int column, int order, string sqlServer, string liveQueries, string chartType = "Line", bool span = false)
         {
             return new PanelDefinition
             {
@@ -38,11 +38,11 @@ namespace SqlHealthAssessment.Data
                 PanelType = "TimeSeries",
                 ChartType = chartType,
                 Layout = new PanelLayout { Column = column, Order = order, SpanColumns = span },
-                Query = new QueryPair { SqlServer = sqlServer, Sqlite = sqlite }
+                Query = new QueryPair { SqlServer = sqlServer, LiveQueries = liveQueries }
             };
         }
 
-        private static PanelDefinition StatCardPanel(string id, string title, string unit, int order, string sqlServer, string sqlite, string? statThresholdKey = null, List<ColorThresholdRule>? colorThresholds = null)
+        private static PanelDefinition StatCardPanel(string id, string title, string unit, int order, string sqlServer, string liveQueries, string? statThresholdKey = null, List<ColorThresholdRule>? colorThresholds = null)
         {
             return new PanelDefinition
             {
@@ -52,12 +52,12 @@ namespace SqlHealthAssessment.Data
                 StatUnit = unit,
                 StatThresholdKey = statThresholdKey,
                 Layout = new PanelLayout { Column = 0, Order = order },
-                Query = new QueryPair { SqlServer = sqlServer, Sqlite = sqlite },
+                Query = new QueryPair { SqlServer = sqlServer, LiveQueries = liveQueries },
                 ColorThresholds = colorThresholds ?? new List<ColorThresholdRule>()
             };
         }
 
-        private static PanelDefinition CheckStatusPanel(string id, string title, int order, string sqlServer, string sqlite)
+        private static PanelDefinition CheckStatusPanel(string id, string title, int order, string sqlServer, string liveQueries)
         {
             return new PanelDefinition
             {
@@ -65,11 +65,11 @@ namespace SqlHealthAssessment.Data
                 Title = title,
                 PanelType = "CheckStatus",
                 Layout = new PanelLayout { Column = 0, Order = order },
-                Query = new QueryPair { SqlServer = sqlServer, Sqlite = sqlite }
+                Query = new QueryPair { SqlServer = sqlServer, LiveQueries = liveQueries }
             };
         }
 
-        private static PanelDefinition BarGaugePanel(string id, string title, string thresholdKey, string unitSuffix, int column, int order, string sqlServer, string sqlite, bool span = false, List<ColorThresholdRule>? colorThresholds = null)
+        private static PanelDefinition BarGaugePanel(string id, string title, string thresholdKey, string unitSuffix, int column, int order, string sqlServer, string liveQueries, bool span = false, List<ColorThresholdRule>? colorThresholds = null)
         {
             return new PanelDefinition
             {
@@ -79,12 +79,12 @@ namespace SqlHealthAssessment.Data
                 BarGaugeThresholdKey = thresholdKey,
                 BarGaugeUnitSuffix = unitSuffix,
                 Layout = new PanelLayout { Column = column, Order = order, SpanColumns = span },
-                Query = new QueryPair { SqlServer = sqlServer, Sqlite = sqlite },
+                Query = new QueryPair { SqlServer = sqlServer, LiveQueries = liveQueries },
                 ColorThresholds = colorThresholds ?? new List<ColorThresholdRule>()
             };
         }
 
-        private static PanelDefinition DataGridPanel(string id, string title, int order, string sqlServer, string sqlite, bool span = false)
+        private static PanelDefinition DataGridPanel(string id, string title, int order, string sqlServer, string liveQueries, bool span = false)
         {
             return new PanelDefinition
             {
@@ -92,7 +92,7 @@ namespace SqlHealthAssessment.Data
                 Title = title,
                 PanelType = "DataGrid",
                 Layout = new PanelLayout { Column = 1, Order = order, SpanColumns = span },
-                Query = new QueryPair { SqlServer = sqlServer, Sqlite = sqlite }
+                Query = new QueryPair { SqlServer = sqlServer, LiveQueries = liveQueries }
             };
         }
 
@@ -121,7 +121,7 @@ namespace SqlHealthAssessment.Data
 SELECT COUNT(DISTINCT sql_instance) AS [Value]
 FROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)
 WHERE repo_collector_is_active = 1",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT COUNT(DISTINCT sql_instance) AS [Value]
 FROM sqlwatch_config_sql_instance
 WHERE repo_collector_is_active = 1"
@@ -152,7 +152,7 @@ INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY h.report_time DESC",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Memory %' AS [Series],
@@ -192,7 +192,7 @@ INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY h.report_time DESC",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Pending' AS [Series],
@@ -226,7 +226,7 @@ INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 GROUP BY d.check_status",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     d.check_status AS [Status],
     COUNT(*) AS [Count]
@@ -265,7 +265,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND m.counter_name IN ('Processor Time %','Privileged Time %','User Time %')
     AND m.cntr_type <> 1073939712
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     m.counter_name AS [Series],
@@ -308,7 +308,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND m.counter_name IN ('Batch Requests/Sec','Readahead pages/sec','Transactions/sec','Processes blocked')
     AND m.cntr_type <> 1073939712
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     m.counter_name AS [Series],
@@ -347,7 +347,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 GROUP BY h.report_time
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Wait Time (ms)' AS [Series],
@@ -397,7 +397,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 GROUP BY h.report_time
 ORDER BY [Time]",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Bytes Read/s' AS [Series],
@@ -447,7 +447,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 GROUP BY h.report_time
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Long Queries' AS [Series],
@@ -491,7 +491,7 @@ ORDER BY h.report_time"
 SELECT COUNT(DISTINCT sql_instance) AS [Value]
 FROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)
 WHERE repo_collector_is_active = 1",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT COUNT(DISTINCT sql_instance) AS [Value]
 FROM sqlwatch_config_sql_instance
 WHERE repo_collector_is_active = 1"
@@ -522,7 +522,7 @@ INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY h.report_time DESC",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Memory %' AS [Series],
@@ -562,7 +562,7 @@ INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY h.report_time DESC",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Pending' AS [Series],
@@ -619,7 +619,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
             AND h2.sql_instance = d.sql_instance
             AND h2.snapshot_type_id = d.snapshot_type_id
     )",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     v.volume_name AS [Label],
     CASE WHEN d.volume_total_space_bytes > 0
@@ -671,7 +671,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND m.counter_name IN ('Processor Time %','Privileged Time %','User Time %')
     AND m.cntr_type <> 1073939712
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     m.counter_name AS [Series],
@@ -714,7 +714,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND m.counter_name IN ('Batch Requests/Sec','Logins/sec','Transactions/sec','SQL Compilations/sec','User Connections')
     AND m.cntr_type <> 1073939712
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     m.counter_name AS [Series],
@@ -757,7 +757,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
 GROUP BY h.report_time, ISNULL(ws.wait_category, 'Other')
 HAVING SUM(d.wait_time_ms_delta) > 0
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     COALESCE(cw.wait_category,
@@ -823,7 +823,7 @@ INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY [Time]",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Physical Memory In Use (KB)' AS [Series],
@@ -894,7 +894,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
     AND d.type = 1
 ORDER BY [Time]",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Running' AS [Series], d.running AS [Value]
@@ -991,7 +991,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
     AND d.type = 1
 ORDER BY [Time]",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Background' AS [Series], d.background AS [Value]
@@ -1064,7 +1064,7 @@ LEFT JOIN dbo.sqlwatch_meta_database f WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     COALESCE(db.database_name,'?') || ' - ' || COALESCE(mf.file_name,'?') AS [Series],
@@ -1133,7 +1133,7 @@ LEFT JOIN dbo.sqlwatch_meta_database f WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY [Time]",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     COALESCE(db.database_name,'?') || ' Read B/s' AS [Series],
@@ -1220,7 +1220,7 @@ INNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY [Time]",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Current Tasks' AS [Series], d.current_tasks_count AS [Value]
@@ -1277,7 +1277,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 GROUP BY h.report_time
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Blocked Sessions' AS [Series],
@@ -1316,7 +1316,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND m.counter_name IN ('Lock Requests/sec','Lock Waits/sec','Lock Timeouts/sec','Number of Deadlocks/sec')
     AND m.cntr_type <> 1073939712
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     m.counter_name AS [Series],
@@ -1359,7 +1359,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND m.counter_name = 'Page life expectancy'
     AND m.cntr_type <> 1073939712
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Page Life Expectancy' AS [Series],
@@ -1400,7 +1400,7 @@ INNER JOIN dbo.sqlwatch_meta_memory_clerk mc WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND omc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     mc.clerk_name AS [Series],
@@ -1452,7 +1452,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 GROUP BY h.report_time
 ORDER BY [Time]",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'Database Count' AS [Series],
@@ -1510,7 +1510,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND db.database_name = 'tempdb'
 GROUP BY h.report_time
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     'TempDB Size (MB)' AS [Series],
@@ -1558,7 +1558,7 @@ WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.check_status <> 'OK'
 GROUP BY h.report_time, d.check_status
 ORDER BY h.report_time",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     h.report_time AS [Time],
     d.check_status AS [Series],
@@ -1602,7 +1602,7 @@ INNER JOIN dbo.sqlwatch_meta_check c WITH (NOLOCK)
 WHERE h.report_time BETWEEN @TimeFrom AND @TimeTo
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))
 ORDER BY d.snapshot_time DESC",
-                        sqlite: @"
+                        liveQueries: @"
 SELECT
     d.snapshot_time,
     c.check_name,
@@ -1641,7 +1641,7 @@ ORDER BY d.snapshot_time DESC"
 SELECT sql_instance
 FROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)
 ORDER BY repo_collector_is_active DESC, sql_instance",
-                    Sqlite = @"
+                    LiveQueries = @"
 SELECT sql_instance
 FROM sqlwatch_config_sql_instance
 ORDER BY repo_collector_is_active DESC, sql_instance"
@@ -1664,7 +1664,7 @@ LEFT JOIN dbo.sqlwatch_meta_query_plan_hash qph WITH (NOLOCK)
     AND qph.query_plan_hash = qp.query_plan_hash
 WHERE d.long_query_id = @QueryId
     AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))",
-                    Sqlite = @"
+                    LiveQueries = @"
 SELECT
     COALESCE(qph.statement_for_query_plan_hash, '') AS sql_text,
     qph.query_plan_for_query_plan_hash AS query_plan
@@ -1690,7 +1690,7 @@ SELECT
 FROM dbo.sqlwatch_meta_query_plan_hash qph WITH (NOLOCK)
 WHERE qph.query_plan_hash = @PlanHash
     AND qph.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))",
-                    Sqlite = @"
+                    LiveQueries = @"
 SELECT
     COALESCE(qph.statement_for_query_plan_hash, '') AS sql_text,
     qph.query_plan_for_query_plan_hash AS query_plan

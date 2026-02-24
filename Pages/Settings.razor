@@ -30,7 +30,7 @@
             <label>Data Source</label>
             <select value="@SelectedDataSource" @onchange="OnDataSourceChanged">
                 <option value="SqlServer">SQL Server</option>
-                @* <option value="Sqlite">SQLite</option> *@
+                @* <option value="sqlite">sqlite</option> *@
             </select>
         </div>
         @if (RestartRequired)
@@ -191,9 +191,9 @@
     <div class="settings-group">
         <h3>Cache Management</h3>
         <div class="settings-field">
-            <label>SQLite Dashboard Cache</label>
+            <label>sqlite Dashboard Cache</label>
             <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
-                Clear all cached dashboard data from the local SQLite database. This will force fresh data to be loaded from SQL Server on next dashboard refresh.
+                Clear all cached dashboard data from the local sqlite database. This will force fresh data to be loaded from SQL Server on next dashboard refresh.
             </p>
         </div>
         <div class="settings-field">
@@ -209,12 +209,12 @@
             <input type="text" value="@(Configuration.GetValue<int>("CacheEvictionHours", 24)) hours" readonly />
         </div>
         <div class="settings-field">
-            <label>SQLite Maintenance Interval</label>
-            <input type="text" value="@(Configuration.GetValue<int>("SqliteMaintenanceIntervalHours", 4)) hours" readonly />
+            <label>sqlite Maintenance Interval</label>
+            <input type="text" value="@(Configuration.GetValue<int>("sqliteMaintenanceIntervalHours", 4)) hours" readonly />
         </div>
         <div class="settings-field">
-            <label>SQLite Integrity Check Frequency</label>
-            <input type="text" value="Every @(Configuration.GetValue<int>("SqliteIntegrityCheckEveryNRuns", 6)) maintenance runs" readonly />
+            <label>sqlite Integrity Check Frequency</label>
+            <input type="text" value="Every @(Configuration.GetValue<int>("sqliteIntegrityCheckEveryNRuns", 6)) maintenance runs" readonly />
         </div>
         <div style="display: flex; gap: 8px; margin-top: 10px;">
             <button class="settings-btn" @onclick="FlushCache" disabled="@IsFlushingCache">@(IsFlushingCache ? "Flushing..." : "Flush All Cache")</button>
@@ -576,7 +576,7 @@
     //                {
     //                    if (connProp.Name == "SqlServer")
     //                        connStrings[connProp.Name] = newConnStr;
-    //                    else if (connProp.Name == "Sqlite")
+    //                    else if (connProp.Name == "sqlite")
     //                        connStrings[connProp.Name] = connProp.Value.GetString() ?? "";
     //                }
     //                root[prop.Name] = connStrings;
@@ -724,7 +724,7 @@
             var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment.db");
             if (System.IO.File.Exists(dbPath))
             {
-                // Close all SQLite connections and clear the pool
+                // Close all sqlite connections and clear the pool
                 Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
                 GC.Collect();
                 GC.WaitForPendingFinalizers();

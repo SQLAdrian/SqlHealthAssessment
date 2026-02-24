@@ -88,7 +88,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<AlertingService>();
             services.AddSingleton<HealthCheckService>();
             services.AddSingleton<CheckExecutionService>();
-            services.AddSingleton<SQLiteTableService>();
+            services.AddSingleton<liveQueriesTableService>();
             services.AddSingleton<SessionManager>();
             services.AddSingleton<RateLimiter>();
             services.AddSingleton<UserSettingsService>();
@@ -97,17 +97,18 @@ namespace SqlHealthAssessment
             services.AddSingleton<MemoryMonitorService>();
             services.AddSingleton<ConfigurationValidator>();
             services.AddSingleton<AutoUpdateService>();
+            services.AddSingleton<SqlHealthAssessment.Services.ReportService>();
 
             // Local log service for debug logging
             var maxLogSize = configuration.GetValue<long>("LogMaxFileSizeBytes", 5 * 1024 * 1024);
             services.AddSingleton(new LocalLogService(maxLogSize));
 
-            // SQLite caching layer — delta-fetch + offline resilience
-            services.AddSingleton<SqliteCacheStore>();
+            // liveQueries caching layer — delta-fetch + offline resilience
+            services.AddSingleton<liveQueriesCacheStore>();
             services.AddSingleton<CacheStateTracker>();
             services.AddSingleton<CachingQueryExecutor>();
             services.AddSingleton<CacheEvictionService>();
-            services.AddSingleton<SqliteMaintenanceService>();
+            services.AddSingleton<liveQueriesMaintenanceService>();
 
             Services = services.BuildServiceProvider();
 
@@ -125,20 +126,20 @@ namespace SqlHealthAssessment
             // Start cache eviction timer (runs every 5 minutes)
             Services.GetService<CacheEvictionService>()?.Start();
 
-            // Start SQLite maintenance timer (VACUUM + optimize, default every 4 hours)
-            Services.GetService<SqliteMaintenanceService>()?.Start();
+            // Start liveQueries maintenance timer (VACUUM + optimize, default every 4 hours)
+            Services.GetService<liveQueriesMaintenanceService>()?.Start();
 
             // Log application start for audit trail
             var auditLog = Services.GetService<AuditLogService>();
             auditLog?.LogApplicationStart();
             Log.Information("Application started successfully");
 
-            // Ensure SQLite tables exist for all panels on startup (best-effort, non-blocking)
+            // Ensure liveQueries tables exist for all panels on startup (best-effort, non-blocking)
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    var tableService = Services?.GetService<SQLiteTableService>();
+                    var tableService = Services?.GetService<liveQueriesTableService>();
                     var connFactory = Services?.GetService<IDbConnectionFactory>();
                     var configService = Services?.GetService<DashboardConfigService>();
 
@@ -148,14 +149,14 @@ namespace SqlHealthAssessment
                             connFactory, configService.Config);
 
                         System.Diagnostics.Debug.WriteLine(
-                            $"[App] SQLite table provisioning: {succeeded} OK, {failed} failed.");
+                            $"[App] liveQueries table provisioning: {succeeded} OK, {failed} failed.");
                         foreach (var err in errors)
                             System.Diagnostics.Debug.WriteLine($"[App]   - {err}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[App] SQLite table provisioning error: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[App] liveQueries table provisioning error: {ex.Message}");
                 }
             });
         }

@@ -98,11 +98,13 @@
                                SelectedSpid="@SelectedSession?.SPID" />
         </div>
 
-        @* Detail panel *@
-        @if (SelectedSession != null)
-        {
-            <SessionDetailPanel Session="@SelectedSession" OnClose="CloseDetail" />
-        }
+        @* Detail panel - always rendered with fixed width to prevent layout shift *@
+        <div class="sessions-detail-container @((SelectedSession != null) ? "visible" : "hidden")">
+            @if (SelectedSession != null)
+            {
+                <SessionDetailPanel Session="@SelectedSession" OnClose="CloseDetail" />
+            }
+        </div>
     </div>
 </div>
 

@@ -215,7 +215,7 @@ namespace SqlHealthAssessment.Data
         /// Uses O(1) dictionary lookup instead of scanning all panels.
         /// </summary>
         /// <param name="queryId">The query/panel identifier (e.g., "repo.perf_counters").</param>
-        /// <param name="dataSourceType">"SqlServer" or "Sqlite".</param>
+        /// <param name="dataSourceType">"SqlServer" or "liveQueries".</param>
         /// <returns>The SQL query string for the specified data source.</returns>
         /// <exception cref="KeyNotFoundException">Thrown when the query ID is not found.</exception>
         public string GetQuery(string queryId, string dataSourceType)

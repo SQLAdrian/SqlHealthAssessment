@@ -8,13 +8,13 @@ using Microsoft.Extensions.Configuration;
 namespace SqlHealthAssessment.Data.Caching
 {
     /// <summary>
-    /// Runs periodic SQLite database maintenance on a timer.
+    /// Runs periodic liveQueries database maintenance on a timer.
     /// Each cycle: purges data older than the retention period, runs
     /// PRAGMA optimize and VACUUM, and optionally PRAGMA integrity_check.
     /// </summary>
-    public class SqliteMaintenanceService : IDisposable
+    public class liveQueriesMaintenanceService : IDisposable
     {
-        private readonly SqliteCacheStore _cache;
+        private readonly liveQueriesCacheStore _cache;
         private readonly TimeSpan _interval;
         private readonly TimeSpan _retentionPeriod;
         private readonly int _integrityCheckEveryNRuns;
@@ -29,13 +29,13 @@ namespace SqlHealthAssessment.Data.Caching
 
         public MaintenanceResult? LastResult { get; private set; }
 
-        public SqliteMaintenanceService(SqliteCacheStore cache, IConfiguration config)
+        public liveQueriesMaintenanceService(liveQueriesCacheStore cache, IConfiguration config)
         {
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
 
             // Default: run maintenance every 4 hours
             var intervalHours = 4;
-            if (int.TryParse(config["SqliteMaintenanceIntervalHours"], out var h) && h > 0)
+            if (int.TryParse(config["liveQueriesMaintenanceIntervalHours"], out var h) && h > 0)
                 intervalHours = h;
             _interval = TimeSpan.FromHours(intervalHours);
 
@@ -47,7 +47,7 @@ namespace SqlHealthAssessment.Data.Caching
 
             // Default: run integrity check every 6th maintenance run (i.e. once per day at 4h intervals)
             _integrityCheckEveryNRuns = 6;
-            if (int.TryParse(config["SqliteIntegrityCheckEveryNRuns"], out var n) && n > 0)
+            if (int.TryParse(config["liveQueriesIntegrityCheckEveryNRuns"], out var n) && n > 0)
                 _integrityCheckEveryNRuns = n;
         }
 
@@ -85,7 +85,7 @@ namespace SqlHealthAssessment.Data.Caching
                 LastResult = result;
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"[SqliteMaintenanceService] Maintenance completed in {result.Duration.TotalSeconds:F1}s " +
+                    $"[liveQueriesMaintenanceService] Maintenance completed in {result.Duration.TotalSeconds:F1}s " +
                     $"(purged={rowsPurged}, optimize={result.OptimizeCompleted}, vacuum={result.VacuumCompleted}" +
                     (includeIntegrity ? $", integrity={result.IntegrityCheckResult}" : "") + ")");
 
@@ -94,7 +94,7 @@ namespace SqlHealthAssessment.Data.Caching
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    $"[SqliteMaintenanceService] Maintenance error: {ex.Message}");
+                    $"[liveQueriesMaintenanceService] Maintenance error: {ex.Message}");
             }
         }
 

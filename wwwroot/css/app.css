@@ -163,7 +163,7 @@ body {
 
 .status-dot { width: 8px; height: 8px; border-radius: 50%; }
 .status-sql { background: var(--accent); }
-.status-sqlite { background: var(--green); }
+.status-liveQueries { background: var(--green); }
 
 /* === Stat Card === */
 .stat-card {
@@ -3597,7 +3597,6 @@ tr.clickable:hover .datagrid-plan-badge {
     border-color: var(--accent);
 }
 
-<<<<<<< HEAD
 /* ================================
    Live Sessions Bubble View
    ================================ */
@@ -3652,9 +3651,30 @@ tr.clickable:hover .datagrid-plan-badge {
 
 .sessions-bubble-area {
     flex: 1;
+    min-width: 0;
     position: relative;
     overflow: auto;
     padding: 8px;
+}
+
+/* Detail container - fixed width to prevent layout shift */
+.sessions-detail-container {
+    width: 380px;
+    flex-shrink: 0;
+    transition: width 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+    overflow: hidden;
+}
+
+.sessions-detail-container.hidden {
+    width: 0;
+    opacity: 0;
+    margin-right: 0;
+}
+
+.sessions-detail-container.visible {
+    width: 380px;
+    opacity: 1;
+    margin-right: 0;
 }
 
 /* ── Bubble View Container ── */
@@ -3901,7 +3921,7 @@ tr.clickable:hover .datagrid-plan-badge {
 .server-context-db {
     color: var(--text-muted);
     font-size: 11px;
-=======
+}
 
 /* ================================
    Enhanced Preview Pane
@@ -3989,6 +4009,8 @@ tr.clickable:hover .datagrid-plan-badge {
     overflow: hidden;
     cursor: pointer;
     transition: all 0.15s;
+    height: 80px;
+    min-height: 80px;
 }
 
 .preview-panel:hover {
@@ -4008,6 +4030,8 @@ tr.clickable:hover .datagrid-plan-badge {
 .preview-panel-full {
     width: 100%;
     margin-bottom: 8px;
+    height: 80px;
+    min-height: 80px;
 }
 
 .preview-panel-header {
@@ -4040,8 +4064,9 @@ tr.clickable:hover .datagrid-plan-badge {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px;
-    min-height: 60px;
+    padding: 4px;
+    min-height: 40px;
+    flex: 1;
 }
 
 .preview-placeholder {
@@ -4532,3 +4557,69 @@ tr.clickable:hover .datagrid-plan-badge {
     font-size: 13px;
 
 }
+
+/* Stat Card Mini - for TextCard button-style display */
+.stat-card-mini {
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    padding: 12px;
+    min-width: 120px;
+    text-align: center;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+}
+
+.stat-card-mini:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+}
+
+.stat-card-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.stat-card-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+/* Panel Type Grouping */
+.panel-group-header {
+    padding: 6px 12px;
+    background: var(--bg-primary);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+}
+
+.panel-group-header:first-child {
+    margin-top: 0;
+    border-top: none;
+}
+
+/* Panel Type Color Coding */
+.panel-item.panel-type-timeseries { border-left: 3px solid #2196f3; }
+.panel-item.panel-type-statcard { border-left: 3px solid #4caf50; }
+.panel-item.panel-type-deltastatcard { border-left: 3px solid #00bcd4; }
+.panel-item.panel-type-bargauge { border-left: 3px solid #ff9800; }
+.panel-item.panel-type-datagrid { border-left: 3px solid #9c27b0; }
+.panel-item.panel-type-checkstatus { border-left: 3px solid #f44336; }
+.panel-item.panel-type-textcard { border-left: 3px solid #607d8b; }
+
+.preview-panel-type.timeseries { background: #2196f3; color: white; }
+.preview-panel-type.statcard { background: #4caf50; color: white; }
+.preview-panel-type.deltastatcard { background: #00bcd4; color: white; }
+.preview-panel-type.bargauge { background: #ff9800; color: white; }
+.preview-panel-type.datagrid { background: #9c27b0; color: white; }
+.preview-panel-type.checkstatus { background: #f44336; color: white; }
+.preview-panel-type.textcard { background: #607d8b; color: white; }

@@ -17,11 +17,11 @@ using Microsoft.Data.Sqlite;
 namespace SqlHealthAssessment.Data.Caching
 {
     /// <summary>
-    /// Manages the local SQLite cache database for dashboard query results.
+    /// Manages the local liveQueries cache database for dashboard query results.
     /// All writes are serialized through a SemaphoreSlim; reads are lock-free (WAL mode).
     /// The database file is created automatically in the application's base directory.
     /// </summary>
-    public sealed class SqliteCacheStore : IDisposable
+    public sealed class liveQueriesCacheStore : IDisposable
     {
         private readonly string _connectionString;
 
@@ -39,7 +39,7 @@ namespace SqlHealthAssessment.Data.Caching
             PropertyNameCaseInsensitive = true
         };
 
-        public SqliteCacheStore()
+        public liveQueriesCacheStore()
         {
             var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment-cache.db");
             _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
@@ -823,7 +823,7 @@ namespace SqlHealthAssessment.Data.Caching
         // ──────────────────────── Maintenance ─────────────────────────
 
         /// <summary>
-        /// Runs SQLite maintenance tasks: PRAGMA optimize (updates query planner
+        /// Runs liveQueries maintenance tasks: PRAGMA optimize (updates query planner
         /// statistics), VACUUM (reclaims free pages and defragments the database
         /// file), and optionally PRAGMA integrity_check.
         /// </summary>
@@ -837,7 +837,7 @@ namespace SqlHealthAssessment.Data.Caching
                 using var conn = CreateConnection();
                 await conn.OpenAsync();
 
-                // PRAGMA optimize — lets SQLite update internal statistics
+                // PRAGMA optimize — lets liveQueries update internal statistics
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "PRAGMA optimize;";

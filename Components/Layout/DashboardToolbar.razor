@@ -78,7 +78,7 @@
     <!--
     <div class="toolbar-status">
         <button class="server-name-btn" @onclick="OpenSettings">
-            <span class="status-dot @(ConnectionFactory.DataSourceType == "SqlServer" ? "status-sql" : "status-sqlite")"></span>
+            <span class="status-dot @(ConnectionFactory.DataSourceType == "SqlServer" ? "status-sql" : "status-liveQueries")"></span>
             @ServerDisplayName
         </button>
     </div>

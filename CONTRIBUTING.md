@@ -131,7 +131,7 @@ And a matching query entry:
 {
   "id": "my_query_id",
   "sqlServer": "SELECT TOP 100 ... FROM SQLWATCH...",
-  "sqlite": null,              // optional: SQLite fallback for cached data
+  "sqlite": null,                   // optional: SQLite fallback for cached data
   "parameters": []
 }
 ```

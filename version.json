@@ -1,7 +1,7 @@
 {
     "version":  "1.0.0",
-    "buildNumber":  104,
-    "buildDate":  "2026-02-24",
+    "buildNumber":  122,
+    "buildDate":  "2026-02-25",
     "releaseType":  "Production",
     "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SqlHealthAssessment/releases/latest"
 }

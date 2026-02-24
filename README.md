@@ -167,7 +167,7 @@ See the [Deployment Guide](DEPLOYMENT_GUIDE.md) for the full configuration refer
 │  └──────┬─────────────────┬────────────┘    │
 │         │                 │                  │
 │  ┌──────▼──────┐  ┌───────▼──────────┐      │
-│  │  SQL Server │  │  SQLite (cache)  │      │
+│  │  SQL Server │  │  SQLite (cache)       │      │
 │  │  SQLWATCH   │  │  WAL-mode .db    │      │
 │  └─────────────┘  └──────────────────┘      │
 └─────────────────────────────────────────────┘

@@ -1,0 +1,616 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/blitz"
+
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject IDbConnectionFactory ConnectionFactory
+@inject ServerConnectionManager ConnectionManager
+@inject SqlHealthAssessment.Services.ReportService ReportService
+
+<div class="blitz-page">
+    <div class="page-header">
+        <div>
+            <h2>🛡️ sp_Blitz SQL Risk Assessment</h2>
+            <p class="page-description">
+                Comprehensive SQL Server health check results from sp_Blitz
+            </p>
+        </div>
+        <div class="header-actions">
+            <select @bind="SelectedServer" class="server-select">
+                <option value="">-- Select a SQL Instance --</option>
+                @foreach (var server in Servers)
+                {
+                    <option value="@server">@server</option>
+                }
+            </select>
+            <button class="btn btn-primary" @onclick="LoadData" disabled="@(string.IsNullOrEmpty(SelectedServer) || IsLoading)">
+                @(IsLoading ? "Loading..." : "🔄 Refresh")
+            </button>
+            @if (ResultsLoaded)
+            {
+                <div class="view-toggle">
+                    <button class="toggle-btn @(!ShowReportView ? "active" : "")" @onclick='() => ShowReportView = false'>
+                        📊 Table
+                    </button>
+                    <button class="toggle-btn @(ShowReportView ? "active" : "")" @onclick="SwitchToReport"
+                            disabled="@IsGeneratingReport">
+                        @(IsGeneratingReport ? "⏳" : "📄") Report
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="error-message">@ErrorMessage</div>
+    }
+
+    @if (ResultsLoaded)
+    {
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="summary-card passed">
+                <div class="card-icon">✅</div>
+                <div class="card-count">@PassedCount</div>
+                <div class="card-label">Passed</div>
+            </div>
+            <div class="summary-card failed">
+                <div class="card-icon">❌</div>
+                <div class="card-count">@FailedCount</div>
+                <div class="card-label">Failed</div>
+            </div>
+            <div class="summary-card warning">
+                <div class="card-icon">⚠️</div>
+                <div class="card-count">@WarningCount</div>
+                <div class="card-label">Warnings</div>
+            </div>
+            <div class="summary-card info">
+                <div class="card-icon">ℹ️</div>
+                <div class="card-count">@InfoCount</div>
+                <div class="card-label">Informational</div>
+            </div>
+            <div class="summary-card total">
+                <div class="card-icon">📊</div>
+                <div class="card-count">@TotalCount</div>
+                <div class="card-label">Total</div>
+            </div>
+        </div>
+
+        <!-- Category Summary -->
+        <div class="category-section">
+            <h3>Findings by Category</h3>
+            <div class="category-grid">
+                @foreach (var cat in CatSummary)
+                {
+                    <div class="category-card @GetCategorySeverityClass(cat.HighestPriority)">
+                        <div class="category-name">@cat.Category</div>
+                        <div class="category-stats">
+                            <span class="stat failed">❌ @cat.FailedCount</span>
+                            <span class="stat warning">⚠️ @cat.WarningCount</span>
+                            <span class="stat info">ℹ️ @cat.InfoCount</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Priority Findings -->
+        <div class="findings-section">
+            <h3>🚨 Priority Findings</h3>
+            @if (PriorityFindings.Any())
+            {
+                <div class="findings-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Priority</th>
+                                <th>Check ID</th>
+                                <th>Finding</th>
+                                <th>Details</th>
+                                <th>URL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var finding in PriorityFindings)
+                            {
+                                <tr class="@GetPriorityClass(finding.Priority)">
+                                    <td><span class="priority-badge @GetPriorityClass(finding.Priority)">@finding.Priority</span></td>
+                                    <td>@finding.CheckID</td>
+                                    <td>@finding.Finding</td>
+                                    <td>@finding.Findings</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(finding.URL))
+                                        {
+                                            <a href="@finding.URL" target="_blank">📖</a>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="no-findings">No priority findings - all checks passed 🎉</div>
+            }
+        </div>
+
+        <!-- All Results -->
+        <div class="all-results-section">
+            <h3>📋 All Check Results</h3>
+            <div class="filter-bar">
+                <label>Filter by:</label>
+                <select @bind="SelectedFilter" @bind:after="ApplyFilter">
+                    <option value="all">All (@TotalCount)</option>
+                    <option value="failed">Failed (@FailedCount)</option>
+                    <option value="warning">Warnings (@WarningCount)</option>
+                    <option value="info">Informational (@InfoCount)</option>
+                </select>
+                <label>Category:</label>
+                <select @bind="SelectedCategory" @bind:after="ApplyFilter">
+                    <option value="">All Categories</option>
+                    @foreach (var cat in Categories)
+                    {
+                        <option value="@cat">@cat</option>
+                    }
+                </select>
+                <label>Search:</label>
+                <input type="text" @bind="SearchText" @bind:after="ApplyFilter" placeholder="Search findings..." />
+            </div>
+
+            <div class="results-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Priority</th>
+                            <th>Check #</th>
+                            <th>Category</th>
+                            <th>Finding</th>
+                            <th>Details</th>
+                            <th>URL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var result in FilteredResults)
+                        {
+                            <tr class="@GetPriorityClass(result.Priority)">
+                                <td><span class="priority-badge @GetPriorityClass(result.Priority)">@result.Priority</span></td>
+                                <td>@result.CheckID</td>
+                                <td>@result.Category</td>
+                                <td>@result.Finding</td>
+                                <td>@result.Findings</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(result.URL))
+                                    {
+                                        <a href="@result.URL" target="_blank" title="Learn more">📖</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (!FilteredResults.Any())
+                {
+                    <div class="no-results">No results match your filter criteria.</div>
+                }
+            </div>
+        </div>
+    }
+    else if (!IsLoading && string.IsNullOrEmpty(SelectedServer))
+    {
+        <div class="initial-state">
+            <div class="icon">🛡️</div>
+            <h3>sp_Blitz SQL Risk Assessment</h3>
+            <p>Select a SQL Instance above to view the sp_Blitz health check results.</p>
+        </div>
+    }
+
+    @if (ResultsLoaded && ShowReportView)
+    {
+        <div class="report-view">
+            @if (IsGeneratingReport)
+            {
+                <div class="report-loading">⏳ Rendering report…</div>
+            }
+            else if (ReportDataUrl == null)
+            {
+                <div class="report-missing">
+                    <p>Report file <code>reports/BlitzReport.rdl</code> not found next to the executable.</p>
+                    <p>Switch to <strong>📊 Table</strong> view above to see results.</p>
+                </div>
+            }
+            else
+            {
+                <iframe src="@ReportDataUrl"
+                        class="report-iframe"
+                        title="sp_Blitz Report"></iframe>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    private List<string> Servers = new();
+    private string SelectedServer = "";
+    private bool IsLoading = false;
+    private bool ResultsLoaded = false;
+    private string ErrorMessage = "";
+    
+    // Data
+    private List<BlitzCheckResult> AllResults = new();
+    private List<BlitzCheckResult> FilteredResults = new();
+    private List<CategorySummaryItem> CatSummary = new();
+    private List<string> Categories = new();
+    private List<BlitzCheckResult> PriorityFindings = new();
+
+    // Counts
+    private int PassedCount => AllResults.Count(r => r.Priority == "Pass" || r.Priority == "Complete");
+    private int FailedCount => AllResults.Count(r => r.Priority == "High" || r.Priority == "1" || r.Priority == "2" || r.Priority == "3");
+    private int WarningCount => AllResults.Count(r => r.Priority == "Medium" || r.Priority == "4" || r.Priority == "5");
+    private int InfoCount => AllResults.Count(r => r.Priority == "Low" || r.Priority == "6" || r.Priority == "Information");
+    private int TotalCount => AllResults.Count;
+
+    // View toggle
+    private bool ShowReportView = false;
+    private bool IsGeneratingReport = false;
+    private string? ReportDataUrl = null;
+
+    // Filters
+    private string SelectedFilter = "all";
+    private string SelectedCategory = "";
+    private string SearchText = "";
+    private string SortColumn = "Priority";
+    private bool SortAscending = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServers();
+    }
+
+    private async Task LoadServers()
+    {
+        try
+        {
+            var connections = ConnectionManager.GetConnections();
+            foreach (var conn in connections)
+            {
+                var serverList = conn.GetServerList();
+                Servers.AddRange(serverList);
+            }
+            
+            if (Servers.Count == 0)
+            {
+                Servers.Add("localhost");
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading servers: {ex.Message}";
+        }
+    }
+
+    private async Task OnServerChanged()
+    {
+        ResultsLoaded = false;
+        if (!string.IsNullOrEmpty(SelectedServer))
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        if (string.IsNullOrEmpty(SelectedServer)) return;
+
+        IsLoading = true;
+        ErrorMessage = "";
+
+        try
+        {
+            await Task.Delay(100);
+
+            AllResults = await LoadFromDatabaseAsync();
+            // For testing, uncomment below and comment out the line above
+            // AllResults = GenerateSampleData();
+            Categories = AllResults.Select(r => r.Category).Distinct().OrderBy(c => c).ToList();
+            
+            CalculateCategorySummary();
+            CalculatePriorityFindings();
+            ApplyFilter();
+
+            ResultsLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading data: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task<List<BlitzCheckResult>> LoadFromDatabaseAsync()
+    {
+        var results = new List<BlitzCheckResult>();
+        
+        try
+        {
+            using var conn = await ConnectionFactory.CreateConnectionAsync();
+            
+            // Query your sp_Blitz results table
+            var sql = @"SELECT
+       CAST([BlitzCheckID] AS INT) AS CheckID,
+       Category,
+       [Bad],
+       [Section] Finding,
+       [BlitzDetails] + ' ' + [Summary]Findings,
+       [Impact] Priority,
+       [Details] URL
+   FROM [master].[dbo].[020_BlitzReport]  -- Update this table name
+   WHERE SQLInstance = @Server
+   ORDER BY
+       Category, Bad, [Impact] ,CheckID
+             ";
+            
+            using var cmd = (Microsoft.Data.SqlClient.SqlCommand)conn.CreateCommand();
+            cmd.CommandText = sql;
+            var param = cmd.CreateParameter();
+            param.ParameterName = "@Server";
+            param.Value = SelectedServer;
+            cmd.Parameters.Add(param);
+            
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new BlitzCheckResult
+                {
+                    CheckID = reader.GetInt32(0),
+                    Category = reader.GetString(1),
+                    Finding = reader.GetString(2),
+                    Findings = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                    Priority = reader.GetString(4),
+                    URL = reader.IsDBNull(5) ? "" : reader.GetString(5)
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Database error: {ex.Message}";
+        }
+        
+        return results;
+    }
+
+    private List<BlitzCheckResult> GenerateSampleData()
+    {
+        // Sample data - replace with LoadFromDatabaseAsync() call in LoadData()
+        return new List<BlitzCheckResult>
+        {
+            new() { CheckID = 1, Category = "Security", Finding = "SQL Server is running as SYSTEM", Findings = "The service is running as SYSTEM account which poses a security risk", Priority = "High", URL = "https://www.brentozar.com/blitz/sa-privileged/" },
+            new() { CheckID = 2, Category = "Security", Finding = "Database owner is SYSTEM", Findings = "Some databases are owned by SYSTEM", Priority = "Medium", URL = "" },
+            new() { CheckID = 3, Category = "Performance", Finding = "Cost Threshold for Parallelism is too low", Findings = "Value is set to 5, should be at least 50", Priority = "Medium", URL = "https://www.brentozar.com/blitz/cost-threshold/" },
+            new() { CheckID = 4, Category = "Performance", Finding = "Max Degree of Parallelism is set too high", Findings = "Value is 0 (unlimited), should be limited to 8 or less", Priority = "Medium", URL = "https://www.brentozar.com/blitz/max-degree-of-parallelism/" },
+            new() { CheckID = 5, Category = "Reliability", Finding = "Database Corruption", Findings = "Potential corruption detected in msdb", Priority = "High", URL = "https://www.brentozar.com/blitz/database-corrupt/" },
+            new() { CheckID = 6, Category = "Reliability", Finding = "Last DBCC CHECKDB over 7 days ago", Findings = "No integrity checks have been run recently", Priority = "Medium", URL = "https://www.brentozar.com/blitz/checkdb/" },
+            new() { CheckID = 7, Category = "Info", Finding = "SQL Server Agent is running", Findings = "SQL Agent is enabled and running", Priority = "Information", URL = "" },
+            new() { CheckID = 8, Category = "Info", Finding = "Server Name and Instance Name", Findings = "SERVERNAME\\INSTANCENAME", Priority = "Information", URL = "" },
+            new() { CheckID = 9, Category = "Performance", Finding = "Table has clustered index", Findings = "All tables have appropriate indexes", Priority = "Pass", URL = "" },
+            new() { CheckID = 10, Category = "Security", Finding = "contained database auth is enabled", Findings = "Contained databases are using contained authentication", Priority = "Low", URL = "" }
+        };
+    }
+
+    private void CalculateCategorySummary()
+    {
+        CatSummary = AllResults
+            .GroupBy(r => r.Category)
+            .Select(g => new CategorySummaryItem
+            {
+                Category = g.Key,
+                FailedCount = g.Count(r => r.Priority == "High" || r.Priority == "1" || r.Priority == "2" || r.Priority == "3"),
+                WarningCount = g.Count(r => r.Priority == "Medium" || r.Priority == "4" || r.Priority == "5"),
+                InfoCount = g.Count(r => r.Priority == "Low" || r.Priority == "6" || r.Priority == "Information"),
+                HighestPriority = g.OrderBy(r => GetPriorityOrder(r.Priority)).First().Priority
+            })
+            .OrderBy(c => GetPriorityOrder(c.HighestPriority))
+            .ToList();
+    }
+
+    private void CalculatePriorityFindings()
+    {
+        PriorityFindings = AllResults
+            .Where(r => r.Priority != "Pass" && r.Priority != "Complete" && r.Priority != "Information")
+            .OrderBy(r => GetPriorityOrder(r.Priority))
+            .Take(20)
+            .ToList();
+    }
+
+    private void ApplyFilter()
+    {
+        var query = AllResults.AsEnumerable();
+
+        if (SelectedFilter == "failed")
+            query = query.Where(r => r.Priority == "High" || r.Priority == "1" || r.Priority == "2" || r.Priority == "3");
+        else if (SelectedFilter == "warning")
+            query = query.Where(r => r.Priority == "Medium" || r.Priority == "4" || r.Priority == "5");
+        else if (SelectedFilter == "info")
+            query = query.Where(r => r.Priority == "Low" || r.Priority == "6" || r.Priority == "Information");
+
+        if (!string.IsNullOrEmpty(SelectedCategory))
+            query = query.Where(r => r.Category == SelectedCategory);
+
+        if (!string.IsNullOrEmpty(SearchText))
+        {
+            var search = SearchText.ToLower();
+            query = query.Where(r => r.Finding.ToLower().Contains(search) || r.Findings.ToLower().Contains(search) || r.Category.ToLower().Contains(search));
+        }
+
+        query = SortColumn switch
+        {
+            "Priority" => SortAscending ? query.OrderBy(r => GetPriorityOrder(r.Priority)) : query.OrderByDescending(r => GetPriorityOrder(r.Priority)),
+            "CheckID" => SortAscending ? query.OrderBy(r => r.CheckID) : query.OrderByDescending(r => r.CheckID),
+            "Category" => SortAscending ? query.OrderBy(r => r.Category) : query.OrderByDescending(r => r.Category),
+            "Finding" => SortAscending ? query.OrderBy(r => r.Finding) : query.OrderByDescending(r => r.Finding),
+            "Findings" => SortAscending ? query.OrderBy(r => r.Findings) : query.OrderByDescending(r => r.Findings),
+            _ => query
+        };
+
+        FilteredResults = query.ToList();
+    }
+
+    private void SortBy(string column)
+    {
+        if (SortColumn == column)
+            SortAscending = !SortAscending;
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+        ApplyFilter();
+    }
+
+    private async Task SwitchToReport()
+    {
+        ShowReportView = true;
+        if (ReportDataUrl != null) return; // already rendered
+
+        IsGeneratingReport = true;
+        await Task.Run(() =>
+        {
+            var rows = AllResults.Select(r =>
+                new SqlHealthAssessment.Services.ReportService.BlitzRow(
+                    r.CheckID, r.Category, r.Finding, r.Findings, r.Priority, r.URL));
+            ReportDataUrl = ReportService.RenderAsDataUrl(rows);
+        });
+        IsGeneratingReport = false;
+    }
+
+    private int GetPriorityOrder(string priority)
+    {
+        return priority switch
+        {
+            "High" or "1" or "2" or "3" => 1,
+            "Medium" or "4" or "5" => 2,
+            "Low" or "6" => 3,
+            "Information" => 4,
+            _ => 5
+        };
+    }
+
+    private string GetPriorityClass(string priority)
+    {
+        return priority switch
+        {
+            "High" or "1" or "2" or "3" => "priority-high",
+            "Medium" or "4" or "5" => "priority-medium",
+            "Low" or "6" => "priority-low",
+            "Information" => "priority-info",
+            _ => "priority-pass"
+        };
+    }
+
+    private string GetCategorySeverityClass(string highestPriority)
+    {
+        return highestPriority switch
+        {
+            "High" or "1" or "2" or "3" => "severity-high",
+            "Medium" or "4" or "5" => "severity-medium",
+            "Low" or "6" => "severity-low",
+            _ => "severity-info"
+        };
+    }
+
+    public class BlitzCheckResult
+    {
+        public int CheckID { get; set; }
+        public string Category { get; set; } = "";
+        public string Finding { get; set; } = "";
+        public string Findings { get; set; } = "";
+        public string Priority { get; set; } = "";
+        public string URL { get; set; } = "";
+    }
+
+    public class CategorySummaryItem
+    {
+        public string Category { get; set; } = "";
+        public int FailedCount { get; set; }
+        public int WarningCount { get; set; }
+        public int InfoCount { get; set; }
+        public string HighestPriority { get; set; } = "";
+    }
+}
+
+<style>
+    .blitz-page { padding: 20px; color: var(--text-primary); }
+    .blitz-page h2, .blitz-page h3 { color: var(--text-primary); }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .page-header h2 { margin: 0 0 5px 0; color: var(--text-primary); }
+    .page-description { color: var(--text-secondary); margin: 0; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+    .server-select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; min-width: 200px; background: var(--bg-secondary); color: var(--text-primary); }
+    .error-message { background: rgba(244,67,54,0.15); color: #ef9a9a; padding: 12px; border-radius: 4px; margin-bottom: 20px; border-left: 3px solid #f44336; }
+
+    .summary-cards { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; }
+    .summary-card { flex: 1; min-width: 120px; padding: 20px; border-radius: 8px; text-align: center; background: var(--bg-panel); border: 1px solid var(--border); }
+    .summary-card.passed { border-top: 3px solid #4caf50; }
+    .summary-card.failed { border-top: 3px solid #f44336; }
+    .summary-card.warning { border-top: 3px solid #ff9800; }
+    .summary-card.info { border-top: 3px solid var(--accent); }
+    .summary-card.total { border-top: 3px solid var(--text-secondary); }
+    .summary-card .card-icon { font-size: 24px; margin-bottom: 8px; }
+    .summary-card .card-count { font-size: 32px; font-weight: bold; color: var(--text-primary); }
+    .summary-card .card-label { font-size: 14px; color: var(--text-secondary); }
+
+    .category-section, .findings-section, .all-results-section { margin-bottom: 30px; }
+    .category-section h3, .findings-section h3, .all-results-section h3 { margin-bottom: 15px; color: var(--accent); }
+    .category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+    .category-card { padding: 15px; border-radius: 8px; border-left: 4px solid var(--border); background: var(--bg-panel); border: 1px solid var(--border); border-left-width: 4px; }
+    .category-card.severity-high { border-left-color: #f44336; }
+    .category-card.severity-medium { border-left-color: #ff9800; }
+    .category-card.severity-low { border-left-color: var(--accent); }
+    .category-card.severity-info { border-left-color: var(--text-secondary); }
+    .category-name { font-weight: bold; margin-bottom: 8px; color: var(--text-primary); }
+    .category-stats { font-size: 13px; color: var(--text-secondary); }
+    .category-stats .stat { margin-right: 10px; }
+
+    .filter-bar { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap; }
+    .filter-bar label { font-weight: 500; color: var(--text-secondary); }
+    .filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); }
+    .filter-bar input { min-width: 200px; }
+
+    .results-table table, .findings-table table { width: 100%; border-collapse: collapse; background: var(--bg-panel); }
+    .results-table th, .results-table td, .findings-table th, .findings-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); color: var(--text-primary); }
+    .results-table th, .findings-table th { background: var(--accent); color: white; cursor: pointer; user-select: none; }
+    .results-table th:hover, .findings-table th:hover { opacity: 0.9; }
+
+    .priority-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .priority-high { background: #f44336; color: white; }
+    .priority-medium { background: #ff9800; color: white; }
+    .priority-low { background: var(--accent); color: white; }
+    .priority-info { background: var(--text-secondary); color: white; }
+    .priority-pass { background: #4caf50; color: white; }
+    tr.priority-high { background: rgba(244,67,54,0.1); }
+    tr.priority-medium { background: rgba(255,152,0,0.1); }
+    tr.priority-low { background: rgba(33,150,243,0.07); }
+
+    .no-findings, .no-results, .initial-state { text-align: center; padding: 40px; color: var(--text-secondary); }
+    .initial-state .icon { font-size: 64px; margin-bottom: 20px; }
+    .initial-state h3 { margin-bottom: 10px; color: var(--text-primary); }
+
+    /* View toggle */
+    .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .toggle-btn { padding: 7px 16px; background: var(--bg-secondary); color: var(--text-secondary); border: none; cursor: pointer; font-size: 13px; transition: background 0.15s, color 0.15s; }
+    .toggle-btn:disabled { opacity: 0.6; cursor: default; }
+    .toggle-btn.active { background: var(--accent); color: white; }
+    .toggle-btn:not(.active):not(:disabled):hover { background: var(--bg-panel); color: var(--text-primary); }
+
+    /* Report iframe */
+    .report-view { margin-top: 10px; }
+    .report-iframe { width: 100%; height: 80vh; border: 1px solid var(--border); border-radius: 6px; background: white; }
+    .report-loading, .report-missing { text-align: center; padding: 40px; color: var(--text-secondary); }
+    .report-missing code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 3px; }
+</style>

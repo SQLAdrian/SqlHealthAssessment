@@ -8,12 +8,12 @@ namespace SqlHealthAssessment.Data.Caching
 {
     /// <summary>
     /// Runs periodic cache eviction on a timer (default: every 5 minutes).
-    /// Removes rows from all SQLite cache tables where fetched_at is older
+    /// Removes rows from all liveQueries cache tables where fetched_at is older
     /// than the configured threshold (default: 24 hours).
     /// </summary>
     public class CacheEvictionService : IDisposable
     {
-        private readonly SqliteCacheStore _cache;
+        private readonly liveQueriesCacheStore _cache;
         private readonly TimeSpan _evictionThreshold;
         private readonly TimeSpan _interval;
         private readonly long _maxCacheSizeBytes;
@@ -21,7 +21,7 @@ namespace SqlHealthAssessment.Data.Caching
         private Timer? _timer;
         private bool _disposed;
 
-        public CacheEvictionService(SqliteCacheStore cache, IConfiguration config, MemoryMonitorService? memoryMonitor = null)
+        public CacheEvictionService(liveQueriesCacheStore cache, IConfiguration config, MemoryMonitorService? memoryMonitor = null)
         {
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _memoryMonitor = memoryMonitor;

@@ -7,7 +7,7 @@ namespace SqlHealthAssessment.Data
     public class QueryDefinition
     {
         public string SqlServer { get; set; } = "";
-        public string Sqlite { get; set; } = "";
+        public string liveQueries { get; set; } = "";
     }
 
     public class QueryStore

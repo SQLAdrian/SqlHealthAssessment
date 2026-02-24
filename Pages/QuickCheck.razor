@@ -461,14 +461,16 @@
 
     private async Task ClearResults()
     {
-        Results = new();
-        ServerSummaries = new();
-        ExpandedResults = new();
+        Results.Clear();
+        ServerSummaries.Clear();
+        ExpandedResults.Clear();
         HasRun = false;
         StatusMessage = string.Empty;
         SelectedFilter = "all";
+        SelectedCategory = string.Empty;
+        SelectedServer = string.Empty;
+        SelectedSeverity = string.Empty;
         
-        // Force UI to re-render after clearing
         await InvokeAsync(StateHasChanged);
     }
 

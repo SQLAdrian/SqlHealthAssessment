@@ -13,17 +13,17 @@ using Microsoft.Data.Sqlite;
 namespace SqlHealthAssessment.Data
 {
     /// <summary>
-    /// Service for creating and managing SQLite tables based on SQL Server query results.
+    /// Service for creating and managing liveQueries tables based on SQL Server query results.
     /// All tables include a server_name column for multi-server filtering.
     /// </summary>
-    public class SQLiteTableService
+    public class liveQueriesTableService
     {
-        private readonly string _sqliteConnectionString;
+        private readonly string _SqliteConnectionString;
 
-        public SQLiteTableService()
+        public liveQueriesTableService()
         {
             var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment.db");
-            _sqliteConnectionString = $"Data Source={dbPath}";
+            _SqliteConnectionString = $"Data Source={dbPath}";
         }
 
         // ──────────────────────── Query Testing with Results ──────────────
@@ -122,16 +122,16 @@ namespace SqlHealthAssessment.Data
                             sqlCmd.Parameters.AddWithValue("@SqlInstance", instances);
                         }
                     }
-                    else if (cmd is SqliteCommand sqliteCmd)
+                    else if (cmd is SqliteCommand liveQueriesCmd)
                     {
                         if (hasTimeFrom)
-                            sqliteCmd.Parameters.AddWithValue("@TimeFrom", filter.TimeFrom.ToString("yyyy-MM-dd HH:mm:ss"));
+                            liveQueriesCmd.Parameters.AddWithValue("@TimeFrom", filter.TimeFrom.ToString("yyyy-MM-dd HH:mm:ss"));
                         if (hasTimeTo)
-                            sqliteCmd.Parameters.AddWithValue("@TimeTo", filter.TimeTo.ToString("yyyy-MM-dd HH:mm:ss"));
+                            liveQueriesCmd.Parameters.AddWithValue("@TimeTo", filter.TimeTo.ToString("yyyy-MM-dd HH:mm:ss"));
                         if (hasSqlInstance)
                         {
                             var instances = filter.Instances.Length > 0 ? string.Join(",", filter.Instances) : "";
-                            sqliteCmd.Parameters.AddWithValue("@SqlInstance", instances);
+                            liveQueriesCmd.Parameters.AddWithValue("@SqlInstance", instances);
                         }
                     }
                 }
@@ -168,10 +168,10 @@ namespace SqlHealthAssessment.Data
         }
 
         /// <summary>
-        /// Executes a query against the local SqlHealthAssessment.db SQLite database and
+        /// Executes a query against the local SqlHealthAssessment.db liveQueries database and
         /// returns up to <paramref name="maxRows"/> rows as a DataTable.
         /// </summary>
-        public async Task<(bool Success, string Message, DataTable? Results)> ExecuteSqliteQueryAsync(
+        public async Task<(bool Success, string Message, DataTable? Results)> ExecuteliveQueriesQueryAsync(
             string query, int maxRows = 50)
         {
             if (string.IsNullOrWhiteSpace(query))
@@ -179,7 +179,7 @@ namespace SqlHealthAssessment.Data
 
             try
             {
-                using var conn = new SqliteConnection(_sqliteConnectionString);
+                using var conn = new SqliteConnection(_SqliteConnectionString);
                 await conn.OpenAsync();
 
                 using var cmd = conn.CreateCommand();
@@ -217,7 +217,7 @@ namespace SqlHealthAssessment.Data
         }
 
         /// <summary>
-        /// Generates the CREATE TABLE DDL that will be used for a panel's SQLite table,
+        /// Generates the CREATE TABLE DDL that will be used for a panel's liveQueries table,
         /// based on the SQL Server query schema. Returns the DDL string and any ALTER
         /// statements if the table already exists with missing columns.
         /// </summary>
@@ -246,11 +246,11 @@ namespace SqlHealthAssessment.Data
                 var sb = new StringBuilder();
 
                 // Check if table already exists
-                using var sqliteConn = new SqliteConnection(_sqliteConnectionString);
-                await sqliteConn.OpenAsync();
+                using var liveQueriesConn = new SqliteConnection(_SqliteConnectionString);
+                await liveQueriesConn.OpenAsync();
 
-                using var checkCmd = sqliteConn.CreateCommand();
-                checkCmd.CommandText = $"SELECT name FROM sqlite_master WHERE type='table' AND name='{tableName}'";
+                using var checkCmd = liveQueriesConn.CreateCommand();
+                checkCmd.CommandText = $"SELECT name FROM liveQueries_master WHERE type='table' AND name='{tableName}'";
                 var exists = await checkCmd.ExecuteScalarAsync();
 
                 if (exists == null)
@@ -260,17 +260,17 @@ namespace SqlHealthAssessment.Data
                     for (int i = 0; i < columns.Count; i++)
                     {
                         var col = columns[i];
-                        var sqliteType = GetSQLiteType(col.DataType, col.MaxLength);
+                        var liveQueriesType = GetliveQueriesType(col.DataType, col.MaxLength);
                         var nullable = col.IsNullable ? "" : " NOT NULL";
                         var comma = i < columns.Count - 1 ? "," : "";
-                        sb.AppendLine($"    {col.ColumnName} {sqliteType}{nullable}{comma}");
+                        sb.AppendLine($"    {col.ColumnName} {liveQueriesType}{nullable}{comma}");
                     }
                     sb.AppendLine(");");
                 }
                 else
                 {
                     // Table exists — show ALTER statements for missing columns
-                    using var pragmaCmd = sqliteConn.CreateCommand();
+                    using var pragmaCmd = liveQueriesConn.CreateCommand();
                     pragmaCmd.CommandText = $"PRAGMA table_info({tableName})";
                     using var pragmaReader = await pragmaCmd.ExecuteReaderAsync();
 
@@ -284,9 +284,9 @@ namespace SqlHealthAssessment.Data
                     {
                         if (!existingColumns.Contains(col.ColumnName))
                         {
-                            var sqliteType = GetSQLiteType(col.DataType, col.MaxLength);
+                            var liveQueriesType = GetliveQueriesType(col.DataType, col.MaxLength);
                             var nullable = col.IsNullable ? "" : " NOT NULL";
-                            sb.AppendLine($"ALTER TABLE {tableName} ADD COLUMN {col.ColumnName} {sqliteType}{nullable};");
+                            sb.AppendLine($"ALTER TABLE {tableName} ADD COLUMN {col.ColumnName} {liveQueriesType}{nullable};");
                             anyMissing = true;
                         }
                     }
@@ -307,7 +307,7 @@ namespace SqlHealthAssessment.Data
         // ──────────────────────── Automatic Table Provisioning ──────────────
 
         /// <summary>
-        /// Ensures the SQLite table for a panel exists and its schema matches the
+        /// Ensures the liveQueries table for a panel exists and its schema matches the
         /// SQL Server query.  Creates the table if it doesn't exist, or adds any
         /// missing columns if it does.  Schema-only — does NOT insert data.
         /// </summary>
@@ -361,7 +361,7 @@ namespace SqlHealthAssessment.Data
         }
 
         /// <summary>
-        /// Ensures SQLite tables exist for every panel that has a SQL Server query
+        /// Ensures liveQueries tables exist for every panel that has a SQL Server query
         /// across all dashboards in the configuration.  Best-effort: individual
         /// panel failures are collected and returned but do not stop processing
         /// of remaining panels.
@@ -455,7 +455,7 @@ namespace SqlHealthAssessment.Data
         }
 
         /// <summary>
-        /// Validate a SQLite query and create/update the table if needed.
+        /// Validate a liveQueries query and create/update the table if needed.
         /// Uses the panel ID as the table name.
         /// </summary>
         public async Task<(bool Success, string Message)> ValidateAndCreateTableAsync(
@@ -500,10 +500,10 @@ namespace SqlHealthAssessment.Data
                     MaxLength = 0
                 });
 
-                // Create or update the SQLite table
+                // Create or update the liveQueries table
                 await CreateOrUpdateTableAsync(tableName, columns);
 
-                // Execute the SQL Server query and insert data into SQLite
+                // Execute the SQL Server query and insert data into liveQueries
                 await InsertDataFromSqlServerAsync(sqlServerConnectionFactory, tableName, sqlServerQuery, serverName);
 
                 return (true, $"Table '{tableName}' created/updated successfully with {columns.Count} columns.");
@@ -515,16 +515,16 @@ namespace SqlHealthAssessment.Data
         }
 
         /// <summary>
-        /// Create or update a SQLite table based on column definitions.
+        /// Create or update a liveQueries table based on column definitions.
         /// </summary>
         private async Task CreateOrUpdateTableAsync(string tableName, List<ColumnInfo> columns)
         {
-            using var sqliteConnection = new SqliteConnection(_sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            using var SqliteConnection = new SqliteConnection(_SqliteConnectionString);
+            await SqliteConnection.OpenAsync();
 
             // Check if table exists
-            var checkTableSql = $"SELECT name FROM sqlite_master WHERE type='table' AND name='{tableName}'";
-            using var checkCmd = sqliteConnection.CreateCommand();
+            var checkTableSql = $"SELECT name FROM liveQueries_master WHERE type='table' AND name='{tableName}'";
+            using var checkCmd = SqliteConnection.CreateCommand();
             checkCmd.CommandText = checkTableSql;
             var existingTable = await checkCmd.ExecuteScalarAsync();
 
@@ -536,9 +536,9 @@ namespace SqlHealthAssessment.Data
                 var columnDefs = new StringBuilder();
                 foreach (var col in columns)
                 {
-                    var sqliteType = GetSQLiteType(col.DataType, col.MaxLength);
+                    var liveQueriesType = GetliveQueriesType(col.DataType, col.MaxLength);
                     var nullable = col.IsNullable ? "" : " NOT NULL";
-                    columnDefs.AppendLine($"    {col.ColumnName} {sqliteType}{nullable},");
+                    columnDefs.AppendLine($"    {col.ColumnName} {liveQueriesType}{nullable},");
                 }
 
                 createTableSql = $@"
@@ -552,7 +552,7 @@ namespace SqlHealthAssessment.Data
                 var alterStatements = new List<string>();
                 
                 // Get existing columns
-                var pragmaCmd = sqliteConnection.CreateCommand();
+                var pragmaCmd = SqliteConnection.CreateCommand();
                 pragmaCmd.CommandText = $"PRAGMA table_info({tableName})";
                 using var pragmaReader = await pragmaCmd.ExecuteReaderAsync();
                 
@@ -567,9 +567,9 @@ namespace SqlHealthAssessment.Data
                 {
                     if (!existingColumns.Contains(col.ColumnName))
                     {
-                        var sqliteType = GetSQLiteType(col.DataType, col.MaxLength);
+                        var liveQueriesType = GetliveQueriesType(col.DataType, col.MaxLength);
                         var nullable = col.IsNullable ? "" : " NOT NULL";
-                        alterStatements.Add($"ALTER TABLE {tableName} ADD COLUMN {col.ColumnName} {sqliteType}{nullable}");
+                        alterStatements.Add($"ALTER TABLE {tableName} ADD COLUMN {col.ColumnName} {liveQueriesType}{nullable}");
                     }
                 }
 
@@ -577,7 +577,7 @@ namespace SqlHealthAssessment.Data
                 {
                     foreach (var alterSql in alterStatements)
                     {
-                        using var alterCmd = sqliteConnection.CreateCommand();
+                        using var alterCmd = SqliteConnection.CreateCommand();
                         alterCmd.CommandText = alterSql;
                         await alterCmd.ExecuteNonQueryAsync();
                     }
@@ -586,13 +586,13 @@ namespace SqlHealthAssessment.Data
                 return;
             }
 
-            using var createCmd = sqliteConnection.CreateCommand();
+            using var createCmd = SqliteConnection.CreateCommand();
             createCmd.CommandText = createTableSql;
             await createCmd.ExecuteNonQueryAsync();
         }
 
         /// <summary>
-        /// Execute SQL Server query and insert results into SQLite table.
+        /// Execute SQL Server query and insert results into liveQueries table.
         /// </summary>
         private async Task InsertDataFromSqlServerAsync(
             IDbConnectionFactory sqlServerConnectionFactory,
@@ -618,9 +618,9 @@ namespace SqlHealthAssessment.Data
             }
             columnNames.Add("collection_time"); // Add collection_time last
 
-            // Insert data into SQLite
-            using var sqliteConnection = new SqliteConnection(_sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            // Insert data into liveQueries
+            using var SqliteConnection = new SqliteConnection(_SqliteConnectionString);
+            await SqliteConnection.OpenAsync();
 
             while (await reader.ReadAsync())
             {
@@ -652,16 +652,16 @@ namespace SqlHealthAssessment.Data
 
                 var insertSql = $"INSERT INTO {tableName} ({string.Join(",", columnNames)}) VALUES ({string.Join(",", values)})";
                 
-                using var insertCmd = sqliteConnection.CreateCommand();
+                using var insertCmd = SqliteConnection.CreateCommand();
                 insertCmd.CommandText = insertSql;
                 await insertCmd.ExecuteNonQueryAsync();
             }
         }
 
         /// <summary>
-        /// Get SQLite data type from SQL Server data type.
+        /// Get liveQueries data type from SQL Server data type.
         /// </summary>
-        private string GetSQLiteType(string dataType, int maxLength)
+        private string GetliveQueriesType(string dataType, int maxLength)
         {
             var dt = dataType?.ToLowerInvariant() ?? "";
 

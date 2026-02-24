@@ -381,3 +381,9 @@ Runtimes/
 
 # Compiled dacpac outputs — keep the source dacpacs but not build intermediates
 *.dacpac.bak
+
+# Internal / personal files
+MEMORY_OPTIMIZATION_RECOMMENDATIONS.md
+dashboard-config - Copy.json
+sp_blitz*local*.rdl
+Reports/
