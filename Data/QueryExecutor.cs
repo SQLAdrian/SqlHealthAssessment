@@ -195,6 +195,38 @@ namespace SqlHealthAssessment.Data
         }
 
         /// <summary>
+        /// Returns the distinct sql_instance values recorded in the SQLWATCH snapshot header table.
+        /// These are the real @@SERVERNAME values SQLWATCH stored — they may differ from the
+        /// user-configured connection names (IP addresses, aliases, FQDNs).
+        /// Returns an empty list on any error so callers can fall back to user-configured names.
+        /// </summary>
+        public async Task<List<string>> GetSqlWatchInstanceNamesAsync(CancellationToken cancellationToken = default)
+        {
+            const string sql = "SELECT DISTINCT sql_instance FROM dbo.sqlwatch_logger_snapshot_header ORDER BY sql_instance";
+            var results = new List<string>();
+            try
+            {
+                using var conn = (SqlConnection)_connectionFactory.CreateConnection();
+                await conn.OpenAsync(cancellationToken);
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.CommandTimeout = 10;
+                cmd.Connection = conn;
+                using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    if (!reader.IsDBNull(0))
+                        results.Add(reader.GetString(0));
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[QueryExecutor] SQLWATCH instance discovery error: {ex.Message}");
+            }
+            return results;
+        }
+
+        /// <summary>
         /// Adds the standard dashboard filter parameters to the command.
         /// @SqlInstance is a comma-separated string used with STRING_SPLIT in SQL Server queries.
         /// </summary>
