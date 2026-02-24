@@ -5,6 +5,7 @@
 @using SqlHealthAssessment.Data.Models
 @inject IDbConnectionFactory ConnectionFactory
 @inject ServerConnectionManager ConnectionManager
+@inject GlobalInstanceSelector InstanceSelector
 @inject SqlHealthAssessment.Services.ReportService ReportService
 
 <div class="blitz-page">
@@ -268,6 +269,8 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadServers();
+        if (!string.IsNullOrEmpty(SelectedServer))
+            await LoadData();
     }
 
     private async Task LoadServers()
@@ -276,14 +279,24 @@
         {
             var connections = ConnectionManager.GetConnections();
             foreach (var conn in connections)
-            {
-                var serverList = conn.GetServerList();
-                Servers.AddRange(serverList);
-            }
-            
+                Servers.AddRange(conn.GetServerList());
+
             if (Servers.Count == 0)
-            {
                 Servers.Add("localhost");
+
+            // Pre-select: prefer the globally-selected SQLWATCH instance name (set by the
+            // dashboard instance picker), otherwise fall back to the first configured server.
+            var preferred = InstanceSelector.SelectedInstance;
+            if (!string.IsNullOrEmpty(preferred))
+            {
+                // The SQLWATCH-discovered name may not be in the user-configured list — add it.
+                if (!Servers.Any(s => string.Equals(s, preferred, StringComparison.OrdinalIgnoreCase)))
+                    Servers.Insert(0, preferred);
+                SelectedServer = preferred;
+            }
+            else if (Servers.Count > 0)
+            {
+                SelectedServer = Servers[0];
             }
         }
         catch (Exception ex)
