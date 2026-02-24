@@ -385,17 +385,16 @@ rd /s /q "%APPDATA%\SqlHealthAssessment"
 ## Support
 
 ### Documentation
-- User Manual: `docs\UserManual.pdf`
-- API Documentation: `docs\API.md`
-- FAQ: `docs\FAQ.md`
+- [README](README.md) — project overview and quick start
+- [Changelog](CHANGELOG.md) — version history
+- [Contributing](CONTRIBUTING.md) — how to contribute
 
 ### Logs Location
 - **Application:** `logs\app-YYYY-MM-DD.log`
 - **Audit:** `audit-logs\audit-YYYY-MM-DD.jsonl`
 
-### Contact
+### Getting Help
 - GitHub Issues: https://github.com/SQLAdrian/SqlHealthAssessment/issues
-- Email: support@example.com
 
 ---
 
@@ -439,6 +438,6 @@ HKEY_CURRENT_USER\SOFTWARE\SqlHealthAssessment
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2024  
-**Applies To:** SQL Health Assessment v2.0+
+**Document Version:** 1.0
+**Last Updated:** 2026-02-24
+**Applies To:** SQL Health Assessment v1.0+

@@ -362,3 +362,22 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 nul
+
+# SQL Health Assessment — project-specific excludes
+
+# User-specific settings (connection strings, personal preferences)
+user-settings.json
+
+# SQLite cache database
+*.db
+*.db-wal
+*.db-shm
+
+# Claude AI working files
+.claude/
+
+# Runtime files (distributed separately)
+Runtimes/
+
+# Compiled dacpac outputs — keep the source dacpacs but not build intermediates
+*.dacpac.bak
