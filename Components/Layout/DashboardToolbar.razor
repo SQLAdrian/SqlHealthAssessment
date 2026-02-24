@@ -33,21 +33,7 @@
         </select>
     </div>
 
-    @if (ServerConnections.Count > 0)
-    {
-        <div class="toolbar-group">
-            <label class="toolbar-label">Server:</label>
-            <select class="toolbar-select" @onchange="OnServerConnectionChanged">
-                @foreach (var conn in ServerConnections)
-                {
-                    <option value="@conn.Id" selected="@(SelectedServerId == conn.Id)">
-                        @(string.IsNullOrWhiteSpace(conn.ServerNames) ? "(unnamed)" : conn.ServerNames.Split('\n', ',')[0].Trim())
-                    </option>
-                }
-            </select>
-        </div>
-    }
-
+    
     <div class="toolbar-group">
         <label class="toolbar-label">Timezone:</label>
         <select class="toolbar-select" @onchange="OnTimezoneChanged">
@@ -89,12 +75,15 @@
         </button>
     </div>
 
+    <!--
     <div class="toolbar-status">
         <button class="server-name-btn" @onclick="OpenSettings">
             <span class="status-dot @(ConnectionFactory.DataSourceType == "SqlServer" ? "status-sql" : "status-sqlite")"></span>
             @ServerDisplayName
         </button>
     </div>
+    -->
+
 </div>
 
 @code {

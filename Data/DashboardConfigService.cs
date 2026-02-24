@@ -26,6 +26,12 @@ namespace SqlHealthAssessment.Data
         /// </summary>
         private Dictionary<string, QueryPair> _queryCache = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// O(1) lookup cache mapping queryId -> PanelType string.
+        /// Avoids O(dashboards × panels) scan on every delta-fetch call.
+        /// </summary>
+        private Dictionary<string, string> _panelTypeCache = new(StringComparer.OrdinalIgnoreCase);
+
         private static readonly JsonSerializerOptions SerializerOptions = new()
         {
             WriteIndented = true,
@@ -134,6 +140,7 @@ namespace SqlHealthAssessment.Data
         private void RebuildQueryCache(DashboardConfigRoot config)
         {
             var cache = new Dictionary<string, QueryPair>(StringComparer.OrdinalIgnoreCase);
+            var typeCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             // Index all panels across all dashboards
             foreach (var dashboard in config.Dashboards)
@@ -143,6 +150,7 @@ namespace SqlHealthAssessment.Data
                     if (!string.IsNullOrEmpty(panel.Id))
                     {
                         cache[panel.Id] = panel.Query;
+                        typeCache[panel.Id] = panel.PanelType;
                     }
                 }
             }
@@ -154,6 +162,7 @@ namespace SqlHealthAssessment.Data
             }
 
             _queryCache = cache;
+            _panelTypeCache = typeCache;
         }
 
         /// <summary>
@@ -213,7 +222,7 @@ namespace SqlHealthAssessment.Data
         {
             if (_queryCache.TryGetValue(queryId, out var queryPair))
             {
-                return dataSourceType == "Sqlite" ? queryPair.Sqlite : queryPair.SqlServer;
+                return dataSourceType == "LiveQueries" ? queryPair.LiveQueries : queryPair.SqlServer;
             }
 
             throw new KeyNotFoundException($"Query '{queryId}' not found in dashboard configuration.");
@@ -226,6 +235,15 @@ namespace SqlHealthAssessment.Data
         public bool HasQuery(string queryId)
         {
             return _queryCache.ContainsKey(queryId);
+        }
+
+        /// <summary>
+        /// O(1) lookup of a panel's type string by query ID.
+        /// Returns "Unknown" if the query ID is not found.
+        /// </summary>
+        public string GetPanelType(string queryId)
+        {
+            return _panelTypeCache.TryGetValue(queryId, out var type) ? type : "Unknown";
         }
     }
 }

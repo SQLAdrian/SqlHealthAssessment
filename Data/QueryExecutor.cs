@@ -1,6 +1,7 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Data;
 using Microsoft.Data.SqlClient;
@@ -21,11 +22,13 @@ namespace SqlHealthAssessment.Data
         private readonly IDbConnectionFactory _connectionFactory;
         private readonly QueryStore _queryStore;
         private readonly AuditLogService? _auditLog;
+        private readonly ServerConnectionManager _connectionManager;
 
-        public QueryExecutor(IDbConnectionFactory connectionFactory, QueryStore queryStore, IConfiguration configuration, AuditLogService? auditLog = null)
+        public QueryExecutor(IDbConnectionFactory connectionFactory, QueryStore queryStore, IConfiguration configuration, ServerConnectionManager connectionManager, AuditLogService? auditLog = null)
         {
             _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
             _queryStore = queryStore ?? throw new ArgumentNullException(nameof(queryStore));
+            _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             _auditLog = auditLog;
             
             _commandTimeout = configuration.GetValue<int>("QueryTimeoutSeconds", 60);
@@ -42,7 +45,8 @@ namespace SqlHealthAssessment.Data
             Dictionary<string, object>? additionalParams = null,
             System.Threading.CancellationToken cancellationToken = default)
         {
-            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType);
+            var useLiveQueries = _connectionManager.CurrentServer?.HasSqlWatch == false;
+            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType, useLiveQueries);
             var dt = new DataTable();
             var startTime = DateTime.UtcNow;
 
@@ -67,7 +71,7 @@ namespace SqlHealthAssessment.Data
             using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
             int rowCount = 0;
             dt.BeginLoadData();
-            
+
             var schemaTable = reader.GetSchemaTable();
             if (schemaTable != null)
             {
@@ -76,25 +80,37 @@ namespace SqlHealthAssessment.Data
                     dt.Columns.Add(schemaRow["ColumnName"].ToString(), (Type)schemaRow["DataType"]);
                 }
             }
-            
-            while (await reader.ReadAsync(cancellationToken))
+
+            // Rent a reusable buffer for column values to avoid per-row array allocations.
+            var fieldCount = reader.FieldCount;
+            var pool = ArrayPool<object>.Shared;
+            var buffer = pool.Rent(fieldCount);
+            try
             {
-                if (++rowCount > _maxRows)
+                while (await reader.ReadAsync(cancellationToken))
                 {
-                    dt.EndLoadData();
-                    _auditLog?.LogQueryExecution(queryId, (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown", false, DateTime.UtcNow - startTime, rowCount, $"Exceeded max rows ({_maxRows})");
-                    throw new InvalidOperationException(
-                        $"Query '{queryId}' returned more than {_maxRows} rows. Consider adding filters or pagination.");
+                    if (++rowCount > _maxRows)
+                    {
+                        dt.EndLoadData();
+                        _auditLog?.LogQueryExecution(queryId, (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown", false, DateTime.UtcNow - startTime, rowCount, $"Exceeded max rows ({_maxRows})");
+                        throw new InvalidOperationException(
+                            $"Query '{queryId}' returned more than {_maxRows} rows. Consider adding filters or pagination.");
+                    }
+
+                    reader.GetValues(buffer);
+                    var row = dt.NewRow();
+                    for (int i = 0; i < fieldCount; i++)
+                    {
+                        row[i] = buffer[i] is DBNull ? DBNull.Value : buffer[i];
+                    }
+                    dt.Rows.Add(row);
                 }
-                
-                var row = dt.NewRow();
-                for (int i = 0; i < reader.FieldCount; i++)
-                {
-                    row[i] = reader.IsDBNull(i) ? DBNull.Value : reader.GetValue(i);
-                }
-                dt.Rows.Add(row);
             }
-            
+            finally
+            {
+                pool.Return(buffer, clearArray: true);
+            }
+
             dt.EndLoadData();
             _auditLog?.LogQueryExecution(queryId, (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown", true, DateTime.UtcNow - startTime, rowCount);
             return dt;
@@ -110,7 +126,8 @@ namespace SqlHealthAssessment.Data
             Dictionary<string, object>? additionalParams = null,
             System.Threading.CancellationToken cancellationToken = default)
         {
-            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType);
+            var useLiveQueries = _connectionManager.CurrentServer?.HasSqlWatch == false;
+            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType, useLiveQueries);
             var results = new List<T>();
 
             using var conn = (SqlConnection)_connectionFactory.CreateConnection();
@@ -149,7 +166,8 @@ namespace SqlHealthAssessment.Data
             Dictionary<string, object>? additionalParams = null,
             System.Threading.CancellationToken cancellationToken = default)
         {
-            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType);
+            var useLiveQueries = _connectionManager.CurrentServer?.HasSqlWatch == false;
+            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType, useLiveQueries);
 
             using var conn = (SqlConnection)_connectionFactory.CreateConnection();
             await conn.OpenAsync(cancellationToken);

@@ -6,7 +6,22 @@
 <div class="datagrid-panel" role="region" aria-label="@(string.IsNullOrEmpty(Title) ? "Data table" : Title)">
     @if (!string.IsNullOrEmpty(Title))
     {
-        <div class="datagrid-title" id="@($"grid-title-{Title.GetHashCode()}")">@Title</div>
+        <div class="datagrid-title" id="@($"grid-title-{Title.GetHashCode()}")">
+            <span>@Title</span>
+            @if (TopRowsConfig.HasValue)
+            {
+                <span class="datagrid-toprows-control">
+                    Top <input type="number"
+                               class="datagrid-toprows-input"
+                               value="@_topRowsInput"
+                               min="1"
+                               max="1000"
+                               title="Number of rows to fetch"
+                               @onchange="HandleTopRowsChange"
+                               @onclick:stopPropagation />
+                </span>
+            }
+        </div>
     }
 
     @if (Data != null && Data.Rows.Count > 0)
@@ -15,20 +30,27 @@
             <table class="datagrid-table" role="table" aria-labelledby="@($"grid-title-{Title.GetHashCode()}")">
                 <thead>
                     <tr role="row">
+                        @if (!string.IsNullOrEmpty(PlanIndicatorColumn) && Data.Columns.Contains(PlanIndicatorColumn))
+                        {
+                            <th role="columnheader" class="datagrid-plan-col" title="Query plan available">Plan</th>
+                        }
                         @foreach (DataColumn col in Data.Columns)
                         {
-                            <th @onclick="() => SortBy(col.ColumnName)"
-                                role="columnheader"
-                                tabindex="0"
-                                @onkeydown="@(e => HandleHeaderKeyDown(e, col.ColumnName))"
-                                aria-sort="@GetAriaSortValue(col.ColumnName)"
-                                class="@(SortColumn == col.ColumnName ? "sorted" : "")">
-                                @col.ColumnName
-                                @if (SortColumn == col.ColumnName)
-                                {
-                                    <span aria-hidden="true">@(SortAscending ? " ▲" : " ▼")</span>
-                                }
-                            </th>
+                            @if (HiddenColumns == null || !HiddenColumns.Contains(col.ColumnName))
+                            {
+                                <th @onclick="() => SortBy(col.ColumnName)"
+                                    role="columnheader"
+                                    tabindex="0"
+                                    @onkeydown="@(e => HandleHeaderKeyDown(e, col.ColumnName))"
+                                    aria-sort="@GetAriaSortValue(col.ColumnName)"
+                                    class="@(SortColumn == col.ColumnName ? "sorted" : "")">
+                                    @col.ColumnName
+                                    @if (SortColumn == col.ColumnName)
+                                    {
+                                        <span aria-hidden="true">@(SortAscending ? " ▲" : " ▼")</span>
+                                    }
+                                </th>
+                            }
                         }
                     </tr>
                 </thead>
@@ -40,18 +62,31 @@
                             tabindex="@(IsClickable ? "0" : "-1")"
                             @onkeydown="@(e => HandleRowKeyDown(e, row))"
                             class="@(IsClickable ? "clickable" : "")">
-                            @foreach (DataColumn col in Data.Columns)
+                            @if (!string.IsNullOrEmpty(PlanIndicatorColumn) && Data.Columns.Contains(PlanIndicatorColumn))
                             {
-                                <td role="cell" title="@row[col]?.ToString()">
-                                    @try
+                                var hasPlan = row[PlanIndicatorColumn] != DBNull.Value && !string.IsNullOrWhiteSpace(row[PlanIndicatorColumn]?.ToString());
+                                <td role="cell" class="datagrid-plan-col">
+                                    @if (hasPlan)
                                     {
-                                        @FormatCell(row[col], col.ColumnName)
-                                    }
-                                    catch (Exception)
-                                    {
-                                        <span>-</span>
+                                        <span class="datagrid-plan-badge" title="Click row to view plan">📋</span>
                                     }
                                 </td>
+                            }
+                            @foreach (DataColumn col in Data.Columns)
+                            {
+                                @if (HiddenColumns == null || !HiddenColumns.Contains(col.ColumnName))
+                                {
+                                    <td role="cell" title="@row[col]?.ToString()">
+                                        @try
+                                        {
+                                            @FormatCell(row[col], col.ColumnName)
+                                        }
+                                        catch (Exception)
+                                        {
+                                            <span>-</span>
+                                        }
+                                    </td>
+                                }
                             }
                         </tr>
                     }
@@ -70,8 +105,8 @@
 
 @code {
     [Parameter] public string Title { get; set; } = "";
-    [Parameter] public DataTable? Data 
-    { 
+    [Parameter] public DataTable? Data
+    {
         get => _data;
         set
         {
@@ -86,8 +121,29 @@
     [Parameter] public EventCallback<DataRow> OnRowClick { get; set; }
     [Parameter] public bool IsClickable { get; set; } = false;
     [Parameter] public int MaxRows { get; set; } = 500;
+    [Parameter] public HashSet<string>? HiddenColumns { get; set; }
+    [Parameter] public string? PlanIndicatorColumn { get; set; }
+    [Parameter] public int? TopRowsConfig { get; set; }
+    [Parameter] public EventCallback<int> OnTopRowsConfigChanged { get; set; }
 
     private DataTable? _data;
+    private int _topRowsInput = 20;
+
+    protected override void OnParametersSet()
+    {
+        if (TopRowsConfig.HasValue && TopRowsConfig.Value != _topRowsInput)
+            _topRowsInput = TopRowsConfig.Value;
+    }
+
+    private async Task HandleTopRowsChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var val) && val > 0)
+        {
+            _topRowsInput = val;
+            if (OnTopRowsConfigChanged.HasDelegate)
+                await OnTopRowsConfigChanged.InvokeAsync(val);
+        }
+    }
 
     private string? SortColumn;
     private bool SortAscending = true;

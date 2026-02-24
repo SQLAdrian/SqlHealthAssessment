@@ -1,10 +1,13 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System;
+using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,8 +24,15 @@ namespace SqlHealthAssessment.Data.Caching
     public sealed class SqliteCacheStore : IDisposable
     {
         private readonly string _connectionString;
-        private readonly SemaphoreSlim _writeLock = new(1, 1);
+
+        // Per-(queryId:instanceKey) semaphores for concurrent panel writes.
+        // Global ops (eviction, vacuum) use _globalWriteLock exclusively.
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> _writeLocks = new();
+        private readonly SemaphoreSlim _globalWriteLock = new(1, 1);
         private bool _disposed;
+
+        private SemaphoreSlim GetLockFor(string queryId, string instanceKey) =>
+            _writeLocks.GetOrAdd($"{queryId}:{instanceKey}", _ => new SemaphoreSlim(1, 1));
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -121,13 +131,15 @@ namespace SqlHealthAssessment.Data.Caching
         /// Upserts time-series rows into the cache. Uses INSERT OR REPLACE
         /// so duplicate (query_id, instance_key, time_value, series) rows
         /// are overwritten with the latest values.
+        /// Enforces row limit per query to prevent unbounded growth.
         /// </summary>
         public async Task UpsertTimeSeriesAsync(string queryId, string instanceKey,
             List<TimeSeriesPoint> rows, DateTime fetchedAt)
         {
             if (rows.Count == 0) return;
 
-            await _writeLock.WaitAsync();
+            var lk = GetLockFor(queryId, instanceKey);
+            await lk.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -161,11 +173,26 @@ namespace SqlHealthAssessment.Data.Caching
                     cmd.ExecuteNonQuery();
                 }
 
+                // Enforce row limit: keep only newest 5000 rows
+                using var trimCmd = conn.CreateCommand();
+                trimCmd.Transaction = transaction;
+                trimCmd.CommandText = @"
+                    DELETE FROM cache_timeseries
+                    WHERE query_id = @qid AND instance_key = @ikey
+                    AND rowid NOT IN (
+                        SELECT rowid FROM cache_timeseries
+                        WHERE query_id = @qid AND instance_key = @ikey
+                        ORDER BY time_value DESC LIMIT 5000
+                    )";
+                trimCmd.Parameters.AddWithValue("@qid", queryId);
+                trimCmd.Parameters.AddWithValue("@ikey", instanceKey);
+                trimCmd.ExecuteNonQuery();
+
                 transaction.Commit();
             }
             finally
             {
-                _writeLock.Release();
+                lk.Release();
             }
         }
 
@@ -175,7 +202,8 @@ namespace SqlHealthAssessment.Data.Caching
         public async Task UpsertStatValueAsync(string queryId, string instanceKey,
             StatValue value, DateTime fetchedAt)
         {
-            await _writeLock.WaitAsync();
+            var lk = GetLockFor(queryId, instanceKey);
+            await lk.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -197,7 +225,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                lk.Release();
             }
         }
 
@@ -207,7 +235,8 @@ namespace SqlHealthAssessment.Data.Caching
         public async Task UpsertBarGaugeAsync(string queryId, string instanceKey,
             List<StatValue> rows, DateTime fetchedAt)
         {
-            await _writeLock.WaitAsync();
+            var lk = GetLockFor(queryId, instanceKey);
+            await lk.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -258,7 +287,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                lk.Release();
             }
         }
 
@@ -270,7 +299,8 @@ namespace SqlHealthAssessment.Data.Caching
         {
             var json = SerializeDataTable(table);
 
-            await _writeLock.WaitAsync();
+            var lk = GetLockFor(queryId, instanceKey);
+            await lk.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -289,7 +319,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                lk.Release();
             }
         }
 
@@ -299,7 +329,8 @@ namespace SqlHealthAssessment.Data.Caching
         public async Task UpsertCheckStatusAsync(string queryId, string instanceKey,
             List<CheckStatus> rows, DateTime fetchedAt)
         {
-            await _writeLock.WaitAsync();
+            var lk = GetLockFor(queryId, instanceKey);
+            await lk.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -343,7 +374,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                lk.Release();
             }
         }
 
@@ -352,7 +383,8 @@ namespace SqlHealthAssessment.Data.Caching
         /// </summary>
         public async Task SetLastFetchTimeAsync(string queryId, string instanceKey, DateTime time)
         {
-            await _writeLock.WaitAsync();
+            var lk = GetLockFor(queryId, instanceKey);
+            await lk.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -369,7 +401,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                lk.Release();
             }
         }
 
@@ -578,7 +610,7 @@ namespace SqlHealthAssessment.Data.Caching
         {
             var cutoff = DateTime.UtcNow.Subtract(maxAge).ToString("o");
 
-            await _writeLock.WaitAsync();
+            await _globalWriteLock.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -603,7 +635,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                _globalWriteLock.Release();
             }
         }
 
@@ -616,7 +648,7 @@ namespace SqlHealthAssessment.Data.Caching
             var cutoff = DateTime.UtcNow.Subtract(maxAge).ToString("o");
             long totalDeleted = 0;
 
-            await _writeLock.WaitAsync();
+            await _globalWriteLock.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -640,7 +672,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                _globalWriteLock.Release();
             }
 
             return totalDeleted;
@@ -652,7 +684,8 @@ namespace SqlHealthAssessment.Data.Caching
         /// </summary>
         public async Task TrimTimeSeriesAsync(string queryId, string instanceKey, DateTime olderThan)
         {
-            await _writeLock.WaitAsync();
+            var lk = GetLockFor(queryId, instanceKey);
+            await lk.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -671,7 +704,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                lk.Release();
             }
         }
 
@@ -680,7 +713,7 @@ namespace SqlHealthAssessment.Data.Caching
         /// </summary>
         public async Task InvalidateAllAsync()
         {
-            await _writeLock.WaitAsync();
+            await _globalWriteLock.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -697,51 +730,93 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                _globalWriteLock.Release();
             }
         }
 
         // ──────────────────────── DataTable Serialization ───────────────
 
+        /// <summary>
+        /// Serializes a DataTable to JSON using a streaming Utf8JsonWriter.
+        /// Avoids the intermediate List&lt;Dictionary&gt; allocation of the old approach,
+        /// reducing GC pressure significantly on large result sets.
+        /// </summary>
         private static string SerializeDataTable(DataTable dt)
         {
-            var rows = new List<Dictionary<string, object?>>();
+            var columns = dt.Columns;
+            var colCount = columns.Count;
+
+            using var ms = new MemoryStream(capacity: Math.Max(256, dt.Rows.Count * colCount * 16));
+            using var writer = new Utf8JsonWriter(ms);
+
+            writer.WriteStartArray();
             foreach (DataRow row in dt.Rows)
             {
-                var dict = new Dictionary<string, object?>();
-                foreach (DataColumn col in dt.Columns)
+                writer.WriteStartObject();
+                for (int i = 0; i < colCount; i++)
                 {
-                    dict[col.ColumnName] = row[col] == DBNull.Value ? null : row[col];
+                    writer.WritePropertyName(columns[i].ColumnName);
+                    var val = row[i];
+                    if (val == DBNull.Value || val is null)
+                    {
+                        writer.WriteNullValue();
+                    }
+                    else
+                    {
+                        switch (val)
+                        {
+                            case string s:         writer.WriteStringValue(s); break;
+                            case int iv:           writer.WriteNumberValue(iv); break;
+                            case long lv:          writer.WriteNumberValue(lv); break;
+                            case double dv:        writer.WriteNumberValue(dv); break;
+                            case float fv:         writer.WriteNumberValue(fv); break;
+                            case decimal decv:     writer.WriteNumberValue(decv); break;
+                            case bool bv:          writer.WriteBooleanValue(bv); break;
+                            case DateTime dtv:     writer.WriteStringValue(dtv.ToString("o")); break;
+                            case DateTimeOffset dto: writer.WriteStringValue(dto.ToString("o")); break;
+                            case Guid gv:          writer.WriteStringValue(gv.ToString()); break;
+                            case byte[] bytes:     writer.WriteBase64StringValue(bytes); break;
+                            default:               writer.WriteStringValue(val.ToString()); break;
+                        }
+                    }
                 }
-                rows.Add(dict);
+                writer.WriteEndObject();
             }
-            return JsonSerializer.Serialize(rows, JsonOptions);
+            writer.WriteEndArray();
+            writer.Flush();
+
+            return Encoding.UTF8.GetString(ms.ToArray());
         }
 
+        /// <summary>
+        /// Deserializes a JSON string back to a DataTable using JsonDocument,
+        /// avoiding the intermediate List&lt;Dictionary&lt;string, JsonElement&gt;&gt; allocation.
+        /// </summary>
         private static DataTable DeserializeDataTable(string json)
         {
             var dt = new DataTable();
-            var rows = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(json, JsonOptions);
-            if (rows == null || rows.Count == 0) return dt;
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
 
-            // Create columns from first row's keys
-            foreach (var key in rows[0].Keys)
-            {
-                dt.Columns.Add(key);
-            }
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0) return dt;
 
-            // Populate rows
-            foreach (var rowDict in rows)
+            var firstRow = root[0];
+            foreach (var prop in firstRow.EnumerateObject())
+                dt.Columns.Add(prop.Name);
+
+            dt.BeginLoadData();
+            foreach (var rowElement in root.EnumerateArray())
             {
                 var row = dt.NewRow();
-                foreach (var kvp in rowDict)
+                foreach (var prop in rowElement.EnumerateObject())
                 {
-                    row[kvp.Key] = kvp.Value.ValueKind == JsonValueKind.Null
+                    row[prop.Name] = prop.Value.ValueKind == JsonValueKind.Null
                         ? DBNull.Value
-                        : (object)kvp.Value.ToString()!;
+                        : (object)prop.Value.ToString()!;
                 }
                 dt.Rows.Add(row);
             }
+            dt.EndLoadData();
             return dt;
         }
 
@@ -756,7 +831,7 @@ namespace SqlHealthAssessment.Data.Caching
         {
             var result = new MaintenanceResult { StartedAt = DateTime.UtcNow };
 
-            await _writeLock.WaitAsync();
+            await _globalWriteLock.WaitAsync();
             try
             {
                 using var conn = CreateConnection();
@@ -794,7 +869,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             finally
             {
-                _writeLock.Release();
+                _globalWriteLock.Release();
             }
 
             return result;
@@ -808,7 +883,9 @@ namespace SqlHealthAssessment.Data.Caching
         {
             if (!_disposed)
             {
-                _writeLock.Dispose();
+                _globalWriteLock.Dispose();
+                foreach (var sem in _writeLocks.Values) sem.Dispose();
+                _writeLocks.Clear();
                 _disposed = true;
             }
         }

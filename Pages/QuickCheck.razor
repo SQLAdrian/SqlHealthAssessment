@@ -33,24 +33,6 @@
     <div class="qc-layout @(ShowDiagnosticPane ? "with-diag" : "")">
         <!-- Main Content -->
         <div class="qc-main">
-            <!-- Check Mode Selection -->
-            <div class="mode-selection">
-                <div class="mode-card @(CheckMode == "quick" ? "selected" : "")" @onclick='() => SetCheckMode("quick")'>
-                    <span class="mode-icon">⚡</span>
-                    <div class="mode-info">
-                        <strong>Quick Check</strong>
-                        <small>Critical + Warning severity only (@QuickCheckCount checks)</small>
-                    </div>
-                </div>
-                <div class="mode-card @(CheckMode == "full" ? "selected" : "")" @onclick='() => SetCheckMode("full")'>
-                    <span class="mode-icon">🔍</span>
-                    <div class="mode-info">
-                        <strong>Full Check</strong>
-                        <small>Critical + Warning + Info severity (@FullCheckCount checks)</small>
-                    </div>
-                </div>
-            </div>
-
             <!-- Server Selection -->
             <div class="server-selection">
                 <div class="server-selection-header">
@@ -108,7 +90,7 @@
                         }
                         else
                         {
-                            <span>@(CheckMode == "quick" ? "⚡ Run Quick Check" : "🔍 Run Full Check")</span>
+                            <span>🔍 Run Full Check</span>
                         }
                     </button>
 
@@ -139,7 +121,7 @@
             {
                 <!-- Execution Info -->
                 <div class="execution-info">
-                    <span>Executed at @ExecutionTime.ToString("HH:mm:ss") | Duration: @ExecutionDuration | Mode: @(CheckMode == "quick" ? "Quick" : "Full")</span>
+                    <span>Executed at @ExecutionTime.ToString("HH:mm:ss") | Duration: @ExecutionDuration</span>
                     <span>@ServersTested server(s) tested</span>
                 </div>
 
@@ -355,7 +337,6 @@
     private string SelectedCategory = string.Empty;
     private string SelectedServer = string.Empty;
     private string SelectedSeverity = string.Empty;
-    private string CheckMode = "quick"; // "quick" or "full"
     private bool RunAllServers = true;
     private bool ShowDiagnosticPane;
 
@@ -379,12 +360,6 @@
 
     private int EnabledChecksCount => CheckRepo.GetEnabledChecks().Count;
     private int EnabledServersCount => EnabledConnections.SelectMany(c => c.GetServerList()).Count();
-
-    private int QuickCheckCount => CheckRepo.GetChecksBySeverity("Critical", "Warning").Count;
-    private int FullCheckCount => CheckRepo.GetEnabledChecks()
-        .Count(c => c.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
-                    c.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
-                    c.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase));
 
     private List<string> ServersInResults =>
         Results.Select(r => r.InstanceName).Distinct().OrderBy(s => s).ToList();
@@ -457,20 +432,14 @@
         });
 
         // Keep max 500 entries
-        if (DiagLog.Count > 500)
-            DiagLog.RemoveRange(0, DiagLog.Count - 500);
+        //if (DiagLog.Count > 500)
+        //    DiagLog.RemoveRange(0, DiagLog.Count - 500);
 
         // Auto-scroll and refresh UI on the UI thread
         InvokeAsync(StateHasChanged);
     }
 
     private void OnServerSelected() => StateHasChanged();
-
-    private void SetCheckMode(string mode)
-    {
-        CheckMode = mode;
-        StateHasChanged();
-    }
 
     private void SetFilterFromCard(string filter)
     {
@@ -490,7 +459,7 @@
         DiagLog.Clear();
     }
 
-    private void ClearResults()
+    private async Task ClearResults()
     {
         Results = new();
         ServerSummaries = new();
@@ -498,6 +467,9 @@
         HasRun = false;
         StatusMessage = string.Empty;
         SelectedFilter = "all";
+        
+        // Force UI to re-render after clearing
+        await InvokeAsync(StateHasChanged);
     }
 
     private void ToggleExpandResult(string key)
@@ -508,17 +480,18 @@
 
     private async Task RunChecks()
     {
-        ClearResults();
+        await ClearResults();
         IsRunning = true;
         Progress = 0;
         ProgressMessage = "Starting...";
+        await InvokeAsync(StateHasChanged); // force render with cleared results before checks begin
         ExecutionTime = DateTime.Now;
         ServersTested = 0;
 
         var overallStart = DateTime.UtcNow;
 
         // Diagnostic logging
-        AddDiagEntry($"=== {(CheckMode == "quick" ? "Quick" : "Full")} Check started ===", "info");
+        AddDiagEntry("=== Quick Check started ===", "info");
 
         try
         {
@@ -562,18 +535,14 @@
 
             AddDiagEntry($"Targets: {targets.Count} server(s)", "info");
 
-            // Build the severity filter for quick check mode (Critical + Warning)
-            // Full check mode also filters by severity to exclude draft/placeholder checks
-            Func<SqlCheck, bool>? filter = CheckMode == "quick" || CheckMode == "full"
-                ? c => c.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
-                        c.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
-                        c.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase)
-                : null;
+            // Filter to Critical + Warning + Info severity (excludes draft/placeholder checks)
+            Func<SqlCheck, bool> filter = c =>
+                c.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+                c.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
+                c.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase);
 
             // Log check counts
-            var checksToRun = filter != null
-                ? CheckRepo.GetEnabledChecks().Where(filter).ToList()
-                : CheckRepo.GetEnabledChecks();
+            var checksToRun = CheckRepo.GetEnabledChecks().Where(filter).ToList();
             AddDiagEntry($"Checks to execute per server: {checksToRun.Count}", "info");
 
             // Log check breakdown by category
@@ -609,16 +578,7 @@
 
                 try
                 {
-                    CheckExecutionSummary summary;
-
-                    if (filter != null)
-                    {
-                        summary = await CheckExecutor.ExecuteChecksAsync(conn, server, filter);
-                    }
-                    else
-                    {
-                        summary = await CheckExecutor.ExecuteChecksAsync(conn, server);
-                    }
+                    var summary = await CheckExecutor.ExecuteChecksAsync(conn, server, filter);
 
                     ServerSummaries.Add(summary);
 
@@ -658,7 +618,7 @@
 
             if (Results.Count > 0)
             {
-                StatusMessage = $"{(CheckMode == "quick" ? "Quick" : "Full")} check completed: {PassedCount} passed, {FailedCount} failed, {ErrorCount} errors across {ServersTested} server(s)";
+                StatusMessage = $"Quick check completed: {PassedCount} passed, {FailedCount} failed, {ErrorCount} errors across {ServersTested} server(s)";
                 StatusClass = FailedCount > 0 || ErrorCount > 0 ? "warning" : "success";
             }
             else

@@ -23,9 +23,9 @@ namespace SqlHealthAssessment.Data
         /// Retrieves the SQL query text for the given query ID and data source type.
         /// Delegates to DashboardConfigService which reads from dashboard-config.json.
         /// </summary>
-        public string GetQuery(string queryId, string dataSourceType)
+        public string GetQuery(string queryId, string dataSourceType, bool useLiveQueries = false)
         {
-            return _configService.GetQuery(queryId, dataSourceType);
+            return _configService.GetQuery(queryId, useLiveQueries ? "LiveQueries" : dataSourceType);
         }
 
         /// <summary>

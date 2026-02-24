@@ -45,12 +45,6 @@
                   OnServerChanged="OnServerConnectionChanged" />
 
 <div class="dashboard-content">
-    @if (CachingExecutor.IsServingStaleData)
-    {
-        <div class="chart-empty" style="color: #ff9800; background: #2a2000; border: 1px solid #ff9800; padding: 10px; margin: 8px; border-radius: 4px;">
-            &#9888; SQL Server unreachable. Showing cached data from @(CachingExecutor.LastSuccessfulFetch?.ToString("HH:mm:ss") ?? "unknown")
-        </div>
-    }
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
@@ -89,7 +83,7 @@
                     {
                         <DynamicPanel Panel="panel" CheckData="checks" TimezoneOffsetHours="@TimezoneOffsetHours" />
                     }
-                    else if (panel.PanelType == "StatCard" && _statResults.TryGetValue(panel.Id, out var stat))
+                    else if ((panel.PanelType == "StatCard" || panel.PanelType == "DeltaStatCard") && _statResults.TryGetValue(panel.Id, out var stat))
                     {
                         <DynamicPanel Panel="panel" StatData="stat" TimezoneOffsetHours="@TimezoneOffsetHours" />
                     }
@@ -203,6 +197,9 @@
     private PanelDefinition? _maximizedPanel;
     private PanelDefinition? _maximizedPanelExpanded;
 
+    // Per-panel runtime TOP-rows values (keyed by panel ID)
+    private Dictionary<string, int> _panelTopRows = new();
+
     private void MaximizePanel(PanelDefinition panel)
     {
         _maximizedPanel = panel;
@@ -239,7 +236,7 @@
     private void RefreshPanelCaches()
     {
         _enabledPanelsCache = Dashboard?.Panels?.Where(p => p.Enabled).ToList() ?? new List<PanelDefinition>();
-        _statPanelsCache = _enabledPanelsCache.Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "CheckStatus")).OrderBy(p => p.Layout.Order).ToList();
+        _statPanelsCache = _enabledPanelsCache.Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "DeltaStatCard" || p.PanelType == "CheckStatus")).OrderBy(p => p.Layout.Order).ToList();
         _detailsPanelsCache = _enabledPanelsCache.Where(p => p.Layout.Column == 0 && p.PanelType == "TextCard").OrderBy(p => p.Layout.Order).ToList();
         _gaugePanelsCache = _enabledPanelsCache.Where(p => p.PanelType == "BarGauge").OrderBy(p => p.Layout.Order).ToList();
         _chartPanelsCache = _enabledPanelsCache.Where(p => p.PanelType == "TimeSeries" || p.PanelType == "DataGrid" || (p.PanelType != "StatCard" && p.PanelType != "CheckStatus" && p.PanelType != "BarGauge" && p.PanelType != "TextCard" && p.Layout.Column > 0)).OrderBy(p => p.Layout.Order).ToList();
@@ -323,6 +320,11 @@
             return;
         }
 
+        // Log memory before load
+        var process = System.Diagnostics.Process.GetCurrentProcess();
+        var memBefore = process.WorkingSet64 / 1024.0 / 1024.0;
+        System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Memory before load: {memBefore:F1} MB");
+
         IsLoading = true;
         ErrorMessage = null;
         _panelErrors.Clear();
@@ -346,11 +348,12 @@
         var panelsToLoad = _enabledPanelsCache ?? Dashboard.Panels;
 
         var tasks = panelsToLoad.Select(async panel =>
-            await QueryThrottle.ExecuteAsync(async () => 
+            await QueryThrottle.ExecuteAsync(async () =>
             {
                 await LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, cancellationToken);
                 return Task.CompletedTask;
             },
+            isHeavy: panel.PanelType == "TimeSeries",
             cancellationToken));
 
         await Task.WhenAll(tasks);
@@ -362,8 +365,19 @@
         _gridResults = gridResults;
         _checkResults = checkResults;
 
-        // Refresh caches in case panels changed (config reloads will also call RefreshPanelCaches)
         RefreshPanelCaches();
+
+        // Log memory after load
+        process = System.Diagnostics.Process.GetCurrentProcess();
+        var memAfter = process.WorkingSet64 / 1024.0 / 1024.0;
+        System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Memory after load: {memAfter:F1} MB (delta: {memAfter - memBefore:F1} MB)");
+
+        // Force garbage collection to free memory from old data
+        if (memAfter - memBefore > 50) // Only GC if memory increased by more than 50MB
+        {
+            System.Diagnostics.Debug.WriteLine("[DynamicDashboard] Forcing GC collection...");
+            GC.Collect(2, GCCollectionMode.Optimized, false);
+        }
 
         IsLoading = false;
         await InvokeAsync(StateHasChanged);
@@ -388,6 +402,7 @@
                     tsResults[panel.Id] = tsData;
                     break;
                 case "StatCard":
+                case "DeltaStatCard":
                     var dt = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
                     if (dt.Rows.Count > 0)
                     {
@@ -411,7 +426,13 @@
                     break;
                 case "DataGrid":
                 case "TextCard":
-                    var gridData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, null, cancellationToken);
+                    Dictionary<string, object>? gridParams = null;
+                    if (panel.DataGridTopRows > 0)
+                    {
+                        var topRows = _panelTopRows.TryGetValue(panel.Id, out var tr) ? tr : panel.DataGridTopRows;
+                        gridParams = new Dictionary<string, object> { ["@TopRows"] = topRows };
+                    }
+                    var gridData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, gridParams, cancellationToken);
                     gridResults[panel.Id] = gridData;
                     break;
                 case "CheckStatus":
@@ -441,12 +462,43 @@
         if (panel.PanelType == "TimeSeries" && _timeSeriesResults.TryGetValue(panel.Id, out var tsData))
             builder.AddAttribute(2, "TimeSeriesData", tsData);
         else if (panel.PanelType == "DataGrid" && _gridResults.TryGetValue(panel.Id, out var gridData))
+        {
             builder.AddAttribute(3, "GridData", gridData);
+            if (panel.DataGridTopRows > 0)
+            {
+                var topRows = _panelTopRows.TryGetValue(panel.Id, out var t) ? t : panel.DataGridTopRows;
+                builder.AddAttribute(6, "TopRowsValue", (int?)topRows);
+                builder.AddAttribute(7, "OnTopRowsConfigChanged",
+                    EventCallback.Factory.Create<int>(this, val => OnPanelTopRowsChanged(panel.Id, val)));
+            }
+        }
         else if (panel.PanelType == "TextCard" && _gridResults.TryGetValue(panel.Id, out var textData))
             builder.AddAttribute(4, "GridData", textData);
 
         builder.CloseComponent();
     };
+
+    private async Task OnPanelTopRowsChanged(string panelId, int newTopRows)
+    {
+        _panelTopRows[panelId] = newTopRows;
+        // Reload just the one panel that changed
+        var panel = _enabledPanelsCache?.FirstOrDefault(p => p.Id == panelId);
+        if (panel == null) return;
+        var filter = BuildFilter();
+        var topRows = newTopRows;
+        var gridParams = new Dictionary<string, object> { ["@TopRows"] = topRows };
+        try
+        {
+            var newData = await CachingExecutor.ExecuteQueryAsync(panelId, filter, gridParams);
+            if (_gridResults.TryGetValue(panelId, out var old)) old?.Dispose();
+            _gridResults[panelId] = newData;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            _panelErrors[panelId] = $"Panel '{panelId}' error: {ex.Message}";
+        }
+    }
 
     private async Task OnManualRefresh()
     {
@@ -488,10 +540,19 @@
         }
         _gridResults.Clear();
         
+        // Clear all data dictionaries to free memory
+        _timeSeriesResults.Clear();
+        _statResults.Clear();
+        _barGaugeResults.Clear();
+        _checkResults.Clear();
+        _panelErrors.Clear();
+        
+        // Unsubscribe from events without stopping RefreshService (affects all dashboards)
         RefreshService.OnRefresh -= OnAutoRefresh;
-        RefreshService.Stop();
         ConfigService.OnConfigChanged -= OnConfigChanged;
         InstanceSelector.OnInstanceChanged -= OnGlobalInstanceChanged;
+        
+        System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Disposed dashboard '{DashboardId}'. Memory freed.");
     }
 
     private static TimeSeriesPoint MapTimeSeriesPoint(IDataReader reader) => new()

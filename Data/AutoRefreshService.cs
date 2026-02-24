@@ -49,9 +49,8 @@ namespace SqlHealthAssessment.Data
                 _intervalMs = seconds * 1000;
                 if (_isRunning)
                 {
-                    // Atomically stop and restart within the same lock to prevent race conditions
-                    _timer?.Dispose();
-                    _timer = new Timer(_ => OnRefresh?.Invoke(), null, _intervalMs, _intervalMs);
+                    // Reuse the existing timer instance via Change() — avoids a Dispose+new allocation
+                    _timer?.Change(_intervalMs, _intervalMs);
                 }
             }
         }

@@ -46,6 +46,7 @@
     [Parameter] public string YAxisUnit { get; set; } = "";
     [Parameter] public int Height { get; set; } = 250;
     [Parameter] public SeriesType ChartSeriesType { get; set; } = SeriesType.Line;
+    [Parameter] public int MaxDataPoints { get; set; } = 1000;
     
     // Timezone offset in hours from UTC (e.g., 13 for UTC+13 like Pacific/Auckland)
     [Parameter] public double TimezoneOffsetHours { get; set; } = 0;
@@ -57,7 +58,7 @@
     private List<TimeSeriesPoint>? _adjustedDataCache;
     private int _lastOffset;
 
-    // Get data with timezone adjustment applied
+    // Get data with timezone adjustment applied and throttled to max points
     private List<TimeSeriesPoint> GetAdjustedData()
     {
         if (Data == null) return new List<TimeSeriesPoint>();
@@ -68,12 +69,23 @@
         if (_lastOffset != offsetMinutes || _adjustedDataCache == null)
         {
             _lastOffset = offsetMinutes;
-            _adjustedDataCache = Data.Select(p => new TimeSeriesPoint
+            var adjusted = Data.Select(p => new TimeSeriesPoint
             {
                 Time = p.Time == DateTime.MinValue ? DateTime.MinValue : p.Time.AddMinutes(offsetMinutes),
                 Value = p.Value,
                 Series = p.Series
             }).ToList();
+
+            // Throttle data points if exceeds limit
+            if (adjusted.Count > MaxDataPoints)
+            {
+                var step = adjusted.Count / MaxDataPoints;
+                _adjustedDataCache = adjusted.Where((_, i) => i % step == 0).Take(MaxDataPoints).ToList();
+            }
+            else
+            {
+                _adjustedDataCache = adjusted;
+            }
         }
         
         return _adjustedDataCache ?? new List<TimeSeriesPoint>();

@@ -1,35 +1,89 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/about"
 
-
 @inject NavigationManager Navigation
 @inject AutoUpdateService UpdateService
 
 <div class="about-container">
     <h1>About SQL Health Assessment</h1>
-    
+
+    <div class="about-section credits-section">
+        <h2>🙏 Thank You</h2>
+        <p>This application stands on the shoulders of excellent open-source projects. Many thanks to their authors and contributors:</p>
+        <div class="credits-grid">
+            <a class="credit-card" href="https://github.com/marcingminski/sqlwatch" target="_blank">
+                <div class="credit-icon">🗄️</div>
+                <div class="credit-body">
+                    <div class="credit-name">SQLWATCH</div>
+                    <div class="credit-author">Marcin Gminski</div>
+                    <div class="credit-desc">SQL Server monitoring framework — the data foundation this app is built on</div>
+                </div>
+            </a>
+            <a class="credit-card" href="https://github.com/JustinPealing/html-query-plan" target="_blank">
+                <div class="credit-icon">📊</div>
+                <div class="credit-body">
+                    <div class="credit-name">html-query-plan</div>
+                    <div class="credit-author">Justin Pealing</div>
+                    <div class="credit-desc">Interactive graphical SQL Server execution plan viewer</div>
+                </div>
+            </a>
+            <a class="credit-card" href="https://github.com/apexcharts/Blazor-ApexCharts" target="_blank">
+                <div class="credit-icon">📈</div>
+                <div class="credit-body">
+                    <div class="credit-name">Blazor-ApexCharts</div>
+                    <div class="credit-author">ApexCharts Team</div>
+                    <div class="credit-desc">Rich interactive charts and time-series visualisations</div>
+                </div>
+            </a>
+            <a class="credit-card" href="https://github.com/serilog/serilog" target="_blank">
+                <div class="credit-icon">📝</div>
+                <div class="credit-body">
+                    <div class="credit-name">Serilog</div>
+                    <div class="credit-author">Serilog Contributors</div>
+                    <div class="credit-desc">Structured diagnostic logging for .NET</div>
+                </div>
+            </a>
+            <a class="credit-card" href="https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit" target="_blank">
+                <div class="credit-icon">🚒</div>
+                <div class="credit-body">
+                    <div class="credit-name">sp_Blitz</div>
+                    <div class="credit-author">Brent Ozar Unlimited</div>
+                    <div class="credit-desc">SQL Server First Responder Kit — health check scripts</div>
+                </div>
+            </a>
+            <a class="credit-card" href="https://github.com/dotnet/efcore" target="_blank">
+                <div class="credit-icon">💾</div>
+                <div class="credit-body">
+                    <div class="credit-name">Microsoft.Data.Sqlite</div>
+                    <div class="credit-author">Microsoft / .NET Foundation</div>
+                    <div class="credit-desc">Local SQLite caching layer for offline resilience</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
     <div class="about-section">
         <h2>📖 Overview</h2>
         <p>
-            <strong>SQL Health Assessment</strong> is an enterprise-grade SQL Server monitoring and health assessment tool 
-            built with .NET 8, WPF, and Blazor. It provides real-time monitoring, comprehensive health checks, 
-            and performance analysis for multiple SQL Server instances.
+            <strong>SQL Health Assessment</strong> is an enterprise-grade SQL Server monitoring and health assessment tool
+            built with .NET 8, WPF, and Blazor WebView. It provides real-time monitoring, comprehensive health checks,
+            query execution plan analysis, and performance dashboards for multiple SQL Server instances.
         </p>
         <p>
-            <strong>Version:</strong> @UpdateService.GetCurrentVersion() | 
-            <strong>Build:</strong> Self-Contained Optimized | 
-            <strong>Size:</strong> ~100-120 MB
+            <strong>Version:</strong> @UpdateService.GetCurrentVersion() |
+            <strong>Platform:</strong> .NET 8 · WPF · Blazor WebView |
+            <strong>Deployment:</strong> Framework-Dependent Single File
         </p>
     </div>
 
     <div class="about-section">
-        <h2>✨ Enterprise Features</h2>
+        <h2>✨ Features</h2>
         <div class="features-grid">
             <div class="feature-card">
                 <h3>🔒 Security</h3>
                 <ul>
                     <li>DPAPI credential encryption</li>
-                    <li>SQL injection prevention</li>
+                    <li>Parameterised queries (SQL injection prevention)</li>
                     <li>Comprehensive audit logging</li>
                     <li>Security event tracking</li>
                 </ul>
@@ -37,28 +91,52 @@
             <div class="feature-card">
                 <h3>⚡ Performance</h3>
                 <ul>
-                    <li>Configurable query timeouts (60s)</li>
-                    <li>Memory pressure monitoring</li>
-                    <li>Automatic cache eviction</li>
-                    <li>SQLite caching layer</li>
+                    <li>Streaming JSON serialisation (Utf8JsonWriter)</li>
+                    <li>ArrayPool&lt;T&gt; zero-allocation row reading</li>
+                    <li>Per-query concurrent cache write locks</li>
+                    <li>Two-tier query throttle (heavy / light)</li>
+                    <li>Server GC + concurrent GC tuning</li>
+                    <li>Memory pressure monitoring &amp; alerts</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>💾 Caching</h3>
+                <ul>
+                    <li>SQLite WAL-mode persistent cache</li>
+                    <li>Delta-fetch for time-series panels</li>
+                    <li>Automatic stale-data eviction</li>
+                    <li>Offline resilience (serves cached data on SQL failure)</li>
+                    <li>Scheduled VACUUM + optimise maintenance</li>
                 </ul>
             </div>
             <div class="feature-card">
                 <h3>📊 Observability</h3>
                 <ul>
                     <li>Serilog structured logging</li>
-                    <li>Query execution tracking</li>
-                    <li>Performance metrics</li>
-                    <li>30-day log retention</li>
+                    <li>Query execution tracking with timing</li>
+                    <li>30-day rolling log retention</li>
+                    <li>Panel-level error reporting</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>🔍 Query Analysis</h3>
+                <ul>
+                    <li>Interactive graphical execution plan viewer</li>
+                    <li>Plan node tooltips with cost breakdown</li>
+                    <li>Top usage queries by CPU / duration / reads</li>
+                    <li>Long-running query detection</li>
+                    <li>Blocking chain analysis</li>
                 </ul>
             </div>
             <div class="feature-card">
                 <h3>🎨 User Experience</h3>
                 <ul>
-                    <li>Toast notifications</li>
-                    <li>Keyboard shortcuts (Ctrl+1-9)</li>
-                    <li>WCAG 2.1 AA accessibility</li>
                     <li>10 theme options</li>
+                    <li>Toast notifications</li>
+                    <li>Keyboard shortcuts (Ctrl+1–9)</li>
+                    <li>Configurable auto-refresh</li>
+                    <li>Panel maximise / full-screen view</li>
+                    <li>WCAG 2.1 AA accessibility</li>
                 </ul>
             </div>
         </div>
@@ -66,13 +144,13 @@
 
     <div class="about-section">
         <h2>🚀 Deploying SQLWatch Database</h2>
-        
+
         <h3>Option 1: Deploy via Application (Recommended)</h3>
         <ol>
             <li>Go to <strong>Monitoring new server</strong> from the navigation menu</li>
             <li>Enter your SQL Server connection details (server name, authentication method)</li>
             <li>Select the database name (default: SQLWATCH)</li>
-            <li>Click <strong>Deploy</strong> - the application will create the database and tables automatically</li>
+            <li>Click <strong>Deploy</strong> — the application will create the database and tables automatically</li>
             <li>Once deployed, the server will appear in your servers list</li>
         </ol>
 
@@ -85,18 +163,17 @@
         </ol>
 
         <div class="alert alert-info">
-            <strong>Note:</strong> The application requires at least SQL Server 2016 or later for full functionality.
+            <strong>Note:</strong> The application requires SQL Server 2016 or later for full functionality.
         </div>
 
-        <h3>🔐 Trust Server Certificate Option</h3>
+        <h3>🔐 Trust Server Certificate</h3>
         <p>
-            If you encounter SSL/TLS connection errors when deploying to a SQL Server with encryption enabled,
-            you can enable the <strong>Trust Server Certificate</strong> option:
+            If you encounter SSL/TLS connection errors, enable the <strong>Trust Server Certificate</strong> option:
         </p>
         <ul>
-            <li><strong>Via Application Settings</strong>: Go to Settings and enable "Trust Server Certificate"</li>
-            <li><strong>For New Servers</strong>: When adding a server in the Servers page, check "Trust Server Certificate"</li>
-            <li><strong>Connection String</strong>: Add <code>TrustServerCertificate=True</code> to your connection string</li>
+            <li><strong>Via Settings:</strong> Go to Settings and enable "Trust Server Certificate"</li>
+            <li><strong>New Server:</strong> Check "Trust Server Certificate" when adding a server</li>
+            <li><strong>Connection String:</strong> Add <code>TrustServerCertificate=True</code> manually</li>
         </ul>
         <div class="alert alert-warning">
             <strong>Security Note:</strong> Only enable Trust Server Certificate in trusted environments.
@@ -105,36 +182,24 @@
     </div>
 
     <div class="about-section">
-        <h2>⚡ Running Quick Checks</h2>
-        
-        <h3>Quick Check (Ctrl+0)</h3>
-        <p>
-            The Quick Check page provides instant health assessment of your SQL Server instance:
-        </p>
+        <h2>⚡ Quick Check &amp; Audits</h2>
+
+        <h3>Quick Check (Ctrl+Q)</h3>
+        <p>Instant health assessment of your SQL Server instance, covering:</p>
         <ul>
-            <li><strong>CPU Usage</strong> - Current CPU utilization</li>
-            <li><strong>Memory Pressure</strong> - Memory usage analysis</li>
-            <li><strong>Active Sessions</strong> - Currently running queries</li>
-            <li><strong>Blocking Queries</strong> - Identify blocked processes</li>
-            <li><strong>Index Health</strong> - Missing and unused indexes</li>
+            <li>CPU utilisation and memory pressure</li>
+            <li>Active sessions and blocking queries</li>
+            <li>Index health (missing and unused indexes)</li>
+            <li>Configurable severity filtering (Critical / Warning / Info)</li>
         </ul>
-        
-        <h3>Full Audit</h3>
-        <p>
-            For comprehensive analysis, use the Full Audit page which performs:
-        </p>
-        <ul>
-            <li>Configuration review</li>
-            <li>Performance baseline analysis</li>
-            <li>Security assessment</li>
-            <li>Backup verification</li>
-            <li>Index fragmentation analysis</li>
-        </ul>
+
+        <h3>Full Audit (Ctrl+4)</h3>
+        <p>Comprehensive deep-dive analysis including configuration review, performance baseline,
+        security assessment, backup verification, and index fragmentation analysis.</p>
     </div>
 
     <div class="about-section">
         <h2>📊 Available Dashboards</h2>
-        
         <table class="dashboards-table">
             <thead>
                 <tr>
@@ -144,128 +209,101 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>Repository</td>
-                    <td>Overview of all monitored servers</td>
-                    <td>Ctrl+1</td>
-                </tr>
-                <tr>
-                    <td>Instance Overview</td>
-                    <td>Detailed metrics for selected instance</td>
-                    <td>Ctrl+2</td>
-                </tr>
-                <tr>
-                    <td>Long Queries</td>
-                    <td>Queries running longer than threshold</td>
-                    <td>-</td>
-                </tr>
-                <tr>
-                    <td>Wait Events</td>
-                    <td>SQL Server wait statistics</td>
-                    <td>-</td>
-                </tr>
-                <tr>
-                    <td>Blocking Queries</td>
-                    <td>Current blocking chains</td>
-                    <td>-</td>
-                </tr>
-                <tr>
-                    <td>Checks</td>
-                    <td>Health check results</td>
-                    <td>Ctrl+3</td>
-                </tr>
-                <tr>
-                    <td>Quick Check</td>
-                    <td>Fast health assessment</td>
-                    <td>Ctrl+0</td>
-                </tr>
-                <tr>
-                    <td>Full Audit</td>
-                    <td>Comprehensive audit</td>
-                    <td>Ctrl+4</td>
-                </tr>
+                <tr><td>Repository</td><td>Overview of all monitored servers</td><td>Ctrl+1</td></tr>
+                <tr><td>Live Monitor</td><td>Real-time sessions, waits, top queries with execution plan viewer</td><td>Ctrl+2</td></tr>
+                <tr><td>Instance Overview</td><td>Detailed metrics for the selected instance</td><td>Ctrl+3</td></tr>
+                <tr><td>Long Queries</td><td>Queries running longer than threshold</td><td>—</td></tr>
+                <tr><td>Wait Events</td><td>SQL Server wait statistics</td><td>—</td></tr>
+                <tr><td>Blocking Queries</td><td>Current blocking chains</td><td>—</td></tr>
+                <tr><td>Checks</td><td>Health check results</td><td>—</td></tr>
+                <tr><td>Quick Check</td><td>Fast health assessment</td><td>Ctrl+Q</td></tr>
+                <tr><td>Full Audit</td><td>Comprehensive audit</td><td>Ctrl+4</td></tr>
             </tbody>
         </table>
     </div>
 
     <div class="about-section">
         <h2>❓ Frequently Asked Questions</h2>
-        
+
         <details>
             <summary><strong>Q: How do I add a new SQL Server to monitor?</strong></summary>
             <p>
-                Go to <strong>Servers</strong> page (Ctrl+8), click <strong>Add Server</strong>, 
-                enter the connection details, and click Save. You can then deploy the SQLWatch 
+                Go to <strong>Servers</strong> (Ctrl+8), click <strong>Add Server</strong>,
+                enter the connection details, and click Save. You can then deploy the SQLWatch
                 database to start monitoring.
             </p>
         </details>
-        
+
         <details>
             <summary><strong>Q: What permissions does the monitoring user need?</strong></summary>
-            <p>
-                The monitoring user needs at least:
-            </p>
             <ul>
-                <li>VIEW SERVER STATE permission</li>
-                <li>VIEW DATABASE STATE permission</li>
+                <li>VIEW SERVER STATE</li>
+                <li>VIEW DATABASE STATE</li>
                 <li>db_owner role on the SQLWATCH database</li>
             </ul>
         </details>
-        
+
+        <details>
+            <summary><strong>Q: How do I view a query execution plan?</strong></summary>
+            <p>
+                Open the <strong>Live Monitor</strong> dashboard and find the <strong>Top Usage Queries</strong> panel.
+                Rows with a 📋 badge have a cached execution plan. Click any such row to open the
+                interactive graphical plan viewer with node tooltips.
+            </p>
+        </details>
+
         <details>
             <summary><strong>Q: How often is data collected?</strong></summary>
             <p>
-                By default, data is collected every minute. You can adjust this in Settings 
-                or configure SQL Agent jobs for custom collection intervals.
+                By default, data is collected every minute via SQL Agent jobs. The dashboard
+                auto-refresh interval is configurable in Settings.
             </p>
         </details>
-        
+
         <details>
             <summary><strong>Q: Can I monitor multiple servers from one dashboard?</strong></summary>
             <p>
-                Yes! Use the Instance dropdown to select different servers, or select "All Instances" 
-                to see aggregated data across all monitored servers.
+                Yes — use the Instance dropdown to switch between servers, or select "All Instances"
+                for aggregated data across all monitored servers.
             </p>
         </details>
-        
+
+        <details>
+            <summary><strong>Q: Where is data stored?</strong></summary>
+            <p>
+                Application settings: <code>appsettings.json</code> and <code>user-settings.json</code>.<br/>
+                Dashboard cache: <code>SqlHealthAssessment-cache.db</code> (SQLite, WAL mode).<br/>
+                Monitoring data: SQLWATCH database on your SQL Server.<br/>
+                Logs: <code>logs/app-YYYYMMDD.log</code> (30-day rolling).
+            </p>
+        </details>
+
         <details>
             <summary><strong>Q: How do I troubleshoot connection issues?</strong></summary>
             <p>
-                1. Verify SQL Server is running and accessible<br/>
-                2. Check firewall settings<br/>
-                3. Ensure Trust Server Certificate is enabled in Settings (for encrypted connections)<br/>
-                4. Verify authentication method matches your SQL Server configuration
-            </p>
-        </details>
-        
-        <details>
-            <summary><strong>Q: Where is the data stored?</strong></summary>
-            <p>
-                Application settings are stored in appsettings.json and user-settings.json. 
-                Dashboard cache is stored in SQLite (SqlHealthAssessment-cache.db). 
-                Monitoring data is stored in the SQLWATCH database on your SQL Server.
+                1. Verify SQL Server is running and network-accessible<br/>
+                2. Check Windows Firewall / port 1433<br/>
+                3. Enable Trust Server Certificate in Settings for encrypted connections<br/>
+                4. Check <code>logs/app-*.log</code> for detailed error messages
             </p>
         </details>
     </div>
 
     <div class="about-section">
         <h2>⌨️ Keyboard Shortcuts</h2>
-        <p>Press <kbd>?</kbd> to show the shortcuts dialog, or use these quick keys:</p>
+        <p>Press <kbd>?</kbd> to show the shortcuts dialog at any time.</p>
         <table class="shortcuts-table">
             <thead>
-                <tr>
-                    <th>Shortcut</th>
-                    <th>Action</th>
-                </tr>
+                <tr><th>Shortcut</th><th>Action</th></tr>
             </thead>
             <tbody>
-                <tr><td><kbd>Ctrl+1-9</kbd></td><td>Navigate to dashboards 1-9</td></tr>
-                <tr><td><kbd>Ctrl+H</kbd></td><td>Health Page</td></tr>
+                <tr><td><kbd>Ctrl+1–9</kbd></td><td>Navigate to dashboards 1–9</td></tr>
+                <tr><td><kbd>Ctrl+H</kbd></td><td>Health page</td></tr>
                 <tr><td><kbd>Ctrl+Q</kbd></td><td>Quick Check</td></tr>
                 <tr><td><kbd>Ctrl+E</kbd></td><td>Dashboard Editor</td></tr>
                 <tr><td><kbd>Ctrl+S</kbd></td><td>Save (in editor)</td></tr>
                 <tr><td><kbd>?</kbd></td><td>Show shortcuts help</td></tr>
-                <tr><td><kbd>Esc</kbd></td><td>Close dialogs</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Close dialogs / modals</td></tr>
             </tbody>
         </table>
     </div>
@@ -274,29 +312,29 @@
         <h2>🔧 Configuration</h2>
         <p>Application settings are managed through environment-specific configuration files:</p>
         <ul>
-            <li><strong>appsettings.json</strong> - Base configuration</li>
-            <li><strong>appsettings.Development.json</strong> - Development overrides</li>
-            <li><strong>appsettings.Production.json</strong> - Production overrides</li>
+            <li><strong>appsettings.json</strong> — Base configuration (timeouts, cache limits, refresh intervals)</li>
+            <li><strong>appsettings.Development.json</strong> — Development overrides</li>
+            <li><strong>appsettings.Production.json</strong> — Production overrides</li>
+            <li><strong>dashboard-config.json</strong> — Dashboard and panel definitions (editable in-app)</li>
         </ul>
-        <p>Key settings include query timeouts, cache limits, refresh intervals, and logging levels.</p>
     </div>
 
     <div class="about-section">
         <h2>📦 Deployment</h2>
-        <p><strong>Build Type:</strong> Self-Contained Optimized</p>
+        <p><strong>Build Type:</strong> Framework-Dependent Single File — requires .NET 8 Desktop Runtime on the target machine.</p>
         <ul>
-            <li>No .NET Runtime required on target machines</li>
-            <li>Single executable deployment</li>
             <li>ReadyToRun compilation for fast startup</li>
-            <li>Compressed for optimal size (~100-120 MB)</li>
+            <li>Server GC + concurrent GC for optimal throughput</li>
+            <li>Bundled .NET 8 runtime installer included</li>
         </ul>
-        <p>Check for updates in <strong>Settings → Updates</strong></p>
+        <p>Check for updates via <strong>Settings → Updates</strong>.</p>
     </div>
 
     <div class="about-section">
         <h2>📞 Support</h2>
         <p>
-            For issues and feedback, please visit the project repository or contact the development team.
+            For issues and feedback, visit the project repository:
+            <a href="https://github.com/SQLAdrian/SqlHealthAssessment" target="_blank">github.com/SQLAdrian/SqlHealthAssessment</a>
         </p>
     </div>
 
@@ -355,6 +393,63 @@
         margin-top: 20px;
     }
 
+    /* Credits */
+    .credits-section {
+        border-color: var(--accent);
+        border-width: 2px;
+    }
+
+    .credits-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .credit-card {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px;
+        text-decoration: none;
+        color: var(--text-primary);
+        transition: border-color 0.2s, background 0.2s;
+    }
+
+    .credit-card:hover {
+        border-color: var(--accent);
+        background: var(--bg-panel);
+    }
+
+    .credit-icon {
+        font-size: 24px;
+        flex-shrink: 0;
+        line-height: 1;
+        margin-top: 2px;
+    }
+
+    .credit-name {
+        font-weight: 700;
+        color: var(--accent);
+        font-size: 14px;
+    }
+
+    .credit-author {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+    }
+
+    .credit-desc {
+        font-size: 12px;
+        color: var(--text-primary);
+        line-height: 1.4;
+    }
+
+    /* Features */
     .features-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -371,7 +466,7 @@
 
     .feature-card h3 {
         margin-top: 0;
-        font-size: 16px;
+        font-size: 15px;
         color: var(--accent);
     }
 
@@ -447,6 +542,12 @@
         color: white;
     }
 
+    .about-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 10px;
+    }
+
     .btn {
         padding: 12px 24px;
         border: none;
@@ -461,16 +562,16 @@
         color: white;
     }
 
-    .btn-primary:hover {
-        opacity: 0.9;
-    }
+    .btn-primary:hover { opacity: 0.9; }
 
     .btn-secondary {
         background: var(--green);
         color: white;
     }
 
-    .btn-secondary:hover {
-        opacity: 0.9;
+    .btn-secondary:hover { opacity: 0.9; }
+
+    a[href] {
+        color: var(--accent);
     }
 </style>

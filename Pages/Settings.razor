@@ -230,14 +230,6 @@
         }
     </div>
 
-    <div class="settings-group">
-        <h3>Connection Test</h3>
-        <button class="settings-btn" @onclick="TestConnection">Test Connection</button>
-        @if (TestResult != null)
-        {
-            <p style="margin-top: 8px; color: @(TestSuccess ? "var(--green)" : "var(--red)");">@TestResult</p>
-        }
-    </div>
 
     <!-- Alerting Section -->
     <div class="settings-group">
@@ -385,10 +377,12 @@
                     <span class="theme-preview ocean-deep"></span>
                     <span class="theme-name">Ocean Deep</span>
                 </button>
+                
                 <button class="theme-btn @(SelectedTheme == "middleEastern" ? "selected" : "")" @onclick="@(() => ApplyTheme("middleEastern"))">
                     <span class="theme-preview middle-eastern"></span>
                     <span class="theme-name">Arabian Nights</span>
                 </button>
+                
             </div>
         </div>
     </div>
@@ -850,7 +844,4 @@
     }
 }
 
-                <button class="theme-btn @(SelectedTheme == "middleEast" ? "selected" : "")" @onclick="@(() => ApplyTheme("middleEast"))">
-                    <span class="theme-preview middle-east"></span>
-                    <span class="theme-name">Middle East</span>
-                </button>
+      

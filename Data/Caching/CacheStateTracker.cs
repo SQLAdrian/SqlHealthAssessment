@@ -61,8 +61,27 @@ namespace SqlHealthAssessment.Data.Caching
             _lastFilterState[dashboardId] = new FilterState
             {
                 TimeRangeMinutes = timeRangeMinutes,
-                Instance = selectedInstance
+                Instance = selectedInstance,
+                LastUpdated = DateTime.UtcNow
             };
+
+            EvictStaleFilterStates();
+        }
+
+        /// <summary>
+        /// Removes filter state entries for dashboards not visited in the last hour,
+        /// preventing the dictionary from growing unbounded across long sessions.
+        /// </summary>
+        private void EvictStaleFilterStates()
+        {
+            if (_lastFilterState.Count <= 10) return;
+
+            var cutoff = DateTime.UtcNow.AddHours(-1);
+            foreach (var kvp in _lastFilterState)
+            {
+                if (kvp.Value.LastUpdated < cutoff)
+                    _lastFilterState.TryRemove(kvp.Key, out _);
+            }
         }
 
         /// <summary>
@@ -86,6 +105,7 @@ namespace SqlHealthAssessment.Data.Caching
         {
             public int TimeRangeMinutes { get; set; }
             public string Instance { get; set; } = "";
+            public DateTime LastUpdated { get; set; }
         }
     }
 }

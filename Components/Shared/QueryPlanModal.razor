@@ -1,0 +1,76 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@inject IJSRuntime JS
+
+@if (IsVisible)
+{
+    <div class="panel-maximize-overlay" @onclick="Close">
+        <div class="query-plan-modal-content" @onclick:stopPropagation>
+            <div class="panel-maximize-header">
+                <span class="panel-maximize-title">Query Execution Plan</span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    @if (!string.IsNullOrWhiteSpace(QueryText))
+                    {
+                        <button class="panel-maximize-btn" style="position:static;opacity:1;"
+                                @onclick="ToggleQueryText" title="@(_showQueryText ? "Hide Query" : "Show Query")">
+                            SQL
+                        </button>
+                    }
+                    <button class="panel-maximize-close" @onclick="Close" title="Close">✕</button>
+                </div>
+            </div>
+
+            @if (_showQueryText && !string.IsNullOrWhiteSpace(QueryText))
+            {
+                <div class="query-plan-sql-box">
+                    <pre>@QueryText</pre>
+                </div>
+            }
+
+            <div class="query-plan-modal-body">
+                <div id="qp-container"></div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? PlanXml { get; set; }
+    [Parameter] public string? QueryText { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    public bool IsVisible { get; private set; }
+
+    private bool _showQueryText = false;
+
+    public async Task ShowAsync(string xml, string? queryText = null)
+    {
+        PlanXml = xml;
+        QueryText = queryText;
+        _showQueryText = false;
+        IsVisible = true;
+        StateHasChanged();
+        await Task.Delay(50); // allow DOM to render
+        await JS.InvokeVoidAsync("queryPlanInterop.showPlan", "qp-container", xml);
+    }
+
+    public async Task CloseAsync()
+    {
+        IsVisible = false;
+        PlanXml = null;
+        QueryText = null;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("queryPlanInterop.clearPlan", "qp-container");
+    }
+
+    private async Task Close()
+    {
+        await CloseAsync();
+        if (OnClose.HasDelegate)
+            await OnClose.InvokeAsync();
+    }
+
+    private void ToggleQueryText()
+    {
+        _showQueryText = !_showQueryText;
+    }
+}

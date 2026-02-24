@@ -19,6 +19,9 @@ namespace SqlHealthAssessment.Data.Models
         [JsonPropertyName("Database")]
         public string Database { get; set; } = "master";
 
+        [JsonPropertyName("HasSqlWatch")]
+        public bool HasSqlWatch { get; set; } = true;
+
         [JsonPropertyName("UseWindowsAuthentication")]
         public bool UseWindowsAuthentication { get; set; } = true;
 
@@ -87,9 +90,9 @@ namespace SqlHealthAssessment.Data.Models
                 .Where(s => !string.IsNullOrEmpty(s))
                 .ToList();
 
-        public string GetConnectionString(string serverName) => GetConnectionString(serverName, Database);
+        public string GetConnectionString(string serverName) => GetConnectionString(serverName, HasSqlWatch ? "SQLWATCH" : "master");
 
-        public string GetConnectionStringForDashboard(string serverName) => GetConnectionString(serverName, "SQLWATCH");
+        public string GetConnectionStringForDashboard(string serverName) => GetConnectionString(serverName, HasSqlWatch ? "SQLWATCH" : "master");
 
         public string GetConnectionString(string serverName, string database)
         {

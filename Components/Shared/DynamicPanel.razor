@@ -3,6 +3,7 @@
 
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
+@inject IJSRuntime JS
 
 @switch (Panel.PanelType)
 {
@@ -58,7 +59,13 @@
         <DataGrid Title="@Panel.Title"
                   Data="@GridData"
                   IsClickable="@Panel.DataGridIsClickable"
-                  MaxRows="@Panel.DataGridMaxRows" />
+                  MaxRows="@Panel.DataGridMaxRows"
+                  HiddenColumns="@_planHiddenColumns"
+                  PlanIndicatorColumn="@(GridData != null && GridData.Columns.Contains("Plan") ? "Plan" : null)"
+                  OnRowClick="@OnDataGridRowClick"
+                  TopRowsConfig="@(Panel.DataGridTopRows > 0 ? TopRowsValue : null)"
+                  OnTopRowsConfigChanged="@OnTopRowsConfigChanged" />
+        <QueryPlanModal @ref="_queryPlanModal" />
         break;
 
     case "CheckStatus":
@@ -120,6 +127,35 @@
     [Parameter] public List<StatValue>? BarGaugeData { get; set; }
     [Parameter] public DataTable? GridData { get; set; }
     [Parameter] public List<CheckStatus>? CheckData { get; set; }
+    [Parameter] public int? TopRowsValue { get; set; }
+    [Parameter] public EventCallback<int> OnTopRowsConfigChanged { get; set; }
+
+    private QueryPlanModal? _queryPlanModal;
+
+    // Hide [Plan] column in grids that have it — shown via modal on row click instead
+    private static readonly HashSet<string> _planHiddenColumns = new(StringComparer.OrdinalIgnoreCase) { "Plan" };
+
+    private async Task OnDataGridRowClick(DataRow row)
+    {
+        if (_queryPlanModal == null) return;
+        if (!row.Table.Columns.Contains("Plan")) return;
+
+        var xml = row["Plan"]?.ToString();
+        if (string.IsNullOrWhiteSpace(xml)) return;
+
+        // Extract query text if present
+        string? queryText = null;
+        foreach (var candidate in new[] { "query_text", "QueryText", "sql_text", "text", "statement_text" })
+        {
+            if (row.Table.Columns.Contains(candidate) && row[candidate] != DBNull.Value)
+            {
+                queryText = row[candidate]?.ToString();
+                break;
+            }
+        }
+
+        await _queryPlanModal.ShowAsync(xml, queryText);
+    }
 
     private ApexCharts.SeriesType MapChartType()
     {

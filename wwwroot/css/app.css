@@ -1404,6 +1404,122 @@ body {
 }
 
 /* ================================
+   Query Plan Modal
+   ================================ */
+
+.query-plan-modal-content {
+    background: var(--bg-panel);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    
+    width: 95vw;
+    height: 90vh;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+.query-plan-modal-body {
+    flex: 1;
+    overflow: auto;
+    background: #fff !important;
+    padding: 16px;
+    background: var(--bg-panel);
+}
+
+.query-plan-sql-box {
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+    padding: 12px 16px;
+    max-height: 160px;
+    overflow: auto;
+}
+
+.query-plan-sql-box pre {
+    margin: 0;
+    font-size: 12px;
+    color: #111;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Ensure qp.css icons resolve correctly relative to our css/ folder */
+.qp-node .qp-icon {
+    background-image: url('qp_icons.png');
+}
+
+/* Force dark text on all query plan elements (light backgrounds in dark theme) */
+.qp-node,
+.qp-node *,
+.qp-tt,
+.qp-tt *,
+.qp-statement-header,
+.qp-statement-header * {
+    color: #111 !important;
+}
+
+/* Ensure tooltips render above all modal layers */
+.qp-tt {
+    z-index: 9999 !important;
+}
+
+/* TOP rows control in DataGrid title */
+.datagrid-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.datagrid-toprows-control {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: normal;
+    color: var(--text-secondary);
+    margin-left: auto;
+}
+
+.datagrid-toprows-input {
+    width: 52px;
+    padding: 2px 4px;
+    font-size: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+.datagrid-toprows-input::-webkit-inner-spin-button,
+.datagrid-toprows-input::-webkit-outer-spin-button {
+    opacity: 1;
+}
+
+.datagrid-toprows-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Plan indicator column in DataGrid */
+.datagrid-plan-col {
+    width: 36px;
+    min-width: 36px;
+    text-align: center;
+    padding: 4px 6px !important;
+}
+
+.datagrid-plan-badge {
+    font-size: 14px;
+    opacity: 0.85;
+}
+
+tr.clickable:hover .datagrid-plan-badge {
+    opacity: 1;
+}
+
+/* ================================
    Color Threshold Rules Editor
    ================================ */
 
@@ -4131,7 +4247,7 @@ body {
         var(--bg-secondary) 75%
     );
     background-size: 200% 100%;
-    animation: skeleton-loading 1.5s ease-in-out infinite;
+    animation: skeleton-loading 1.0s ease-in-out infinite;
     border-radius: 4px;
 }
 

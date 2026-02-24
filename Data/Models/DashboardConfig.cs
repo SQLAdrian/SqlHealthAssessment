@@ -106,6 +106,12 @@ namespace SqlHealthAssessment.Data.Models
         [JsonPropertyName("dataGridMaxRows")]
         public int DataGridMaxRows { get; set; } = 500;
 
+        /// <summary>
+        /// When > 0, the query uses a @TopRows parameter and the panel header shows an editable count.
+        /// </summary>
+        [JsonPropertyName("dataGridTopRows")]
+        public int DataGridTopRows { get; set; } = 0;
+
         /// <summary>Evaluates colorThresholds rules in order, returns last matching color. Falls back to default.</summary>
         public string GetThresholdColor(double value, string defaultColor = "#2196f3")
         {
@@ -195,7 +201,7 @@ namespace SqlHealthAssessment.Data.Models
         [JsonPropertyName("sqlServer")]
         public string SqlServer { get; set; } = "";
 
-        [JsonPropertyName("sqlite")]
-        public string Sqlite { get; set; } = "";
+        [JsonPropertyName("liveQueries")]
+        public string LiveQueries { get; set; } = "";
     }
 }
