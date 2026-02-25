@@ -90,20 +90,22 @@
 
     @* Main content area *@
     <div class="sessions-content">
-        @* Bubble view area *@
+        @* Bubble view - top *@
         <div class="sessions-bubble-area">
-            <SessionLegend />
             <SessionBubbleView Sessions="@FilteredSessions"
                                OnSessionClicked="OnSessionClicked"
                                SelectedSpid="@SelectedSession?.SPID" />
         </div>
 
-        @* Detail panel - always rendered with fixed width to prevent layout shift *@
-        <div class="sessions-detail-container @((SelectedSession != null) ? "visible" : "hidden")">
-            @if (SelectedSession != null)
-            {
-                <SessionDetailPanel Session="@SelectedSession" OnClose="CloseDetail" />
-            }
+        @* Bottom row: Legend + Detail panel *@
+        <div class="sessions-bottom-area">
+            <SessionLegend />
+            <div class="sessions-detail-container @((SelectedSession != null) ? "visible" : "hidden")">
+                @if (SelectedSession != null)
+                {
+                    <SessionDetailPanel Session="@SelectedSession" OnClose="CloseDetail" />
+                }
+            </div>
         </div>
     </div>
 </div>

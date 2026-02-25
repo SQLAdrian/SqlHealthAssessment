@@ -3645,36 +3645,15 @@ tr.clickable:hover .datagrid-plan-badge {
 
 .sessions-content {
     display: flex;
+    flex-direction: column;
     flex: 1;
-    overflow: hidden;
+    overflow: auto;
 }
 
 .sessions-bubble-area {
-    flex: 1;
-    min-width: 0;
-    position: relative;
-    overflow: auto;
-    padding: 8px;
-}
-
-/* Detail container - fixed width to prevent layout shift */
-.sessions-detail-container {
-    width: 380px;
-    flex-shrink: 0;
-    transition: width 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+    flex: 0 0 auto;
     overflow: hidden;
-}
-
-.sessions-detail-container.hidden {
-    width: 0;
-    opacity: 0;
-    margin-right: 0;
-}
-
-.sessions-detail-container.visible {
-    width: 380px;
-    opacity: 1;
-    margin-right: 0;
+    padding: 8px;
 }
 
 /* ── Bubble View Container ── */
@@ -3808,15 +3787,11 @@ tr.clickable:hover .datagrid-plan-badge {
 /* ── Session Legend ── */
 
 .session-legend {
-    position: absolute;
-    top: 16px;
-    left: 16px;
-    z-index: 10;
+    flex-shrink: 0;
+    align-self: flex-start;
     background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    max-width: 260px;
+    border-right: 1px solid var(--border);
+    width: 260px;
     overflow: hidden;
 }
 
@@ -4623,3 +4598,134 @@ tr.clickable:hover .datagrid-plan-badge {
 .preview-panel-type.datagrid { background: #9c27b0; color: white; }
 .preview-panel-type.checkstatus { background: #f44336; color: white; }
 .preview-panel-type.textcard { background: #607d8b; color: white; }
+
+/* === Sessions Page === */
+.sessions-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.server-context-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.server-context-icon { font-size: 16px; }
+.server-context-label { color: var(--text-secondary); }
+.server-context-name { color: var(--accent); font-weight: 600; }
+.server-context-db { color: var(--text-muted); }
+
+.sessions-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.sessions-filter-btn {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+}
+
+.sessions-filter-btn:hover { background: var(--bg-hover); }
+.sessions-filter-btn.active { background: var(--accent)33; border-color: var(--accent); color: var(--accent); }
+
+.sessions-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: auto;
+}
+
+.sessions-bubble-area {
+    flex: 0 0 auto;
+    overflow: hidden;
+    background: var(--bg-panel);
+}
+
+.sessions-bottom-area {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 180px;
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.bubble-view-container {
+    display: block;
+}
+
+.bubble-svg {
+    display: block;
+}
+
+.sessions-detail-container {
+    width: 400px;
+    min-width: 400px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
+}
+
+.sessions-detail-container.hidden {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.sessions-detail-container.visible {
+    width: 400px;
+    min-width: 400px;
+    opacity: 1;
+}
+
+.blocking-line {
+    stroke: #f44336;
+    stroke-width: 2;
+    stroke-dasharray: 5,5;
+    opacity: 0.6;
+}
+
+.session-bubble:hover {
+    transform: scale(1.1);
+}
+
+.session-bubble.selected {
+    transform: scale(1.15);
+}
+
+.bubble-circle {
+    transition: all 0.3s ease;
+}
+
+.bubble-label {
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.activity-dot {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
