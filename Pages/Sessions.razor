@@ -90,16 +90,20 @@
 
     @* Main content area *@
     <div class="sessions-content">
-        @* Bubble view - top *@
-        <div class="sessions-bubble-area">
-            <SessionBubbleView Sessions="@FilteredSessions"
-                               OnSessionClicked="OnSessionClicked"
-                               SelectedSpid="@SelectedSession?.SPID" />
-        </div>
+        <div class="sessions-main-row">
+            @* Bubble view *@
+            <div class="sessions-bubble-area">
+                <SessionBubbleView Sessions="@FilteredSessions"
+                                   OnSessionClicked="OnSessionClicked"
+                                   SelectedSpid="@SelectedSession?.SPID" />
+                <div class="sessions-bubble-footer">
+                    <button class="sessions-filter-btn" @onclick="() => ShowLegend = true">
+                        📖 Show Legend
+                    </button>
+                </div>
+            </div>
 
-        @* Bottom row: Legend + Detail panel *@
-        <div class="sessions-bottom-area">
-            <SessionLegend />
+            @* Detail panel *@
             <div class="sessions-detail-container @((SelectedSession != null) ? "visible" : "hidden")">
                 @if (SelectedSession != null)
                 {
@@ -109,6 +113,16 @@
         </div>
     </div>
 </div>
+
+@* Legend modal overlay *@
+@if (ShowLegend)
+{
+    <div class="session-legend-overlay" @onclick="() => ShowLegend = false">
+        <div @onclick:stopPropagation="true">
+            <SessionLegend OnClose="() => ShowLegend = false" />
+        </div>
+    </div>
+}
 
 @code {
     private List<SessionInfo> AllSessions = new();
@@ -122,6 +136,7 @@
 
     private bool HideSleeping = false;
     private bool ShowOnlyBlocked = false;
+    private bool ShowLegend = false;
 
     private bool AutoRefresh = true;
     private int RefreshIntervalSeconds = 5;

@@ -8,12 +8,11 @@
     }
     else
     {
-        <svg width="100%" height="@SvgHeight" viewBox="0 0 @SvgWidth @SvgHeight"
-             xmlns="http://www.w3.org/2000/svg" class="bubble-svg">
+        <svg width="100%" height="100%" viewBox="0 0 @SvgWidth @SvgHeight"
+             xmlns="http://www.w3.org/2000/svg" class="bubble-svg"
+             preserveAspectRatio="xMidYMid meet">
 
-            @* Background gradient *@
             <defs>
-                @* Modern sleek gradients *@
                 <radialGradient id="bubbleGradNormal" cx="35%" cy="25%" r="70%">
                     <stop offset="0%" stop-color="#64b5f6" />
                     <stop offset="50%" stop-color="#1976d2" />
@@ -29,7 +28,6 @@
                     <stop offset="50%" stop-color="#388e3c" />
                     <stop offset="100%" stop-color="#1b5e20" />
                 </radialGradient>
-                @* Glow effect for selected *@
                 <filter id="glowSelected" x="-50%" y="-50%" width="200%" height="200%">
                     <feGaussianBlur stdDeviation="6" result="coloredBlur" />
                     <feMerge>
@@ -37,11 +35,9 @@
                         <feMergeNode in="SourceGraphic" />
                     </feMerge>
                 </filter>
-                @* Drop shadow *@
                 <filter id="bubbleShadow" x="-20%" y="-20%" width="140%" height="140%">
                     <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.35" />
                 </filter>
-                @* Inner glow for 3D effect *@
                 <radialGradient id="innerGlow" cx="50%" cy="50%" r="50%">
                     <stop offset="0%" stop-color="#fff" stop-opacity="0.3" />
                     <stop offset="100%" stop-color="#fff" stop-opacity="0" />
@@ -62,7 +58,7 @@
                 }
             }
 
-            @* Bubbles with animation *@
+            @* Bubbles *@
             @foreach (var session in Sessions)
             {
                 var pos = GetPosition(session.SPID);
@@ -74,22 +70,19 @@
 
                 <g class="session-bubble @(isSelected ? "selected" : "") @(session.IsActive ? "active" : "")"
                    @onclick="() => OnBubbleClicked(session)"
-                   style="cursor: pointer; transition: transform 0.3s ease-out;">
+                   style="cursor: pointer;">
 
-                    @* Main circle with shadow *@
                     <circle cx="@pos.x" cy="@pos.y" r="@radius"
-                            fill="@fill" 
+                            fill="@fill"
                             stroke="@strokeColor" stroke-width="@strokeWidth"
                             filter="@(isSelected ? "url(#glowSelected)" : "url(#bubbleShadow)")"
                             class="bubble-circle" />
 
-                    @* Inner highlight *@
-                    <circle cx="@(pos.x - radius * 0.25)" cy="@(pos.y - radius * 0.25)" 
-                            r="@(radius * 0.4)" 
-                            fill="url(#innerGlow)" 
+                    <circle cx="@(pos.x - radius * 0.25)" cy="@(pos.y - radius * 0.25)"
+                            r="@(radius * 0.4)"
+                            fill="url(#innerGlow)"
                             class="bubble-highlight" />
 
-                    @* SPID label *@
                     <text x="@pos.x" y="@(pos.y + 1)"
                           text-anchor="middle" dominant-baseline="central"
                           fill="white" font-size="@GetFontSize(radius)"
@@ -99,10 +92,9 @@
                         @session.SPID
                     </text>
 
-                    @* Activity indicator *@
                     @if (session.ActivityScore > 100)
                     {
-                        <circle cx="@(pos.x + radius * 0.6)" cy="@(pos.y - radius * 0.6)" 
+                        <circle cx="@(pos.x + radius * 0.6)" cy="@(pos.y - radius * 0.6)"
                                 r="4" fill="#4caf50" class="activity-dot" />
                     }
                 </g>
@@ -116,30 +108,21 @@
     [Parameter] public EventCallback<SessionInfo> OnSessionClicked { get; set; }
     [Parameter] public int? SelectedSpid { get; set; }
 
-    private int SvgWidth = 900;
-    private int SvgHeight = 500;
-    private const double GoldenAngle = 2.39996322972865; // 137.508 degrees in radians
+    private int SvgWidth = 1200;
+    private int SvgHeight = 700;
+    private const double GoldenAngle = 2.39996322972865;
 
-    // Cache positions so blocking lines can look up coordinates
     private Dictionary<int, (double x, double y)> _positionCache = new();
-    private Random _random = new();
-    private int _refreshCount = 0;
 
     protected override void OnParametersSet()
     {
-        // Rebuild position cache whenever sessions change
         _positionCache.Clear();
         if (Sessions == null || Sessions.Count == 0) return;
 
-        // Increment refresh count to add subtle movement
-        _refreshCount++;
-        
-        // Sort: biggest (most active) sessions in the center
         var sorted = Sessions.OrderByDescending(s => s.ActivityScore).ToList();
         var centerX = SvgWidth / 2.0;
         var centerY = SvgHeight / 2.0;
 
-        // Spiral placement using golden angle
         double angle = 0;
         double spiralSpacing = 3.5;
 
@@ -150,22 +133,14 @@
 
             if (i == 0)
             {
-                // First (most active) session goes dead center
                 _positionCache[session.SPID] = (centerX, centerY);
             }
             else
             {
-                // Spiral out from center
-                var dist = spiralSpacing * Math.Sqrt(i) * (radius + 10);
+                var dist = spiralSpacing * Math.Sqrt(i) * (radius + 15);
                 var x = centerX + dist * Math.Cos(angle);
                 var y = centerY + dist * Math.Sin(angle);
 
-                // Add subtle random offset for movement effect (only 2-3 pixels)
-                var offsetSeed = (session.SPID * 7 + _refreshCount) % 20 - 10;
-                x += offsetSeed * 0.3;
-                y += (offsetSeed * 13) % 17 * 0.2;
-
-                // Clamp to SVG bounds with padding
                 var pad = radius + 5;
                 x = Math.Clamp(x, pad, SvgWidth - pad);
                 y = Math.Clamp(y, pad, SvgHeight - pad);
@@ -184,7 +159,6 @@
     private double GetRadius(SessionInfo session)
     {
         var activity = session.ActivityScore;
-        // Log-scale: minimum 14px radius, maximum 45px
         if (activity <= 0) return 14;
         return Math.Clamp(14 + Math.Log10(activity + 1) * 6, 14, 45);
     }
@@ -201,18 +175,18 @@
     private string GetStrokeColor(SessionInfo session)
     {
         if (session.IsIdleInTransaction)
-            return "#ff0000"; // Dangerous: idle in transaction
+            return "#ff0000";
         if (session.OpenTransactionCount > 0)
-            return "#ffd700"; // In transaction (gold)
+            return "#ffd700";
         return "none";
     }
 
     private int GetStrokeWidth(SessionInfo session)
     {
         if (session.IsIdleInTransaction)
-            return 4; // Thick red border = dangerous
+            return 4;
         if (session.OpenTransactionCount > 0)
-            return 2; // Thin gold border = active in txn
+            return 2;
         return 0;
     }
 
