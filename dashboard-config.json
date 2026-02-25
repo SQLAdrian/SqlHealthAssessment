@@ -30,16 +30,17 @@
           "statThresholdKey": null,
           "barGaugeThresholdKey": null,
           "barGaugeUnitSuffix": "",
-          "valueFormat": "",
+          "valueFormat": "N0",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.process_memory",
           "title": "SQL Memory",
           "description": null,
-          "enabled": true,
+          "enabled": false,
           "panelType": "StatCard",
           "chartType": "Line",
           "height": 250,
@@ -79,13 +80,14 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.schedulers",
           "title": "Pending Queue",
           "description": null,
-          "enabled": true,
+          "enabled": false,
           "panelType": "StatCard",
           "chartType": "Line",
           "height": 250,
@@ -119,13 +121,14 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.instance_count",
           "title": "Instances",
           "description": null,
-          "enabled": true,
+          "enabled": false,
           "panelType": "StatCard",
           "chartType": "Line",
           "height": 250,
@@ -146,7 +149,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.details",
@@ -173,7 +177,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repository.text_server_CPU_OS",
@@ -200,7 +205,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repository.text_servername",
@@ -217,7 +223,7 @@
             "spanColumns": true
           },
           "query": {
-            "sqlServer": "\nSELECT \nServerName\n, Edition\n, \u0027$ \u0027 \u002B CONVERT(VARCHAR(25),CONVERT(INT,CONVERT(MONEY,\nCASE Edition \nWHEN \u0027Business Intelligence\u0027\nTHEN 5434  * VirtualCPUs / 2\n  \nWHEN \u0027Standard\u0027\nTHEN 5434  * VirtualCPUs / 2/ 3.832\n  \nWHEN \u0027Enterprise\u0027\nTHEN 5434  * VirtualCPUs / 2\nELSE  0\nEND)))\n[licensingRetailUSD]\n, [Version]\n, BuildNr\n\n\nFROM (\nSELECT \n    @@SERVERNAME AS ServerName,\n    --SERVERPROPERTY(\u0027Edition\u0027) AS Edition,\n    CASE ServerProperty(\u0027EngineEdition\u0027)\n \nWHEN 1  THEN \u0027Desktop\u0027\nWHEN 2  THEN \n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Busi%\u0027 THEN \u0027Business Intelligence\u0027\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Developer%\u0027 THEN \u0027Developer\u0027\n    ELSE \u0027Standard\u0027-- (For Standard, Standard Developer, Web, and Business Intelligence.)\n    END\nWHEN 3  THEN \n-- (For Enterprise, Enterprise Developer, Developer, and Evaluation editions.)\n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Developer%\u0027 THEN \u0027Developer\u0027\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Evaluation%\u0027 THEN \u0027Evaluation\u0027\n    ELSE \u0027Enterprise\u0027\n    END\n\nWHEN 4  THEN \u0027Express\u0027-- (For Express, Express with Tools, and Express with Advanced Services)\nWHEN 5  THEN \u0027SQL Database\u0027\nWHEN 6  THEN \u0027Azure Synapse\u0027-- Analytics\nWHEN 8  THEN \u0027Azure SQL MI\u0027\nWHEN 9  THEN \u0027Azure SQL Edge\u0027-- (For all editions of Azure SQL Edge)\nWHEN 11 THEN  \u0027Azure Synapse serverless\u0027-- SQL pool, or Microsoft Fabric\nWHEN 12 THEN  \u0027Microsoft Fabric\u0027-- SQL database in Microsoft Fabric.\n    END AS Edition\n    \n\n    ,\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS VirtualCPUs,\n    (SELECT socket_count FROM sys.dm_os_sys_info) AS Sockets,\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN \u0027VM\u0027 ELSE \u0027Physical\u0027 END AS VMType,\n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS MemoryGB,\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS SqlAllocated,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS UsedBySql,\n    \u0027\u0027 AS MemoryState,\n    CASE \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u00278%\u0027    THEN \u00272000\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u00279%\u0027    THEN \u00272005\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002710.0%\u0027 THEN \u00272008\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002710.5%\u0027 THEN \u00272008 R2\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002711%\u0027   THEN \u00272012\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002712%\u0027   THEN \u00272014\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002713%\u0027   THEN \u00272016\u0027     \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002714%\u0027   THEN \u00272017\u0027 \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002715%\u0027   THEN \u00272019\u0027 \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002716%\u0027   THEN \u00272022\u0027 \n     ELSE \u0027unknown\u0027\n  END \n    --@@VERSION \n    AS [Version],\n    SERVERPROPERTY(\u0027ProductVersion\u0027) AS BuildNr,\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS OS,\n    CASE WHEN SERVERPROPERTY(\u0027IsHadrEnabled\u0027) = 1 THEN \u0027Yes\u0027 ELSE \u0027No\u0027 END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = \u0027sa\u0027 AND is_disabled = 0) THEN \u0027Enabled\u0027 ELSE \u0027Disabled\u0027 END AS SA,\n    \u0027\u0027 AS [Level]\n) T1\n   ",
+            "sqlServer": "\nSELECT \nServerName\n, Edition\n, \u0027$ \u0027 \u002B CONVERT(VARCHAR(25),CONVERT(INT,CONVERT(MONEY,\nCASE Edition \nWHEN \u0027Business Intelligence\u0027\nTHEN 5434  * VirtualCPUs / 2\n  \nWHEN \u0027Standard\u0027\nTHEN 5434  * VirtualCPUs / 2/ 3.832\n  \nWHEN \u0027Enterprise\u0027\nTHEN 5434  * VirtualCPUs / 2\nELSE  0\nEND)))\n[licensingRetailUSD]\n, [Version]\n, BuildNr\n, HADR\n, SA [sa state]\n\nFROM (\nSELECT \n    @@SERVERNAME AS ServerName,\n    --SERVERPROPERTY(\u0027Edition\u0027) AS Edition,\n    CASE ServerProperty(\u0027EngineEdition\u0027)\n \nWHEN 1  THEN \u0027Desktop\u0027\nWHEN 2  THEN \n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Busi%\u0027 THEN \u0027Business Intelligence\u0027\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Developer%\u0027 THEN \u0027Developer\u0027\n    ELSE \u0027Standard\u0027-- (For Standard, Standard Developer, Web, and Business Intelligence.)\n    END\nWHEN 3  THEN \n-- (For Enterprise, Enterprise Developer, Developer, and Evaluation editions.)\n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Developer%\u0027 THEN \u0027Developer\u0027\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY(\u0027Edition\u0027)) LIKE \u0027%Evaluation%\u0027 THEN \u0027Evaluation\u0027\n    ELSE \u0027Enterprise\u0027\n    END\n\nWHEN 4  THEN \u0027Express\u0027-- (For Express, Express with Tools, and Express with Advanced Services)\nWHEN 5  THEN \u0027SQL Database\u0027\nWHEN 6  THEN \u0027Azure Synapse\u0027-- Analytics\nWHEN 8  THEN \u0027Azure SQL MI\u0027\nWHEN 9  THEN \u0027Azure SQL Edge\u0027-- (For all editions of Azure SQL Edge)\nWHEN 11 THEN  \u0027Azure Synapse serverless\u0027-- SQL pool, or Microsoft Fabric\nWHEN 12 THEN  \u0027Microsoft Fabric\u0027-- SQL database in Microsoft Fabric.\n    END AS Edition\n    \n\n    ,\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS VirtualCPUs,\n    (SELECT socket_count FROM sys.dm_os_sys_info) AS Sockets,\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN \u0027VM\u0027 ELSE \u0027Physical\u0027 END AS VMType,\n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS MemoryGB,\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS SqlAllocated,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS UsedBySql,\n    \u0027\u0027 AS MemoryState,\n    CASE \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u00278%\u0027    THEN \u00272000\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u00279%\u0027    THEN \u00272005\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002710.0%\u0027 THEN \u00272008\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002710.5%\u0027 THEN \u00272008 R2\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002711%\u0027   THEN \u00272012\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002712%\u0027   THEN \u00272014\u0027\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002713%\u0027   THEN \u00272016\u0027     \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002714%\u0027   THEN \u00272017\u0027 \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002715%\u0027   THEN \u00272019\u0027 \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY (\u0027productversion\u0027)) like \u002716%\u0027   THEN \u00272022\u0027 \n     ELSE \u0027unknown\u0027\n  END \n    --@@VERSION \n    AS [Version],\n    SERVERPROPERTY(\u0027ProductVersion\u0027) AS BuildNr,\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS OS,\n    CASE WHEN SERVERPROPERTY(\u0027IsHadrEnabled\u0027) = 1 THEN \u0027Yes\u0027 ELSE \u0027No\u0027 END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = \u0027sa\u0027 AND is_disabled = 0) THEN \u0027Enabled\u0027 ELSE \u0027Disabled\u0027 END AS SA,\n    \u0027\u0027 AS [Level]\n) T1\n   \n\n ",
             "liveQueries": ""
           },
           "statUnit": "",
@@ -227,7 +233,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 5
+          "dataGridMaxRows": 5,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.ks1",
@@ -244,7 +251,7 @@
             "spanColumns": false
           },
           "query": {
-            "sqlServer": "\nselect TOP 1\n --time = pc.snapshot_time\n--,\n\u0027CPU usage %\u0027 = sum(case \n when 1=1 and mpc.counter_name = \u0027Processor Time %\u0027 then pc.[cntr_value_calculated] \n --when serverproperty(\u0027EngineEdition\u0027) = 3 and mpc.counter_name = \u0027CPU usage %\u0027 then pc.[cntr_value_calculated] \n --when serverproperty(\u0027EngineEdition\u0027) \u003C\u003E 3 and mpc.counter_name = \u0027Processor Time %\u0027 then pc.[cntr_value_calculated]\n else null end)\n, \u0027Batch Requests/sec\u0027 =CONVERT(INT, avg(case when mpc.counter_name = \u0027Batch Requests/sec\u0027 then pc.[cntr_value_calculated] else null end))\n\n, \u0027Logins/sec\u0027 = CONVERT(INT,avg(case when mpc.counter_name = \u0027Logins/sec\u0027 then pc.[cntr_value_calculated] else null end))\n, \u0027Transactions/sec\u0027 = CONVERT(INT,sum(case when mpc.counter_name = \u0027Transactions/sec\u0027 and pc.instance_name not in (\u0027_Total\u0027,\u0027mssqlsystemresource\u0027) then pc.[cntr_value_calculated] else null end))\n, \u0027User Connections\u0027 = avg(case when mpc.counter_name = \u0027User Connections\u0027 then pc.[cntr_value_calculated] else null end)\n, \u0027SQL Compilations/sec\u0027 = CONVERT(INT,avg(case when mpc.counter_name = \u0027SQL Compilations/sec\u0027 then pc.[cntr_value_calculated] else null end))\n, \u0027Availability Group Bytes\u0027 = avg(case when mpc.counter_name in (\u0027Bytes Sent to Replica/sec\u0027,\u0027Bytes Received from Replica/sec\u0027) then pc.[cntr_value_calculated] else null end)\n \nfrom [dbo].[sqlwatch_logger_perf_os_performance_counters] pc\n\ninner join [dbo].[sqlwatch_meta_performance_counter] mpc\non pc.sql_instance = mpc.sql_instance\nand pc.performance_counter_id = mpc.performance_counter_id\n\nWHERE 1=1--snapshot_time BETWEEN @TimeFrom AND @TimeTo\n\nand pc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nand mpc.counter_name in (\u0027CPU usage %\u0027\n ,\u0027Batch Requests/sec\u0027\n ,\u0027Logins/sec\u0027\n ,\u0027Transactions/sec\u0027\n ,\u0027User Connections\u0027\n ,\u0027SQL Compilations/sec\u0027\n ,\u0027Bytes Sent to Replica/sec\u0027\n ,\u0027Bytes Received from Replica/sec\u0027\n ,\u0027Processor Time %\u0027\n ,\u0027% Processor Time\u0027\n \n ,\u0027Connection Memory (KB)\u0027\n ,\u0027Optimizer Memory (KB)\u0027\n ,\u0027SQL Cache Memory (KB)\u0027\n ,\u0027Total Server Memory (KB)\u0027\n ,\u0027Stolen Server Memory (KB)\u0027\n , \u0027Target Server Memory (KB)\u0027\n )\n\ngroup by pc.snapshot_time\norder by pc.snapshot_time DESC",
+            "sqlServer": "\nselect TOP 1\n --time = pc.snapshot_time\n--,\n\u0027CPU usage %\u0027 = sum(case \n when 1=1 and mpc.counter_name = \u0027Processor Time %\u0027 then pc.[cntr_value_calculated] \n --when serverproperty(\u0027EngineEdition\u0027) = 3 and mpc.counter_name = \u0027CPU usage %\u0027 then pc.[cntr_value_calculated] \n --when serverproperty(\u0027EngineEdition\u0027) \u003C\u003E 3 and mpc.counter_name = \u0027Processor Time %\u0027 then pc.[cntr_value_calculated]\n else null end)\n, \u0027Batch Requests/sec\u0027 =CONVERT(INT, avg(case when mpc.counter_name = \u0027Batch Requests/sec\u0027 then pc.[cntr_value_calculated] else null end))\n\n, \u0027Logins/sec\u0027 = CONVERT(INT,avg(case when mpc.counter_name = \u0027Logins/sec\u0027 then pc.[cntr_value_calculated] else null end))\n, \u0027Transactions/sec\u0027 = CONVERT(INT,sum(case when mpc.counter_name = \u0027Transactions/sec\u0027 and pc.instance_name not in (\u0027_Total\u0027,\u0027mssqlsystemresource\u0027) then pc.[cntr_value_calculated] else null end))\n, \u0027User Connections\u0027 = avg(case when mpc.counter_name = \u0027User Connections\u0027 then pc.[cntr_value_calculated] else null end)\n, \u0027SQL Compilations/sec\u0027 = CONVERT(INT,avg(case when mpc.counter_name = \u0027SQL Compilations/sec\u0027 then pc.[cntr_value_calculated] else null end))\n, \u0027Availability Group Bytes\u0027 = avg(case when mpc.counter_name in (\u0027Bytes Sent to Replica/sec\u0027,\u0027Bytes Received from Replica/sec\u0027) then pc.[cntr_value_calculated] else null end)\n ,\u0027Connection Memory (MB)\u0027\t\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Connection Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\telse null end))\n ,\u0027Optimizer Memory (MB)\u0027\t\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Optimizer Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,\u0027SQL Cache Memory (MB)\u0027\t\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027SQL Cache Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,\u0027Total Server Memory (MB)\u0027\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Total Server Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024\telse null end))\n ,\u0027Stolen Server Memory (MB)\u0027\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Stolen Server Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024 else null end))\n ,\u0027Target Server Memory (MB)\u0027\t= CONVERT(INT,avg(case when mpc.counter_name = \u0027Target Server Memory (KB)\u0027 then pc.[cntr_value_calculated]/1024 else null end))\nfrom [dbo].[sqlwatch_logger_perf_os_performance_counters] pc\n\ninner join [dbo].[sqlwatch_meta_performance_counter] mpc\non pc.sql_instance = mpc.sql_instance\nand pc.performance_counter_id = mpc.performance_counter_id\n\nWHERE 1=1--snapshot_time BETWEEN @TimeFrom AND @TimeTo\n\nand pc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, \u0027,\u0027))\nand mpc.counter_name in (\u0027CPU usage %\u0027\n ,\u0027Batch Requests/sec\u0027\n ,\u0027Logins/sec\u0027\n ,\u0027Transactions/sec\u0027\n ,\u0027User Connections\u0027\n ,\u0027SQL Compilations/sec\u0027\n ,\u0027Bytes Sent to Replica/sec\u0027\n ,\u0027Bytes Received from Replica/sec\u0027\n ,\u0027Processor Time %\u0027\n ,\u0027% Processor Time\u0027\n \n ,\u0027Connection Memory (KB)\u0027\n ,\u0027Optimizer Memory (KB)\u0027\n ,\u0027SQL Cache Memory (KB)\u0027\n ,\u0027Total Server Memory (KB)\u0027\n ,\u0027Stolen Server Memory (KB)\u0027\n , \u0027Target Server Memory (KB)\u0027\n )\n\ngroup by pc.snapshot_time\norder by pc.snapshot_time DESC\n\n",
             "liveQueries": ""
           },
           "statUnit": "%",
@@ -254,13 +261,14 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.checks",
           "title": "Health Checks",
           "description": null,
-          "enabled": true,
+          "enabled": false,
           "panelType": "CheckStatus",
           "chartType": "Line",
           "height": 250,
@@ -281,13 +289,14 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.ks2",
           "title": "More Key Stats",
           "description": "",
-          "enabled": true,
+          "enabled": false,
           "panelType": "TextCard",
           "chartType": "Line",
           "height": 250,
@@ -308,7 +317,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repository.text_server_memory",
@@ -325,7 +335,7 @@
             "spanColumns": false
           },
           "query": {
-            "sqlServer": "\nSELECT \n   \n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [System Total Memory GB],\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Allocated to SQL],\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Used By SQL],\n    CONVERT(INT,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))\n    /\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))*100)\n    [SQL Memory usage %]\n    \n\n    ,CASE WHEN SERVERPROPERTY(\u0027IsHadrEnabled\u0027) = 1 THEN \u0027Yes\u0027 ELSE \u0027No\u0027 END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = \u0027sa\u0027 AND is_disabled = 0) THEN \u0027Enabled\u0027 ELSE \u0027Disabled\u0027 END AS [sa account state]",
+            "sqlServer": "\nSELECT \n   \n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [System Total Memory GB],\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Allocated to SQL],\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Used By SQL],\n    CONVERT(INT,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))\n    /\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))*100)\n    [SQL Memory usage %]\n    \n",
             "liveQueries": ""
           },
           "statUnit": "",
@@ -335,7 +345,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.blocking",
@@ -362,7 +373,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.disk_space",
@@ -408,7 +420,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.cpu",
@@ -435,7 +448,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.activity",
@@ -462,7 +476,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.waits_category",
@@ -489,7 +504,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.memory",
@@ -516,7 +532,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.sessions",
@@ -543,7 +560,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.requests",
@@ -570,7 +588,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.file_stats",
@@ -597,7 +616,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.file_stats_latency",
@@ -624,7 +644,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.file_stats_throughput",
@@ -651,7 +672,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.schedulers",
@@ -678,7 +700,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.lock_requests",
@@ -705,7 +728,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.page_life",
@@ -732,7 +756,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.memory_clerks",
@@ -759,7 +784,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.database_stats",
@@ -786,7 +812,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.tempdb",
@@ -813,7 +840,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.checks_history",
@@ -840,7 +868,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "instance.checks_detail",
@@ -867,13 +896,14 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.schedulers",
           "title": "Pending Queue",
           "description": null,
-          "enabled": true,
+          "enabled": false,
           "panelType": "StatCard",
           "chartType": "Line",
           "height": 250,
@@ -907,7 +937,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.perf_counters",
@@ -934,7 +965,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         }
       ]
     },
@@ -970,7 +1002,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "longqueries.querydetails",
@@ -997,7 +1030,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "longqueries.querytext",
@@ -1024,7 +1058,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         }
       ]
     },
@@ -1060,7 +1095,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "waits.details",
@@ -1087,7 +1123,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         }
       ]
     },
@@ -1136,7 +1173,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.batch_req",
@@ -1163,7 +1201,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.transactions",
@@ -1190,7 +1229,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.compilations",
@@ -1217,7 +1257,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.page_reads",
@@ -1244,7 +1285,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.page_writes",
@@ -1271,7 +1313,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.poison_waits",
@@ -1311,7 +1354,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.serializable_locking",
@@ -1351,7 +1395,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.cmemthread",
@@ -1391,7 +1436,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.sessions",
@@ -1418,7 +1464,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "live.blocking",
@@ -1445,7 +1492,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "sessions.top",
@@ -1472,7 +1520,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": true,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         }
       ]
     },
@@ -1508,7 +1557,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.process_memory",
@@ -1554,7 +1604,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.schedulers",
@@ -1594,7 +1645,8 @@
             }
           ],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.checks",
@@ -1621,7 +1673,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.cpu",
@@ -1648,7 +1701,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.perf_counters",
@@ -1675,7 +1729,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.wait_stats",
@@ -1702,7 +1757,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.file_stats",
@@ -1729,7 +1785,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         },
         {
           "id": "repo.long_queries",
@@ -1756,7 +1813,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         }
       ]
     },
@@ -1792,7 +1850,8 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
-          "dataGridMaxRows": 500
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0
         }
       ]
     }

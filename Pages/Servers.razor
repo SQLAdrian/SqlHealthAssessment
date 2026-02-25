@@ -129,8 +129,8 @@
                 
                 <div class="form-group">
                     <label>Server Name(s)</label>
-                    <textarea @bind="EditingConnection.ServerNames" rows="3" placeholder="Enter server names (one per line, or comma-separated)"></textarea>
-                    <small>Enter multiple servers to monitor them together (e.g., server1, server2, server3)</small>
+                    <textarea @bind="EditingConnection.ServerNames" rows="4" placeholder="Enter server names, one per line (each line becomes a separate connection)"></textarea>
+                    <small>Enter one server per line. Each line will create a separate connection entry.</small>
                 </div>
 
                 <div class="form-group">
@@ -331,15 +331,59 @@
                 EditingConnection.SetPassword(EditingPassword);
             }
 
+            // Split server names by newline to create separate connections
+            var serverNames = EditingConnection.ServerNames
+                .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            if (serverNames.Count == 0)
+            {
+                StatusMessage = "Server name is required";
+                IsSuccess = false;
+                return;
+            }
+
             if (IsEditing)
             {
+                // For edit, update as single connection (keep existing behavior)
                 ConnectionManager.UpdateConnection(EditingConnection);
                 StatusMessage = "Server connection updated successfully";
             }
             else
             {
-                ConnectionManager.AddConnection(EditingConnection);
-                StatusMessage = "Server connection added successfully";
+                // For new, create separate connection for each server name on separate line
+                if (serverNames.Count == 1)
+                {
+                    // Single server - create one connection
+                    EditingConnection.ServerNames = serverNames[0];
+                    ConnectionManager.AddConnection(EditingConnection);
+                    StatusMessage = "Server connection added successfully";
+                }
+                else
+                {
+                    // Multiple servers on separate lines - create separate connections
+                    foreach (var serverName in serverNames)
+                    {
+                        var newConn = new ServerConnection
+                        {
+                            ServerNames = serverName,
+                            Database = EditingConnection.Database,
+                            AuthenticationType = EditingConnection.AuthenticationType,
+                            UseWindowsAuthentication = EditingConnection.UseWindowsAuthentication,
+                            Username = EditingConnection.Username,
+                            Password = EditingConnection.Password,
+                            TrustServerCertificate = EditingConnection.TrustServerCertificate,
+                            ConnectionTimeout = EditingConnection.ConnectionTimeout,
+                            IsEnabled = EditingConnection.IsEnabled,
+                            Environment = EditingConnection.Environment,
+                            Tags = new List<string>(EditingConnection.Tags ?? new List<string>())
+                        };
+                        ConnectionManager.AddConnection(newConn);
+                    }
+                    StatusMessage = $"Added {serverNames.Count} server connections";
+                }
             }
             
             IsSuccess = true;

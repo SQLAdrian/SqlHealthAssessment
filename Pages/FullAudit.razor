@@ -115,7 +115,7 @@
                 <div class="section-header">
                     <h2>Diagnostic Scripts - @SelectedServer</h2>
                     <div class="script-actions">
-                        @if (AllSuccessfulServers.Count > 1)
+                        @if (AllSuccessfulServers.Count > 0)
                         {
                             <button class="btn btn-warning" @onclick="RunAgainstAllServers" disabled="@_isRunning">
                                 @(_isRunning ? "Running..." : "Run against all servers")
@@ -129,6 +129,23 @@
                         </button>-->
                     </div>
                 </div>
+
+                @if (_isRunning)
+                {
+                    <div class="progress-container">
+                        <div class="progress-info">
+                            <span>Server: @_currentServerName</span>
+                            <span>Script: @_currentScriptName</span>
+                            <span>@ProgressPercent.ToString("F0")%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: @ProgressPercent%"></div>
+                        </div>
+                        <div class="progress-detail">
+                            Server @_currentServerIndex of @_totalServers | Script @_currentScriptIndex of @_totalScripts
+                        </div>
+                    </div>
+                }
 
                 <div class="script-list">
                     @foreach (var script in _scripts)
@@ -268,6 +285,17 @@
     private ServerConnection? SelectedConnection { get; set; }
     private string? SelectedServer { get; set; }
     private bool _isLoading = true;
+    
+    // Progress tracking
+    private int _totalServers;
+    private int _currentServerIndex;
+    private string _currentServerName = "";
+    private int _totalScripts;
+    private int _currentScriptIndex;
+    private string _currentScriptName = "";
+    private double ProgressPercent => _totalServers * _totalScripts > 0 
+        ? (double)(_currentServerIndex * _totalScripts + _currentScriptIndex) / (_totalServers * _totalScripts) * 100 
+        : 0;
     
     // Property to get all successful servers from all connections
     private List<(ServerConnection Connection, string ServerName)> AllSuccessfulServers
@@ -483,8 +511,11 @@
             conn.LastConnected = successfulServers.Count > 0 ? DateTime.Now : null;
         }
 
-        ConnectionManager.UpdateSuccessfulServers(SelectedConnection?.Id ?? "", 
-            SelectedConnection?.SuccessfulServers ?? new List<string>());
+        // Update all connections' successful servers in ConnectionManager
+        foreach (var conn in _connections)
+        {
+            ConnectionManager.UpdateSuccessfulServers(conn.Id, conn.SuccessfulServers);
+        }
 
         if (SelectedConnection != null && SelectedConnection.SuccessfulServers.Count > 0)
         {
@@ -520,6 +551,12 @@
         _isRunning = true;
         AuditState.ClearExecutionResults();
 
+        // Initialize progress tracking
+        _totalServers = allServers.Count;
+        _totalScripts = _scripts.Where(s => s.Enabled).Count();
+        _currentServerIndex = 0;
+        _currentScriptIndex = 0;
+
         try
         {
             // Group by connection to minimize connection switching
@@ -530,10 +567,18 @@
                 var connection = group.First().Connection;
                 foreach (var (conn, server) in group)
                 {
+                    _currentServerName = server;
+                    _currentServerIndex++;
+                    _currentScriptIndex = 0;
+                    
                     var results = await ScriptRunner.ExecuteAllEnabledScriptsAsync(conn, server);
                     // Prepend server name to distinguish results from different servers
                     foreach (var result in results)
                     {
+                        _currentScriptName = result.ScriptName;
+                        _currentScriptIndex++;
+                        StateHasChanged(); // Update UI
+                        
                         result.ScriptName = $"[{server}] {result.ScriptName}";
                         AuditState.AddExecutionResult(result);
                     }
@@ -543,6 +588,8 @@
         finally
         {
             _isRunning = false;
+            _currentServerName = "";
+            _currentScriptName = "";
         }
     }
 
