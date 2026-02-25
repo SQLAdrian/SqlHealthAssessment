@@ -64,19 +64,19 @@ namespace SqlHealthAssessment.Data.Caching
         /// <summary>
         /// Called once per LoadData() cycle, before any panel queries.
         /// Handles:
-        ///   1. Detecting filter changes (time range or instance) that require full invalidation.
+        ///   1. Detecting filter changes (time range, instance, or timezone) that require full invalidation.
         ///   2. Periodic cache eviction of very old data.
         /// </summary>
-        public async Task PrepareRefreshCycle(string dashboardId, int timeRangeMinutes, string selectedInstance)
+        public async Task PrepareRefreshCycle(string dashboardId, int timeRangeMinutes, string selectedInstance, double timezoneOffsetHours = 0)
         {
             await _invalidationLock.WaitAsync();
             try
             {
-                if (_stateTracker.RequiresFullReload(dashboardId, timeRangeMinutes, selectedInstance))
+                if (_stateTracker.RequiresFullReload(dashboardId, timeRangeMinutes, selectedInstance, timezoneOffsetHours))
                 {
                     await _cache.InvalidateAllAsync();
                 }
-                _stateTracker.RecordFilterState(dashboardId, timeRangeMinutes, selectedInstance);
+                _stateTracker.RecordFilterState(dashboardId, timeRangeMinutes, selectedInstance, timezoneOffsetHours);
             }
             finally
             {

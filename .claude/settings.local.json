@@ -18,7 +18,14 @@
       "Bash(findstr:*)",
       "Bash(Select-String -Pattern \"error CS|Build succeeded|Error\\\\\\(s\\\\\\)|Warning\\\\\\(s\\\\\\)\")",
       "Bash(python:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(npm run webpack:*)",
+      "Bash(NODE_OPTIONS=--openssl-legacy-provider npm run webpack:*)",
+      "Bash(node -e:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(processing\" because the <DataSet> in BlitzReport.rdl had no <Query>:*)",
+      "Bash(processing\" because <DataSet> in BlitzReport.rdl had no <Query>:*)"
     ]
   }
 }

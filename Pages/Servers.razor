@@ -400,7 +400,8 @@
 
                 foreach (var serverName in serverList)
                 {
-                    var connectionString = conn.GetConnectionString(serverName);
+                    // Use master database for connection test to allow testing before SQLWATCH is deployed
+                    var connectionString = conn.GetConnectionString(serverName, "master");
                     using var connection = new SqlConnection(connectionString);
                     await connection.OpenAsync();
                     successfulServers.Add(serverName);
@@ -458,7 +459,8 @@
                 {
                     try
                     {
-                        var connectionString = conn.GetConnectionString(serverName);
+                        // Use master database for connection test to allow testing before SQLWATCH is deployed
+                        var connectionString = conn.GetConnectionString(serverName, "master");
                         using var connection = new SqlConnection(connectionString);
                         await connection.OpenAsync();
                         successfulServers.Add(serverName);
@@ -489,7 +491,9 @@
             var serverList = conn.GetServerList();
             foreach (var serverName in serverList)
             {
-                var connectionString = conn.GetConnectionString(serverName);
+                // Always use master database for testing to avoid connection failures
+                // when SQLWATCH database doesn't exist yet
+                var connectionString = conn.GetConnectionString(serverName, "master");
                 using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
                 using var cmd = connection.CreateCommand();
@@ -528,7 +532,8 @@
                     var successfulForThisConn = new List<string>();
                     foreach (var serverName in serverList)
                     {
-                        var connectionString = conn.GetConnectionString(serverName);
+                        // Use master database for connection test to allow testing before SQLWATCH is deployed
+                        var connectionString = conn.GetConnectionString(serverName, "master");
                         using var connection = new SqlConnection(connectionString);
                         await connection.OpenAsync();
                         successfulForThisConn.Add(serverName);

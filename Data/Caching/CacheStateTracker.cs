@@ -33,12 +33,13 @@ namespace SqlHealthAssessment.Data.Caching
         /// invalidation and reload. This occurs when:
         ///   - The time range changed (e.g., user switched from 1hr to 6hr)
         ///   - The selected instance changed
+        ///   - The timezone offset changed (cached rows have timestamps mapped at the old offset)
         ///   - This is the very first call for this dashboard (no previous state)
         ///
         /// The sliding window moving forward by 5 seconds on each auto-refresh
         /// does NOT constitute a change — that is normal delta-fetch behavior.
         /// </summary>
-        public bool RequiresFullReload(string dashboardId, int currentTimeRangeMinutes, string currentInstance)
+        public bool RequiresFullReload(string dashboardId, int currentTimeRangeMinutes, string currentInstance, double currentTimezoneOffsetHours)
         {
             if (!_lastFilterState.TryGetValue(dashboardId, out var previous))
             {
@@ -49,19 +50,21 @@ namespace SqlHealthAssessment.Data.Caching
             }
 
             return previous.TimeRangeMinutes != currentTimeRangeMinutes
-                || !string.Equals(previous.Instance, currentInstance, StringComparison.OrdinalIgnoreCase);
+                || !string.Equals(previous.Instance, currentInstance, StringComparison.OrdinalIgnoreCase)
+                || previous.TimezoneOffsetHours != currentTimezoneOffsetHours;
         }
 
         /// <summary>
         /// Records the current filter state so subsequent calls to RequiresFullReload
         /// can detect changes.
         /// </summary>
-        public void RecordFilterState(string dashboardId, int timeRangeMinutes, string selectedInstance)
+        public void RecordFilterState(string dashboardId, int timeRangeMinutes, string selectedInstance, double timezoneOffsetHours)
         {
             _lastFilterState[dashboardId] = new FilterState
             {
                 TimeRangeMinutes = timeRangeMinutes,
                 Instance = selectedInstance,
+                TimezoneOffsetHours = timezoneOffsetHours,
                 LastUpdated = DateTime.UtcNow
             };
 
@@ -105,6 +108,7 @@ namespace SqlHealthAssessment.Data.Caching
         {
             public int TimeRangeMinutes { get; set; }
             public string Instance { get; set; } = "";
+            public double TimezoneOffsetHours { get; set; }
             public DateTime LastUpdated { get; set; }
         }
     }

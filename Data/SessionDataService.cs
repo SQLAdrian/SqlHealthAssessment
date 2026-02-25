@@ -18,7 +18,7 @@ namespace SqlHealthAssessment.Data
         private readonly IDbConnectionFactory _connectionFactory;
 
         private const string LiveSessionsQuery = @"
-            SELECT
+            SELECT TOP (@TopCount)
                 s.session_id AS SPID,
                 s.login_name AS LoginName,
                 ISNULL(s.host_name, '') AS HostName,
@@ -51,7 +51,7 @@ namespace SqlHealthAssessment.Data
         /// <summary>
         /// Fetches all live user sessions from the currently connected SQL Server instance.
         /// </summary>
-        public async Task<List<SessionInfo>> GetLiveSessionsAsync()
+        public async Task<List<SessionInfo>> GetLiveSessionsAsync(int topCount = 100)
         {
             var sessions = new List<SessionInfo>();
 
@@ -59,6 +59,11 @@ namespace SqlHealthAssessment.Data
             using var cmd = ((SqlConnection)conn).CreateCommand();
             cmd.CommandText = LiveSessionsQuery;
             cmd.CommandTimeout = 30;
+            
+            var topParam = cmd.CreateParameter();
+            topParam.ParameterName = "@TopCount";
+            topParam.Value = topCount;
+            cmd.Parameters.Add(topParam);
 
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())

@@ -67,6 +67,11 @@ namespace SqlHealthAssessment.Data
                     _scriptConfigurations = JsonSerializer.Deserialize<List<ScriptConfiguration>>(json, ScriptConfigSerializerOptions)
                         ?? new List<ScriptConfiguration>();
 
+                    // Sort by ExecutionOrder for display and execution
+                    _scriptConfigurations = _scriptConfigurations
+                        .OrderBy(s => s.ExecutionOrder)
+                        .ToList();
+
                     _logger.LogInformation("Loaded {Count} script configurations", _scriptConfigurations.Count);
                     return _scriptConfigurations;
                 }
@@ -75,6 +80,36 @@ namespace SqlHealthAssessment.Data
                     _logger.LogError(ex, "Error loading script configurations");
                     _scriptConfigurations = new List<ScriptConfiguration>();
                     return _scriptConfigurations;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Saves script configurations back to the JSON file.
+        /// </summary>
+        public void SaveScriptConfigurations(List<ScriptConfiguration> configurations)
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    var configPath = Path.Combine(AppContext.BaseDirectory, "script-configurations.json");
+                    var json = JsonSerializer.Serialize(configurations, new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    });
+                    File.WriteAllText(configPath, json);
+                    
+                    // Update cached version
+                    _scriptConfigurations = configurations.OrderBy(s => s.ExecutionOrder).ToList();
+                    
+                    _logger.LogInformation("Saved {Count} script configurations", configurations.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error saving script configurations");
+                    throw;
                 }
             }
         }
@@ -107,21 +142,20 @@ namespace SqlHealthAssessment.Data
                 using var dbConnection = new SqlConnection(masterConnectionString);
                 await dbConnection.OpenAsync(cancellationToken);
 
-                // If ExecutionParameters is a stored procedure call, check if it exists
+                // If ExecutionParameters references a stored procedure, check whether it exists.
+                // If it is missing, the ScriptPath installation script will create it below —
+                // do NOT return early; just log and continue so the install script runs first.
                 if (!string.IsNullOrEmpty(config.ExecutionParameters))
                 {
                     var procedureName = ExtractProcedureName(config.ExecutionParameters);
                     if (!string.IsNullOrEmpty(procedureName))
                     {
-                        if (!await ProcedureExistsAsync(dbConnection, procedureName, cancellationToken))
+                        var procExists = await ProcedureExistsAsync(dbConnection, procedureName, cancellationToken);
+                        if (!procExists)
                         {
-                            result.Success = false;
-                            stopwatch.Stop();
-                            result.ExecutionTime = stopwatch.Elapsed;
-                            result.ErrorMessage = $"Stored procedure '{procedureName}' not found on this server. " +
-                                "This procedure needs to be installed first. Visit https://www.brentozar.com/first-aid/sql-server-diagnostic-scripts/ for sp_Blitz.";
-                            _logger.LogWarning("Procedure {Procedure} not found on {Server}", procedureName, targetServer);
-                            return result;
+                            _logger.LogInformation(
+                                "Procedure '{Procedure}' not found on {Server} — installing from '{ScriptPath}' first",
+                                procedureName, targetServer, config.ScriptPath);
                         }
                     }
                 }

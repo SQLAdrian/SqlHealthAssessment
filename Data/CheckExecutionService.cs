@@ -89,7 +89,9 @@ namespace SqlHealthAssessment.Data
             var throttle = _instanceThrottles.GetOrAdd(serverName,
                 _ => new SemaphoreSlim(MaxConcurrentQueriesPerInstance));
 
-            var connectionString = connection.GetConnectionString(serverName);
+            // Use master database for check execution to allow running checks
+            // even when SQLWATCH is not installed
+            var connectionString = connection.GetConnectionString(serverName, "master");
 
             var tasks = enabledChecks.Select(check =>
                 ExecuteSingleCheckAsync(check, connectionString, serverName, throttle, ct));
@@ -145,7 +147,9 @@ namespace SqlHealthAssessment.Data
             var throttle = _instanceThrottles.GetOrAdd(serverName,
                 _ => new SemaphoreSlim(MaxConcurrentQueriesPerInstance));
 
-            var connectionString = connection.GetConnectionString(serverName);
+            // Use master database for check execution to allow running checks
+            // even when SQLWATCH is not installed
+            var connectionString = connection.GetConnectionString(serverName, "master");
 
             var tasks = filteredChecks.Select(check =>
                 ExecuteSingleCheckAsync(check, connectionString, serverName, throttle, ct));
@@ -403,6 +407,27 @@ namespace SqlHealthAssessment.Data
         public List<string> GetMonitoredInstances()
         {
             return _resultsByInstance.Keys.ToList();
+        }
+
+        /// <summary>
+        /// Clears all stored results for a specific instance.
+        /// </summary>
+        public void ClearResults(string instanceName)
+        {
+            if (_resultsByInstance.TryRemove(instanceName, out _))
+            {
+                Debug.WriteLine($"[CheckExecutionService] Cleared results for {instanceName}");
+            }
+        }
+
+        /// <summary>
+        /// Clears all stored results for all instances.
+        /// </summary>
+        public void ClearAllResults()
+        {
+            _resultsByInstance.Clear();
+            _lastSummary.Clear();
+            Debug.WriteLine("[CheckExecutionService] Cleared all results");
         }
 
         public void Dispose()

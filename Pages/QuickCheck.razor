@@ -459,8 +459,9 @@
         DiagLog.Clear();
     }
 
-    private async Task ClearResults()
+    private void ClearResults()
     {
+        CheckExecutor.ClearAllResults();
         Results.Clear();
         ServerSummaries.Clear();
         ExpandedResults.Clear();
@@ -471,7 +472,7 @@
         SelectedServer = string.Empty;
         SelectedSeverity = string.Empty;
         
-        await InvokeAsync(StateHasChanged);
+        StateHasChanged();
     }
 
     private void ToggleExpandResult(string key)
@@ -482,11 +483,13 @@
 
     private async Task RunChecks()
     {
-        await ClearResults();
+        CheckExecutor.ClearAllResults();
         IsRunning = true;
         Progress = 0;
         ProgressMessage = "Starting...";
-        await InvokeAsync(StateHasChanged); // force render with cleared results before checks begin
+        Results.Clear();
+        ServerSummaries.Clear();
+        await InvokeAsync(StateHasChanged);
         ExecutionTime = DateTime.Now;
         ServersTested = 0;
 

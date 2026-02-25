@@ -31,6 +31,17 @@
     @* Toolbar *@
     <div class="sessions-toolbar">
         <div class="toolbar-group">
+            <label class="toolbar-label">Top:</label>
+            <select class="toolbar-select" value="@TopSessionCount" @onchange="OnTopCountChanged">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+
+        <div class="toolbar-group">
             <label class="toolbar-label">Refresh:</label>
             <select class="toolbar-select" value="@RefreshIntervalSeconds" @onchange="OnRefreshIntervalChanged">
                 <option value="2">2 sec</option>
@@ -140,6 +151,7 @@
 
     private bool AutoRefresh = true;
     private int RefreshIntervalSeconds = 5;
+    private int TopSessionCount = 100;
     private System.Threading.Timer? _refreshTimer;
 
     private List<SessionInfo> FilteredSessions
@@ -198,7 +210,7 @@
         try
         {
             IsLoading = true;
-            var sessions = await SessionService.GetLiveSessionsAsync();
+            var sessions = await SessionService.GetLiveSessionsAsync(TopSessionCount);
             AllSessions = sessions;
             ErrorMessage = null;
             LastRefreshTime = DateTime.Now.ToString("HH:mm:ss");
@@ -259,6 +271,15 @@
         {
             RefreshIntervalSeconds = seconds;
             if (AutoRefresh) StartTimer();
+        }
+    }
+
+    private async Task OnTopCountChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var count))
+        {
+            TopSessionCount = count;
+            await LoadSessions();
         }
     }
 

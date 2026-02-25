@@ -17,13 +17,16 @@
 @implements IDisposable
 
 
-@if (ConnectionManager.CurrentServer != null)
+@if (ConnectionManager.CurrentServer != null || Instances.Length > 0)
 {
     <div class="server-context-header">
         <span class="server-context-icon">🖥️</span>
         <span class="server-context-label">Connected to:</span>
-        <span class="server-context-name">@ConnectionManager.CurrentServer.ServerNames</span>
-        <span class="server-context-db">(@ConnectionManager.CurrentServer.Database)</span>
+        @if (ConnectionManager.CurrentServer != null)
+        {
+            <span class="server-context-name">@ConnectionManager.CurrentServer.ServerNames</span>
+            <span class="server-context-db">(@ConnectionManager.CurrentServer.Database)</span>
+        }
         <span class="server-context-label" style="margin-left: 16px;">Instance:</span>
         <select class="toolbar-select" style="margin-left: 4px;" @onchange="OnInstanceChanged">
             @if (Dashboard?.ShowAllOption ?? false)
@@ -67,11 +70,25 @@
         </div>
     }
 
-    @if (IsLoading)
+    @if (RequiresSqlWatch && !CurrentServerHasSqlWatch)
+    {
+        <div class="sqlwatch-required-banner">
+            <span class="sqlwatch-required-icon">⚠️</span>
+            <div>
+                <strong>SQLWATCH is not installed on this server</strong>
+                <div class="sqlwatch-required-detail">
+                    This dashboard requires the SQLWATCH database. Please install SQLWATCH on the
+                    selected server, or switch to a server that already has SQLWATCH installed.
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (IsLoading && (CurrentServerHasSqlWatch || !RequiresSqlWatch))
     {
         <div class="chart-empty">Loading data...</div>
     }
-    else if (Dashboard != null)
+    else if (Dashboard != null && (CurrentServerHasSqlWatch || !RequiresSqlWatch))
     {
         @* Stat cards section *@
         @if (_statPanelsCache?.Any() == true)
@@ -204,6 +221,17 @@
     // Built during initialisation to bridge the gap between user-configured server names
     // (IP addresses, aliases) and the actual instance names SQLWATCH stores in its tables.
     private Dictionary<string, string> _sqlWatchInstanceToConnectionId = new(StringComparer.OrdinalIgnoreCase);
+
+    // Tracks which connection IDs have a confirmed SQLWATCH installation (non-empty discovery).
+    private readonly HashSet<string> _connectionsWithSqlWatch = new();
+
+    // Dashboards that require SQLWATCH historical tables (the first 3 in dashboard-config.json).
+    private static readonly HashSet<string> SqlWatchRequiredDashboards =
+        new(StringComparer.OrdinalIgnoreCase) { "instance", "longqueries", "waitevents" };
+
+    private bool RequiresSqlWatch => SqlWatchRequiredDashboards.Contains(DashboardId);
+    private bool CurrentServerHasSqlWatch =>
+        _connectionsWithSqlWatch.Contains(ConnectionManager.CurrentServer?.Id ?? "");
 
     private void MaximizePanel(PanelDefinition panel)
     {
@@ -339,38 +367,73 @@
     }
 
     /// <summary>
-    /// Queries SQLWATCH for its stored sql_instance values and updates the Instances dropdown.
-    /// Bridges the gap between user-configured names (IP addresses, aliases) and the actual
-    /// @@SERVERNAME values SQLWATCH records in its tables so that @SqlInstance filters match.
+    /// Builds the Instances dropdown by querying every enabled connection.
+    ///
+    /// Strategy per connection:
+    ///   HasSqlWatch=true  + SQLWATCH found  → use discovered @@SERVERNAME names (so @SqlInstance
+    ///                                         filters match what SQLWATCH stored).  Connection is
+    ///                                         added to _connectionsWithSqlWatch.
+    ///   HasSqlWatch=true  + SQLWATCH absent → fall back to the user-configured server names so
+    ///                                         the entry still appears in the dropdown (banner shown).
+    ///   HasSqlWatch=false                   → always use user-configured names (master-context
+    ///                                         dashboards like Live Monitor work fine without SQLWATCH).
+    ///
+    /// All servers always appear in every dashboard's dropdown.  The SQLWATCH-required banner
+    /// handles the "wrong server" case instead of hiding the server from the list.
     /// </summary>
     private async Task DiscoverAndUpdateInstancesAsync()
     {
-        if (ConnectionManager.CurrentServer?.HasSqlWatch != true) return;
+        var allConnections = ConnectionManager.GetEnabledConnections();
+        if (allConnections.Count == 0) return;
 
-        try
+        var allInstances = new List<string>();
+
+        foreach (var conn in allConnections)
         {
-            var discovered = await QueryExecutor.GetSqlWatchInstanceNamesAsync();
-            if (discovered.Count == 0) return;
+            if (conn.HasSqlWatch)
+            {
+                // Attempt live discovery so @SqlInstance filters match @@SERVERNAME.
+                try
+                {
+                    ConnectionManager.SetCurrentServer(conn.Id);
+                    var discovered = await QueryExecutor.GetSqlWatchInstanceNamesAsync();
 
-            var currentConn = ConnectionManager.CurrentServer;
-            foreach (var inst in discovered)
-                _sqlWatchInstanceToConnectionId[inst] = currentConn.Id;
+                    if (discovered.Count > 0)
+                    {
+                        foreach (var inst in discovered)
+                            _sqlWatchInstanceToConnectionId[inst] = conn.Id;
+                        allInstances.AddRange(discovered);
+                        _connectionsWithSqlWatch.Add(conn.Id);
 
-            Instances = discovered.ToArray();
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[DynamicDashboard:{DashboardId}] '{conn.ServerNames}': SQLWATCH found — {string.Join(", ", discovered)}");
+                        continue; // skip configured names; use discovered names
+                    }
 
-            // Keep SelectedInstance pointing at a valid SQLWATCH instance name.
-            if (!_sqlWatchInstanceToConnectionId.ContainsKey(SelectedInstance))
-                SelectedInstance = discovered[0];
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[DynamicDashboard:{DashboardId}] '{conn.ServerNames}': HasSqlWatch=true but no instances found (not installed?)");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[DynamicDashboard:{DashboardId}] Discovery failed for '{conn.ServerNames}': {ex.Message}");
+                }
+            }
 
-            System.Diagnostics.Debug.WriteLine(
-                $"[DynamicDashboard:{DashboardId}] Discovered SQLWATCH instances: {string.Join(", ", discovered)}. Selected: {SelectedInstance}");
+            // HasSqlWatch=false OR SQLWATCH discovery returned nothing — use configured names.
+            allInstances.AddRange(conn.GetServerList());
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[DynamicDashboard:{DashboardId}] SQLWATCH instance discovery failed: {ex.Message}");
-            // Keep user-configured names — charts may still show no data if names mismatch.
-        }
+
+        Instances = allInstances.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        // Keep SelectedInstance pointing at a valid entry.
+        if (!Instances.Contains(SelectedInstance, StringComparer.OrdinalIgnoreCase))
+            SelectedInstance = Instances.FirstOrDefault() ?? "";
+
+        SetServerContext(SelectedInstance);
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[DynamicDashboard:{DashboardId}] Discovery complete. Instances: [{string.Join(", ", Instances)}]. Selected: {SelectedInstance}");
     }
 
     private async Task LoadData(CancellationToken cancellationToken = default)
@@ -378,6 +441,14 @@
         if (Dashboard == null)
         {
             ErrorMessage = $"Dashboard '{DashboardId}' not found in configuration.";
+            IsLoading = false;
+            return;
+        }
+
+        // Skip loading for SQLWATCH-dependent dashboards when SQLWATCH is not available.
+        // The UI will show the "SQLWATCH not installed" banner instead.
+        if (RequiresSqlWatch && !CurrentServerHasSqlWatch)
+        {
             IsLoading = false;
             return;
         }
@@ -399,7 +470,7 @@
         _gridResults.Clear();
 
         var filter = BuildFilter();
-        await CachingExecutor.PrepareRefreshCycle(DashboardId, TimeRangeMinutes, SelectedInstance);
+        await CachingExecutor.PrepareRefreshCycle(DashboardId, TimeRangeMinutes, SelectedInstance, TimezoneOffsetHours);
 
         var tsResults = new ConcurrentDictionary<string, List<TimeSeriesPoint>>();
         var statResults = new ConcurrentDictionary<string, StatValue>();

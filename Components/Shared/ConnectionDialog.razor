@@ -16,7 +16,7 @@
             <div class="form-group">
                 <label>Server Names (one per line)</label>
                 <textarea @bind="Connection.ServerNames" rows="5" placeholder="Server1&#10;Server2&#10;Server3"></textarea>
-                <small>Enter each server name on a separate line</small>
+                <small>Each server will be saved as its own connection block</small>
             </div>
 
             <div class="form-group">
@@ -184,7 +184,8 @@
             {
                 await Task.Run(() =>
                 {
-                    using var connection = new Microsoft.Data.SqlClient.SqlConnection(Connection.GetConnectionString(server));
+                    // Use master database for testing to allow adding servers before SQLWATCH is deployed
+                    using var connection = new Microsoft.Data.SqlClient.SqlConnection(Connection.GetConnectionString(server, "master"));
                     connection.Open();
                     using var command = connection.CreateCommand();
                     command.CommandText = "SELECT @@VERSION";
@@ -234,33 +235,52 @@
 
         try
         {
-            // Filter to only save successful servers
             var successfulServers = Connection.SuccessfulServers ?? new List<string>();
             if (successfulServers.Count == 0)
-            {
-                // If no test was run, save all servers as untested
-                successfulServers = servers;
-            }
-            
-            Connection.SuccessfulServers = successfulServers;
-            Connection.IsConnected = successfulServers.Count > 0;
-            if (successfulServers.Count > 0)
-            {
-                Connection.LastConnected = DateTime.Now;
-            }
+                successfulServers = servers; // untested — treat all as candidates
 
-            if (EditingConnection != null && !string.IsNullOrEmpty(EditingConnection.Id))
+            if (servers.Count == 1)
             {
-                // Update existing connection
-                Connection.Id = EditingConnection.Id;
-                ConnectionManager.UpdateConnection(Connection);
+                // Single server — normal path
+                Connection.SuccessfulServers = successfulServers;
+                Connection.IsConnected = successfulServers.Count > 0;
+                if (successfulServers.Count > 0)
+                    Connection.LastConnected = DateTime.Now;
+
+                if (EditingConnection != null && !string.IsNullOrEmpty(EditingConnection.Id))
+                {
+                    Connection.Id = EditingConnection.Id;
+                    ConnectionManager.UpdateConnection(Connection);
+                }
+                else
+                {
+                    ConnectionManager.AddConnection(Connection);
+                }
             }
             else
             {
-                // Add new connection
-                ConnectionManager.AddConnection(Connection);
+                // Multiple servers — each gets its own connection block
+                if (EditingConnection != null && !string.IsNullOrEmpty(EditingConnection.Id))
+                {
+                    // Update the existing entry with the first server only
+                    var firstConn = CloneConnectionForServer(Connection, servers[0], successfulServers);
+                    firstConn.Id = EditingConnection.Id;
+                    ConnectionManager.UpdateConnection(firstConn);
+
+                    // Create a new connection block for every additional server
+                    foreach (var server in servers.Skip(1))
+                        ConnectionManager.AddConnection(CloneConnectionForServer(Connection, server, successfulServers));
+                }
+                else
+                {
+                    foreach (var server in servers)
+                        ConnectionManager.AddConnection(CloneConnectionForServer(Connection, server, successfulServers));
+                }
             }
-            StatusMessage = "Connection saved successfully!";
+
+            StatusMessage = servers.Count > 1
+                ? $"{servers.Count} server connections saved successfully!"
+                : "Connection saved successfully!";
             IsSuccess = true;
 
             await Task.Delay(500);
@@ -277,6 +297,26 @@
         {
             IsSaving = false;
         }
+    }
+
+    private ServerConnection CloneConnectionForServer(ServerConnection template, string serverName, List<string> testedSuccessful)
+    {
+        var isConnected = testedSuccessful.Contains(serverName, StringComparer.OrdinalIgnoreCase);
+        return new ServerConnection
+        {
+            ServerNames = serverName,
+            Database = template.Database,
+            UseWindowsAuthentication = template.UseWindowsAuthentication,
+            Username = template.Username,
+            Password = template.Password,
+            TrustServerCertificate = template.TrustServerCertificate,
+            HasSqlWatch = template.HasSqlWatch,
+            IsEnabled = template.IsEnabled,
+            ConnectionTimeout = template.ConnectionTimeout,
+            SuccessfulServers = isConnected ? new List<string> { serverName } : new List<string>(),
+            IsConnected = isConnected,
+            LastConnected = isConnected ? DateTime.Now : null
+        };
     }
 
     private async Task Close()

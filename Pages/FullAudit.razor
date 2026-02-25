@@ -115,6 +115,12 @@
                 <div class="section-header">
                     <h2>Diagnostic Scripts - @SelectedServer</h2>
                     <div class="script-actions">
+                        @if (AllSuccessfulServers.Count > 1)
+                        {
+                            <button class="btn btn-warning" @onclick="RunAgainstAllServers" disabled="@_isRunning">
+                                @(_isRunning ? "Running..." : "Run against all servers")
+                            </button>
+                        }
                         <button class="btn btn-primary" @onclick="RunAllEnabledScripts" disabled="@_isRunning">
                             @(_isRunning ? "Running..." : "Run All Enabled Scripts")
                         </button>
@@ -262,6 +268,23 @@
     private ServerConnection? SelectedConnection { get; set; }
     private string? SelectedServer { get; set; }
     private bool _isLoading = true;
+    
+    // Property to get all successful servers from all connections
+    private List<(ServerConnection Connection, string ServerName)> AllSuccessfulServers
+    {
+        get
+        {
+            var result = new List<(ServerConnection, string)>();
+            foreach (var conn in _connections)
+            {
+                foreach (var server in conn.SuccessfulServers)
+                {
+                    result.Add((conn, server));
+                }
+            }
+            return result;
+        }
+    }
     private bool _showConnectionDialog = false;
     private ServerConnection? _editingConnection;
     private string StatusMessage = string.Empty;
@@ -482,6 +505,40 @@
         {
             var results = await ScriptRunner.ExecuteAllEnabledScriptsAsync(SelectedConnection, SelectedServer);
             AuditState.ClearAndAddResults(results);
+        }
+        finally
+        {
+            _isRunning = false;
+        }
+    }
+
+    private async Task RunAgainstAllServers()
+    {
+        var allServers = AllSuccessfulServers;
+        if (allServers.Count == 0) return;
+
+        _isRunning = true;
+        AuditState.ClearExecutionResults();
+
+        try
+        {
+            // Group by connection to minimize connection switching
+            var groupedByConnection = allServers.GroupBy(s => s.Connection.Id);
+            
+            foreach (var group in groupedByConnection)
+            {
+                var connection = group.First().Connection;
+                foreach (var (conn, server) in group)
+                {
+                    var results = await ScriptRunner.ExecuteAllEnabledScriptsAsync(conn, server);
+                    // Prepend server name to distinguish results from different servers
+                    foreach (var result in results)
+                    {
+                        result.ScriptName = $"[{server}] {result.ScriptName}";
+                        AuditState.AddExecutionResult(result);
+                    }
+                }
+            }
         }
         finally
         {
