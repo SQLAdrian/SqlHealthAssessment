@@ -11,20 +11,15 @@
         <div class="chart-title">@Title</div>
     }
 
-    @if (Data != null && Data.Any())
+    @if (_seriesDataCache != null && _distinctSeries != null)
     {
-        @* Cache distinct series to avoid repeated LINQ operations *@
-        var adjustedData = GetAdjustedData();
-        var seriesList = _distinctSeries ??= adjustedData.Select(d => d.Series).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        
         <ApexChart TItem="TimeSeriesPoint"
                    Height="@Height"
                    Options="@GetChartOptions()">
 
-            @foreach (var series in seriesList)
+            @foreach (var series in _distinctSeries)
             {
-                @* Use pre-grouped data to avoid repeated Where() calls *@
-                var seriesData = _seriesDataCache?.TryGetValue(series, out var data) == true ? data : GetSeriesData(series, adjustedData);
+                var seriesData = _seriesDataCache.TryGetValue(series, out var sd) ? sd : new List<TimeSeriesPoint>();
                 <ApexPointSeries TItem="TimeSeriesPoint"
                                  Items="@seriesData"
                                  Name="@series"
@@ -71,7 +66,9 @@
             _lastOffset = offsetMinutes;
             var adjusted = Data.Select(p => new TimeSeriesPoint
             {
-                Time = p.Time == DateTime.MinValue ? DateTime.MinValue : p.Time.AddMinutes(offsetMinutes),
+                Time = p.Time == DateTime.MinValue
+                    ? DateTime.MinValue
+                    : DateTime.SpecifyKind(p.Time.AddMinutes(offsetMinutes), DateTimeKind.Utc),
                 Value = p.Value,
                 Series = p.Series
             }).ToList();
@@ -157,24 +154,29 @@
         };
     }
 
-    // Cache series data on parameters set
+    // Rebuild caches whenever data or timezone offset changes
     protected override void OnParametersSet()
     {
-        _cachedOptions = null; // Invalidate options cache
-        
+        _cachedOptions = null;
+        _adjustedDataCache = null; // Force recompute with current offset
+
         if (Data != null && Data.Any())
         {
-            // Pre-compute distinct series
-            _distinctSeries = Data
+            // Build caches from timezone-adjusted data so the chart always
+            // reflects the selected timezone without a data re-fetch.
+            var adjustedData = GetAdjustedData();
+
+            _distinctSeries = adjustedData
                 .Select(d => d.Series)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            // Pre-group data by series
             _seriesDataCache = _distinctSeries
                 .ToDictionary(
                     series => series,
-                    series => Data.Where(d => string.Equals(d.Series, series, StringComparison.OrdinalIgnoreCase)).ToList(),
+                    series => adjustedData
+                        .Where(d => string.Equals(d.Series, series, StringComparison.OrdinalIgnoreCase))
+                        .ToList(),
                     StringComparer.OrdinalIgnoreCase);
         }
         else
@@ -184,9 +186,4 @@
         }
     }
 
-    private List<TimeSeriesPoint> GetSeriesData(string series, List<TimeSeriesPoint> data)
-    {
-        if (data == null) return new List<TimeSeriesPoint>();
-        return data.Where(d => string.Equals(d.Series, series, StringComparison.OrdinalIgnoreCase)).ToList();
-    }
 }
