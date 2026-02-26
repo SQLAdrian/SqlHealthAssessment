@@ -44,7 +44,25 @@
                 </radialGradient>
             </defs>
 
-            @* Blocking lines *@
+            @* Band zone fills — layered circles, innermost drawn last to override outer tints *@
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.95)" fill="rgba(56,142,60,0.05)" />
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.72)" fill="rgba(245,124,0,0.05)" />
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.47)" fill="rgba(25,118,210,0.06)" />
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.22)" fill="rgba(198,40,40,0.09)" />
+
+            @* Band boundary rings — dashed outlines at each zone edge *@
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.22)" fill="none" stroke="#c62828" stroke-width="0.7" stroke-dasharray="3,5" stroke-opacity="0.5" />
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.47)" fill="none" stroke="#1565c0" stroke-width="0.7" stroke-dasharray="3,5" stroke-opacity="0.4" />
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.72)" fill="none" stroke="#e65100" stroke-width="0.7" stroke-dasharray="3,5" stroke-opacity="0.4" />
+            <circle cx="@CenterX" cy="@CenterY" r="@(CanvasRadius * 0.95)" fill="none" stroke="#2e7d32" stroke-width="0.7" stroke-dasharray="3,5" stroke-opacity="0.4" />
+
+            @* Band labels — placed at top of each ring boundary *@
+            <text x="@CenterX" y="@(CenterY - CanvasRadius * 0.22 + 11)" text-anchor="middle" font-size="9" fill="#ef5350" fill-opacity="0.65" font-family="Segoe UI, sans-serif" pointer-events="none">Blocking</text>
+            <text x="@CenterX" y="@(CenterY - CanvasRadius * 0.47 + 11)" text-anchor="middle" font-size="9" fill="#64b5f6" fill-opacity="0.65" font-family="Segoe UI, sans-serif" pointer-events="none">Active</text>
+            <text x="@CenterX" y="@(CenterY - CanvasRadius * 0.72 + 11)" text-anchor="middle" font-size="9" fill="#ffb74d" fill-opacity="0.65" font-family="Segoe UI, sans-serif" pointer-events="none">Idle (TX)</text>
+            <text x="@CenterX" y="@(CenterY - CanvasRadius * 0.95 + 11)" text-anchor="middle" font-size="9" fill="#81c784" fill-opacity="0.65" font-family="Segoe UI, sans-serif" pointer-events="none">Sleeping</text>
+
+            @* Blocking chain lines *@
             @foreach (var session in Sessions.Where(s => s.IsBlocked))
             {
                 var blocker = Sessions.FirstOrDefault(s => s.SPID == session.BlockingSessionId);
@@ -112,6 +130,14 @@
     private int SvgHeight = 700;
     private const double GoldenAngle = 2.39996322972865;
 
+    private double CenterX => SvgWidth / 2.0;
+    private double CenterY => SvgHeight / 2.0;
+
+    /// <summary>
+    /// Usable canvas radius — 90% of the half-minimum dimension to leave edge padding.
+    /// </summary>
+    private double CanvasRadius => Math.Min(SvgWidth, SvgHeight) / 2.0 * 0.90;
+
     private Dictionary<int, (double x, double y)> _positionCache = new();
 
     protected override void OnParametersSet()
@@ -119,48 +145,133 @@
         _positionCache.Clear();
         if (Sessions == null || Sessions.Count == 0) return;
 
-        var sorted = Sessions.OrderByDescending(s => s.ActivityScore).ToList();
-        var centerX = SvgWidth / 2.0;
-        var centerY = SvgHeight / 2.0;
+        // Identify sessions that are actively blocking at least one other session.
+        // A blocker may itself be sleeping (idle transaction holding a lock) — it belongs
+        // in Band 0 regardless of its own status.
+        var blockerSpids = new HashSet<int>(
+            Sessions.Where(s => s.BlockingSessionId > 0).Select(s => s.BlockingSessionId));
 
-        double angle = 0;
-        double spiralSpacing = 3.5;
+        // Compute log-weighted proximity score for each session.
+        // Higher score → session is placed closer to the inner edge of its band.
+        var scores = Sessions.ToDictionary(s => s.SPID, s => ComputeProximityScore(s));
+        double maxScore = scores.Values.DefaultIfEmpty(1.0).Max();
+        if (maxScore < 1.0) maxScore = 1.0;
 
-        for (int i = 0; i < sorted.Count; i++)
+        // Band radial ranges as fractions of CanvasRadius.
+        // Gaps between bands act as visual separators.
+        //   Band 0 (blocking):     0.00 – 0.22  → innermost, red zone
+        //   Band 1 (active):       0.25 – 0.47  → blue zone
+        //   Band 2 (idle + tx):    0.50 – 0.72  → amber zone
+        //   Band 3 (sleeping):     0.75 – 0.95  → green / outer zone
+        var bandRanges = new (double inner, double outer)[]
         {
-            var session = sorted[i];
-            var radius = GetRadius(session);
+            (0.00, 0.22),
+            (0.25, 0.47),
+            (0.50, 0.72),
+            (0.75, 0.95),
+        };
 
-            if (i == 0)
-            {
-                _positionCache[session.SPID] = (centerX, centerY);
-            }
+        // Classify each session into exactly one band.
+        // Priority: blocking involvement > active > idle-in-transaction > sleeping.
+        var bands = new[]
+        {
+            new List<SessionInfo>(),
+            new List<SessionInfo>(),
+            new List<SessionInfo>(),
+            new List<SessionInfo>()
+        };
+
+        foreach (var session in Sessions)
+        {
+            int b;
+            if (session.IsBlocked || blockerSpids.Contains(session.SPID))
+                b = 0;
+            else if (session.IsActive)
+                b = 1;
+            else if (session.IsIdleInTransaction)
+                b = 2;
             else
-            {
-                var dist = spiralSpacing * Math.Sqrt(i) * (radius + 15);
-                var x = centerX + dist * Math.Cos(angle);
-                var y = centerY + dist * Math.Sin(angle);
+                b = 3;
+            bands[b].Add(session);
+        }
 
-                var pad = radius + 5;
+        // Assign positions: golden-angle rotation continues across all bands so angular
+        // distribution stays uniform over the whole canvas.
+        double angle = 0;
+        for (int b = 0; b < 4; b++)
+        {
+            var (innerFrac, outerFrac) = bandRanges[b];
+            double innerR   = innerFrac * CanvasRadius;
+            double outerR   = outerFrac * CanvasRadius;
+            double bandWidth = outerR - innerR;
+
+            // Sort descending: highest-scoring session sits at the inner edge of the band.
+            var sorted = bands[b].OrderByDescending(s => scores[s.SPID]).ToList();
+
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                var session = sorted[i];
+                double normalizedScore = scores[session.SPID] / maxScore;
+
+                // High score → small offset from inner edge; low score → pushed toward outer edge.
+                double targetRadius = innerR + (1.0 - normalizedScore) * bandWidth;
+
+                // Single blocking session: place at dead center for maximum visual emphasis.
+                if (b == 0 && sorted.Count == 1)
+                    targetRadius = 0;
+
+                var bRadius = GetRadius(session);
+                double x = CenterX + targetRadius * Math.Cos(angle);
+                double y = CenterY + targetRadius * Math.Sin(angle);
+
+                double pad = bRadius + 5;
                 x = Math.Clamp(x, pad, SvgWidth - pad);
                 y = Math.Clamp(y, pad, SvgHeight - pad);
 
                 _positionCache[session.SPID] = (x, y);
+                angle += GoldenAngle;
             }
-            angle += GoldenAngle;
         }
+    }
+
+    /// <summary>
+    /// Log-weighted composite proximity score.
+    ///
+    /// All three metrics are log10-transformed to compress their heavy-tailed distributions
+    /// (SQL Server metrics span many orders of magnitude). Without this, a single extreme
+    /// session would dominate and all others would cluster at the outer edge.
+    ///
+    /// Weights — matching stated priority (I/O > CPU > Wait):
+    ///   45% Writes + LogicalReads  — combined I/O footprint; primary contention driver
+    ///   30% CpuTime                — direct compute cost (slightly downweighted to avoid
+    ///                                double-counting its correlation with LogicalReads)
+    ///   25% WaitTime               — current wait from dm_exec_requests; 0 for idle sessions,
+    ///                                so it contributes only where it's meaningful (active/blocked)
+    /// </summary>
+    private static double ComputeProximityScore(SessionInfo s)
+    {
+        return Math.Log10(1.0 + s.Writes + s.LogicalReads) * 0.45
+             + Math.Log10(1.0 + s.CpuTime)                 * 0.30
+             + Math.Log10(1.0 + s.WaitTime)                 * 0.25;
     }
 
     private (double x, double y) GetPosition(int spid)
     {
-        return _positionCache.TryGetValue(spid, out var pos) ? pos : (SvgWidth / 2.0, SvgHeight / 2.0);
+        return _positionCache.TryGetValue(spid, out var pos) ? pos : (CenterX, CenterY);
     }
 
     private double GetRadius(SessionInfo session)
     {
-        var activity = session.ActivityScore;
-        if (activity <= 0) return 14;
-        return Math.Clamp(14 + Math.Log10(activity + 1) * 6, 14, 45);
+        double metric;
+        if (session.IsBlocked)
+            metric = session.WaitTime;                          // blocked: how long it has been waiting
+        else if (session.IsSleeping)
+            metric = session.LogicalReads + session.Writes;    // sleeping: accumulated I/O footprint
+        else
+            metric = session.CpuTime;                          // active / blocking: CPU consumed
+
+        if (metric <= 0) return 10;
+        return Math.Clamp(10 + Math.Log10(metric + 1) * 4.2, 10, 32);
     }
 
     private string GetFill(SessionInfo session)
@@ -192,9 +303,9 @@
 
     private int GetFontSize(double radius)
     {
-        if (radius >= 35) return 14;
-        if (radius >= 25) return 12;
-        if (radius >= 18) return 10;
+        if (radius >= 24) return 14;
+        if (radius >= 17) return 12;
+        if (radius >= 13) return 10;
         return 8;
     }
 

@@ -319,7 +319,15 @@
                             </div>
                         </div>
 
-
+                        @* ── liveQueries Query ── *@
+                        <div class="form-group">
+                            <label>liveQueries Query</label>
+                            <textarea @bind="SelectedPanel.Query.LiveQueries" rows="4" placeholder="SELECT..."></textarea>
+                            <div class="button-row">
+                                <button class="btn btn-sm" @onclick="TestliveQueriesQuery" disabled="@IsQueryRunning">🧪 Test Query</button>
+                                <button class="btn btn-sm" @onclick="ValidateliveQueriesQuery" disabled="@IsQueryRunning">✅ Validate &amp; Create Table</button>
+                            </div>
+                        </div>
 
                         @* ── Result message ── *@
                         @if (!string.IsNullOrEmpty(QueryTestResult))

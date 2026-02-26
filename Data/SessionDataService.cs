@@ -56,6 +56,9 @@ namespace SqlHealthAssessment.Data
             var sessions = new List<SessionInfo>();
 
             using var conn = await _connectionFactory.CreateConnectionAsync();
+            // Live session DMVs are server-scoped; always query from master to avoid
+            // a dependency on the SQLWATCH database being present or accessible.
+            conn.ChangeDatabase("master");
             using var cmd = ((SqlConnection)conn).CreateCommand();
             cmd.CommandText = LiveSessionsQuery;
             cmd.CommandTimeout = 30;
