@@ -1454,7 +1454,7 @@
             "spanColumns": false
           },
           "query": {
-            "sqlServer": "SELECT TOP 20 s.spid AS Spid, DB_NAME(s.dbid) AS [Database], status AS Status, CAST(cpu AS BIGINT) AS Cpu, CAST(physical_io AS BIGINT) AS PhysicalIo, program_name AS ProgramName FROM sys.sysprocesses s WHERE s.spid \u003E 50 AND program_name NOT LIKE \u0027%SQLMonitorUI%\u0027 AND hostname \u003C\u003E \u0027\u0027 AND program_name \u003C\u003E \u0027\u0027 ORDER BY (ISNULL(cpu,0) \u002B ISNULL(physical_io,0)) DESC",
+            "sqlServer": "SELECT TOP (@TopRows) s.spid AS Spid, DB_NAME(s.dbid) AS [Database], status AS Status, CAST(cpu AS BIGINT) AS Cpu, CAST(physical_io AS BIGINT) AS PhysicalIo, program_name AS ProgramName FROM sys.sysprocesses s WHERE s.spid \u003E 50 AND program_name NOT LIKE \u0027%SQLMonitorUI%\u0027 AND hostname \u003C\u003E \u0027\u0027 AND program_name \u003C\u003E \u0027\u0027 ORDER BY (ISNULL(cpu,0) \u002B ISNULL(physical_io,0)) DESC",
             "liveQueries": ""
           },
           "statUnit": "",
@@ -1465,7 +1465,7 @@
           "colorThresholds": [],
           "dataGridIsClickable": false,
           "dataGridMaxRows": 500,
-          "dataGridTopRows": 0
+          "dataGridTopRows": 100
         },
         {
           "id": "live.blocking",

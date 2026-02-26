@@ -16,6 +16,14 @@ namespace SqlHealthAssessment.Data
         private readonly object _lock = new();
         private string? _currentServerId;
 
+        // Discovery cache — populated once after the first successful SQLWATCH scan.
+        // Invalidated whenever connections are added, updated, or removed so that
+        // the next dashboard load re-runs discovery and picks up the new topology.
+        private bool _discoveryCompleted;
+        private string[] _cachedInstances = Array.Empty<string>();
+        private readonly Dictionary<string, string> _cachedInstanceToConnectionId = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _cachedConnectionsWithSqlWatch = new();
+
         public event Action? OnConnectionChanged;
 
         private static readonly JsonSerializerOptions DeserializeOptions = new()
@@ -85,6 +93,7 @@ namespace SqlHealthAssessment.Data
             lock (_lock)
             {
                 _connections.Add(connection);
+                InvalidateDiscoveryCache();
                 SaveConnections();
             }
         }
@@ -97,6 +106,7 @@ namespace SqlHealthAssessment.Data
                 if (index >= 0)
                 {
                     _connections[index] = connection;
+                    InvalidateDiscoveryCache();
                     SaveConnections();
                 }
             }
@@ -107,6 +117,7 @@ namespace SqlHealthAssessment.Data
             lock (_lock)
             {
                 _connections.RemoveAll(c => c.Id == id);
+                InvalidateDiscoveryCache();
                 SaveConnections();
             }
         }
@@ -124,6 +135,66 @@ namespace SqlHealthAssessment.Data
                     SaveConnections();
                 }
             }
+        }
+
+        // ── Discovery cache ──────────────────────────────────────────────
+
+        /// <summary>True after the first successful SQLWATCH instance discovery.</summary>
+        public bool DiscoveryCompleted { get { lock (_lock) return _discoveryCompleted; } }
+
+        /// <summary>
+        /// Returns a snapshot of the discovery results for use by DynamicDashboard.
+        /// All collections are copied so callers hold independent references.
+        /// </summary>
+        public (string[] instances,
+                Dictionary<string, string> instanceToConnId,
+                HashSet<string> connectionsWithSqlWatch) GetDiscoveryCache()
+        {
+            lock (_lock)
+            {
+                return (
+                    _cachedInstances.ToArray(),
+                    new Dictionary<string, string>(_cachedInstanceToConnectionId, StringComparer.OrdinalIgnoreCase),
+                    new HashSet<string>(_cachedConnectionsWithSqlWatch)
+                );
+            }
+        }
+
+        /// <summary>
+        /// Stores discovery results from DynamicDashboard so subsequent dashboard
+        /// navigations can skip the SQL roundtrips.
+        /// </summary>
+        public void CacheDiscoveryResults(
+            string[] instances,
+            Dictionary<string, string> instanceToConnId,
+            HashSet<string> connectionsWithSqlWatch)
+        {
+            lock (_lock)
+            {
+                _cachedInstances = instances.ToArray();
+
+                _cachedInstanceToConnectionId.Clear();
+                foreach (var kvp in instanceToConnId)
+                    _cachedInstanceToConnectionId[kvp.Key] = kvp.Value;
+
+                _cachedConnectionsWithSqlWatch.Clear();
+                foreach (var id in connectionsWithSqlWatch)
+                    _cachedConnectionsWithSqlWatch.Add(id);
+
+                _discoveryCompleted = true;
+            }
+        }
+
+        /// <summary>
+        /// Clears the discovery cache. Must be called (inside _lock) whenever the
+        /// connection topology changes so the next load re-discovers instance names.
+        /// </summary>
+        private void InvalidateDiscoveryCache()
+        {
+            _discoveryCompleted = false;
+            _cachedInstances = Array.Empty<string>();
+            _cachedInstanceToConnectionId.Clear();
+            _cachedConnectionsWithSqlWatch.Clear();
         }
 
         private void LoadConnections()

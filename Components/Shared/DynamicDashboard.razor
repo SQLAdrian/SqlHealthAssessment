@@ -302,9 +302,34 @@
         SelectedInstance = initialInstance;
         SetServerContext(initialInstance);
 
-        // Discover actual SQLWATCH instance names — they may differ from the user-configured
-        // connection names (e.g. IP addresses vs @@SERVERNAME). Must run before first LoadData.
-        await DiscoverAndUpdateInstancesAsync();
+        if (ConnectionManager.DiscoveryCompleted)
+        {
+            // Reuse cached discovery results — no SQL roundtrips needed.
+            // This makes every subsequent dashboard switch instant.
+            var (cachedInstances, cachedMap, cachedWithSqlWatch) = ConnectionManager.GetDiscoveryCache();
+
+            foreach (var kvp in cachedMap)
+                _sqlWatchInstanceToConnectionId[kvp.Key] = kvp.Value;
+            foreach (var id in cachedWithSqlWatch)
+                _connectionsWithSqlWatch.Add(id);
+
+            if (cachedInstances.Length > 0)
+            {
+                Instances = cachedInstances;
+                if (!Instances.Contains(SelectedInstance, StringComparer.OrdinalIgnoreCase))
+                    SelectedInstance = Instances.FirstOrDefault() ?? "";
+            }
+            SetServerContext(SelectedInstance);
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[DynamicDashboard:{DashboardId}] Using cached discovery. Instances: [{string.Join(", ", Instances)}]");
+        }
+        else
+        {
+            // First load ever (or connections changed) — run discovery and cache the results.
+            await DiscoverAndUpdateInstancesAsync();
+            ConnectionManager.CacheDiscoveryResults(Instances, _sqlWatchInstanceToConnectionId, _connectionsWithSqlWatch);
+        }
 
         await LoadData();
         if (AutoRefresh) RefreshService.Start();
