@@ -62,14 +62,12 @@
             <text x="@CenterX" y="@(CenterY - CanvasRadius * 0.72 + 11)" text-anchor="middle" font-size="9" fill="#ffb74d" fill-opacity="0.65" font-family="Segoe UI, sans-serif" pointer-events="none">Idle (TX)</text>
             <text x="@CenterX" y="@(CenterY - CanvasRadius * 0.95 + 11)" text-anchor="middle" font-size="9" fill="#81c784" fill-opacity="0.65" font-family="Segoe UI, sans-serif" pointer-events="none">Sleeping</text>
 
-            @* Blocking chain lines *@
+            @* Blocking chain lines — uses pre-built O(1) lookup, not O(n²) FirstOrDefault *@
             @foreach (var session in Sessions.Where(s => s.IsBlocked))
             {
-                var blocker = Sessions.FirstOrDefault(s => s.SPID == session.BlockingSessionId);
-                if (blocker != null)
+                if (_blockerPositions.TryGetValue(session.SPID, out var blockerPos))
                 {
                     var blockedPos = GetPosition(session.SPID);
-                    var blockerPos = GetPosition(blocker.SPID);
                     <line x1="@blockerPos.x" y1="@blockerPos.y"
                           x2="@blockedPos.x" y2="@blockedPos.y"
                           class="blocking-line" />
@@ -139,6 +137,8 @@
     private double CanvasRadius => Math.Min(SvgWidth, SvgHeight) / 2.0 * 0.90;
 
     private Dictionary<int, (double x, double y)> _positionCache = new();
+    // Pre-built for O(1) blocker-position lookup during render (replaces O(n²) FirstOrDefault)
+    private Dictionary<int, (double x, double y)> _blockerPositions = new();
 
     protected override void OnParametersSet()
     {
@@ -232,6 +232,13 @@
                 angle += GoldenAngle;
             }
         }
+
+        // Pre-build blocker-position lookup so the render loop is O(1) not O(n²)
+        _blockerPositions = Sessions
+            .Where(s => s.IsBlocked && s.BlockingSessionId > 0 && _positionCache.ContainsKey(s.BlockingSessionId))
+            .ToDictionary(
+                s => s.SPID,
+                s => _positionCache[s.BlockingSessionId]);
     }
 
     /// <summary>

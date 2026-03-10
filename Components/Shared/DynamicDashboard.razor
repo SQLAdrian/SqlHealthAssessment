@@ -44,15 +44,35 @@
 <DashboardToolbar @bind-TimeRangeMinutes="TimeRangeMinutes"
                   @bind-AutoRefresh="AutoRefresh"
                   @bind-TimezoneOffsetHours="TimezoneOffsetHours"
+                  DataSource="@DataSource"
+                  DataSourceChanged="OnDataSourceChanged"
                   OnRefreshRequested="OnManualRefresh"
                   OnServerChanged="OnServerConnectionChanged" />
 
 <div class="dashboard-content">
 
+    @* Thin loading bar — visible during every refresh, doesn't blank out the content below *@
+    @if (IsLoading)
+    {
+        <div class="db-loading-bar"><div class="db-loading-bar-fill"></div></div>
+    }
+
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
         <div class="chart-empty" style="color: #f44336; background: #2a1a1a; border: 1px solid #f44336; padding: 12px; margin: 8px; border-radius: 4px;">
             @ErrorMessage
+        </div>
+    }
+
+    @* Stale data banner — shown when SQL Server is unreachable and we're serving cached data *@
+    @if (CachingExecutor.IsServingStaleData)
+    {
+        <div class="db-stale-banner">
+            <span>⚠ Serving cached data</span>
+            @if (CachingExecutor.LastSuccessfulFetch.HasValue)
+            {
+                <span class="db-stale-age">Last live fetch: @CachingExecutor.LastSuccessfulFetch.Value.ToString("HH:mm:ss")</span>
+            }
         </div>
     }
 
@@ -84,7 +104,8 @@
         </div>
     }
 
-    @if (IsLoading && (CurrentServerHasSqlWatch || !RequiresSqlWatch))
+    @* Initial blank-slate spinner only — subsequent refreshes keep content visible *@
+    @if (IsLoading && !_hasLoadedOnce && (CurrentServerHasSqlWatch || !RequiresSqlWatch))
     {
         <div class="chart-empty">Loading data...</div>
     }
@@ -191,6 +212,7 @@
     private string[] Instances = Array.Empty<string>();
     private int TimeRangeMinutes = 60;
     private double TimezoneOffsetHours = 0;
+    private string DataSource = "sqlwatch";
     private bool AutoRefresh = true;
     private bool IsLoading = true;
     private string? ErrorMessage;
@@ -216,6 +238,9 @@
 
     // Per-panel runtime TOP-rows values (keyed by panel ID)
     private Dictionary<string, int> _panelTopRows = new();
+
+    // Set to true after the first successful LoadData so refresh cycles don't blank the UI
+    private bool _hasLoadedOnce = false;
 
     // Maps SQLWATCH sql_instance names (@@SERVERNAME format) → ServerConnection.Id.
     // Built during initialisation to bridge the gap between user-configured server names
@@ -248,7 +273,7 @@
             Height = panel.Height,
             RefreshIntervalSeconds = panel.RefreshIntervalSeconds,
             Layout = panel.Layout != null ? new PanelLayout { Column = panel.Layout.Column, Order = panel.Layout.Order, SpanColumns = panel.Layout.SpanColumns } : new PanelLayout(),
-            Query = panel.Query != null ? new QueryPair { SqlServer = panel.Query.SqlServer, LiveQueries = panel.Query.LiveQueries } : new QueryPair(),
+            Query = panel.Query != null ? new QueryPair { Source = panel.Query.Source, SqlServer = panel.Query.SqlServer, LiveQueries = panel.Query.LiveQueries } : new QueryPair(),
             StatUnit = panel.StatUnit,
             StatThresholdKey = panel.StatThresholdKey,
             BarGaugeThresholdKey = panel.BarGaugeThresholdKey,
@@ -256,7 +281,8 @@
             ValueFormat = panel.ValueFormat,
             ColorThresholds = panel.ColorThresholds != null ? new List<ColorThresholdRule>(panel.ColorThresholds) : new List<ColorThresholdRule>(),
             DataGridIsClickable = panel.DataGridIsClickable,
-            DataGridMaxRows = panel.DataGridMaxRows
+            DataGridMaxRows = panel.DataGridMaxRows,
+            Source = panel.Source
         };
     }
 
@@ -268,7 +294,14 @@
 
     private void RefreshPanelCaches()
     {
-        _enabledPanelsCache = Dashboard?.Panels?.Where(p => p.Enabled).ToList() ?? new List<PanelDefinition>();
+        // Filter panels by data source
+        var sourceFilteredPanels = Dashboard?.Panels?.Where(p => 
+        {
+            var panelSource = p.GetEffectiveSource(Dashboard?.Source ?? "sqlwatch");
+            return panelSource == "both" || panelSource == DataSource || string.IsNullOrEmpty(panelSource);
+        }).ToList() ?? new List<PanelDefinition>();
+
+        _enabledPanelsCache = sourceFilteredPanels.Where(p => p.Enabled).ToList();
         _statPanelsCache = _enabledPanelsCache.Where(p => p.Layout.Column == 0 && (p.PanelType == "StatCard" || p.PanelType == "DeltaStatCard" || p.PanelType == "CheckStatus")).OrderBy(p => p.Layout.Order).ToList();
         _detailsPanelsCache = _enabledPanelsCache.Where(p => p.Layout.Column == 0 && p.PanelType == "TextCard").OrderBy(p => p.Layout.Order).ToList();
         _gaugePanelsCache = _enabledPanelsCache.Where(p => p.PanelType == "BarGauge").OrderBy(p => p.Layout.Order).ToList();
@@ -282,6 +315,7 @@
         InstanceSelector.OnInstanceChanged += OnGlobalInstanceChanged;
 
         TimezoneOffsetHours = UserSettings.GetTimezoneOffset();
+        DataSource = UserSettings.GetDataSource();
         Dashboard = ConfigService.Config.Dashboards.FirstOrDefault(d => string.Equals(d.Id, DashboardId, StringComparison.OrdinalIgnoreCase));
 
         if (Dashboard == null)
@@ -478,11 +512,6 @@
             return;
         }
 
-        // Log memory before load
-        var process = System.Diagnostics.Process.GetCurrentProcess();
-        var memBefore = process.WorkingSet64 / 1024.0 / 1024.0;
-        System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Memory before load: {memBefore:F1} MB");
-
         IsLoading = true;
         ErrorMessage = null;
         _panelErrors.Clear();
@@ -523,24 +552,11 @@
         _gridResults = gridResults;
         _checkResults = checkResults;
 
-        RefreshPanelCaches();
-
-        // Log memory after load
-        process = System.Diagnostics.Process.GetCurrentProcess();
-        var memAfter = process.WorkingSet64 / 1024.0 / 1024.0;
-        System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Memory after load: {memAfter:F1} MB (delta: {memAfter - memBefore:F1} MB)");
-
-        // Force garbage collection to free memory from old data
-        if (memAfter - memBefore > 50) // Only GC if memory increased by more than 50MB
-        {
-            System.Diagnostics.Debug.WriteLine("[DynamicDashboard] Forcing GC collection...");
-            GC.Collect(2, GCCollectionMode.Optimized, false);
-        }
-
+        _hasLoadedOnce = true;
         IsLoading = false;
         await InvokeAsync(StateHasChanged);
     }
-    
+
     private async Task LoadPanelDataAsync(
     PanelDefinition panel,
     DashboardFilter filter,
@@ -565,20 +581,14 @@
                     if (dt.Rows.Count > 0)
                     {
                         var val = Convert.ToDouble(dt.Rows[0]["Value"]);
-                        var color = panel.ColorThresholds?.Count > 0
-                            ? panel.GetThresholdColor(val)
-                            : ThresholdConfig.GetColor(panel.StatThresholdKey, val);
-                        statResults[panel.Id] = new StatValue { Label = panel.Title, Value = val, Unit = panel.StatUnit, Color = color };
+                        statResults[panel.Id] = new StatValue { Label = panel.Title, Value = val, Unit = panel.StatUnit, Color = ResolveColor(panel, val) };
                     }
                     break;
                 case "BarGauge":
                     var bgData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader =>
                     {
                         var val = Convert.ToDouble(reader["Value"]);
-                        var color = panel.ColorThresholds?.Count > 0
-                            ? panel.GetThresholdColor(val)
-                            : ThresholdConfig.GetColor(panel.BarGaugeThresholdKey ?? "", val);
-                        return new StatValue { Label = reader["Label"]?.ToString() ?? "", Value = val, Unit = reader["Unit"]?.ToString() ?? "%", Instance = reader["Instance"]?.ToString() ?? "", Color = color };
+                        return new StatValue { Label = reader["Label"]?.ToString() ?? "", Value = val, Unit = reader["Unit"]?.ToString() ?? "%", Instance = reader["Instance"]?.ToString() ?? "", Color = ResolveColor(panel, val) };
                     }, null, cancellationToken);
                     bgResults[panel.Id] = bgData;
                     break;
@@ -668,8 +678,16 @@
         await LoadData();
     }
 
+    private async Task OnDataSourceChanged(string newSource)
+    {
+        DataSource = newSource;
+        RefreshPanelCaches();
+        await LoadData();
+    }
+
     private async void OnAutoRefresh()
     {
+        if (!AutoRefresh) return;
         try
         {
             using var cts = new System.Threading.CancellationTokenSource();
@@ -711,6 +729,19 @@
         InstanceSelector.OnInstanceChanged -= OnGlobalInstanceChanged;
         
         System.Diagnostics.Debug.WriteLine($"[DynamicDashboard] Disposed dashboard '{DashboardId}'. Memory freed.");
+    }
+
+    /// <summary>
+    /// Resolves the display colour for a numeric panel value.
+    /// Prefers the panel's inline ColorThresholds list; falls back to the
+    /// named ThresholdConfig entry (StatThresholdKey / BarGaugeThresholdKey).
+    /// </summary>
+    private static string ResolveColor(PanelDefinition panel, double value)
+    {
+        if (panel.ColorThresholds?.Count > 0)
+            return panel.GetThresholdColor(value);
+        var key = panel.StatThresholdKey ?? panel.BarGaugeThresholdKey ?? "";
+        return ThresholdConfig.GetColor(key, value);
     }
 
     private static TimeSeriesPoint MapTimeSeriesPoint(IDataReader reader) => new()

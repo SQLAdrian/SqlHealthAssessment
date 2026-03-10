@@ -123,6 +123,9 @@
     <None Update="SQLWATCH_db\02_PostSQLWATCHDBcreate.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="PerformanceMonitor_db\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

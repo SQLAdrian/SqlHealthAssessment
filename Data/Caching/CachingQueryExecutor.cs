@@ -394,19 +394,9 @@ namespace SqlHealthAssessment.Data.Caching
         // ──────────────────────── Helpers ───────────────────────────────
 
         /// <summary>
-        /// Determines the panel type for a given queryId by searching the dashboard config.
-        /// Returns the PanelType string ("TimeSeries", "StatCard", etc.) or "Unknown".
+        /// Determines the panel type for a given queryId using the O(1) cache in DashboardConfigService.
         /// </summary>
-        private string GetPanelType(string queryId)
-        {
-            foreach (var dashboard in _configService.Config.Dashboards)
-            {
-                var panel = dashboard.Panels.FirstOrDefault(p => p.Id == queryId);
-                if (panel != null)
-                    return panel.PanelType;
-            }
-            return "Unknown";
-        }
+        private string GetPanelType(string queryId) => _configService.GetPanelType(queryId);
 
         /// <summary>
         /// Builds a consistent cache key from the instance selection in the filter.

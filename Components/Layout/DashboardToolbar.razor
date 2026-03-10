@@ -67,6 +67,14 @@
     </div>
 
     <div class="toolbar-group">
+        <label class="toolbar-label">Source:</label>
+        <select class="toolbar-select" @onchange="OnDataSourceChanged">
+            <option value="sqlwatch" selected=@(DataSource == "sqlwatch")>SQLWATCH</option>
+            <option value="pm" selected=@(DataSource == "pm")>Performance Monitor</option>
+        </select>
+    </div>
+
+    <div class="toolbar-group">
         <button class="toolbar-btn @(AutoRefresh ? "active" : "")" @onclick="ToggleAutoRefresh">
             @(AutoRefresh ? "⏸ Pause" : "▶ Auto-Refresh")
         </button>
@@ -95,6 +103,8 @@
     [Parameter] public double TimezoneOffsetHours { get; set; } = 0;
     [Parameter] public EventCallback<double> TimezoneOffsetHoursChanged { get; set; }
     [Parameter] public EventCallback OnServerChanged { get; set; }
+    [Parameter] public string DataSource { get; set; } = "sqlwatch";
+    [Parameter] public EventCallback<string> DataSourceChanged { get; set; }
 
     private string ServerDisplayName = "SqlServer";
     private int RefreshIntervalSeconds = 35;
@@ -118,6 +128,9 @@
 
         // Load timezone from user settings (default to UTC+13 for NZ)
         TimezoneOffsetHours = UserSettings.GetTimezoneOffset();
+
+        // Load data source from user settings
+        DataSource = UserSettings.GetDataSource();
 
         // Populate server connection list from the manager
         ServerConnections = ConnectionManager.GetEnabledConnections();
@@ -186,42 +199,24 @@
         {
             var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
             var json = await File.ReadAllTextAsync(configPath);
-            var config = System.Text.Json.JsonDocument.Parse(json);
-            var root = config.RootElement;
-            
-            // Create a new JSON object with updated value
-            var newConfig = new System.Text.StringBuilder();
-            newConfig.AppendLine("{");
-            
-            foreach (var prop in root.EnumerateObject())
+
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            using var ms = new System.IO.MemoryStream();
+            var writerOptions = new System.Text.Json.JsonWriterOptions { Indented = true };
+            using (var writer = new System.Text.Json.Utf8JsonWriter(ms, writerOptions))
             {
-                if (prop.Name == "RefreshIntervalSeconds")
+                writer.WriteStartObject();
+                foreach (var prop in doc.RootElement.EnumerateObject())
                 {
-                    newConfig.AppendLine($"  \"RefreshIntervalSeconds\": {seconds},");
+                    if (prop.Name == "RefreshIntervalSeconds")
+                        writer.WriteNumber("RefreshIntervalSeconds", seconds);
+                    else
+                        prop.WriteTo(writer);
                 }
-                else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String)
-                {
-                    newConfig.AppendLine($"  \"{prop.Name}\": \"{prop.Value.GetString()}\",");
-                }
-                else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Number)
-                {
-                    newConfig.AppendLine($"  \"{prop.Name}\": {prop.Value.GetRawText()},");
-                }
-                else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.True || prop.Value.ValueKind == System.Text.Json.JsonValueKind.False)
-                {
-                    newConfig.AppendLine($"  \"{prop.Name}\": {prop.Value.GetBoolean().ToString().ToLower()},");
-                }
-                else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
-                {
-                    newConfig.AppendLine($"  \"{prop.Name}\": {prop.Value.GetRawText()},");
-                }
+                writer.WriteEndObject();
             }
-            
-            newConfig.AppendLine("}");
-            
-            // Remove trailing comma before closing brace on the previous line
-            var finalJson = newConfig.ToString().Replace(",\n  }", "\n  }");
-            await File.WriteAllTextAsync(configPath, finalJson);
+
+            await File.WriteAllBytesAsync(configPath, ms.ToArray());
         }
         catch (Exception ex)
         {
@@ -246,6 +241,14 @@
             UserSettings.SetTimezoneOffset(offset);
             await TimezoneOffsetHoursChanged.InvokeAsync(offset);
         }
+    }
+
+    private async Task OnDataSourceChanged(ChangeEventArgs e)
+    {
+        var source = e.Value?.ToString() ?? "sqlwatch";
+        DataSource = source;
+        UserSettings.SetDataSource(source);
+        await DataSourceChanged.InvokeAsync(source);
     }
 
     private async Task ToggleAutoRefresh()

@@ -20,14 +20,14 @@ namespace SqlHealthAssessment.Data
         private readonly int _commandTimeout;
         private readonly int _maxRows;
         private readonly IDbConnectionFactory _connectionFactory;
-        private readonly QueryStore _queryStore;
+        private readonly DashboardConfigService _configService;
         private readonly AuditLogService? _auditLog;
         private readonly ServerConnectionManager _connectionManager;
 
-        public QueryExecutor(IDbConnectionFactory connectionFactory, QueryStore queryStore, IConfiguration configuration, ServerConnectionManager connectionManager, AuditLogService? auditLog = null)
+        public QueryExecutor(IDbConnectionFactory connectionFactory, DashboardConfigService configService, IConfiguration configuration, ServerConnectionManager connectionManager, AuditLogService? auditLog = null)
         {
             _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-            _queryStore = queryStore ?? throw new ArgumentNullException(nameof(queryStore));
+            _configService = configService ?? throw new ArgumentNullException(nameof(configService));
             _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             _auditLog = auditLog;
             
@@ -46,7 +46,8 @@ namespace SqlHealthAssessment.Data
             System.Threading.CancellationToken cancellationToken = default)
         {
             var useLiveQueries = _connectionManager.CurrentServer?.HasSqlWatch == false;
-            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType, useLiveQueries);
+            var sourceType = useLiveQueries ? "LiveQueries" : _connectionFactory.DataSourceType;
+            var sql = _configService.GetQuery(queryId, sourceType);
             var dt = new DataTable();
             var startTime = DateTime.UtcNow;
 
@@ -127,7 +128,8 @@ namespace SqlHealthAssessment.Data
             System.Threading.CancellationToken cancellationToken = default)
         {
             var useLiveQueries = _connectionManager.CurrentServer?.HasSqlWatch == false;
-            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType, useLiveQueries);
+            var sourceType = useLiveQueries ? "LiveQueries" : _connectionFactory.DataSourceType;
+            var sql = _configService.GetQuery(queryId, sourceType);
             var results = new List<T>();
 
             using var conn = (SqlConnection)_connectionFactory.CreateConnection();
@@ -167,7 +169,8 @@ namespace SqlHealthAssessment.Data
             System.Threading.CancellationToken cancellationToken = default)
         {
             var useLiveQueries = _connectionManager.CurrentServer?.HasSqlWatch == false;
-            var sql = _queryStore.GetQuery(queryId, _connectionFactory.DataSourceType, useLiveQueries);
+            var sourceType = useLiveQueries ? "LiveQueries" : _connectionFactory.DataSourceType;
+            var sql = _configService.GetQuery(queryId, sourceType);
 
             using var conn = (SqlConnection)_connectionFactory.CreateConnection();
             await conn.OpenAsync(cancellationToken);

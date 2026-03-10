@@ -30,11 +30,21 @@ namespace SqlHealthAssessment.Data.Models
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;
 
+        /// <summary>Data source: "sqlwatch" (default), "pm" (PerformanceMonitor), or "both"</summary>
+        [JsonPropertyName("source")]
+        public string Source { get; set; } = "sqlwatch";
+
         [JsonPropertyName("showAllOption")]
         public bool ShowAllOption { get; set; } = false;
 
         [JsonPropertyName("panels")]
         public List<PanelDefinition> Panels { get; set; } = new();
+
+        /// <summary>Returns true if this dashboard should be visible for the given source.</summary>
+        public bool IsVisibleForSource(string source)
+        {
+            return Source == "both" || Source == source || string.IsNullOrEmpty(Source);
+        }
     }
 
     public class PanelDefinition
@@ -51,6 +61,10 @@ namespace SqlHealthAssessment.Data.Models
 
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;
+
+        /// <summary>Data source: "sqlwatch" (default), "pm" (PerformanceMonitor), or "both". If empty, inherits from dashboard.</summary>
+        [JsonPropertyName("source")]
+        public string Source { get; set; } = "";
 
         /// <summary>TimeSeries, StatCard, BarGauge, DataGrid, CheckStatus, TextCard</summary>
         [JsonPropertyName("panelType")]
@@ -111,6 +125,12 @@ namespace SqlHealthAssessment.Data.Models
         /// </summary>
         [JsonPropertyName("dataGridTopRows")]
         public int DataGridTopRows { get; set; } = 0;
+
+        /// <summary>Gets the effective source, inheriting from dashboard if not specified.</summary>
+        public string GetEffectiveSource(string dashboardSource)
+        {
+            return string.IsNullOrEmpty(Source) ? dashboardSource : Source;
+        }
 
         /// <summary>Evaluates colorThresholds rules in order, returns last matching color. Falls back to default.</summary>
         public string GetThresholdColor(double value, string defaultColor = "#2196f3")
@@ -198,10 +218,25 @@ namespace SqlHealthAssessment.Data.Models
 
     public class QueryPair
     {
+        /// <summary>Data source: "sqlwatch" (default), "pm" (PerformanceMonitor)</summary>
+        [JsonPropertyName("source")]
+        public string Source { get; set; } = "sqlwatch";
+
         [JsonPropertyName("sqlServer")]
         public string SqlServer { get; set; } = "";
 
         [JsonPropertyName("liveQueries")]
         public string LiveQueries { get; set; } = "";
+
+        /// <summary>Gets the appropriate SQL query based on the data source setting.</summary>
+        public string GetQueryForSource(string currentSource)
+        {
+            // If this query's source matches the current source, use it
+            if (Source == currentSource || string.IsNullOrEmpty(Source))
+            {
+                return SqlServer;
+            }
+            return "";
+        }
     }
 }

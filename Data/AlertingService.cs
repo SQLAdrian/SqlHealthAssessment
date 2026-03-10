@@ -26,6 +26,13 @@ namespace SqlHealthAssessment.Data
             StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan AlertCooldown = TimeSpan.FromMinutes(5);
 
+        /// <summary>
+        /// Set of notification IDs the user has explicitly acknowledged.
+        /// Cleared automatically when the corresponding alert no longer fires
+        /// (so the badge re-appears if the condition returns).
+        /// </summary>
+        private readonly HashSet<string> _acknowledgedIds = new(StringComparer.Ordinal);
+
         public AlertingService(ILogger<AlertingService> logger)
         {
             _logger = logger;
@@ -79,19 +86,50 @@ namespace SqlHealthAssessment.Data
 
         public int GetUnacknowledgedCount()
         {
-            return _notifications.Count(n => !n.IsAcknowledged);
+            lock (_lock)
+            {
+                return _notifications.Count(n => !_acknowledgedIds.Contains(n.Id));
+            }
         }
 
+        /// <summary>
+        /// Acknowledges a single notification by its ID.
+        /// The notification remains in the list but is excluded from the unacknowledged count
+        /// until the alert condition clears and re-triggers.
+        /// </summary>
         public void AcknowledgeNotification(string id)
         {
-            // For simplicity, we'll just clear old notifications
-            // In a real app, you'd track them by ID
-            ClearNotifications();
+            lock (_lock)
+            {
+                _acknowledgedIds.Add(id);
+                var notification = _notifications.FirstOrDefault(n => n.Id == id);
+                if (notification != null)
+                    notification.IsAcknowledged = true;
+            }
+        }
+
+        /// <summary>
+        /// Acknowledges all current notifications in one operation.
+        /// </summary>
+        public void AcknowledgeAll()
+        {
+            lock (_lock)
+            {
+                foreach (var n in _notifications)
+                {
+                    _acknowledgedIds.Add(n.Id);
+                    n.IsAcknowledged = true;
+                }
+            }
         }
 
         public void ClearNotifications()
         {
-            while (_notifications.TryDequeue(out _)) { }
+            lock (_lock)
+            {
+                while (_notifications.TryDequeue(out _)) { }
+                _acknowledgedIds.Clear();
+            }
         }
 
         /// <summary>
@@ -161,6 +199,12 @@ namespace SqlHealthAssessment.Data
                                 Message = result.Message
                             };
                             _notifications.Enqueue(notification);
+
+                            // A new notification for this metric means the condition re-triggered —
+                            // remove stale acks for notifications that have since been dequeued so the
+                            // badge reappears correctly rather than staying silenced indefinitely.
+                            var activeIds = new HashSet<string>(_notifications.Select(n => n.Id));
+                            _acknowledgedIds.RemoveWhere(id => !activeIds.Contains(id));
 
                             // Keep only last 100 notifications
                             while (_notifications.Count > 100)

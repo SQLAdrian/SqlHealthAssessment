@@ -75,12 +75,10 @@ namespace SqlHealthAssessment
             });
 
             services.AddSingleton<DashboardConfigService>();
-            services.AddSingleton<QueryStore>();
             services.AddSingleton<QueryThrottleService>();
             services.AddSingleton<QueryExecutor>();
             services.AddScoped<DashboardDataService>();
             services.AddSingleton<AutoRefreshService>();
-            services.AddSingleton<GlobalInstanceSelector>();
             services.AddSingleton<CheckRepositoryService>();
             services.AddSingleton<DiagnosticScriptRunner>();
             services.AddSingleton<FullAuditStateService>();
@@ -90,7 +88,6 @@ namespace SqlHealthAssessment
             services.AddSingleton<CheckExecutionService>();
             services.AddSingleton<liveQueriesTableService>();
             services.AddSingleton<SessionManager>();
-            services.AddSingleton<RateLimiter>();
             services.AddSingleton<UserSettingsService>();
             services.AddSingleton<SessionDataService>();
             services.AddSingleton<ToastService>();

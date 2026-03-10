@@ -1854,6 +1854,128 @@
           "dataGridTopRows": 0
         }
       ]
+    },
+    {
+      "id": "querystore",
+      "title": "Query Store",
+      "route": "/querystore",
+      "enabled": true,
+      "showAllOption": false,
+      "description": "Query Store analytics — requires Query Store enabled on the current database (ALTER DATABASE ... SET QUERY_STORE = ON). Queries run against sys.query_store_* DMVs in the configured database context.",
+      "panels": [
+        {
+          "id": "qs.topcpu",
+          "title": "Top CPU Queries (last hour)",
+          "description": "Queries with highest average CPU time over the past hour, aggregated across all plans.",
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 400,
+          "refreshIntervalSeconds": 60,
+          "layout": {
+            "column": 1,
+            "order": 0,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "SELECT TOP (@TopRows)\r\n    q.query_id AS [Query ID],\r\n    LEFT(qt.query_sql_text, 150) AS [Query (truncated)],\r\n    ROUND(AVG(rs.avg_cpu_time) / 1000.0, 1) AS [Avg CPU (ms)],\r\n    ROUND(AVG(rs.avg_duration) / 1000.0, 1) AS [Avg Duration (ms)],\r\n    SUM(rs.count_executions) AS [Executions],\r\n    ROUND(AVG(rs.avg_logical_io_reads), 0) AS [Avg Logical Reads]\r\nFROM sys.query_store_query q WITH (NOLOCK)\r\nJOIN sys.query_store_query_text qt WITH (NOLOCK) ON q.query_text_id = qt.query_text_id\r\nJOIN sys.query_store_plan p WITH (NOLOCK) ON q.query_id = p.query_id\r\nJOIN sys.query_store_runtime_stats rs WITH (NOLOCK) ON p.plan_id = rs.plan_id\r\nJOIN sys.query_store_runtime_stats_interval rsi WITH (NOLOCK) ON rs.runtime_stats_interval_id = rsi.runtime_stats_interval_id\r\nWHERE rsi.start_time >= DATEADD(HOUR, -1, GETUTCDATE())\r\n  AND q.is_internal_query = 0\r\nGROUP BY q.query_id, qt.query_sql_text\r\nORDER BY AVG(rs.avg_cpu_time) DESC",
+            "liveQueries": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 25
+        },
+        {
+          "id": "qs.topduration",
+          "title": "Top Duration Queries (last hour)",
+          "description": "Queries with highest average elapsed duration over the past hour. High duration with low CPU often indicates waits (I/O, locking, network).",
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 400,
+          "refreshIntervalSeconds": 60,
+          "layout": {
+            "column": 1,
+            "order": 1,
+            "spanColumns": true
+          },
+          "query": {
+            "sqlServer": "SELECT TOP (@TopRows)\r\n    q.query_id AS [Query ID],\r\n    LEFT(qt.query_sql_text, 150) AS [Query (truncated)],\r\n    ROUND(AVG(rs.avg_duration) / 1000.0, 1) AS [Avg Duration (ms)],\r\n    ROUND(AVG(rs.avg_cpu_time) / 1000.0, 1) AS [Avg CPU (ms)],\r\n    SUM(rs.count_executions) AS [Executions],\r\n    ROUND(AVG(rs.avg_logical_io_reads), 0) AS [Avg Logical Reads],\r\n    ROUND(AVG(rs.avg_physical_io_reads), 0) AS [Avg Physical Reads]\r\nFROM sys.query_store_query q WITH (NOLOCK)\r\nJOIN sys.query_store_query_text qt WITH (NOLOCK) ON q.query_text_id = qt.query_text_id\r\nJOIN sys.query_store_plan p WITH (NOLOCK) ON q.query_id = p.query_id\r\nJOIN sys.query_store_runtime_stats rs WITH (NOLOCK) ON p.plan_id = rs.plan_id\r\nJOIN sys.query_store_runtime_stats_interval rsi WITH (NOLOCK) ON rs.runtime_stats_interval_id = rsi.runtime_stats_interval_id\r\nWHERE rsi.start_time >= DATEADD(HOUR, -1, GETUTCDATE())\r\n  AND q.is_internal_query = 0\r\nGROUP BY q.query_id, qt.query_sql_text\r\nORDER BY AVG(rs.avg_duration) DESC",
+            "liveQueries": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 25
+        },
+        {
+          "id": "qs.planvariation",
+          "title": "High Plan Variation",
+          "description": "Queries that have compiled multiple different plans. High plan variation with large duration variance is a sign of parameter sniffing.",
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 400,
+          "refreshIntervalSeconds": 300,
+          "layout": {
+            "column": 1,
+            "order": 2,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT TOP (@TopRows)\r\n    q.query_id AS [Query ID],\r\n    LEFT(qt.query_sql_text, 150) AS [Query (truncated)],\r\n    COUNT(DISTINCT p.plan_id) AS [Plan Count],\r\n    ROUND(MAX(rs.avg_duration) / 1000.0, 1) AS [Max Avg Dur (ms)],\r\n    ROUND(MIN(rs.avg_duration) / 1000.0, 1) AS [Min Avg Dur (ms)],\r\n    ROUND((MAX(rs.avg_duration) - MIN(rs.avg_duration)) / 1000.0, 1) AS [Variance (ms)]\r\nFROM sys.query_store_query q WITH (NOLOCK)\r\nJOIN sys.query_store_query_text qt WITH (NOLOCK) ON q.query_text_id = qt.query_text_id\r\nJOIN sys.query_store_plan p WITH (NOLOCK) ON q.query_id = p.query_id\r\nJOIN sys.query_store_runtime_stats rs WITH (NOLOCK) ON p.plan_id = rs.plan_id\r\nWHERE q.is_internal_query = 0\r\nGROUP BY q.query_id, qt.query_sql_text\r\nHAVING COUNT(DISTINCT p.plan_id) >= 2\r\nORDER BY COUNT(DISTINCT p.plan_id) DESC, (MAX(rs.avg_duration) - MIN(rs.avg_duration)) DESC",
+            "liveQueries": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 25
+        },
+        {
+          "id": "qs.regressed",
+          "title": "Regressed Queries",
+          "description": "Queries whose average duration in the last hour is at least 50% worse than their 1-24 hour historical baseline. Indicates a plan change or statistics problem.",
+          "enabled": true,
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 400,
+          "refreshIntervalSeconds": 300,
+          "layout": {
+            "column": 1,
+            "order": 3,
+            "spanColumns": false
+          },
+          "query": {
+            "sqlServer": "SELECT TOP (@TopRows)\r\n    q.query_id AS [Query ID],\r\n    LEFT(qt.query_sql_text, 150) AS [Query (truncated)],\r\n    ROUND(recent.avg_duration / 1000.0, 1) AS [Recent Avg Dur (ms)],\r\n    ROUND(hist.avg_duration / 1000.0, 1) AS [Historical Avg Dur (ms)],\r\n    ROUND((recent.avg_duration - hist.avg_duration) / NULLIF(hist.avg_duration, 0) * 100, 0) AS [Regression %],\r\n    recent.count_executions AS [Recent Executions]\r\nFROM sys.query_store_query q WITH (NOLOCK)\r\nJOIN sys.query_store_query_text qt WITH (NOLOCK) ON q.query_text_id = qt.query_text_id\r\nCROSS APPLY (\r\n    SELECT AVG(CAST(rs.avg_duration AS BIGINT)) AS avg_duration, SUM(rs.count_executions) AS count_executions\r\n    FROM sys.query_store_plan p WITH (NOLOCK)\r\n    JOIN sys.query_store_runtime_stats rs WITH (NOLOCK) ON p.plan_id = rs.plan_id\r\n    JOIN sys.query_store_runtime_stats_interval rsi WITH (NOLOCK) ON rs.runtime_stats_interval_id = rsi.runtime_stats_interval_id\r\n    WHERE p.query_id = q.query_id AND rsi.start_time >= DATEADD(HOUR, -1, GETUTCDATE())\r\n) recent\r\nCROSS APPLY (\r\n    SELECT AVG(CAST(rs.avg_duration AS BIGINT)) AS avg_duration\r\n    FROM sys.query_store_plan p WITH (NOLOCK)\r\n    JOIN sys.query_store_runtime_stats rs WITH (NOLOCK) ON p.plan_id = rs.plan_id\r\n    JOIN sys.query_store_runtime_stats_interval rsi WITH (NOLOCK) ON rs.runtime_stats_interval_id = rsi.runtime_stats_interval_id\r\n    WHERE p.query_id = q.query_id\r\n      AND rsi.start_time >= DATEADD(HOUR, -24, GETUTCDATE())\r\n      AND rsi.start_time < DATEADD(HOUR, -1, GETUTCDATE())\r\n) hist\r\nWHERE q.is_internal_query = 0\r\n  AND recent.avg_duration > hist.avg_duration * 1.5\r\n  AND hist.avg_duration > 10000\r\nORDER BY (recent.avg_duration - hist.avg_duration) / NULLIF(hist.avg_duration, 0) DESC",
+            "liveQueries": ""
+          },
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 25
+        }
+      ]
     }
   ],
   "supportQueries": {
@@ -1882,4 +2004,113 @@
       "liveQueries": "\r\nSELECT\r\n    COALESCE(qph.statement_for_query_plan_hash, \u0027\u0027) AS sql_text,\r\n    qph.query_plan_for_query_plan_hash AS query_plan\r\nFROM sqlwatch_meta_query_plan_hash qph\r\nWHERE qph.query_plan_hash = @PlanHash\r\n    AND qph.sql_instance = @SqlInstance"
     }
   }
+]
+}
+    {
+      "id": "pm",
+      "title": "Performance Monitor",
+      "route": "/pm",
+      "enabled": true,
+      "source": "pm",
+      "showAllOption": false,
+      "panels": [
+        {
+          "id": "pm.latches",
+          "title": "Latch Stats",
+          "description": "Latch wait statistics by class",
+          "enabled": true,
+          "source": "pm",
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 300,
+          "layout": {"column": 1, "order": 1},
+          "query": {
+            "source": "pm",
+            "sqlServer": "SELECT ls.collection_time AS [Time], ls.latch_class AS [Series], ls.wait_time_ms AS [Value] FROM collect.latch_stats AS ls WHERE ls.collection_time BETWEEN @TimeFrom AND @TimeTo ORDER BY ls.collection_time",
+            "liveQueries": ""
+          }
+        },
+        {
+          "id": "pm.spinlocks",
+          "title": "Spinlock Stats",
+          "description": "Spinlock collision statistics",
+          "enabled": true,
+          "source": "pm",
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 300,
+          "layout": {"column": 2, "order": 2},
+          "query": {
+            "source": "pm",
+            "sqlServer": "SELECT ss.collection_time AS [Time], ss.spinlock_name AS [Series], ss.backoffs AS [Value] FROM collect.spinlock_stats AS ss WHERE ss.collection_time BETWEEN @TimeFrom AND @TimeTo ORDER BY ss.collection_time",
+            "liveQueries": ""
+          }
+        },
+        {
+          "id": "pm.memory_grants",
+          "title": "Memory Grants",
+          "description": "Query memory grant statistics",
+          "enabled": true,
+          "source": "pm",
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 300,
+          "layout": {"column": 1, "order": 3},
+          "query": {
+            "source": "pm",
+            "sqlServer": "SELECT mgs.collection_time AS [Time], 'Granted Memory (MB)' AS [Series], mgs.granted_memory_mb AS [Value] FROM collect.memory_grant_stats AS mgs WHERE mgs.collection_time BETWEEN @TimeFrom AND @TimeTo ORDER BY mgs.collection_time",
+            "liveQueries": ""
+          }
+        },
+        {
+          "id": "pm.plan_cache",
+          "title": "Plan Cache",
+          "description": "Plan cache size by type",
+          "enabled": true,
+          "source": "pm",
+          "panelType": "BarGauge",
+          "height": 250,
+          "layout": {"column": 2, "order": 4},
+          "query": {
+            "source": "pm",
+            "sqlServer": "SELECT pcs.cache_type AS [Series], SUM(pcs.single_pages_kb + pages_kb) / 1024.0 AS [Value] FROM collect.plan_cache_stats AS pcs WHERE pcs.collection_time BETWEEN @TimeFrom AND @TimeTo GROUP BY pcs.cache_type",
+            "liveQueries": ""
+          },
+          "valueFormat": "N0"
+        },
+        {
+          "id": "pm.tempdb_usage",
+          "title": "TempDB Usage",
+          "description": "TempDB space allocation and usage",
+          "enabled": true,
+          "source": "pm",
+          "panelType": "TimeSeries",
+          "chartType": "Line",
+          "height": 300,
+          "layout": {"column": 1, "order": 5},
+          "query": {
+            "source": "pm",
+            "sqlServer": "SELECT ts.collection_time AS [Time], 'User Objects (MB)' AS [Series], ts.user_object_reserved_page_count * 8.0 / 1024 AS [Value] FROM collect.tempdb_stats AS ts WHERE ts.collection_time BETWEEN @TimeFrom AND @TimeTo ORDER BY ts.collection_time",
+            "liveQueries": ""
+          }
+        },
+        {
+          "id": "pm.config_changes",
+          "title": "Configuration Changes",
+          "description": "Server and database configuration changes over time",
+          "enabled": true,
+          "source": "pm",
+          "panelType": "DataGrid",
+          "height": 300,
+          "dataGridMaxRows": 50,
+          "layout": {"column": 1, "order": 6, "spanColumns": true},
+          "query": {
+            "source": "pm",
+            "sqlServer": "SELECT TOP 50 scc.change_time AS [Time], scc.configuration_name AS [Setting], scc.value AS [New Value], scc.value_in_use AS [Running Value] FROM report.server_configuration_changes AS scc WHERE scc.change_time BETWEEN @TimeFrom AND @TimeTo ORDER BY scc.change_time DESC",
+            "liveQueries": ""
+          }
+        }
+      ]
+    }
+  ]
 }

@@ -718,7 +718,7 @@
         SelectAllState = SelectedCount == FilteredChecks.Count;
     }
 
-    private async void ApplyOperation(BulkEditOperation operation)
+    private async Task ApplyOperation(BulkEditOperation operation)
     {
         var selectedChecks = AllChecks.Where(c => c.IsSelected).ToList();
 
@@ -857,7 +857,7 @@
         EditingCheck = null;
     }
 
-    private async void SaveCheck()
+    private async Task SaveCheck()
     {
         if (EditingCheck == null) return;
 

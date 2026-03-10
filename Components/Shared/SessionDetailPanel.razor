@@ -6,7 +6,17 @@
     <div class="session-detail-panel">
         <div class="session-detail-header">
             <h3>Session @Session.SPID</h3>
-            <button class="close-btn" @onclick="OnClose" title="Close">✕</button>
+            <div style="display:flex;gap:6px;align-items:center;">
+                @if (Session.IsActive && OnViewPlanRequested.HasDelegate)
+                {
+                    <button class="toolbar-btn" style="font-size:11px;padding:3px 8px;"
+                            @onclick="() => OnViewPlanRequested.InvokeAsync(Session.SPID)"
+                            title="Fetch and display the current query execution plan">
+                        🔍 View Plan
+                    </button>
+                }
+                <button class="close-btn" @onclick="OnClose" title="Close">✕</button>
+            </div>
         </div>
 
         <div class="session-detail-body">
@@ -118,6 +128,7 @@
 @code {
     [Parameter] public SessionInfo? Session { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<int> OnViewPlanRequested { get; set; }
 
     private string GetStatusColor()
     {

@@ -95,5 +95,31 @@ namespace SqlHealthAssessment.Data
 
             return sessions;
         }
+
+        /// <summary>
+        /// Returns the XML query execution plan for a session that currently has an active request.
+        /// Returns null if the session is sleeping or has no plan handle (plan not yet compiled).
+        /// </summary>
+        public async Task<string?> GetQueryPlanAsync(int spid)
+        {
+            using var conn = await _connectionFactory.CreateConnectionAsync();
+            conn.ChangeDatabase("master");
+            using var cmd = ((SqlConnection)conn).CreateCommand();
+            cmd.CommandText = @"
+                SELECT CONVERT(NVARCHAR(MAX), qp.query_plan) AS PlanXml
+                FROM sys.dm_exec_requests r WITH (NOLOCK)
+                CROSS APPLY sys.dm_exec_query_plan(r.plan_handle) qp
+                WHERE r.session_id = @Spid
+                  AND qp.query_plan IS NOT NULL";
+            cmd.CommandTimeout = 10;
+
+            var p = cmd.CreateParameter();
+            p.ParameterName = "@Spid";
+            p.Value = spid;
+            cmd.Parameters.Add(p);
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result as string;
+        }
     }
 }

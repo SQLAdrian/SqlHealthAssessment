@@ -33,6 +33,8 @@ namespace SqlHealthAssessment.Data
             public int DefaultTimeRangeMinutes { get; set; } = 60;
             public bool ShowDiagnosticPane { get; set; } = false;
             public string DefaultDashboardId { get; set; } = "";
+            /// <summary>Data source: "sqlwatch" or "pm" (PerformanceMonitor)</summary>
+            public string DataSource { get; set; } = "sqlwatch";
         }
 
         /// <summary>
@@ -195,6 +197,23 @@ namespace SqlHealthAssessment.Data
         public void SetDefaultDashboardId(string dashboardId)
         {
             _settings.DefaultDashboardId = dashboardId;
+            SaveSettings();
+        }
+
+        /// <summary>
+        /// Get data source setting
+        /// </summary>
+        public string GetDataSource()
+        {
+            return _settings.DataSource;
+        }
+
+        /// <summary>
+        /// Set data source and save
+        /// </summary>
+        public void SetDataSource(string source)
+        {
+            _settings.DataSource = source;
             SaveSettings();
         }
     }
