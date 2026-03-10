@@ -1,0 +1,66 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@if (IsVisible)
+{
+    <div class="modal-overlay" @onclick="Cancel">
+        <div class="modal confirm-dialog" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>@Title</h3>
+                <button class="close-btn" @onclick="Cancel">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-icon @Type.ToString().ToLower()">
+                    @GetIcon()
+                </div>
+                <p class="confirm-message">@Message</p>
+                @if (!string.IsNullOrEmpty(Details))
+                {
+                    <p class="confirm-details">@Details</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="Cancel">@CancelText</button>
+                <button class="btn @GetButtonClass()" @onclick="Confirm">@ConfirmText</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm Action";
+    [Parameter] public string Message { get; set; } = "Are you sure?";
+    [Parameter] public string Details { get; set; } = "";
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+    [Parameter] public ConfirmType Type { get; set; } = ConfirmType.Warning;
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task Confirm()
+    {
+        IsVisible = false;
+        await OnConfirm.InvokeAsync();
+    }
+
+    private async Task Cancel()
+    {
+        IsVisible = false;
+        await OnCancel.InvokeAsync();
+    }
+
+    private string GetIcon() => Type switch
+    {
+        ConfirmType.Danger => "⚠",
+        ConfirmType.Warning => "⚠",
+        ConfirmType.Info => "ℹ",
+        _ => "?"
+    };
+
+    private string GetButtonClass() => Type switch
+    {
+        ConfirmType.Danger => "btn-danger",
+        ConfirmType.Warning => "btn-primary",
+        ConfirmType.Info => "btn-primary",
+        _ => "btn-primary"
+    };
+}

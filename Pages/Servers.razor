@@ -1,0 +1,691 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/servers"
+@inject ServerConnectionManager ConnectionManager
+@using Microsoft.Data.SqlClient
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+
+
+<div class="servers-page">
+    <h2>Server Management</h2>
+    
+    <div class="servers-toolbar">
+        <button class="btn btn-primary" @onclick="ShowAddDialog">➕ Add Server</button>
+        <button class="btn btn-secondary" @onclick="RefreshAllConnections">🔄 Refresh All</button>
+    </div>
+
+    @if (StatusMessage != null)
+    {
+        <div class="status-message @(IsSuccess ? "success" : "error")">
+            @StatusMessage
+        </div>
+    }
+
+    <div class="servers-grid">
+        @foreach (var conn in Connections)
+        {
+            <div class="server-card @(conn.IsConnected ? "connected" : "disconnected")">
+                <div class="server-header">
+                    <div class="server-status">
+                        @if (conn.SuccessfulServers != null && conn.SuccessfulServers.Count > 0)
+                        {
+                            var serverCount = conn.GetServerCount();
+                            @if (conn.SuccessfulServers.Count == serverCount)
+                            {
+                                <span class="status-badge connected">🟢 Connected (@conn.SuccessfulServers.Count/@serverCount)</span>
+                            }
+                            else
+                            {
+                                <span class="status-badge partial">🟡 Partial (@conn.SuccessfulServers.Count/@serverCount)</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="status-badge disconnected">🔴 Disconnected</span>
+                        }
+                    </div>
+                    <div class="server-actions">
+                        <button class="btn-icon" @onclick="() => TestConnection(conn)" title="Test">🔗</button>
+                        <button class="btn-icon" @onclick="() => EditConnection(conn)" title="Edit">✏️</button>
+                        <button class="btn-icon" @onclick="() => DeleteConnection(conn)" title="Delete">🗑️</button>
+                    </div>
+                </div>
+                
+                <div class="server-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Server(s):</span>
+                        <span class="detail-value">@conn.ServerNames</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Database:</span>
+                        <span class="detail-value">@conn.Database</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Auth:</span>
+                        <span class="detail-value">@conn.AuthenticationDisplay</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(conn.Username))
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">Username:</span>
+                            <span class="detail-value">@conn.Username</span>
+                        </div>
+                    }
+                    @if (!conn.IsEnabled)
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">Status:</span>
+                            <span class="detail-value" style="color: #999;">Disabled</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(conn.Environment))
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">Environment:</span>
+                            <span class="detail-value">@conn.Environment</span>
+                        </div>
+                    }
+                    @if (conn.LastConnected.HasValue)
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">Last Connected:</span>
+                            <span class="detail-value">@conn.LastConnected.Value.ToString("g")</span>
+                        </div>
+                    }
+                    @if (conn.SuccessfulServers.Count > 0)
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">Successful:</span>
+                            <span class="detail-value">@string.Join(", ", conn.SuccessfulServers)</span>
+                        </div>
+                    }
+                    @if (SqlWatchStatus.ContainsKey(conn.Id))
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">SQLWATCH:</span>
+                            <span class="detail-value" style="color: @(SqlWatchStatus[conn.Id] ? "var(--green)" : "var(--orange)")">
+                                @(SqlWatchStatus[conn.Id] ? "✓ Installed" : "✗ Not Found")
+                            </span>
+                        </div>
+                    }
+                    @if (PerformanceMonitorStatus.ContainsKey(conn.Id))
+                    {
+                        <div class="detail-row">
+                            <span class="detail-label">PerformanceMonitor:</span>
+                            <span class="detail-value" style="color: @(PerformanceMonitorStatus[conn.Id] ? "var(--green)" : "var(--orange)")">
+                                @(PerformanceMonitorStatus[conn.Id] ? "✓ Installed" : "✗ Not Found")
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        
+        @if (Connections.Count == 0)
+        {
+            <div class="empty-state">
+                <p>No servers configured. Click "Add Server" to add your first server.</p>
+                <button class="btn btn-primary" @onclick="ShowAddDialog">➕ Add Your First Server</button>
+            </div>
+        }
+    </div>
+
+    <!-- Add/Edit Dialog -->
+    @if (ShowDialog)
+    {
+        <div class="dialog-overlay" @onclick="CloseDialog">
+            <div class="dialog-content" @onclick:stopPropagation="true">
+                <h3>@(IsEditing ? "Edit Server" : "Add Server")</h3>
+                
+                <div class="form-group">
+                    <label>Server Name(s)</label>
+                    <textarea @bind="EditingConnection.ServerNames" rows="4" placeholder="Enter server names, one per line (each line becomes a separate connection)"></textarea>
+                    <small>Enter one server per line. Each line will create a separate connection entry.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Database</label>
+                    <input type="text" @bind="EditingConnection.Database" placeholder="master" />
+                    <small>Use 'master' for quick checks, 'SQLWATCH' for dashboards (if SQLWATCH is installed)</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Authentication</label>
+                    <div class="auth-options">
+                        <label class="auth-option">
+                            <input type="radio" name="authType" value="@AuthenticationTypes.Windows"
+                                   checked="@(EditingAuthType == AuthenticationTypes.Windows)"
+                                   @onchange="@(() => SetAuthType(AuthenticationTypes.Windows))" />
+                            Windows Authentication
+                        </label>
+                        <label class="auth-option">
+                            <input type="radio" name="authType" value="@AuthenticationTypes.SqlServer"
+                                   checked="@(EditingAuthType == AuthenticationTypes.SqlServer)"
+                                   @onchange="@(() => SetAuthType(AuthenticationTypes.SqlServer))" />
+                            SQL Server Authentication
+                        </label>
+                        <label class="auth-option">
+                            <input type="radio" name="authType" value="@AuthenticationTypes.EntraMFA"
+                                   checked="@(EditingAuthType == AuthenticationTypes.EntraMFA)"
+                                   @onchange="@(() => SetAuthType(AuthenticationTypes.EntraMFA))" />
+                            Microsoft Entra MFA
+                        </label>
+                    </div>
+                </div>
+
+                @if (EditingAuthType == AuthenticationTypes.SqlServer)
+                {
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" @bind="EditingConnection.Username" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" @bind="EditingPassword" />
+                    </div>
+                }
+                else if (EditingAuthType == AuthenticationTypes.EntraMFA)
+                {
+                    <div class="form-group">
+                        <label>Email / Username (optional)</label>
+                        <input type="text" @bind="EditingConnection.Username" placeholder="user@domain.com" />
+                        <small>Pre-fills the login hint. Leave blank to be prompted.</small>
+                    </div>
+                    <div class="form-group mfa-info">
+                        <small>🔐 A browser window will open for interactive MFA authentication when you connect.</small>
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" @bind="EditingConnection.TrustServerCertificate" />
+                        Trust Server Certificate
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Connection Timeout (seconds)</label>
+                    <input type="number" @bind="EditingConnection.ConnectionTimeout" min="1" max="60" />
+                </div>
+
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary" @onclick="CloseDialog">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveConnection">Save</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Delete Confirmation Dialog -->
+    @if (ShowDeleteConfirm)
+    {
+        <div class="dialog-overlay" @onclick="CancelDelete">
+            <div class="dialog-content" @onclick:stopPropagation="true">
+                <h3>Confirm Delete</h3>
+                <p>Are you sure you want to delete the server connection for:</p>
+                <p><strong>@ConnectionToDelete?.ServerNames</strong></p>
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                    <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ServerConnection> Connections = new();
+    private Dictionary<string, bool> SqlWatchStatus = new();
+    private Dictionary<string, bool> PerformanceMonitorStatus = new();
+    private string? StatusMessage;
+    private bool IsSuccess;
+    private bool ShowDialog;
+    private bool IsEditing;
+    private bool ShowDeleteConfirm;
+    private ServerConnection? ConnectionToDelete;
+    private ServerConnection EditingConnection = new();
+    private string EditingAuthType = AuthenticationTypes.Windows;
+    private string EditingPassword = "";
+    private bool _isTestingAll = false;
+    private string[] Instances = Array.Empty<string>();
+
+    private void SetAuthType(string authType)
+    {
+        EditingAuthType = authType;
+        StateHasChanged();
+    }
+
+    protected override void OnInitialized()
+    {
+        LoadConnections();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Auto-open dialog if no servers exist
+            if (Connections.Count == 0)
+            {
+                ShowAddDialog();
+                StateHasChanged();
+            }
+            else if (!_isTestingAll)
+            {
+                _isTestingAll = true;
+                await TestAllConnectionsSilently();
+            }
+        }
+    }
+
+    private void LoadConnections()
+    {
+        Connections = ConnectionManager.GetConnections();
+    }
+
+    private void ShowAddDialog()
+    {
+        EditingConnection = new ServerConnection
+        {
+            Database = "master",
+            UseWindowsAuthentication = true,
+            AuthenticationType = AuthenticationTypes.Windows,
+            TrustServerCertificate = true,
+            ConnectionTimeout = 15
+        };
+        EditingAuthType = AuthenticationTypes.Windows;
+        EditingPassword = "";
+        IsEditing = false;
+        ShowDialog = true;
+    }
+
+    private void EditConnection(ServerConnection conn)
+    {
+        EditingConnection = new ServerConnection
+        {
+            Id = conn.Id,
+            ServerNames = conn.ServerNames,
+            Database = conn.Database,
+            UseWindowsAuthentication = conn.UseWindowsAuthentication,
+            AuthenticationType = conn.AuthenticationType,
+            Username = conn.Username,
+            TrustServerCertificate = conn.TrustServerCertificate,
+            ConnectionTimeout = conn.ConnectionTimeout,
+            IsConnected = conn.IsConnected,
+            IsEnabled = conn.IsEnabled,
+            Environment = conn.Environment,
+            Tags = new List<string>(conn.Tags),
+            SuccessfulServers = new List<string>(conn.SuccessfulServers),
+            LastConnected = conn.LastConnected
+        };
+        EditingAuthType = conn.EffectiveAuthType;
+        EditingPassword = "";
+        IsEditing = true;
+        ShowDialog = true;
+    }
+
+    private void CloseDialog()
+    {
+        ShowDialog = false;
+    }
+
+    private async Task SaveConnection()
+    {
+        try
+        {
+            await Task.CompletedTask;
+            if (string.IsNullOrWhiteSpace(EditingConnection.ServerNames))
+            {
+                StatusMessage = "Server name is required";
+                IsSuccess = false;
+                return;
+            }
+
+            // Sync auth type from radio selection
+            EditingConnection.AuthenticationType = EditingAuthType;
+            EditingConnection.UseWindowsAuthentication = EditingAuthType == AuthenticationTypes.Windows;
+
+            // Set password if provided (SQL auth only)
+            if (!string.IsNullOrEmpty(EditingPassword))
+            {
+                EditingConnection.SetPassword(EditingPassword);
+            }
+
+            // Split server names by newline to create separate connections
+            var serverNames = EditingConnection.ServerNames
+                .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            if (serverNames.Count == 0)
+            {
+                StatusMessage = "Server name is required";
+                IsSuccess = false;
+                return;
+            }
+
+            if (IsEditing)
+            {
+                // For edit, update as single connection (keep existing behavior)
+                ConnectionManager.UpdateConnection(EditingConnection);
+                StatusMessage = "Server connection updated successfully";
+            }
+            else
+            {
+                // For new, create separate connection for each server name on separate line
+                if (serverNames.Count == 1)
+                {
+                    // Single server - create one connection
+                    EditingConnection.ServerNames = serverNames[0];
+                    ConnectionManager.AddConnection(EditingConnection);
+                    StatusMessage = "Server connection added successfully";
+                }
+                else
+                {
+                    // Multiple servers on separate lines - create separate connections
+                    foreach (var serverName in serverNames)
+                    {
+                        var newConn = new ServerConnection
+                        {
+                            ServerNames = serverName,
+                            Database = EditingConnection.Database,
+                            AuthenticationType = EditingConnection.AuthenticationType,
+                            UseWindowsAuthentication = EditingConnection.UseWindowsAuthentication,
+                            Username = EditingConnection.Username,
+                            Password = EditingConnection.Password,
+                            TrustServerCertificate = EditingConnection.TrustServerCertificate,
+                            ConnectionTimeout = EditingConnection.ConnectionTimeout,
+                            IsEnabled = EditingConnection.IsEnabled,
+                            Environment = EditingConnection.Environment,
+                            Tags = new List<string>(EditingConnection.Tags ?? new List<string>())
+                        };
+                        ConnectionManager.AddConnection(newConn);
+                    }
+                    StatusMessage = $"Added {serverNames.Count} server connections";
+                }
+            }
+            
+            IsSuccess = true;
+            LoadConnections();
+            CloseDialog();
+            
+            // Auto-test connection after saving
+            if (!IsEditing)
+            {
+                var savedConnection = Connections.LastOrDefault();
+                if (savedConnection != null)
+                {
+                    await TestConnection(savedConnection);
+                }
+            }
+            else
+            {
+                await TestConnection(EditingConnection);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error saving connection: {ex.Message}";
+            IsSuccess = false;
+        }
+    }
+
+    private void DeleteConnection(ServerConnection conn)
+    {
+        ConnectionToDelete = conn;
+        ShowDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        ShowDeleteConfirm = false;
+        ConnectionToDelete = null;
+    }
+
+    private void ConfirmDelete()
+    {
+        if (ConnectionToDelete != null)
+        {
+            ConnectionManager.RemoveConnection(ConnectionToDelete.Id);
+            StatusMessage = "Server connection deleted";
+            IsSuccess = true;
+            LoadConnections();
+        }
+        ShowDeleteConfirm = false;
+        ConnectionToDelete = null;
+    }
+
+    private async Task TestConnection(ServerConnection conn)
+    {
+        var isMfa = conn.EffectiveAuthType == AuthenticationTypes.EntraMFA;
+
+        StatusMessage = isMfa
+            ? "Testing connection — please complete authentication in the browser popup..."
+            : "Testing connection...";
+        IsSuccess = false;
+        StateHasChanged();
+
+        try
+        {
+            // Serialise MFA attempts so only one browser popup appears at a time
+            if (isMfa) await MfaAuthenticationHelper.MfaAuthLock.WaitAsync();
+
+            try
+            {
+                var serverList = conn.GetServerList();
+                var successfulServers = new List<string>();
+
+                foreach (var serverName in serverList)
+                {
+                    // Use master database for connection test to allow testing before SQLWATCH is deployed
+                    var connectionString = conn.GetConnectionString(serverName, "master");
+                    using var connection = new SqlConnection(connectionString);
+                    await connection.OpenAsync();
+                    successfulServers.Add(serverName);
+                }
+
+                ConnectionManager.UpdateSuccessfulServers(conn.Id, successfulServers);
+                await CheckSqlWatchDatabase(conn);
+                await CheckPerformanceMonitorDatabase(conn);
+                LoadConnections();
+
+                StatusMessage = successfulServers.Count == serverList.Count
+                    ? $"Successfully connected to all {successfulServers.Count} server(s)!"
+                    : $"Connected to {successfulServers.Count} of {serverList.Count} servers";
+                IsSuccess = true;
+            }
+            finally
+            {
+                if (isMfa) MfaAuthenticationHelper.MfaAuthLock.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (isMfa && MfaAuthenticationHelper.IsMfaCancelledException(ex))
+            {
+                StatusMessage = "MFA authentication was cancelled.";
+            }
+            else
+            {
+                StatusMessage = $"Connection failed: {ex.Message}";
+            }
+            IsSuccess = false;
+            ConnectionManager.UpdateSuccessfulServers(conn.Id, new List<string>());
+            LoadConnections();
+        }
+    }
+
+
+    /// <summary>
+    /// Tests all connections silently on page load without showing status messages.
+    /// Only non-MFA connections are tested automatically to avoid unexpected browser popups.
+    /// </summary>
+    private async Task TestAllConnectionsSilently()
+    {
+        var connsToTest = Connections
+            .Where(c => c.IsEnabled && c.EffectiveAuthType != AuthenticationTypes.EntraMFA)
+            .ToList();
+
+        foreach (var conn in connsToTest)
+        {
+            try
+            {
+                var serverList = conn.GetServerList();
+                var successfulServers = new List<string>();
+
+                foreach (var serverName in serverList)
+                {
+                    try
+                    {
+                        // Use master database for connection test to allow testing before SQLWATCH is deployed
+                        var connectionString = conn.GetConnectionString(serverName, "master");
+                        using var connection = new SqlConnection(connectionString);
+                        await connection.OpenAsync();
+                        successfulServers.Add(serverName);
+                    }
+                    catch
+                    {
+                        // Individual server failed — don't stop testing others
+                    }
+                }
+
+                ConnectionManager.UpdateSuccessfulServers(conn.Id, successfulServers);
+            }
+            catch
+            {
+                ConnectionManager.UpdateSuccessfulServers(conn.Id, new List<string>());
+            }
+        }
+
+        LoadConnections();
+        await CheckAllDatabaseStatuses();
+        await InvokeAsync(StateHasChanged);
+        _isTestingAll = false;
+    }
+
+    private async Task CheckSqlWatchDatabase(ServerConnection conn)
+    {
+        try
+        {
+            var serverList = conn.GetServerList();
+            foreach (var serverName in serverList)
+            {
+                // Always use master database for testing to avoid connection failures
+                // when SQLWATCH database doesn't exist yet
+                var connectionString = conn.GetConnectionString(serverName, "master");
+                using var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM sys.databases WHERE name = 'SQLWATCH'";
+                var result = (int)await cmd.ExecuteScalarAsync();
+                SqlWatchStatus[conn.Id] = result > 0;
+                break; // Check first server only
+            }
+        }
+        catch
+        {
+            SqlWatchStatus[conn.Id] = false;
+        }
+    }
+
+    private async Task RefreshAllConnections()
+    {
+        StatusMessage = "Refreshing all connections...";
+        var totalConnections = Connections.Count;
+        var successfulConnections = 0;
+        var totalServers = 0;
+        var successfulServers = 0;
+
+        foreach (var conn in Connections)
+        {
+            var serverList = conn.GetServerList();
+            totalServers += serverList.Count;
+            var isMfa = conn.EffectiveAuthType == AuthenticationTypes.EntraMFA;
+
+            try
+            {
+                if (isMfa) await MfaAuthenticationHelper.MfaAuthLock.WaitAsync();
+
+                try
+                {
+                    var successfulForThisConn = new List<string>();
+                    foreach (var serverName in serverList)
+                    {
+                        // Use master database for connection test to allow testing before SQLWATCH is deployed
+                        var connectionString = conn.GetConnectionString(serverName, "master");
+                        using var connection = new SqlConnection(connectionString);
+                        await connection.OpenAsync();
+                        successfulForThisConn.Add(serverName);
+                        successfulServers++;
+                    }
+
+                    ConnectionManager.UpdateSuccessfulServers(conn.Id, successfulForThisConn);
+                    if (successfulForThisConn.Count == serverList.Count)
+                    {
+                        successfulConnections++;
+                    }
+                }
+                finally
+                {
+                    if (isMfa) MfaAuthenticationHelper.MfaAuthLock.Release();
+                }
+            }
+            catch
+            {
+                ConnectionManager.UpdateSuccessfulServers(conn.Id, new List<string>());
+            }
+        }
+
+        LoadConnections();
+
+        if (successfulConnections == totalConnections && successfulServers == totalServers)
+        {
+            StatusMessage = $"Successfully connected to all {totalServers} server(s)!";
+            IsSuccess = true;
+        }
+        else if (successfulServers > 0)
+        {
+            StatusMessage = $"Connected to {successfulServers} of {totalServers} servers";
+            IsSuccess = true;
+        }
+        else
+        {
+            StatusMessage = "Failed to connect to any server";
+            IsSuccess = false;
+        }
+    }
+
+    private async Task CheckPerformanceMonitorDatabase(ServerConnection conn)
+    {
+        try
+        {
+            var serverList = conn.GetServerList();
+            foreach (var serverName in serverList)
+            {
+                var connectionString = conn.GetConnectionString(serverName, "master");
+                using var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM sys.databases WHERE name = 'PerformanceMonitor'";
+                var result = (int)await cmd.ExecuteScalarAsync();
+                PerformanceMonitorStatus[conn.Id] = result > 0;
+                break; // Check first server only
+            }
+        }
+        catch
+        {
+            PerformanceMonitorStatus[conn.Id] = false;
+        }
+    }
+
+    private async Task CheckAllDatabaseStatuses()
+    {
+        foreach (var conn in Connections.Where(c => c.SuccessfulServers.Count > 0))
+        {
+            await CheckSqlWatchDatabase(conn);
+            await CheckPerformanceMonitorDatabase(conn);
+        }
+    }
+}

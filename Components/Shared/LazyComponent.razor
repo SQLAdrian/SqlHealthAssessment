@@ -1,0 +1,76 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@using System.Buffers
+@inject IJSRuntime JS
+
+<div class="lazy-component" @ref="containerRef">
+    @if (IsVisible)
+    {
+        @ChildContent
+    }
+    else if (ShowPlaceholder)
+    {
+        <div class="lazy-placeholder" style="height: @(Height)px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+            <span>Loading...</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public int Height { get; set; } = 250;
+    [Parameter] public bool ShowPlaceholder { get; set; } = true;
+    [Parameter] public double RootMargin { get; set; } = 100.0; // pixels
+
+    private ElementReference containerRef;
+    private bool IsVisible = false;
+    private IJSObjectReference? intersectionObserver;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await SetupIntersectionObserver();
+        }
+    }
+
+    private async Task SetupIntersectionObserver()
+    {
+        try
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/lazy-loading.js");
+            intersectionObserver = await module.InvokeAsync<IJSObjectReference>("createIntersectionObserver", 
+                DotNetObjectReference.Create(this), RootMargin);
+            await intersectionObserver.InvokeVoidAsync("observe", containerRef);
+        }
+        catch (Exception ex)
+        {
+            // Fallback: show content immediately if intersection observer fails
+            System.Diagnostics.Debug.WriteLine($"LazyComponent: IntersectionObserver failed, showing content immediately: {ex.Message}");
+            IsVisible = true;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnIntersection(bool isIntersecting)
+    {
+        if (isIntersecting && !IsVisible)
+        {
+            IsVisible = true;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (intersectionObserver != null)
+        {
+            try
+            {
+                await intersectionObserver.InvokeVoidAsync("disconnect");
+                await intersectionObserver.DisposeAsync();
+            }
+            catch { /* Best effort cleanup */ }
+        }
+    }
+}

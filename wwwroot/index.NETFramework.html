@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SqlHealthAssessment - SQLWATCH Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: #16213e;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #0f3460;
+        }
+        
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 500;
+            color: #e94560;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .nav a {
+            color: #a0a0a0;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .nav a:hover, .nav a.active {
+            background: #0f3460;
+            color: #fff;
+        }
+        
+        .main {
+            padding: 24px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+        }
+        
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 600;
+        }
+        
+        .stat-card .unit {
+            font-size: 0.9rem;
+            color: #888;
+            margin-left: 4px;
+        }
+        
+        .chart-container {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+            margin-bottom: 24px;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        .chart {
+            height: 300px;
+            background: #0f3460;
+            border-radius: 4px;
+            padding: 16px;
+        }
+        
+        .data-grid {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+        }
+        
+        .data-grid table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .data-grid th, .data-grid td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #0f3460;
+        }
+        
+        .data-grid th {
+            color: #888;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+        
+        .data-grid tr:hover td {
+            background: rgba(233, 69, 96, 0.1);
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-good { background: #1b5e20; color: #4caf50; }
+        .status-warning { background: #e65100; color: #ff9800; }
+        .status-critical { background: #b71c1c; color: #f44336; }
+        
+        .toolbar {
+            background: #16213e;
+            padding: 16px 24px;
+            border-bottom: 1px solid #0f3460;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .toolbar input, .toolbar select {
+            background: #0f3460;
+            border: 1px solid #1a1a2e;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+        
+        .toolbar button {
+            background: #e94560;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .toolbar button:hover {
+            background: #d63d56;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>SqlHealthAssessment — SQLWATCH</h1>
+        <nav class="nav">
+            <a href="#" class="active" onclick="showPage('dashboard')">Dashboard</a>
+            <a href="#" onclick="showPage('checks')">Checks</a>
+            <a href="#" onclick="showPage('connections')">Connections</a>
+            <a href="#" onclick="showPage('fullaudit')">Full Audit</a>
+            <a href="#" onclick="showPage('settings')">Settings</a>
+        </nav>
+    </header>
+    
+    <div id="page-dashboard" class="page">
+        <div class="toolbar">
+            <input type="text" id="server-filter" placeholder="Filter servers...">
+            <select id="time-range">
+                <option value="1h">Last Hour</option>
+                <option value="6h">Last 6 Hours</option>
+                <option value="24h" selected>Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+            </select>
+            <button onclick="refreshDashboard()">Refresh</button>
+        </div>
+        
+        <div class="main">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="label">Active Connections</div>
+                    <div class="value">12<span class="unit">servers</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Checks Passed</div>
+                    <div class="value">847<span class="unit">/ 892</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Avg CPU Usage</div>
+                    <div class="value">34<span class="unit">%</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Critical Issues</div>
+                    <div class="value" style="color: #f44336;">3</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Performance Metrics</div>
+                </div>
+                <div class="chart">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="data-grid">
+                <h3 style="margin-bottom: 16px;">Recent Checks</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Server</th>
+                            <th>Check</th>
+                            <th>Status</th>
+                            <th>Details</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="checks-table">
+                        <tr>
+                            <td>SQLSERVER01</td>
+                            <td>CPU Usage</td>
+                            <td><span class="status-badge status-warning">Warning</span></td>
+                            <td>CPU at 78%</td>
+                            <td>2 min ago</td>
+                        </tr>
+                        <tr>
+                            <td>SQLSERVER02</td>
+                            <td>Disk Space</td>
+                            <td><span class="status-badge status-critical">Critical</span></td>
+                            <td>C: drive at 92%</td>
+                            <td>5 min ago</td>
+                        </tr>
+                        <tr>
+                            <td>SQLSERVER03</td>
+                            <td>Backup Status</td>
+                            <td><span class="status-badge status-good">Good</span></td>
+                            <td>Last backup 2h ago</td>
+                            <td>10 min ago</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div id="page-checks" class="page" style="display: none;">
+        <div class="toolbar">
+            <input type="text" placeholder="Search checks...">
+            <button onclick="bulkEditChecks()">Bulk Edit</button>
+        </div>
+        <div class="main">
+            <div class="data-grid">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="select-all-checks"></th>
+                            <th>Check Name</th>
+                            <th>Category</th>
+                            <th>Enabled</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="checks-list">
+                        <!-- Populated from sql-checks.json -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div id="page-connections" class="page" style="display: none;">
+        <div class="toolbar">
+            <button onclick="addConnection()">Add Connection</button>
+        </div>
+        <div class="main">
+            <div class="stats-grid" id="connections-grid">
+                <!-- Populated from saved connections -->
+            </div>
+        </div>
+    </div>
+    
+    <div id="page-fullaudit" class="page" style="display: none;">
+        <div class="toolbar">
+            <button onclick="runFullAudit()">Run Full Audit</button>
+            <button onclick="exportResults()">Export to CSV</button>
+        </div>
+        <div class="main">
+            <div class="chart-container">
+                <div class="chart-title">Audit Progress</div>
+                <div id="audit-progress" style="margin-top: 16px;">
+                    <div style="background: #0f3460; border-radius: 4px; height: 24px; overflow: hidden;">
+                        <div id="progress-bar" style="background: #e94560; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <div id="progress-text" style="margin-top: 8px; color: #888;">Ready to run</div>
+                </div>
+            </div>
+            <div class="data-grid">
+                <h3 style="margin-bottom: 16px;">Audit Results</h3>
+                <div id="audit-results">No results yet</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="page-settings" class="page" style="display: none;">
+        <div class="main">
+            <div class="chart-container">
+                <h3 style="margin-bottom: 16px;">Configuration</h3>
+                <div style="display: grid; gap: 16px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px;">Refresh Interval (seconds)</label>
+                        <input type="number" id="refresh-interval" value="30" style="width: 120px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px;">Theme</label>
+                        <select id="theme-select">
+                            <option value="dark" selected>Dark</option>
+                            <option value="light">Light</option>
+                        </select>
+                    </div>
+                    <button onclick="saveSettings()" style="width: 120px; margin-top: 16px;">Save Settings</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Chart.js initialization
+        let performanceChart = null;
+        
+        function initCharts() {
+            const ctx = document.getElementById('performanceChart');
+            if (ctx) {
+                performanceChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: generateTimeLabels(24),
+                        datasets: [{
+                            label: 'CPU',
+                            data: generateRandomData(24, 20, 80),
+                            borderColor: '#e94560',
+                            backgroundColor: 'rgba(233, 69, 96, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }, {
+                            label: 'Memory',
+                            data: generateRandomData(24, 40, 70),
+                            borderColor: '#00bcd4',
+                            backgroundColor: 'rgba(0, 188, 212, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { color: '#e0e0e0' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(255,255,255,0.1)' },
+                                ticks: { color: '#888' }
+                            },
+                            y: {
+                                grid: { color: 'rgba(255,255,255,0.1)' },
+                                ticks: { color: '#888' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        function generateTimeLabels(count) {
+            const labels = [];
+            const now = new Date();
+            for (let i = count - 1; i >= 0; i--) {
+                const date = new Date(now - i * 3600000);
+                labels.push(date.toLocaleTimeString());
+            }
+            return labels;
+        }
+        
+        function generateRandomData(count, min, max) {
+            return Array.from({length: count}, () => Math.floor(Math.random() * (max - min + 1)) + min);
+        }
+        
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+            document.getElementById('page-' + page).style.display = 'block';
+            document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+        
+        function refreshDashboard() {
+            if (performanceChart) {
+                performanceChart.data.datasets.forEach(dataset => {
+                    dataset.data = generateRandomData(24, 20, 80);
+                });
+                performanceChart.update();
+            }
+        }
+        
+        function bulkEditChecks() {
+            alert('Bulk edit checks - to be implemented');
+        }
+        
+        function addConnection() {
+            alert('Add connection dialog');
+        }
+        
+        function runFullAudit() {
+            alert('Run full audit - to be implemented');
+        }
+        
+        function exportResults() {
+            alert('Export results - to be implemented');
+        }
+        
+        function saveSettings() {
+            const interval = document.getElementById('refresh-interval').value;
+            alert('Settings saved: ' + interval + 's refresh interval');
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', initCharts);
+    </script>
+</body>
+</html>

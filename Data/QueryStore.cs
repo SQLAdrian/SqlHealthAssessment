@@ -1,0 +1,36 @@
+/* In the name of God, the Merciful, the Compassionate */
+
+using System.Collections.Generic;
+
+namespace SqlHealthAssessment.Data
+{
+    public class QueryDefinition
+    {
+        public string SqlServer { get; set; } = "";
+        public string liveQueries { get; set; } = "";
+    }
+
+    public class QueryStore
+    {
+        private readonly DashboardConfigService _configService;
+
+        public QueryStore(DashboardConfigService configService)
+        {
+            _configService = configService;
+        }
+
+        /// <summary>
+        /// Retrieves the SQL query text for the given query ID and data source type.
+        /// Delegates to DashboardConfigService which reads from dashboard-config.json.
+        /// </summary>
+        public string GetQuery(string queryId, string dataSourceType, bool useLiveQueries = false)
+        {
+            return _configService.GetQuery(queryId, useLiveQueries ? "LiveQueries" : dataSourceType);
+        }
+
+        /// <summary>
+        /// Checks whether a query ID exists in the config.
+        /// </summary>
+        public bool HasQuery(string queryId) => _configService.HasQuery(queryId);
+    }
+}

@@ -1,0 +1,26 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop" @onclick="Close"></div>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Keyboard Shortcuts</h3>
+                <button @onclick="Close">×</button>
+            </div>
+            <div class="modal-body">
+                <p><kbd>Ctrl+R</kbd> Refresh</p>
+                <p><kbd>Ctrl+S</kbd> Settings</p>
+                <p><kbd>Esc</kbd> Close Dialog</p>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private void Close() => OnClose.InvokeAsync();
+}

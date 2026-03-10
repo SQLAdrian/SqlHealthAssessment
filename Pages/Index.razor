@@ -1,0 +1,37 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/"
+
+@using SqlHealthAssessment.Components.Dashboards
+@using SqlHealthAssessment.Data
+@inject NavigationManager Navigation
+@inject UserSettingsService UserSettings
+@inject DashboardConfigService DashboardConfig
+@inject ServerConnectionManager ConnectionManager
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Check if any servers are configured
+        var connections = ConnectionManager.GetConnections();
+        if (connections.Count == 0)
+        {
+            // No servers configured - redirect to servers page
+            Navigation.NavigateTo("/servers", replace: true);
+            return;
+        }
+
+        // Check for default dashboard
+        var defaultDashboardId = UserSettings.GetDefaultDashboardId();
+        if (!string.IsNullOrEmpty(defaultDashboardId))
+        {
+            var dashboard = DashboardConfig.Config.Dashboards.FirstOrDefault(d => d.Id == defaultDashboardId && d.Enabled);
+            if (dashboard != null && !string.IsNullOrEmpty(dashboard.Route))
+            {
+                Navigation.NavigateTo(dashboard.Route, replace: true);
+                return;
+            }
+        }
+    }
+}
+
+<RepositoryDashboard />

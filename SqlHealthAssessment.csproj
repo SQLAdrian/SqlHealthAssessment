@@ -1,0 +1,262 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;Config\**;publish\**;release\**</DefaultItemExcludes>
+    <NoWarn>$(NoWarn);CS0169;CS0414;BL0007</NoWarn>
+    <RootNamespace>SqlHealthAssessment</RootNamespace>
+    <AssemblyName>SqlHealthAssessment</AssemblyName>
+    <Product>SQLHealthAssessment</Product>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <PublishSingleFile>false</PublishSingleFile>
+    <Platforms>AnyCPU;x64</Platforms>
+    <ApplicationIcon>SQLHealthAssessment.ico</ApplicationIcon>
+    <Title>SQL Heatlch Assessment</Title>
+    <Authors>Adrian Sullivn</Authors>
+    <Description>An Enterprise grade SQL health check assessment tool. This tool will generate diagnostic outputs for a comprehensive SQL health audit. Incorporating SQLWATCH for database metrics.</Description>
+    <Copyright>Adrian Sullivan</Copyright>
+    <PackageProjectUrl>https://github.com/SQLAdrian/SqlHealthAssessment</PackageProjectUrl>
+    <PackageIcon>SQLHealthAssessment.png</PackageIcon>
+    <RepositoryUrl>https://github.com/SQLAdrian/SqlHealthAssessment</RepositoryUrl>
+    <RepositoryType>GIthub</RepositoryType>
+    <!-- Memory Optimization: Server GC for better throughput, concurrent for lower latency -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- Windows-only: Exclude non-Windows runtimes -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <!-- Release Build Optimizations -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRunShowWarnings>true</PublishReadyToRunShowWarnings>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="SqlWatch.Monitor\**" />
+    <Content Remove="PerformanceMonitor-main\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="SqlWatch.Monitor\**" />
+    <Compile Remove="Tests\**" />
+    <Compile Remove="BenchmarkSuite1\**" />
+    <Compile Remove="Release\**" />
+    <Compile Remove="PerformanceMonitor-main\**" />
+    <EmbeddedResource Remove="SqlWatch.Monitor\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <EmbeddedResource Remove="BenchmarkSuite1\**" />
+    <EmbeddedResource Remove="Release\**" />
+    <EmbeddedResource Remove="PerformanceMonitor-main\**" />
+    <None Remove="SqlWatch.Monitor\**" />
+    <None Remove="Tests\**" />
+    <None Remove="BenchmarkSuite1\**" />
+    <None Remove="Release\**" />
+    <None Remove="PerformanceMonitor-main\**" />
+  </ItemGroup>
+
+  <!-- Include Deploy and Config folders in publish output for database scripts and configuration -->
+  <ItemGroup>
+    <Content Include="Deploy\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Config\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.*" />
+    <PackageReference Include="Microsoft.SqlServer.DacFx" Version="162.*" />
+    <PackageReference Include="Blazor-ApexCharts" Version="3.*" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.*" />
+
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*">
+      <ExcludeAssets>runtimes</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.*" />
+    <PackageReference Include="Azure.Identity" Version="1.*" />
+    <PackageReference Include="Polly" Version="8.4.2" />
+    <PackageReference Include="Serilog" Version="4.*" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.*" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.*" />
+
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="Config\appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/appsettings.json</TargetPath>
+    </Content>
+    <Content Update="Config\appsettings.Production.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/appsettings.Production.json</TargetPath>
+    </Content>
+    <Content Update="Config\appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/appsettings.Development.json</TargetPath>
+    </Content>
+    <Content Update="Config\version.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/version.json</TargetPath>
+    </Content>
+    <Content Update="dashboard-config.json" Condition="Exists('dashboard-config.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/dashboard-config.json</TargetPath>
+    </Content>
+
+    <Content Include="reports\BlitzReport.rdl" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="SQLHealthAssessment.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="BPScripts\01. MaintenanceSolution.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\02. Post implementation configuration script - The Piranha Interceptor Destroyer.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\03. dba quick view.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\09. Do Stats.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\AddTraceflags.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\availibility group job step script replica check.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\doSPNs.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\find indexes to drop.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\Firewall rules with PowerShell.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\Install-All-Scripts.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\shrinkfile -gradual.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="BPScripts\WeeklyReportSchedule.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+<None Update="scripts\Check_BP_Servers.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="scripts\sp_Blitz.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="scripts\SQLDBA.ORG.sp_triage.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="scripts\stpChecklist_Seguranca.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="SQLHealthAssessment.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="Deploy\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Config\appsettings.Development.json" />
+    <None Include="Config\appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Config\appsettings.Production.json" />
+    <None Include="Config\script-configurations.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Config\sql-checks.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Config\user-settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Config\version.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="SQLHealthAssessment.png" />
+  </ItemGroup>
+
+  <!-- Organize build output: DLLs to bin/, JSON configs to config/ -->
+  <Target Name="OrganizeBuildOutput" AfterTargets="Build" Condition="'$(PublishDir)' == ''">
+    <ItemGroup>
+      <DllFiles Include="$(OutputPath)*.dll" Exclude="$(OutputPath)SqlHealthAssessment.dll" />
+      <ConfigFiles Include="$(OutputPath)appsettings*.json" />
+      <ConfigFiles Include="$(OutputPath)dashboard-config.json" Condition="Exists('$(OutputPath)dashboard-config.json')" />
+      <ConfigFiles Include="$(OutputPath)version.json" Condition="Exists('$(OutputPath)version.json')" />
+      <ConfigFiles Include="$(OutputPath)script-configurations.json" Condition="Exists('$(OutputPath)script-configurations.json')" />
+      <ConfigFiles Include="$(OutputPath)sql-checks.json" Condition="Exists('$(OutputPath)sql-checks.json')" />
+      <ConfigFiles Include="$(OutputPath)user-settings.json" Condition="Exists('$(OutputPath)user-settings.json')" />
+      <ConfigFiles Include="$(OutputPath)SqlHealthAssessment.*.json" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutputPath)bin" />
+    <MakeDir Directories="$(OutputPath)config" />
+    <Move SourceFiles="@(DllFiles)" DestinationFolder="$(OutputPath)bin" />
+    <Move SourceFiles="@(ConfigFiles)" DestinationFolder="$(OutputPath)config" />
+  </Target>
+
+  <!-- Remove language folders from publish output -->
+  <Target Name="RemoveLanguageFolders" AfterTargets="Publish" Condition="'$(PublishDir)' != ''">
+    <ItemGroup>
+      <LanguageFolders Include="$(PublishDir)cs;$(PublishDir)de;$(PublishDir)es;$(PublishDir)fr;$(PublishDir)it;$(PublishDir)ja;$(PublishDir)ko;$(PublishDir)pl;$(PublishDir)pt;$(PublishDir)pt-BR;$(PublishDir)ru;$(PublishDir)tr;$(PublishDir)zh-Hans;$(PublishDir)zh-Hant" />
+    </ItemGroup>
+    <RemoveDir Directories="@(LanguageFolders)" ContinueOnError="true" />
+  </Target>
+
+  <!-- Remove non-English language resources to reduce size -->
+  <Target Name="RemoveUnnecessaryLanguageResources" AfterTargets="Build">
+    <ItemGroup>
+      <LanguageFolders Include="$(OutputPath)cs;$(OutputPath)de;$(OutputPath)es;$(OutputPath)fr;$(OutputPath)it;$(OutputPath)ja;$(OutputPath)ko;$(OutputPath)pl;$(OutputPath)pt;$(OutputPath)pt-BR;$(OutputPath)ru;$(OutputPath)tr;$(OutputPath)zh-Hans;$(OutputPath)zh-Hant" />
+    </ItemGroup>
+    <RemoveDir Directories="@(LanguageFolders)" ContinueOnError="true" />
+  </Target>
+
+  <!-- Increment build number before build -->
+  <Target Name="IncrementBuildNumber" BeforeTargets="BeforeBuild">
+    <Exec Command="powershell -ExecutionPolicy Bypass -File increment-build.ps1" />
+  </Target>
+
+  <!-- Create release ZIP after publish -->
+  <Target Name="CreateReleaseZip" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release' AND '$(PublishDir)' != ''">
+    <PropertyGroup>
+      <VersionJson>$([System.IO.File]::ReadAllText('Config\version.json'))</VersionJson>
+      <VersionNumber>$([System.Text.RegularExpressions.Regex]::Match($(VersionJson), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</VersionNumber>
+      <BuildNumber>$([System.Text.RegularExpressions.Regex]::Match($(VersionJson), '"buildNumber"\s*:\s*(\d+)').Groups[1].Value)</BuildNumber>
+      <ReleaseDir>release</ReleaseDir>
+      <ZipFileName>SqlHealthAssessment-v$(VersionNumber)-build$(BuildNumber)-win-x64.zip</ZipFileName>
+      <ZipFilePath>$(ReleaseDir)\$(ZipFileName)</ZipFilePath>
+    </PropertyGroup>
+    <RemoveDir Directories="$(PublishDir)bin" ContinueOnError="true" />
+    <MakeDir Directories="$(ReleaseDir)" />
+    <ZipDirectory SourceDirectory="$(PublishDir)" DestinationFile="$(ZipFilePath)" Overwrite="true" />
+    <Message Importance="high" Text="Release ZIP created: $(ZipFilePath)" />
+  </Target>
+
+  <!-- Remove redundant publish folder and other unnecessary files -->
+  <Target Name="RemoveRedundantPublishFolder" AfterTargets="Build;Publish">
+    <RemoveDir Directories="$(OutputPath)publish;$(OutputPath)BenchmarkSuite1;$(OutputPath)Tests;$(OutputPath)PerformanceMonitor-main;$(PublishDir)publish" ContinueOnError="true" />
+    <Delete Files="$(OutputPath)*.pdb" Condition="'$(Configuration)' == 'Release'" ContinueOnError="true" />
+  </Target>
+
+</Project>
