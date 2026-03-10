@@ -61,6 +61,14 @@
                 <small>Enable this for local/development servers</small>
             </div>
 
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" @bind="Connection.MultiSubnetFailover" />
+                    Multi-Subnet Failover
+                </label>
+                <small>Enable when connecting to an Availability Group listener to prevent connection being redirected to the underlying instance</small>
+            </div>
+
             @if (!string.IsNullOrEmpty(StatusMessage))
             {
                 <div class="status-message @(IsSuccess ? "success" : "error")">
@@ -137,7 +145,14 @@
                 Username = EditingConnection.Username,
                 Password = EditingConnection.Password, // Already encrypted on disk
                 UseWindowsAuthentication = EditingConnection.UseWindowsAuthentication,
+                AuthenticationType = EditingConnection.AuthenticationType,
                 TrustServerCertificate = EditingConnection.TrustServerCertificate,
+                MultiSubnetFailover = EditingConnection.MultiSubnetFailover,
+                ConnectionTimeout = EditingConnection.ConnectionTimeout,
+                HasSqlWatch = EditingConnection.HasSqlWatch,
+                IsEnabled = EditingConnection.IsEnabled,
+                Environment = EditingConnection.Environment,
+                Tags = new List<string>(EditingConnection.Tags ?? new List<string>()),
                 SuccessfulServers = new List<string>(EditingConnection.SuccessfulServers ?? new List<string>()),
                 IsConnected = EditingConnection.IsConnected,
                 LastConnected = EditingConnection.LastConnected
@@ -307,12 +322,16 @@
             ServerNames = serverName,
             Database = template.Database,
             UseWindowsAuthentication = template.UseWindowsAuthentication,
+            AuthenticationType = template.AuthenticationType,
             Username = template.Username,
             Password = template.Password,
             TrustServerCertificate = template.TrustServerCertificate,
+            MultiSubnetFailover = template.MultiSubnetFailover,
             HasSqlWatch = template.HasSqlWatch,
             IsEnabled = template.IsEnabled,
             ConnectionTimeout = template.ConnectionTimeout,
+            Environment = template.Environment,
+            Tags = new List<string>(template.Tags ?? new List<string>()),
             SuccessfulServers = isConnected ? new List<string> { serverName } : new List<string>(),
             IsConnected = isConnected,
             LastConnected = isConnected ? DateTime.Now : null

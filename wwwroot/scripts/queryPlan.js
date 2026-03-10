@@ -172,12 +172,11 @@ window.queryPlanInterop = {
                 messages.push({ text: '⚠ Sort operation spilled to TempDB', type: 'error' });
         }
 
-        // Insert before the first element child (after metadata bar if present)
-        var insertBefore = container.firstElementChild;
-        for (var k = messages.length - 1; k >= 0; k--) {
+        // Insert warnings after the metadata bar but before qp-root
+        var qpRoot = container.querySelector('.qp-root') || container.lastElementChild;
+        for (var k = 0; k < messages.length; k++) {
             var el = this._banner(messages[k].text, messages[k].type, false);
-            container.insertBefore(el, insertBefore);
-            insertBefore = el;
+            container.insertBefore(el, qpRoot);
         }
     },
 
@@ -253,7 +252,8 @@ window.queryPlanInterop = {
 
             wrapper.appendChild(header);
             wrapper.appendChild(code);
-            container.insertBefore(wrapper, container.firstElementChild);
+            var qpRoot = container.querySelector('.qp-root') || container.lastElementChild;
+            container.insertBefore(wrapper, qpRoot);
         }
     },
 

@@ -61,6 +61,9 @@ namespace SqlHealthAssessment.Data.Models
 
         public string GetDecryptedPassword() => CredentialProtector.Decrypt(Password);
 
+        [JsonPropertyName("MultiSubnetFailover")]
+        public bool MultiSubnetFailover { get; set; } = false;
+
         [JsonPropertyName("ConnectionTimeout")]
         public int ConnectionTimeout { get; set; } = 15;
 
@@ -102,7 +105,8 @@ namespace SqlHealthAssessment.Data.Models
                 InitialCatalog = database,
                 ConnectTimeout = ConnectionTimeout,
                 PersistSecurityInfo = false,
-                TrustServerCertificate = TrustServerCertificate
+                TrustServerCertificate = TrustServerCertificate,
+                MultiSubnetFailover = MultiSubnetFailover
             };
 
             switch (EffectiveAuthType)
