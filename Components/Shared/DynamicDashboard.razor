@@ -840,7 +840,9 @@
                     }
                     break;
                 case "BarGauge":
-                    Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Loading BarGauge data", DashboardId, panel.Id);
+                case "Donut":
+                case "HorizontalBar":
+                    Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Loading {PanelType} data", DashboardId, panel.Id, panel.PanelType);
                     var bgData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader =>
                     {
                         var val = Convert.ToDouble(reader["Value"]);
@@ -929,6 +931,8 @@
         }
         else if (panel.PanelType == "TextCard" && _gridResults.TryGetValue(panel.Id, out var textData))
             builder.AddAttribute(4, "GridData", textData);
+        else if ((panel.PanelType == "Donut" || panel.PanelType == "HorizontalBar") && _barGaugeResults.TryGetValue(panel.Id, out var chartData))
+            builder.AddAttribute(4, "BarGaugeData", chartData);
 
         builder.CloseComponent();
     };

@@ -1513,7 +1513,24 @@ body {
     overflow-y: visible;
 }
 
-/* TOP rows control in DataGrid title */
+/* ── LiveWait Stats dashboard ────────────────────────────────────── */
+
+/* Stat card accent colours per wait category */
+.stat-card[data-panel-id="livestats.cpu_pct"]    { border-left: 3px solid #f44336; }
+.stat-card[data-panel-id="livestats.io_pct"]     { border-left: 3px solid #2196f3; }
+.stat-card[data-panel-id="livestats.memory_pct"] { border-left: 3px solid #9c27b0; }
+.stat-card[data-panel-id="livestats.other_pct"]  { border-left: 3px solid #607d8b; }
+.stat-card[data-panel-id="livestats.signal_pct"] { border-left: 3px solid #ff9800; }
+
+/* CPU pressure highlight when stat card is red */
+.stat-card .stat-card-value[style*="#f44336"] ~ .stat-card-label::after {
+    content: " ⚠ CPU Pressure";
+    color: #f44336;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* ── TOP rows control in DataGrid title */
 .datagrid-title {
     display: flex;
     align-items: center;

@@ -128,6 +128,35 @@
         }
         break;
 
+    case "Donut":
+        @if (BarGaugeData != null)
+        {
+            <DonutChart Title="@Panel.Title"
+                        Data="@BarGaugeData"
+                        Height="@Panel.Height"
+                        ValueSuffix="@Panel.BarGaugeUnitSuffix" />
+            @if (!string.IsNullOrEmpty(Panel.Description))
+            {
+                <div class="panel-description">@Panel.Description</div>
+            }
+        }
+        break;
+
+    case "HorizontalBar":
+        @if (BarGaugeData != null)
+        {
+            <HorizontalBarChart Title="@Panel.Title"
+                                Data="@BarGaugeData"
+                                Height="@Panel.Height"
+                                SeriesName="@Panel.Title"
+                                ValueSuffix="@Panel.BarGaugeUnitSuffix" />
+            @if (!string.IsNullOrEmpty(Panel.Description))
+            {
+                <div class="panel-description">@Panel.Description</div>
+            }
+        }
+        break;
+
     case "SessionBubble":
         <div class="text-card-container" style="text-align: center; padding: 24px;">
             <h4 class="text-card-title">@Panel.Title</h4>
