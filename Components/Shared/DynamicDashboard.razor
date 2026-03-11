@@ -846,7 +846,17 @@
                     var bgData = await CachingExecutor.ExecuteQueryAsync(panel.Id, filter, reader =>
                     {
                         var val = Convert.ToDouble(reader["Value"]);
-                        return new StatValue { Label = reader["Label"]?.ToString() ?? "", Value = val, Unit = reader["Unit"]?.ToString() ?? "%", Instance = reader["Instance"]?.ToString() ?? "", Color = ResolveColor(panel, val) };
+                        var schemaTable = reader.GetSchemaTable();
+                        var cols = schemaTable != null
+                            ? new HashSet<string>(schemaTable.Rows.Cast<System.Data.DataRow>().Select(r => r["ColumnName"]?.ToString() ?? ""), StringComparer.OrdinalIgnoreCase)
+                            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        return new StatValue {
+                            Label    = reader["Label"]?.ToString() ?? "",
+                            Value    = val,
+                            Unit     = cols.Contains("Unit")     ? reader["Unit"]?.ToString()     ?? "" : "",
+                            Instance = cols.Contains("Instance") ? reader["Instance"]?.ToString() ?? "" : "",
+                            Color    = ResolveColor(panel, val)
+                        };
                     }, null, cancellationToken);
                     bgResults[panel.Id] = bgData;
                     Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] BarGauge loaded: {ItemCount} items", 
