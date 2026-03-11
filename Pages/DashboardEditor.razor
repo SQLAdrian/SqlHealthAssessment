@@ -1,0 +1,1446 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/dashboard-editor"
+
+@using System.Data
+@using System.IO
+@using System.Text.Json
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@using Microsoft.Extensions.Logging
+@inject DashboardConfigService ConfigService
+@inject NavigationManager Navigation
+@inject IDbConnectionFactory ConnectionFactory
+@inject liveQueriesTableService liveQueriesTableService
+@inject ILogger<DashboardEditor> Logger
+@implements IDisposable
+
+<div class="dashboard-editor">
+    <div class="editor-header">
+        <h2>Dashboard Editor</h2>
+        <div class="header-actions">
+            <table>
+                <tr>
+                    <td><button class="btn btn-secondary" @onclick="Undo" disabled="@(!CanUndo)">↩ Undo</button></td>
+                    <td><button class="btn btn-secondary" @onclick="Redo" disabled="@(!CanRedo)">↪ Redo</button></td>
+                    <td><button class="btn btn-secondary" @onclick="ExportConfig">📤 Export</button></td>
+                    <td><button class="btn btn-secondary" @onclick="ShowImportDialog">📥 Import</button></td>
+                    <td><button class="btn btn-primary" @onclick="SaveAll">💾 Save All</button></td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(StatusMessage))
+                        {
+                            <span class="autosave-status @(IsSuccess ? "success" : "error")">
+                                @StatusMessage
+                            </span>
+                        }
+                    </td>
+                </tr>
+            </table>
+         
+        </div>
+    </div>
+
+    <div class="editor-content">
+        <!-- Dashboard List -->
+        <div class="dashboard-list-panel">
+            <div class="panel-header">
+                <h3>Dashboards</h3>
+                <button class="btn btn-sm" @onclick="AddDashboard">+ Add</button>
+            </div>
+            <div class="dashboard-list">
+                @foreach (var dashboard in EditedConfig.Dashboards)
+                {
+                    <div class="dashboard-item @(SelectedDashboard?.Id == dashboard.Id ? "selected" : "") @(dashboard == _dragOverDashboard ? "drag-over" : "")" 
+                         @ondragover:preventDefault="true"
+                         @ondragover="() => OnDashboardDragOver(dashboard)"
+                         @ondragleave="() => OnDashboardDragLeave(dashboard)"
+                         @ondrop:preventDefault="true"
+                         @ondrop="() => OnDashboardDrop(dashboard)"
+                         @onclick="() => SelectDashboard(dashboard)">
+                        <div class="dashboard-info">
+                            <span class="dashboard-title">@dashboard.Title</span>
+                            <span class="dashboard-route">@dashboard.Route</span>
+                        </div>
+                        <div class="dashboard-actions">
+                            <button class="btn-icon" @onclick="() => EditDashboard(dashboard)" @onclick:stopPropagation title="Edit">✏️</button>
+                            <label class="toggle">
+                                <input type="checkbox" @bind="dashboard.Enabled" />
+                            </label>
+                            <button class="btn-icon" @onclick="() => DeleteDashboard(dashboard)" @onclick:stopPropagation title="Delete">🗑</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Panel List -->
+        <div class="panel-list-panel">
+            @if (SelectedDashboard != null)
+            {
+                <div class="panel-header">
+                    <h3>Panels - @SelectedDashboard.Title</h3>
+                    <button class="btn btn-sm" @onclick="AddPanel">+ Add Panel</button>
+                </div>
+                
+                <div class="panel-list">
+                    @{
+                        var panelsByType = SelectedDashboard.Panels.GroupBy(p => p.PanelType).OrderBy(g => g.Key);
+                    }
+                    @foreach (var group in panelsByType)
+                    {
+                        <div class="panel-group-header">@group.Key</div>
+                        @foreach (var panel in group)
+                        {
+                            <div class="panel-item panel-type-@panel.PanelType.ToLower() @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")" 
+                                 draggable="true"
+                                 @ondragstart="() => OnDragStart(panel)"
+                                 @ondragover:preventDefault="true"
+                                 @ondragover="() => OnDragOver(panel)"
+                                 @ondragleave="() => OnDragLeave(panel)"
+                                 @ondrop:preventDefault="true"
+                                 @ondrop="() => OnDrop(panel)"
+                                 @onclick="() => SelectPanel(panel)">
+                                <div class="panel-reorder">
+                                    <span class="drag-handle" title="Drag to reorder">☰</span>
+                                </div>
+                                <div class="panel-info">
+                                    <span class="panel-title">@panel.Title</span>
+                                    <span class="panel-type">@panel.PanelType</span>
+                                </div>
+                                <div class="panel-actions">
+                                    <label class="toggle">
+                                        <input type="checkbox" @bind="panel.Enabled" />
+                                    </label>
+                                    <button class="btn-icon" @onclick="() => DuplicatePanel(panel)" @onclick:stopPropagation title="Duplicate">📋</button>
+                                    <button class="btn-icon" @onclick="() => DeletePanel(panel)" @onclick:stopPropagation title="Delete">🗑</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    Select a dashboard to edit its panels
+                </div>
+            }
+        </div>
+
+        <div class="panel-editor-panel">
+            @if (SelectedPanel != null)
+            {
+                <div class="panel-header">
+                    <h3>Edit Panel</h3>
+                    <button class="btn btn-sm btn-primary" @onclick="PreviewPanel">👁 Preview</button>
+                </div>
+
+                <div class="editor-form">
+                    <div class="form-section">
+                        <h4>Basic Properties</h4>
+                        <div class="form-group">
+                            <label>Panel ID</label>
+                            <input type="text" @bind="SelectedPanel.Id" @bind:event="oninput" placeholder="unique-panel-id" />
+                        </div>
+                        <div class="form-group">
+                            <label>Title</label>
+                            <input type="text" @bind="SelectedPanel.Title" @bind:event="oninput" placeholder="Panel Title" />
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea @bind="SelectedPanel.Description" @bind:event="oninput" rows="2" placeholder="Description shown below chart"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Default Database</label>
+                            <input type="text" @bind="SelectedPanel.DefaultDatabase" @bind:event="oninput" @bind:after="TriggerAutoSave" placeholder="Leave empty to inherit from dashboard" />
+                            <small>Database context for this panel's queries. Leave empty to inherit from dashboard's default database.</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Enabled</label>
+                            <input type="checkbox" @bind="SelectedPanel.Enabled" />
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h4>Display</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Panel Type</label>
+                                <select @bind="SelectedPanel.PanelType">
+                                    <option value="TimeSeries">Time Series Chart</option>
+                                    <option value="StatCard">Stat Card</option>
+                                    <option value="DeltaStatCard">Delta Stat Card (per/sec)</option>
+                                    <option value="BarGauge">Bar Gauge</option>
+                                    <option value="DataGrid">Data Grid</option>
+                                    <option value="CheckStatus">Check Status</option>
+                                    <option value="TextCard">Text Card</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Chart Type</label>
+                                <select @bind="SelectedPanel.ChartType">
+                                    <option value="Line">Line</option>
+                                    <option value="Bar">Bar</option>
+                                    <option value="Area">Area</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Height (px)</label>
+                                <input type="number" @bind="SelectedPanel.Height" @bind:event="oninput" min="100" max="800" />
+                            </div>
+                            <div class="form-group">
+                                <label>Refresh (sec)</label>
+                                <input type="number" @bind="SelectedPanel.RefreshIntervalSeconds" @bind:event="oninput" min="5" max="3600" placeholder="Auto" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h4>Layout</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Column</label>
+                                <select @bind="SelectedPanel.Layout.Column">
+                                    <option value="0">Special (Stats/Gauges)</option>
+                                    <option value="1">Left Column</option>
+                                    <option value="2">Right Column</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Order</label>
+                                <input type="number" @bind="SelectedPanel.Layout.Order" @bind:event="oninput" min="0" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" @bind="SelectedPanel.Layout.SpanColumns" />
+                                Span Full Width
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (SelectedPanel.PanelType == "StatCard")
+                    {
+                        <div class="form-section">
+                            <h4>Stat Card Settings</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Unit</label>
+                                    <input type="text" @bind="SelectedPanel.StatUnit" @bind:event="oninput" placeholder="%, MB, etc." />
+                                </div>
+                                <div class="form-group">
+                                    <label>Threshold Key</label>
+                                    <input type="text" @bind="SelectedPanel.StatThresholdKey" @bind:event="oninput" placeholder="cpu, memory, etc." />
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Value Format</label>
+                                <select @bind="SelectedPanel.ValueFormat">
+                                    <option value="">Default (no formatting)</option>
+                                    <option value="N0">Integer (1,234)</option>
+                                    <option value="N1">1 Decimal (1,234.5)</option>
+                                    <option value="N2">2 Decimals (1,234.56)</option>
+                                    <option value="N3">3 Decimals (1,234.567)</option>
+                                    <option value="P0">Percent 0 (100%)</option>
+                                    <option value="P1">Percent 1 (99.9%)</option>
+                                    <option value="P2">Percent 2 (99.99%)</option>
+                                    <option value="C0">Currency 0 ($1,234)</option>
+                                    <option value="C2">Currency 2 ($1,234.56)</option>
+                                    <option value="0 B">Bytes (1 KB)</option>
+                                    <option value="0.## B">Bytes Precise (1.23 KB)</option>
+                                    <option value="0.## GB">GB (1.23 GB)</option>
+                                    <option value="0.## MB">MB (1,234.56 MB)</option>
+                                    <option value="0.## TB">TB (1.23 TB)</option>
+                                    <option value="0.## ms">Milliseconds (123.45 ms)</option>
+                                    <option value="0.## s">Seconds (1.23 s)</option>
+                                    <option value="0.## 'ms/sec'">ms/sec (123.45 ms/sec)</option>
+                                    <option value="0.## 'requests/sec'">req/sec (123.45 req/sec)</option>
+                                </select>
+                                <small style="color: var(--text-muted); font-size: 11px;">
+                                    Standard .NET format strings: N# = number, P# = percent, C# = currency
+                                </small>
+                            </div>
+                        </div>
+                    }
+
+                    @if (SelectedPanel.PanelType == "BarGauge")
+                    {
+                        <div class="form-section">
+                            <h4>Bar Gauge Settings</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Threshold Key</label>
+                                    <input type="text" @bind="SelectedPanel.BarGaugeThresholdKey" @bind:event="oninput" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Unit Suffix</label>
+                                    <input type="text" @bind="SelectedPanel.BarGaugeUnitSuffix" @bind:event="oninput" placeholder="%" />
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Value Format</label>
+                                <select @bind="SelectedPanel.ValueFormat">
+                                    <option value="">Default (no formatting)</option>
+                                    <option value="N0">Integer (1,234)</option>
+                                    <option value="N1">1 Decimal (1,234.5)</option>
+                                    <option value="N2">2 Decimals (1,234.56)</option>
+                                    <option value="P0">Percent 0 (100%)</option>
+                                    <option value="P1">Percent 1 (99.9%)</option>
+                                    <option value="0.## GB">GB (1.23 GB)</option>
+                                    <option value="0.## MB">MB (1,234.56 MB)</option>
+                                </select>
+                            </div>
+                        </div>
+                    }
+
+                    @if (SelectedPanel.PanelType == "DataGrid")
+                    {
+                        <div class="form-section">
+                            <h4>Data Grid Settings</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" @bind="SelectedPanel.DataGridIsClickable" />
+                                        Clickable Rows
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label>Max Rows</label>
+                                    <input type="number" @bind="SelectedPanel.DataGridMaxRows" @bind:event="oninput" min="10" max="10000" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="form-section">
+                        <h4>SQL Queries</h4>
+
+                        @* ── SQL Server Query ── *@
+                        <div class="form-group">
+                            <label>SQL Server Query</label>
+                            <textarea @bind="SelectedPanel.Query.SqlServer" @bind:event="oninput" rows="4" placeholder="SELECT..."></textarea>
+                            <div class="button-row">
+                                <button class="btn btn-sm" @onclick="TestSqlServerQuery" disabled="@IsQueryRunning">🧪 Test Query</button>
+                                <input type="datetime-local" @bind="TestTimeFrom" class="param-input" title="Time From" />
+                                <input type="datetime-local" @bind="TestTimeTo" class="param-input" title="Time To" />
+                                <input type="text" @bind="TestSqlInstance" class="param-input" placeholder="SqlInstance (comma-separated)" title="SQL Instance(s)" />
+                            </div>
+                        </div>
+
+                        @* ── Result message ── *@
+                        @if (!string.IsNullOrEmpty(QueryTestResult))
+                        {
+                            <div class="query-result @(QueryTestIsError ? "error" : "")">
+                                <strong>Result:</strong> @QueryTestResult
+                            </div>
+                        }
+
+                        @* ── DDL Preview ── *@
+                        @if (!string.IsNullOrEmpty(QueryDdlPreview))
+                        {
+                            <div class="query-ddl-preview">
+                                <strong>DDL:</strong>
+                                <pre>@QueryDdlPreview</pre>
+                            </div>
+                        }
+
+                        @* ── Data Grid Results ── *@
+                        @if (QueryResultTable != null && QueryResultTable.Rows.Count > 0)
+                        {
+                            <div class="query-result-grid">
+                                <div class="result-grid-header">
+                                    <strong>@QueryResultSource Results</strong>
+                                    <span class="result-row-count">@QueryResultTable.Rows.Count row(s)</span>
+                                </div>
+                                <div class="result-grid-scroll">
+                                    <table class="result-table">
+                                        <thead>
+                                            <tr>
+                                                @foreach (System.Data.DataColumn col in QueryResultTable.Columns)
+                                                {
+                                                    <th>@col.ColumnName</th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (System.Data.DataRow row in QueryResultTable.Rows)
+                                            {
+                                                <tr>
+                                                    @foreach (System.Data.DataColumn col in QueryResultTable.Columns)
+                                                    {
+                                                        <td>@row[col]</td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4>Color Thresholds</h4>
+                            <button class="btn btn-sm" @onclick="AddColorThreshold">+ Add Rule</button>
+                        </div>
+                        @foreach (var rule in SelectedPanel.ColorThresholds)
+                        {
+                            <div class="threshold-rule">
+                                <input type="text" @bind="rule.Label" @bind:event="oninput" placeholder="Label" />
+                                <select @bind="rule.Operator">
+                                    <option value=">=">>=</option>
+                                    <option value=">">></option>
+                                    <option value="&lt;=">&lt;=</option>
+                                    <option value="&lt;">&lt;</option>
+                                    <option value="==">==</option>
+                                </select>
+                                <input type="number" @bind="rule.Value" @bind:event="oninput" step="0.1" />
+                                <input type="text" @bind="rule.Color" @bind:event="oninput" placeholder="#color" style="width: 80px;" />
+                                <button class="btn-icon" @onclick="() => RemoveColorThreshold(rule)">🗑</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    Select a panel to edit its properties
+                </div>
+            }
+        </div>
+
+        <!-- Preview Pane -->
+        <div class="preview-pane-panel">
+            @if (SelectedDashboard != null)
+            {
+                <div class="panel-header">
+                    <h3>Preview - @SelectedDashboard.Title</h3>
+                    <button class="btn btn-sm" @onclick="RefreshPreview">🔄 Refresh</button>
+                </div>
+                <div class="preview-container">
+                    <!-- Stats/Gauges Section (Column 0) -->
+                    @{
+                        var statsGauges = SelectedDashboard.Panels.Where(p => p.Layout.Column == 0 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                    }
+                    @if (statsGauges.Any())
+                    {
+                        <div class="preview-stats-section">
+                            @foreach (var panel in statsGauges)
+                            {
+                                <div class="preview-stat-card @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                                     draggable="true"
+                                     @ondragstart="() => OnDragStart(panel)"
+                                     @ondragover:preventDefault="true"
+                                     @ondragover="() => OnDragOver(panel)"
+                                     @ondragleave="() => OnDragLeave(panel)"
+                                     @ondrop:preventDefault="true"
+                                     @ondrop="() => OnDrop(panel)"
+                                     @onclick="() => SelectPanel(panel)">
+                                    <div class="preview-stat-label">@panel.Title</div>
+                                    <div class="preview-stat-type">@panel.PanelType</div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Two-Column Layout -->
+                    <div class="preview-columns">
+                        @{
+                            var leftColumn = SelectedDashboard.Panels.Where(p => p.Layout.Column == 1 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                            var rightColumn = SelectedDashboard.Panels.Where(p => p.Layout.Column == 2 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                            var fullWidth = SelectedDashboard.Panels.Where(p => p.Layout.SpanColumns && p.Layout.Column != 0 && p.Enabled).OrderBy(p => p.Layout.Order).ToList();
+                        }
+
+                        <!-- Left Column -->
+                        <div class="preview-column">
+                            @foreach (var panel in leftColumn)
+                            {
+                                <div class="preview-panel @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                                     draggable="true"
+                                     @ondragstart="() => OnDragStart(panel)"
+                                     @ondragover:preventDefault="true"
+                                     @ondragover="() => OnDragOver(panel)"
+                                     @ondragleave="() => OnDragLeave(panel)"
+                                     @ondrop:preventDefault="true"
+                                     @ondrop="() => OnDrop(panel)"
+                                     @onclick="() => SelectPanel(panel)"
+                                     style="height: @(panel.Height)px;">
+                                    <div class="preview-panel-header">
+                                        <span class="preview-panel-title">@panel.Title</span>
+                                        <span class="preview-panel-type">@panel.PanelType</span>
+                                    </div>
+                                    <div class="preview-panel-body">
+                                        <div class="preview-placeholder">@panel.PanelType</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="preview-column">
+                            @foreach (var panel in rightColumn)
+                            {
+                                <div class="preview-panel @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                                     draggable="true"
+                                     @ondragstart="() => OnDragStart(panel)"
+                                     @ondragover:preventDefault="true"
+                                     @ondragover="() => OnDragOver(panel)"
+                                     @ondragleave="() => OnDragLeave(panel)"
+                                     @ondrop:preventDefault="true"
+                                     @ondrop="() => OnDrop(panel)"
+                                     @onclick="() => SelectPanel(panel)"
+                                     style="height: @(panel.Height)px;">
+                                    <div class="preview-panel-header">
+                                        <span class="preview-panel-title">@panel.Title</span>
+                                        <span class="preview-panel-type">@panel.PanelType</span>
+                                    </div>
+                                    <div class="preview-panel-body">
+                                        <div class="preview-placeholder">@panel.PanelType</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Full Width Panels -->
+                    @foreach (var panel in fullWidth)
+                    {
+                        <div class="preview-panel preview-panel-full @(SelectedPanel?.Id == panel.Id ? "selected" : "") @(panel == _dragOverPanel ? "drag-over" : "")"
+                             draggable="true"
+                             @ondragstart="() => OnDragStart(panel)"
+                             @ondragover:preventDefault="true"
+                             @ondragover="() => OnDragOver(panel)"
+                             @ondragleave="() => OnDragLeave(panel)"
+                             @ondrop:preventDefault="true"
+                             @ondrop="() => OnDrop(panel)"
+                             @onclick="() => SelectPanel(panel)"
+                             style="height: @(panel.Height)px;">
+                            <div class="preview-panel-header">
+                                <span class="preview-panel-title">@panel.Title</span>
+                                <span class="preview-panel-type">@panel.PanelType</span>
+                            </div>
+                            <div class="preview-panel-body">
+                                <div class="preview-placeholder">@panel.PanelType</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    Select a dashboard to preview
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    @if (ShowPreview)
+    {
+        <div class="modal-overlay" @onclick="ClosePreview">
+            <div class="modal preview-modal" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Preview: @(SelectedPanel?.Title)</h3>
+                    <button class="close-btn" @onclick="ClosePreview">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="preview-info">
+                        <span>Type: @SelectedPanel?.PanelType</span>
+                        <span>Chart: @SelectedPanel?.ChartType</span>
+                        <span>Height: @SelectedPanel?.Height px</span>
+                    </div>
+                    <div class="preview-placeholder">
+                        [Live preview would render here with actual data]
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Import Modal -->
+    @if (ShowImport)
+    {
+        <div class="modal-overlay" @onclick="CloseImportDialog">
+            <div class="modal import-modal" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Import Dashboard Configuration</h3>
+                    <button class="close-btn" @onclick="CloseImportDialog">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Paste JSON configuration:</label>
+                        <textarea @bind="ImportJson" rows="10" placeholder='{"dashboards": [...]}'></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseImportDialog">Cancel</button>
+                    <button class="btn btn-primary" @onclick="ImportConfig">Import</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (ShowAddDashboardDialog)
+{
+    <div class="modal-overlay" @onclick="CancelAddDashboard">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Add New Dashboard</h3>
+                <button class="close-btn" @onclick="CancelAddDashboard">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="dashboardTitle">Dashboard Name</label>
+                    <input id="dashboardTitle" type="text" @bind="NewDashboardTitle" placeholder="e.g., My Custom Dashboard" />
+                </div>
+                <div class="form-group">
+                    <label for="dashboardRoute">Page Name (Route)</label>
+                    <input id="dashboardRoute" type="text" @bind="NewDashboardRoute" placeholder="e.g., /my-dashboard" />
+                    <small>The URL path for this dashboard (must start with /)</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CancelAddDashboard">Cancel</button>
+                <button class="btn btn-primary" @onclick="ConfirmAddDashboard">Add Dashboard</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ShowEditDashboardDialog)
+{
+    <div class="modal-overlay" @onclick="CancelEditDashboard">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Edit Dashboard</h3>
+                <button class="close-btn" @onclick="CancelEditDashboard">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editDashboardTitle">Dashboard Name</label>
+                    <input id="editDashboardTitle" type="text" @bind="EditDashboardTitle" placeholder="e.g., My Custom Dashboard" />
+                </div>
+                <div class="form-group">
+                    <label for="editDashboardRoute">Page Name (Route)</label>
+                    <input id="editDashboardRoute" type="text" @bind="EditDashboardRoute" placeholder="e.g., /my-dashboard" />
+                    <small>The URL path for this dashboard (must start with /)</small>
+                </div>
+                <div class="form-group">
+                    <label for="editDashboardDefaultDatabase">Default Database</label>
+                    <input id="editDashboardDefaultDatabase" type="text" @bind="EditDashboardDefaultDatabase" placeholder="e.g., SQLWATCH" />
+                    <small>Default database for panels in this dashboard (panels can override this)</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CancelEditDashboard">Cancel</button>
+                <button class="btn btn-primary" @onclick="ConfirmEditDashboard">Save Changes</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardConfigRoot EditedConfig = new();
+    private DashboardDefinition? SelectedDashboard;
+    private PanelDefinition? SelectedPanel;
+    private string StatusMessage = "";
+    private bool IsSuccess;
+    private string QueryTestResult = "";
+    private bool QueryTestIsError;
+    private DataTable? QueryResultTable;
+    private string QueryResultSource = "";
+    private string? QueryDdlPreview;
+    private bool IsQueryRunning;
+    
+    // Add Dashboard Dialog
+    private bool ShowAddDashboardDialog;
+    private string NewDashboardTitle = "";
+    private string NewDashboardRoute = "";
+    
+    // Edit Dashboard Dialog
+    private bool ShowEditDashboardDialog;
+    private DashboardDefinition? EditingDashboard;
+    private string EditDashboardTitle = "";
+    private string EditDashboardRoute = "";
+    private string EditDashboardDefaultDatabase = "";
+    
+    private bool ShowPreview;
+    private bool ShowImport;
+    private string ImportJson = "";
+    private System.Timers.Timer? _autoSaveTimer;
+    private bool _hasUnsavedChanges;
+
+    // Undo/Redo stacks
+    private Stack<DashboardConfigRoot> UndoStack = new();
+    private Stack<DashboardConfigRoot> RedoStack = new();
+    private const int MaxUndoSteps = 50;
+
+    private bool CanUndo => UndoStack.Count > 0;
+    private bool CanRedo => RedoStack.Count > 0;
+
+    // Test query parameters
+    private DateTime TestTimeFrom = DateTime.Now.AddHours(-1);
+    private DateTime TestTimeTo = DateTime.Now;
+    private string TestSqlInstance = "";
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            LoadConfig();
+            
+            // Auto-save timer: save 2 seconds after last edit
+            _autoSaveTimer = new System.Timers.Timer(2000);
+            _autoSaveTimer.AutoReset = false;
+            _autoSaveTimer.Elapsed += async (s, e) => await InvokeAsync(AutoSave);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing dashboard editor");
+            StatusMessage = $"Error initializing editor: {ex.Message}";
+            IsSuccess = false;
+        }
+    }
+
+    private void LoadConfig()
+    {
+        EditedConfig = new DashboardConfigRoot
+        {
+            Version = ConfigService.Config.Version,
+            Dashboards = ConfigService.Config.Dashboards.Select(d => new DashboardDefinition
+            {
+                Id = d.Id,
+                Title = d.Title,
+                NavTitle = d.NavTitle,
+                NavIcon = d.NavIcon,
+                NavCategory = d.NavCategory,
+                NavOrder = d.NavOrder,
+                Route = d.Route,
+                Enabled = d.Enabled,
+                Source = d.Source,
+                DefaultDatabase = d.DefaultDatabase,
+                ShowAllOption = d.ShowAllOption,
+                Panels = d.Panels.Select(p => ClonePanel(p)).ToList()
+            }).ToList(),
+            SupportQueries = new Dictionary<string, QueryPair>(ConfigService.Config.SupportQueries)
+        };
+    }
+
+    private PanelDefinition ClonePanel(PanelDefinition original)
+    {
+        return new PanelDefinition
+        {
+            Id = original.Id,
+            Title = original.Title,
+            Description = original.Description,
+            Enabled = original.Enabled,
+            Source = original.Source,
+            PanelType = original.PanelType,
+            ChartType = original.ChartType,
+            Height = original.Height,
+            RefreshIntervalSeconds = original.RefreshIntervalSeconds,
+            Layout = new PanelLayout
+            {
+                Column = original.Layout.Column,
+                Order = original.Layout.Order,
+                SpanColumns = original.Layout.SpanColumns
+            },
+            Query = new QueryPair
+            {
+                Source = original.Query.Source,
+                SqlServer = original.Query.SqlServer
+            },
+            DefaultDatabase = original.DefaultDatabase,
+            StatUnit = original.StatUnit,
+            StatThresholdKey = original.StatThresholdKey,
+            BarGaugeThresholdKey = original.BarGaugeThresholdKey,
+            BarGaugeUnitSuffix = original.BarGaugeUnitSuffix,
+            ValueFormat = original.ValueFormat,
+            ColorThresholds = original.ColorThresholds.Select(c => new ColorThresholdRule
+            {
+                Operator = c.Operator,
+                Value = c.Value,
+                Color = c.Color,
+                Label = c.Label
+            }).ToList(),
+            DataGridIsClickable = original.DataGridIsClickable,
+            DataGridMaxRows = original.DataGridMaxRows,
+            DataGridTopRows = original.DataGridTopRows
+        };
+    }
+
+    private void RefreshPreview()
+    {
+        StateHasChanged();
+    }
+
+    private void SaveState()
+    {
+        var snapshot = new DashboardConfigRoot
+        {
+            Version = EditedConfig.Version,
+            Dashboards = EditedConfig.Dashboards.Select(d => new DashboardDefinition
+            {
+                Id = d.Id,
+                Title = d.Title,
+                NavTitle = d.NavTitle,
+                NavIcon = d.NavIcon,
+                NavCategory = d.NavCategory,
+                NavOrder = d.NavOrder,
+                Route = d.Route,
+                Enabled = d.Enabled,
+                Source = d.Source,
+                DefaultDatabase = d.DefaultDatabase,
+                ShowAllOption = d.ShowAllOption,
+                Panels = d.Panels.Select(p => ClonePanel(p)).ToList()
+            }).ToList(),
+            SupportQueries = new Dictionary<string, QueryPair>(EditedConfig.SupportQueries)
+        };
+
+        UndoStack.Push(snapshot);
+        if (UndoStack.Count > MaxUndoSteps)
+        {
+            var temp = UndoStack.ToArray().Take(MaxUndoSteps).ToArray();
+            UndoStack = new Stack<DashboardConfigRoot>(temp.Reverse());
+        }
+        RedoStack.Clear();
+        
+        // Mark as having unsaved changes and trigger auto-save timer
+        _hasUnsavedChanges = true;
+        _autoSaveTimer?.Stop();
+        _autoSaveTimer?.Start();
+    }
+
+    private void Undo()
+    {
+        if (!CanUndo) return;
+        RedoStack.Push(CloneConfig(EditedConfig));
+        EditedConfig = UndoStack.Pop();
+        RefreshSelection();
+    }
+
+    private void Redo()
+    {
+        if (!CanRedo) return;
+        UndoStack.Push(CloneConfig(EditedConfig));
+        EditedConfig = RedoStack.Pop();
+        RefreshSelection();
+    }
+
+    private DashboardConfigRoot CloneConfig(DashboardConfigRoot original)
+    {
+        return new DashboardConfigRoot
+        {
+            Version = original.Version,
+            Dashboards = original.Dashboards.Select(d => new DashboardDefinition
+            {
+                Id = d.Id,
+                Title = d.Title,
+                NavTitle = d.NavTitle,
+                NavIcon = d.NavIcon,
+                NavCategory = d.NavCategory,
+                NavOrder = d.NavOrder,
+                Route = d.Route,
+                Enabled = d.Enabled,
+                Source = d.Source,
+                DefaultDatabase = d.DefaultDatabase,
+                ShowAllOption = d.ShowAllOption,
+                Panels = d.Panels.Select(p => ClonePanel(p)).ToList()
+            }).ToList(),
+            SupportQueries = new Dictionary<string, QueryPair>(original.SupportQueries)
+        };
+    }
+
+    private void RefreshSelection()
+    {
+        if (SelectedDashboard != null)
+        {
+            SelectedDashboard = EditedConfig.Dashboards.FirstOrDefault(d => d.Id == SelectedDashboard.Id);
+            if (SelectedDashboard != null && SelectedPanel != null)
+            {
+                SelectedPanel = SelectedDashboard.Panels.FirstOrDefault(p => p.Id == SelectedPanel.Id);
+            }
+        }
+    }
+
+    private void SelectDashboard(DashboardDefinition dashboard)
+    {
+        SelectedDashboard = dashboard;
+        SelectedPanel = dashboard.Panels.FirstOrDefault();
+    }
+
+    private void SelectPanel(PanelDefinition panel)
+    {
+        SelectedPanel = panel;
+    }
+
+    private void AddDashboard()
+    {
+        NewDashboardTitle = "New Dashboard";
+        NewDashboardRoute = "/new-dashboard";
+        ShowAddDashboardDialog = true;
+    }
+
+    private void ConfirmAddDashboard()
+    {
+        if (string.IsNullOrWhiteSpace(NewDashboardTitle))
+        {
+            StatusMessage = "Dashboard name is required";
+            IsSuccess = false;
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(NewDashboardRoute))
+        {
+            StatusMessage = "Page name (route) is required";
+            IsSuccess = false;
+            return;
+        }
+        
+        // Ensure route starts with /
+        if (!NewDashboardRoute.StartsWith("/"))
+        {
+            NewDashboardRoute = "/" + NewDashboardRoute;
+        }
+        
+        SaveState();
+        var newDashboard = new DashboardDefinition
+        {
+            Id = $"dashboard-{DateTime.Now:yyyyMMddHHmmss}",
+            Title = NewDashboardTitle.Trim(),
+            Route = NewDashboardRoute.Trim(),
+            Enabled = true,
+            Panels = new List<PanelDefinition>()
+        };
+        EditedConfig.Dashboards.Add(newDashboard);
+        SelectDashboard(newDashboard);
+        ShowAddDashboardDialog = false;
+        NewDashboardTitle = "";
+        NewDashboardRoute = "";
+    }
+
+    private void CancelAddDashboard()
+    {
+        ShowAddDashboardDialog = false;
+        NewDashboardTitle = "";
+        NewDashboardRoute = "";
+    }
+
+    private void EditDashboard(DashboardDefinition dashboard)
+    {
+        try
+        {
+            EditingDashboard = dashboard;
+            EditDashboardTitle = dashboard.Title;
+            EditDashboardRoute = dashboard.Route;
+            EditDashboardDefaultDatabase = dashboard.DefaultDatabase ?? "";
+            ShowEditDashboardDialog = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error editing dashboard {DashboardId}", dashboard?.Id);
+            StatusMessage = $"Error editing dashboard: {ex.Message}";
+            IsSuccess = false;
+        }
+    }
+
+    private void ConfirmEditDashboard()
+    {
+        try
+        {
+            if (EditingDashboard == null) return;
+            
+            if (string.IsNullOrWhiteSpace(EditDashboardTitle))
+            {
+                StatusMessage = "Dashboard name is required";
+                IsSuccess = false;
+                return;
+            }
+            
+            if (string.IsNullOrWhiteSpace(EditDashboardRoute))
+            {
+                StatusMessage = "Page name (route) is required";
+                IsSuccess = false;
+                return;
+            }
+            
+            // Ensure route starts with /
+            if (!EditDashboardRoute.StartsWith("/"))
+            {
+                EditDashboardRoute = "/" + EditDashboardRoute;
+            }
+            
+            SaveState();
+            EditingDashboard.Title = EditDashboardTitle.Trim();
+            EditingDashboard.Route = EditDashboardRoute.Trim();
+            EditingDashboard.DefaultDatabase = string.IsNullOrWhiteSpace(EditDashboardDefaultDatabase) ? null : EditDashboardDefaultDatabase.Trim();
+            
+            ShowEditDashboardDialog = false;
+            EditingDashboard = null;
+            EditDashboardTitle = "";
+            EditDashboardRoute = "";
+            EditDashboardDefaultDatabase = "";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error confirming dashboard edit");
+            StatusMessage = $"Error saving dashboard: {ex.Message}";
+            IsSuccess = false;
+        }
+    }
+
+    private void CancelEditDashboard()
+    {
+        ShowEditDashboardDialog = false;
+        EditingDashboard = null;
+        EditDashboardTitle = "";
+        EditDashboardRoute = "";
+        EditDashboardDefaultDatabase = "";
+    }
+
+    private void DeleteDashboard(DashboardDefinition dashboard)
+    {
+        SaveState();
+        EditedConfig.Dashboards.Remove(dashboard);
+        if (SelectedDashboard == dashboard)
+        {
+            SelectedDashboard = EditedConfig.Dashboards.FirstOrDefault();
+            SelectedPanel = SelectedDashboard?.Panels.FirstOrDefault();
+        }
+    }
+
+    private void AddPanel()
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var newPanel = new PanelDefinition
+        {
+            Id = $"panel-{DateTime.Now:yyyyMMddHHmmss}",
+            Title = "New Panel",
+            PanelType = "TimeSeries",
+            ChartType = "Line",
+            Height = 250,
+            Layout = new PanelLayout { Column = 1, Order = SelectedDashboard.Panels.Count }
+        };
+        SelectedDashboard.Panels.Add(newPanel);
+        SelectPanel(newPanel);
+    }
+
+    private void DuplicatePanel(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var duplicate = ClonePanel(panel);
+        duplicate.Id = $"{panel.Id}-copy";
+        duplicate.Title = $"{panel.Title} (Copy)";
+        SelectedDashboard.Panels.Add(duplicate);
+        SelectPanel(duplicate);
+    }
+
+    private void DeletePanel(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        SelectedDashboard.Panels.Remove(panel);
+        SelectedPanel = SelectedDashboard.Panels.FirstOrDefault();
+    }
+
+    private void MovePanelUp(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var index = SelectedDashboard.Panels.IndexOf(panel);
+        if (index > 0)
+        {
+            SelectedDashboard.Panels.RemoveAt(index);
+            SelectedDashboard.Panels.Insert(index - 1, panel);
+            UpdatePanelOrders(SelectedDashboard.Panels);
+        }
+    }
+
+    private void MovePanelDown(PanelDefinition panel)
+    {
+        if (SelectedDashboard == null) return;
+        SaveState();
+        var index = SelectedDashboard.Panels.IndexOf(panel);
+        if (index < SelectedDashboard.Panels.Count - 1)
+        {
+            SelectedDashboard.Panels.RemoveAt(index);
+            SelectedDashboard.Panels.Insert(index + 1, panel);
+            UpdatePanelOrders(SelectedDashboard.Panels);
+        }
+    }
+
+    private PanelDefinition? _draggedPanel;
+    private DashboardDefinition? _draggedPanelDashboard;
+    private PanelDefinition? _dragOverPanel;
+    private DashboardDefinition? _dragOverDashboard;
+
+    private void OnDragStart(PanelDefinition panel)
+    {
+        _draggedPanel = panel;
+        _draggedPanelDashboard = SelectedDashboard;
+    }
+
+    private void OnDragOver(PanelDefinition panel)
+    {
+        _dragOverPanel = panel;
+    }
+
+    private void OnDragLeave(PanelDefinition panel)
+    {
+        if (_dragOverPanel == panel)
+        {
+            _dragOverPanel = null;
+        }
+    }
+
+    private void OnDashboardDragOver(DashboardDefinition dashboard)
+    {
+        _dragOverDashboard = dashboard;
+    }
+
+    private void OnDashboardDragLeave(DashboardDefinition dashboard)
+    {
+        if (_dragOverDashboard == dashboard)
+        {
+            _dragOverDashboard = null;
+        }
+    }
+
+    private void OnDashboardDrop(DashboardDefinition targetDashboard)
+    {
+        if (_draggedPanel == null || _draggedPanelDashboard == null || targetDashboard == null)
+            return;
+
+        if (_draggedPanelDashboard.Id == targetDashboard.Id)
+            return;
+
+        SaveState();
+
+        _draggedPanelDashboard.Panels.Remove(_draggedPanel);
+        UpdatePanelOrders(_draggedPanelDashboard.Panels);
+
+        targetDashboard.Panels.Add(_draggedPanel);
+        UpdatePanelOrders(targetDashboard.Panels);
+
+        SelectDashboard(targetDashboard);
+        SelectPanel(_draggedPanel);
+
+        _draggedPanel = null;
+        _draggedPanelDashboard = null;
+        _dragOverDashboard = null;
+    }
+
+    private void OnDrop(PanelDefinition targetPanel)
+    {
+        if (_draggedPanel == null || _draggedPanelDashboard == null || targetPanel == null)
+            return;
+
+        if (_draggedPanel.Id == targetPanel.Id)
+            return;
+
+        SaveState();
+
+        var targetDashboard = EditedConfig.Dashboards.FirstOrDefault(d => d.Panels.Contains(targetPanel));
+        if (targetDashboard == null)
+            return;
+
+        _draggedPanelDashboard.Panels.Remove(_draggedPanel);
+        UpdatePanelOrders(_draggedPanelDashboard.Panels);
+
+        var targetIndex = targetDashboard.Panels.IndexOf(targetPanel);
+        targetDashboard.Panels.Insert(targetIndex, _draggedPanel);
+        UpdatePanelOrders(targetDashboard.Panels);
+
+        if (_draggedPanelDashboard.Id != targetDashboard.Id)
+        {
+            SelectDashboard(targetDashboard);
+        }
+        SelectPanel(_draggedPanel);
+
+        _draggedPanel = null;
+        _draggedPanelDashboard = null;
+        _dragOverPanel = null;
+    }
+
+    private void UpdatePanelOrders(List<PanelDefinition> panels)
+    {
+        for (int i = 0; i < panels.Count; i++)
+        {
+            panels[i].Layout.Order = i;
+        }
+    }
+
+    private void AddColorThreshold()
+    {
+        if (SelectedPanel == null) return;
+        SaveState();
+        SelectedPanel.ColorThresholds.Add(new ColorThresholdRule
+        {
+            Operator = ">=",
+            Value = 80,
+            Color = "#ff9800",
+            Label = "Warning"
+        });
+    }
+
+    private void RemoveColorThreshold(ColorThresholdRule rule)
+    {
+        if (SelectedPanel == null) return;
+        SaveState();
+        SelectedPanel.ColorThresholds.Remove(rule);
+    }
+
+    /// <summary>
+    /// Clears previous query test results before running a new test.
+    /// </summary>
+    private void ClearQueryResults()
+    {
+        QueryTestResult = "";
+        QueryTestIsError = false;
+        QueryResultTable = null;
+        QueryResultSource = "";
+        QueryDdlPreview = null;
+    }
+
+    /// <summary>
+    /// Executes the SQL Server query and shows the results in a data grid
+    /// so the user can manually confirm the data.
+    /// </summary>
+    private async Task TestSqlServerQuery()
+    {
+        if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.SqlServer))
+        {
+            ClearQueryResults();
+            QueryTestResult = "Please enter a SQL Server query";
+            QueryTestIsError = true;
+            return;
+        }
+
+        ClearQueryResults();
+        QueryTestResult = "Executing SQL Server query...";
+        QueryResultSource = "SQL Server";
+        IsQueryRunning = true;
+        StateHasChanged();
+
+        try
+        {
+            // Create dashboard filter with test parameters
+            var filter = new DashboardFilter
+            {
+                TimeFrom = TestTimeFrom,
+                TimeTo = TestTimeTo,
+                Instances = string.IsNullOrWhiteSpace(TestSqlInstance) 
+                    ? Array.Empty<string>() 
+                    : TestSqlInstance.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            };
+
+            var (success, message, results) = await liveQueriesTableService.ExecuteSqlServerQueryAsync(
+                ConnectionFactory, SelectedPanel.Query.SqlServer, filter);
+
+            QueryTestResult = message;
+            QueryTestIsError = !success;
+            QueryResultTable = results;
+        }
+        catch (Exception ex)
+        {
+            QueryTestResult = $"Error: {ex.Message}";
+            QueryTestIsError = true;
+        }
+        finally
+        {
+            IsQueryRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Validates the SQL Server query, generates and shows the CREATE TABLE DDL,
+    /// creates/updates the SQLite cache table, and inserts initial data.
+    /// </summary>
+    private async Task ValidateliveQueriesQuery()
+    {
+        if (SelectedPanel == null || string.IsNullOrWhiteSpace(SelectedPanel.Query.SqlServer))
+        {
+            ClearQueryResults();
+            QueryTestResult = "Please enter a SQL Server query first";
+            QueryTestIsError = true;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SelectedPanel.Id))
+        {
+            ClearQueryResults();
+            QueryTestResult = "Please save the panel first (panel ID is required for table name)";
+            QueryTestIsError = true;
+            return;
+        }
+
+        ClearQueryResults();
+        QueryTestResult = "Generating DDL and creating table...";
+        IsQueryRunning = true;
+        StateHasChanged();
+
+        try
+        {
+            // Step 1: Generate and display the DDL so the user can review it
+            var (ddlOk, ddlMsg, ddl) = await liveQueriesTableService.GenerateCreateTableDdlAsync(
+                ConnectionFactory, SelectedPanel.Id, SelectedPanel.Query.SqlServer);
+
+            if (ddlOk && !string.IsNullOrEmpty(ddl))
+            {
+                QueryDdlPreview = ddl;
+            }
+            else if (!ddlOk)
+            {
+                QueryTestResult = ddlMsg;
+                QueryTestIsError = true;
+                return;
+            }
+
+            // Step 2: Actually create/update the table and insert data
+            var serverName = ".";
+            if (ConnectionFactory is SqlServerConnectionFactory sqlFactory)
+            {
+                serverName = sqlFactory.ServerName ?? ".";
+            }
+
+            var (success, message) = await liveQueriesTableService.ValidateAndCreateTableAsync(
+                ConnectionFactory,
+                SelectedPanel.Id,
+                SelectedPanel.Query.SqlServer,
+                serverName);
+
+            QueryTestResult = message;
+            QueryTestIsError = !success;
+        }
+        catch (Exception ex)
+        {
+            QueryTestResult = $"Error: {ex.Message}";
+            QueryTestIsError = true;
+        }
+        finally
+        {
+            IsQueryRunning = false;
+        }
+    }
+
+    private void PreviewPanel()
+    {
+        ShowPreview = true;
+    }
+
+    private void ClosePreview()
+    {
+        ShowPreview = false;
+    }
+
+    private void ShowImportDialog()
+    {
+        ShowImport = true;
+        ImportJson = "";
+    }
+
+    private void CloseImportDialog()
+    {
+        ShowImport = false;
+    }
+
+    private void ImportConfig()
+    {
+        try
+        {
+            SaveState();
+            var imported = JsonSerializer.Deserialize<DashboardConfigRoot>(ImportJson);
+            if (imported != null)
+            {
+                EditedConfig = imported;
+                SelectedDashboard = EditedConfig.Dashboards.FirstOrDefault();
+                SelectedPanel = SelectedDashboard?.Panels.FirstOrDefault();
+                StatusMessage = "Configuration imported successfully!";
+                IsSuccess = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Import failed: {ex.Message}";
+            IsSuccess = false;
+        }
+        CloseImportDialog();
+    }
+
+    private void ExportConfig()
+    {
+        var json = JsonSerializer.Serialize(EditedConfig, new JsonSerializerOptions { WriteIndented = true });
+        // In a real app, we'd trigger a file download
+        StatusMessage = $"Exported {json.Length} characters to clipboard (simulated)";
+        IsSuccess = true;
+        System.Windows.Clipboard.SetText(json);
+    }
+
+    private async Task SaveAll()
+    {
+        try
+        {
+            SaveState();
+
+            ConfigService.UpdateConfig(EditedConfig);
+
+            StatusMessage = "Configuration saved successfully!";
+            IsSuccess = true;
+            _hasUnsavedChanges = false;
+            _autoSaveTimer?.Stop();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Save failed: {ex.Message}";
+            IsSuccess = false;
+        }
+        await Task.CompletedTask;
+    }
+    
+    private void TriggerAutoSave()
+    {
+        _hasUnsavedChanges = true;
+        _autoSaveTimer?.Stop();
+        _autoSaveTimer?.Start();
+    }
+    
+    private async Task AutoSave()
+    {
+        if (!_hasUnsavedChanges) return;
+        
+        try
+        {
+            ConfigService.UpdateConfig(EditedConfig);
+            _hasUnsavedChanges = false;
+            StatusMessage = "Auto-saved";
+            IsSuccess = true;
+            StateHasChanged();
+            
+            // Clear status message after 2 seconds
+            await Task.Delay(2000);
+            StatusMessage = "";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Auto-save failed: {ex.Message}";
+            IsSuccess = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        _autoSaveTimer?.Stop();
+        _autoSaveTimer?.Dispose();
+        _autoSaveTimer = null;
+    }
+}
+

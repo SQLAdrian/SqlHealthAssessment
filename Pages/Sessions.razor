@@ -1,0 +1,357 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/sessions"
+@page "/dashboard/sessions"
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject SessionDataService SessionService
+@inject ServerConnectionManager ConnectionManager
+@inject IDbConnectionFactory ConnectionFactory
+@inject GlobalInstanceSelector InstanceSelector
+@implements IDisposable
+
+<div class="sessions-page">
+
+    @* Server context header *@
+    @if (ConnectionManager.CurrentServer != null)
+    {
+        <div class="server-context-header">
+            <span class="server-context-icon">🔵</span>
+            <span class="server-context-label">Live Sessions on:</span>
+            <span class="server-context-name">@ConnectionManager.CurrentServer.ServerNames</span>
+            <span class="server-context-db">(@ConnectionManager.CurrentServer.Database)</span>
+            <span class="server-context-label" style="margin-left: 16px;">Instance:</span>
+            <select class="toolbar-select" style="margin-left: 4px;" @onchange="OnInstanceChanged">
+                @foreach (var instance in Instances)
+                {
+                    <option value="@instance" selected="@(SelectedInstance == instance)">@instance</option>
+                }
+            </select>
+        </div>
+    }
+
+    @* Toolbar *@
+    <div class="sessions-toolbar">
+        <div class="toolbar-group">
+            <label class="toolbar-label">Top:</label>
+            <select class="toolbar-select" value="@TopSessionCount" @onchange="OnTopCountChanged">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+
+        <div class="toolbar-group">
+            <label class="toolbar-label">Refresh:</label>
+            <select class="toolbar-select" value="@RefreshIntervalSeconds" @onchange="OnRefreshIntervalChanged">
+                <option value="2">2 sec</option>
+                <option value="5">5 sec</option>
+                <option value="10">10 sec</option>
+                <option value="15">15 sec</option>
+                <option value="30">30 sec</option>
+            </select>
+        </div>
+
+        <div class="toolbar-group">
+            <button class="toolbar-btn @(AutoRefresh ? "active" : "")" @onclick="ToggleAutoRefresh">
+                @(AutoRefresh ? "⏸ Pause" : "▶ Auto-Refresh")
+            </button>
+            <button class="toolbar-btn" @onclick="ManualRefresh">
+                🔄 Refresh
+            </button>
+        </div>
+
+        <div class="toolbar-group" style="margin-left: 16px;">
+            <button class="sessions-filter-btn @(HideSleeping ? "active" : "")" @onclick="ToggleHideSleeping">
+                @(HideSleeping ? "👁 Show Sleeping" : "🙈 Hide Sleeping")
+            </button>
+            <button class="sessions-filter-btn @(ShowOnlyBlocked ? "active" : "")" @onclick="ToggleShowOnlyBlocked">
+                @(ShowOnlyBlocked ? "🔓 Show All" : "🔒 Only Blocked")
+            </button>
+            <button class="sessions-filter-btn @(HideLowIO ? "active" : "")" @onclick="ToggleHideLowIO">
+                @(HideLowIO ? "📊 Show All IO" : "📊 Hide Low IO")
+            </button>
+        </div>
+
+        <div class="toolbar-status">
+            <span style="font-size: 11px; color: var(--text-muted);">
+                @FilteredSessions.Count sessions
+                @if (AllSessions.Count != FilteredSessions.Count)
+                {
+                    <span>(@AllSessions.Count total)</span>
+                }
+                @if (!string.IsNullOrEmpty(LastRefreshTime))
+                {
+                    <span>&nbsp;| Last: @LastRefreshTime</span>
+                }
+            </span>
+        </div>
+    </div>
+
+    @* Error display *@
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="chart-empty" style="color: #f44336; background: #2a1a1a; border: 1px solid #f44336; padding: 12px; margin: 8px; border-radius: 4px;">
+            @ErrorMessage
+        </div>
+    }
+
+    @* Loading indicator *@
+    @if (IsLoading && AllSessions.Count == 0)
+    {
+        <div class="chart-empty">Loading sessions...</div>
+    }
+
+    @* Main content area *@
+    <div class="sessions-content">
+        <div class="sessions-main-row">
+            @* Bubble view *@
+            <div class="sessions-bubble-area">
+                <SessionBubbleView Sessions="@FilteredSessions"
+                                   OnSessionClicked="OnSessionClicked"
+                                   SelectedSpid="@SelectedSession?.SPID" />
+                <div class="sessions-bubble-footer">
+                    <button class="sessions-filter-btn" @onclick="() => ShowLegend = true">
+                        📖 Show Legend
+                    </button>
+                </div>
+            </div>
+
+            @* Detail panel *@
+            <div class="sessions-detail-container @((SelectedSession != null) ? "visible" : "hidden")">
+                @if (SelectedSession != null)
+                {
+                    <SessionDetailPanel Session="@SelectedSession"
+                                       OnClose="CloseDetail"
+                                       OnViewPlanRequested="OnViewPlanRequested" />
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Legend modal overlay *@
+@if (ShowLegend)
+{
+    <div class="session-legend-overlay" @onclick="() => ShowLegend = false">
+        <div @onclick:stopPropagation="true">
+            <SessionLegend OnClose="() => ShowLegend = false" />
+        </div>
+    </div>
+}
+
+@* Query plan modal — shown when "View Plan" is clicked on an active session *@
+<QueryPlanModal @ref="_planModal" />
+
+@code {
+    private List<SessionInfo> AllSessions = new();
+    private SessionInfo? SelectedSession;
+    private bool IsLoading = false;
+    private string? ErrorMessage;
+    private string? LastRefreshTime;
+
+    private string SelectedInstance = "";
+    private string[] Instances = Array.Empty<string>();
+
+    private bool HideSleeping = false;
+    private bool ShowOnlyBlocked = false;
+    private bool HideLowIO = false;
+    private bool ShowLegend = false;
+
+    private bool AutoRefresh = true;
+    private int RefreshIntervalSeconds = 5;
+    private int TopSessionCount = 100;
+    private System.Threading.Timer? _refreshTimer;
+    private QueryPlanModal? _planModal;
+
+    private List<SessionInfo> FilteredSessions
+    {
+        get
+        {
+            IEnumerable<SessionInfo> result = AllSessions;
+
+            if (HideSleeping)
+                result = result.Where(s => !s.IsSleeping || s.IsActive);
+
+            if (ShowOnlyBlocked)
+            {
+                var blockedSpids = new HashSet<int>(AllSessions.Where(s => s.IsBlocked).Select(s => s.SPID));
+                var blockerSpids = new HashSet<int>(AllSessions.Where(s => s.IsBlocked).Select(s => s.BlockingSessionId));
+                result = result.Where(s => blockedSpids.Contains(s.SPID) || blockerSpids.Contains(s.SPID));
+            }
+
+            if (HideLowIO)
+            {
+                var ioValues = AllSessions.Select(s => s.LogicalReads + s.Writes).OrderBy(v => v).ToList();
+                if (ioValues.Count > 0)
+                {
+                    var p20Index = (int)Math.Floor(ioValues.Count * 0.2);
+                    var threshold = ioValues[p20Index];
+                    // Always keep blocked/blocking sessions regardless of IO
+                    result = result.Where(s =>
+                        (s.LogicalReads + s.Writes) > threshold ||
+                        s.IsBlocked || s.BlockingSessionId > 0);
+                }
+            }
+
+            return result.ToList();
+        }
+    }
+
+    private void ToggleHideLowIO() => HideLowIO = !HideLowIO;
+
+    protected override async Task OnInitializedAsync()
+    {
+        InstanceSelector.OnInstanceChanged += OnGlobalInstanceChanged;
+
+        var connections = ConnectionManager.GetConnections();
+        var availableInstances = connections.SelectMany(c => c.GetServerList()).Distinct().ToList();
+        Instances = availableInstances.ToArray();
+        SelectedInstance = InstanceSelector.SelectedInstance ?? (availableInstances.Any() ? availableInstances[0] : "");
+
+        await LoadSessions();
+        StartTimer();
+    }
+
+    private void StartTimer()
+    {
+        _refreshTimer?.Dispose();
+        if (AutoRefresh)
+        {
+            _refreshTimer = new System.Threading.Timer(
+                async _ => await InvokeAsync(async () =>
+                {
+                    await LoadSessions();
+                    StateHasChanged();
+                }),
+                null,
+                TimeSpan.FromSeconds(RefreshIntervalSeconds),
+                TimeSpan.FromSeconds(RefreshIntervalSeconds));
+        }
+    }
+
+    private async Task LoadSessions()
+    {
+        try
+        {
+            IsLoading = true;
+            var sessions = await SessionService.GetLiveSessionsAsync(TopSessionCount);
+            AllSessions = sessions;
+            ErrorMessage = null;
+            LastRefreshTime = DateTime.Now.ToString("HH:mm:ss");
+
+            // If selected session no longer exists, deselect
+            if (SelectedSession != null && !sessions.Any(s => s.SPID == SelectedSession.SPID))
+            {
+                SelectedSession = null;
+            }
+            else if (SelectedSession != null)
+            {
+                // Update selected session with latest data
+                SelectedSession = sessions.FirstOrDefault(s => s.SPID == SelectedSession.SPID);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load sessions: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OnSessionClicked(SessionInfo session)
+    {
+        SelectedSession = SelectedSession?.SPID == session.SPID ? null : session;
+    }
+
+    private void CloseDetail()
+    {
+        SelectedSession = null;
+    }
+
+    private async Task OnViewPlanRequested(int spid)
+    {
+        try
+        {
+            var xml = await SessionService.GetQueryPlanAsync(spid);
+            if (xml != null && _planModal != null)
+                await _planModal.ShowAsync(xml, SelectedSession?.QueryText);
+            else
+                ErrorMessage = "No active query plan is available for this session (session may be sleeping or plan handle is not yet set).";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to fetch query plan: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleHideSleeping()
+    {
+        HideSleeping = !HideSleeping;
+    }
+
+    private void ToggleShowOnlyBlocked()
+    {
+        ShowOnlyBlocked = !ShowOnlyBlocked;
+    }
+
+    private void ToggleAutoRefresh()
+    {
+        AutoRefresh = !AutoRefresh;
+        if (AutoRefresh)
+            StartTimer();
+        else
+            _refreshTimer?.Dispose();
+    }
+
+    private void OnRefreshIntervalChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            RefreshIntervalSeconds = seconds;
+            if (AutoRefresh) StartTimer();
+        }
+    }
+
+    private async Task OnTopCountChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var count))
+        {
+            TopSessionCount = count;
+            await LoadSessions();
+        }
+    }
+
+    private async Task ManualRefresh()
+    {
+        await LoadSessions();
+    }
+
+    private async void OnGlobalInstanceChanged(string instanceName)
+    {
+        SelectedInstance = instanceName;
+        await InvokeAsync(async () =>
+        {
+            await LoadSessions();
+            StateHasChanged();
+        });
+    }
+
+    private async Task OnInstanceChanged(ChangeEventArgs e)
+    {
+        var instance = e.Value?.ToString() ?? "";
+        SelectedInstance = instance;
+        InstanceSelector.SetSelectedInstance(instance);
+        await LoadSessions();
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+        InstanceSelector.OnInstanceChanged -= OnGlobalInstanceChanged;
+    }
+}

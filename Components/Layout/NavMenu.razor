@@ -1,0 +1,196 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@using Microsoft.AspNetCore.Components.Routing
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject AutoUpdateService UpdateService
+@inject DatabaseAvailabilityService DbAvailability
+@inject DashboardConfigService DashboardConfig
+@inject ServerConnectionManager ConnectionManager
+@implements IAsyncDisposable
+
+
+<div class="nav-menu">
+    <div class="nav-brand">
+        <span class="nav-brand-icon">📊</span>
+        <span class="nav-brand-text"><p>SQL Health Assessment</p></span>
+    </div>
+    <div>
+        <span class="nav-version">v@(UpdateService.GetCurrentVersion())</span>
+    </div>
+    <br />
+    <nav>
+        <br />
+        <div class="nav-divider">Live</div>
+        <br />
+        <br />
+        
+        @* Dynamic Dashboard Navigation *@
+        @foreach (var category in GetNavigationCategories())
+        {
+            @if (category.Key != "Dashboards")
+            {
+                <br />
+                <div class="nav-divider">@category.Key</div>
+                <br />
+            }
+            
+            //All
+            @foreach (var dashboard in category.Value.OrderBy(d => d.NavOrder).Where(d => d.DefaultDatabase == "master"))
+            {
+                <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
+                    @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+                </NavLink>
+            }
+            <br />
+            <div class="nav-divider">SQLWATCH</div>
+            <br />
+            @if (_SQLWATCHExists)
+            {
+                @foreach (var dashboard in category.Value.OrderBy(d => d.NavOrder).Where(d => d.DefaultDatabase == "SQLWATCH"))
+                {
+                    <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
+                        @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+                    </NavLink>
+                }
+            }
+            else
+            {
+                <span class="nav-db-missing">SQLWATCH database not installed</span>
+            }
+            <br />
+            <div class="nav-divider">PerformanceMonitor</div>
+            <br />
+            @if (_performanceMonitorExists)
+            {
+                @foreach (var dashboard in category.Value.OrderBy(d => d.NavOrder).Where(d => d.DefaultDatabase == "PerformanceMonitor"))
+                {
+                    <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
+                        @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+                    </NavLink>
+                }
+            }
+            else
+            {
+                <span class="nav-db-missing">PerformanceMonitor database not installed</span>
+            }
+        }
+
+        <br />
+        <div class="nav-divider">Check</div>
+        <br />
+        <NavLink href="/quickcheck" class="nav-link" title="Ctrl+0">
+            <span class="nav-icon"><i class="fa-solid fa-bolt-lightning"></i></span> Quick Check
+        </NavLink>
+        <NavLink href="/fullaudit" class="nav-link" title="Ctrl+4">
+            <span class="nav-icon"><i class="fa-solid fa-clipboard-check"></i></span> Full Audit
+        </NavLink>
+        <br />
+        <div class="nav-divider">Monitoring new server</div>
+        <br />
+        <NavLink href="/deploysqlwatch" class="nav-link">
+            <span class="nav-icon"><i class="fa-solid fa-eye"></i></span> SQLWATCH
+        </NavLink>
+        <NavLink href="/deploydarlingPM" class="nav-link">
+            <span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span> Darling Perf Monitor
+        </NavLink>
+        <NavLink href="/bestpractice" class="nav-link">
+            <span class="nav-icon"><i class="fa-solid fa-check-double"></i></span> Deploy Best Practice
+        </NavLink>
+        <br />
+        <br />
+        <div class="nav-divider">Configure</div>
+        <br />
+
+        <NavLink href="/settings" class="nav-link" title="Ctrl+6">
+            <span class="nav-icon"><i class="fa-solid fa-gear"></i></span> Settings
+        </NavLink>
+        <NavLink href="/dashboard-editor" class="nav-link" title="Ctrl+7">
+            <span class="nav-icon"><i class="fa-solid fa-table-columns"></i></span> Dashboard Editor
+        </NavLink>
+        <NavLink href="/bulkeditchecks" class="nav-link" title="Ctrl+9">
+            <span class="nav-icon"><i class="fa-solid fa-pen-to-square"></i></span> Bulk Edit Checks
+        </NavLink>
+        <NavLink href="/editauditscripts" class="nav-link">
+            <span class="nav-icon"><i class="fa-solid fa-file-code"></i></span> Edit Audit Scripts
+        </NavLink>
+        <NavLink href="/servers" class="nav-link" title="Ctrl+8">
+            <span class="nav-icon"><i class="fa-solid fa-server"></i></span> Servers
+        </NavLink>
+        <NavLink href="/about" class="nav-link">
+            <span class="nav-icon"><i class="fa-solid fa-info-circle"></i></span> About
+        </NavLink>
+    </nav>
+    <div class="nav-footer">
+        <small>Ctrl+1-9: Quick Nav</small>
+    </div>
+</div>
+
+@code {
+    private bool _performanceMonitorExists = false;
+    private bool _SQLWATCHExists = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ConnectionManager.OnConnectionChanged += OnServerChanged;
+        await RefreshDbFlags();
+    }
+
+    private void OnServerChanged()
+    {
+        DbAvailability.InvalidateCache();
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshDbFlags();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshDbFlags()
+    {
+        _performanceMonitorExists = await DbAvailability.DatabaseExistsAsync("PerformanceMonitor");
+        _SQLWATCHExists = await DbAvailability.DatabaseExistsAsync("SQLWATCH");
+    }
+
+    private RenderFragment NavIcon(string? icon) => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "nav-icon");
+        if (icon?.StartsWith("fa-") == true)
+        {
+            builder.OpenElement(2, "i");
+            builder.AddAttribute(3, "class", icon);
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.AddContent(2, icon);
+        }
+        builder.CloseElement();
+    };
+
+    private Dictionary<string, List<DashboardDefinition>> GetNavigationCategories()
+    {
+        var categories = new Dictionary<string, List<DashboardDefinition>>();
+        
+        foreach (var dashboard in DashboardConfig.Config.Dashboards.Where(d => d.Enabled))
+        {
+            if (dashboard.DefaultDatabase == "PerformanceMonitor" && !_performanceMonitorExists)
+                continue;
+            if (dashboard.DefaultDatabase == "SQLWATCH" && !_SQLWATCHExists)
+                continue;
+                
+            if (!categories.ContainsKey(dashboard.NavCategory))
+                categories[dashboard.NavCategory] = new List<DashboardDefinition>();
+                
+            categories[dashboard.NavCategory].Add(dashboard);
+        }
+        
+        return categories;
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        ConnectionManager.OnConnectionChanged -= OnServerChanged;
+        await ValueTask.CompletedTask;
+    }
+}

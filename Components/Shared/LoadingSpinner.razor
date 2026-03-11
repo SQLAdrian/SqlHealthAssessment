@@ -1,0 +1,21 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@if (IsLoading)
+{
+    <div class="loading-spinner-overlay @(Inline ? "inline" : "")">
+        <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                <div class="spinner-message">@Message</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public string Message { get; set; } = "";
+    [Parameter] public bool Inline { get; set; } = false;
+}

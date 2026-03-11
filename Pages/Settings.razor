@@ -1,0 +1,824 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/settings"
+
+@using Microsoft.Extensions.Configuration
+@using System.IO
+@using System.Text.Json
+@using Microsoft.Data.SqlClient
+@using Microsoft.JSInterop
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@inject IDbConnectionFactory ConnectionFactory
+@inject SqlServerConnectionFactory SqlServerConnectionFactory
+@inject IConfiguration Configuration
+@inject AlertingService Alerting
+@inject IJSRuntime JS
+@inject UserSettingsService UserSettings
+@inject DashboardConfigService DashboardConfig
+@inject MemoryMonitorService MemoryMonitor
+@inject ConfigurationValidator ConfigValidator
+@inject AutoUpdateService UpdateService
+
+<div class="settings-page">
+    <h2 style="margin-bottom: 20px;">Settings</h2>
+
+
+<!-- Should use this connection
+    <div class="settings-group">
+        <h3>Data Source</h3>
+        <div class="settings-field">
+            <label>Data Source</label>
+            <select value="@SelectedDataSource" @onchange="OnDataSourceChanged">
+                <option value="SqlServer">SQL Server</option>
+                @* <option value="sqlite">sqlite</option> *@
+            </select>
+        </div>
+        @if (RestartRequired)
+        {
+            <p style="color: var(--yellow); font-size: 12px;">
+                Data source changed. Restart the application for the change to take effect.
+            </p>
+        }
+    </div>
+    -->
+
+<!-- server selection has been moved
+    <div class="settings-group">
+        <h3>Connection Strings</h3>
+        <div class="settings-field">
+            <label>SQL Server</label>
+            @if (_isEditingConnectionString)
+            {
+                <input type="text" @bind="SqlServerConnectionString" />
+            }
+            else
+            {
+                <input type="password" @bind="SqlServerConnectionString" style="width: 100%;" />
+            }
+            <small style="display: block; margin-top: 4px;">
+                <button class="btn-link" @onclick="ToggleConnectionStringVisibility" style="background: none; border: none; color: var(--blue); cursor: pointer; padding: 0; font-size: 12px;">
+                    @(_isEditingConnectionString ? "Hide (password visible)" : "Show/Edit Connection String")
+                </button>
+            </small>
+        </div>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="trustCert" @bind="TrustServerCertificate" style="width: auto;" />
+            <label for="trustCert" style="margin: 0; font-weight: normal;">Trust Server Certificate (use for self-signed SSL certificates)</label>
+        </div>
+        <button class="settings-btn" style="margin-top: 10px;" @onclick="SaveConnectionString">Save Connection String</button>
+        @if (SaveResult != null)
+        {
+            <p style="margin-top: 8px; color: @(SaveSuccess ? "var(--green)" : "var(--red)");">@SaveResult</p>
+        }
+    </div>
+    -->
+
+    <div class="settings-group">
+        <h3>Refresh</h3>
+        <div class="settings-field">
+            <label>Auto-Refresh Interval (seconds)</label>
+            <input type="text" value="@(Configuration["RefreshIntervalSeconds"] ?? "5")" readonly />
+        </div>
+        <div class="settings-field">
+            <label>Default Time Range (minutes)</label>
+            <input type="text" value="@(Configuration["DefaultTimeRangeMinutes"] ?? "60")" readonly />
+        </div>
+        <div class="settings-field">
+            <label>Query Timeout (seconds)</label>
+            <input type="text" value="@(Configuration["QueryTimeoutSeconds"] ?? "60")" readonly />
+            <small style="display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px;">
+                Maximum time to wait for query execution before timeout
+            </small>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Performance</h3>
+        <div class="settings-field">
+            <label>Memory Usage</label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="flex: 1; background: var(--bg-secondary); border-radius: 4px; height: 24px; overflow: hidden;">
+                    <div style="background: @(MemoryMonitor.IsUnderPressure ? "var(--red)" : "var(--green)"); height: 100%; width: @((MemoryMonitor.MemoryUsagePercent * 100).ToString("F1"))%; transition: width 0.3s, background 0.3s;"></div>
+                </div>
+                <span style="min-width: 120px; font-size: 13px;">@((MemoryMonitor.CurrentMemoryUsage / 1024.0 / 1024.0).ToString("N0")) MB (@((MemoryMonitor.MemoryUsagePercent * 100).ToString("F1"))%)</span>
+            </div>
+            @if (MemoryMonitor.IsUnderPressure)
+            {
+                <small style="display: block; margin-top: 4px; color: var(--red); font-size: 11px;">
+                    ⚠️ High memory usage detected. Cache will be automatically cleared.
+                </small>
+            }
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Configuration</h3>
+        <div class="settings-field">
+            <label>Environment</label>
+            <input type="text" value="@(Configuration["Environment"] ?? "Production")" readonly />
+        </div>
+        <button class="settings-btn" @onclick="ValidateConfig">Validate Configuration</button>
+        @if (ConfigValidationResult != null)
+        {
+            <p style="margin-top: 8px; color: @(ConfigValidationSuccess ? "var(--green)" : "var(--red)");">@ConfigValidationResult</p>
+            @if (!ConfigValidationSuccess && ConfigErrors.Any())
+            {
+                <ul style="margin-top: 8px; color: var(--red); font-size: 12px;">
+                    @foreach (var error in ConfigErrors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            }
+        }
+    </div>
+
+    <div class="settings-group">
+        <h3>Updates</h3>
+        <div class="settings-field">
+            <label>Current Version</label>
+            <input type="text" value="@UpdateService.GetCurrentVersion()" readonly />
+        </div>
+        <button class="settings-btn" @onclick="CheckForUpdates" disabled="@IsCheckingUpdates">@(IsCheckingUpdates ? "Checking..." : "Check for Updates")</button>
+        @if (UpdateCheckResult != null)
+        {
+            <p style="margin-top: 8px; color: @(UpdateAvailable ? "var(--orange)" : "var(--green)");">@UpdateCheckResult</p>
+            @if (UpdateAvailable && UpdateInfo != null)
+            {
+                <div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 4px;">
+                    <p style="font-weight: 600; margin-bottom: 8px;">Version @UpdateInfo.Version Available</p>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Released: @UpdateInfo.ReleasedAt.ToString("yyyy-MM-dd")</p>
+                    @if (!string.IsNullOrEmpty(UpdateInfo.ReleaseNotes))
+                    {
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">@UpdateInfo.ReleaseNotes</p>
+                    }
+                    <a href="@UpdateInfo.DownloadUrl" target="_blank" class="settings-btn" style="display: inline-block; text-decoration: none;">Download Update</a>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="settings-group">
+        <h3>Quick Check</h3>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="showDiagnosticPane" checked="@ShowDiagnosticPane"
+                   @onchange="ToggleDiagnosticPane" style="width: auto;" />
+            <label for="showDiagnosticPane" style="margin: 0; font-weight: normal;">
+                Show Diagnostic Output Pane (real-time per-check execution log)
+            </label>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Default Dashboard</h3>
+        <div class="settings-field">
+            <label>Dashboard to Display First</label>
+            <select @bind="DefaultDashboardId">
+                <option value="">None (use first available)</option>
+                @foreach (var dashboard in DashboardConfig.Config.Dashboards.Where(d => d.Enabled))
+                {
+                    <option value="@dashboard.Id">@dashboard.Title</option>
+                }
+            </select>
+        </div>
+        <button class="settings-btn" style="margin-top: 10px;" @onclick="SaveDefaultDashboard">Save Default Dashboard</button>
+        @if (DashboardSaveResult != null)
+        {
+            <p style="margin-top: 8px; color: var(--green);">@DashboardSaveResult</p>
+        }
+    </div>
+
+    <div class="settings-group">
+        <h3>Cache Management</h3>
+        <div class="settings-field">
+            <label>sqlite Dashboard Cache</label>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                Clear all cached dashboard data from the local sqlite database. This will force fresh data to be loaded from SQL Server on next dashboard refresh.
+            </p>
+        </div>
+        <div class="settings-field">
+            <label>Cache File Size</label>
+            <input type="text" value="@CacheFileSize" readonly />
+        </div>
+        <div class="settings-field">
+            <label>Max Cache Size</label>
+            <input type="text" value="@((Configuration.GetValue<long>("MaxCacheSizeBytes", 524288000) / 1024.0 / 1024.0).ToString("N0")) MB" readonly />
+        </div>
+        <div class="settings-field">
+            <label>Cache Eviction Interval</label>
+            <input type="text" value="@(Configuration.GetValue<int>("CacheEvictionHours", 24)) hours" readonly />
+        </div>
+        <div class="settings-field">
+            <label>sqlite Maintenance Interval</label>
+            <input type="text" value="@(Configuration.GetValue<int>("sqliteMaintenanceIntervalHours", 4)) hours" readonly />
+        </div>
+        <div class="settings-field">
+            <label>sqlite Integrity Check Frequency</label>
+            <input type="text" value="Every @(Configuration.GetValue<int>("sqliteIntegrityCheckEveryNRuns", 6)) maintenance runs" readonly />
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button class="settings-btn" @onclick="FlushCache" disabled="@IsFlushingCache">@(IsFlushingCache ? "Flushing..." : "Flush All Cache")</button>
+            <button class="settings-btn" @onclick="RunMaintenance" disabled="@IsRunningMaintenance">@(IsRunningMaintenance ? "Running..." : "Run Maintenance")</button>
+        </div>
+        @if (FlushCacheResult != null)
+        {
+            <p style="margin-top: 8px; color: @(FlushCacheSuccess ? "var(--green)" : "var(--red)");">@FlushCacheResult</p>
+        }
+        @if (MaintenanceResult != null)
+        {
+            <p style="margin-top: 8px; color: @(MaintenanceSuccess ? "var(--green)" : "var(--red)");">@MaintenanceResult</p>
+        }
+    </div>
+
+
+    <!-- Alerting Section -->
+    <div class="settings-group">
+        <div class="section-header">
+            <h3>Alerting</h3>
+            <button class="btn btn-sm" @onclick="ShowAddAlertDialog">+ Add Alert</button>
+        </div>
+        
+        @if (AlertNotifications.Count > 0)
+        {
+            <div class="alert-notifications">
+                <h4>Recent Alerts</h4>
+                @foreach (var notification in AlertNotifications.Take(5))
+                {
+                    <div class="alert-notification @notification.Severity">
+                        <span class="alert-badge">@notification.Severity.ToUpper()</span>
+                        <span>@notification.Message</span>
+                        <small>@notification.TriggeredAt.ToString("g")</small>
+                    </div>
+                }
+                <button class="btn btn-sm" style="margin-top: 8px;" @onclick="ClearAlerts">Clear Alerts</button>
+            </div>
+        }
+
+        <div class="alert-thresholds">
+            <h4>Alert Thresholds</h4>
+            @foreach (var threshold in AlertThresholds)
+            {
+                <div class="alert-threshold @(threshold.Enabled ? "enabled" : "disabled")">
+                    <div class="threshold-info">
+                        <strong>@threshold.Name</strong>
+                        <span class="threshold-condition">
+                            @threshold.Metric @threshold.Condition.Replace("_", " ") @threshold.ThresholdValue
+                        </span>
+                        <span class="severity-badge @threshold.Severity">@threshold.Severity</span>
+                    </div>
+                    <div class="threshold-actions">
+                        <button class="btn btn-sm" @onclick="() => ToggleThreshold(threshold)">
+                            @(threshold.Enabled ? "Disable" : "Enable")
+                        </button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteThreshold(threshold.Id)">Delete</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (ShowAlertDialog)
+        {
+            <div class="modal-overlay">
+                <div class="modal">
+                    <h3>Add Alert Threshold</h3>
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" @bind="NewAlert.Name" placeholder="High CPU Alert" />
+                    </div>
+                    <div class="form-group">
+                        <label>Metric</label>
+                        <select @bind="NewAlert.Metric">
+                            <option value="cpu">CPU Usage (%)</option>
+                            <option value="memory">Memory Usage (%)</option>
+                            <option value="connections">Connections</option>
+                            <option value="deadlocks">Deadlocks</option>
+                            <option value="batch_requests">Batch Requests/sec</option>
+                            <option value="page_life_expectancy">Page Life Expectancy</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Condition</label>
+                        <select @bind="NewAlert.Condition">
+                            <option value="greater_than">Greater than</option>
+                            <option value="less_than">Less than</option>
+                            <option value="equals">Equals</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Threshold Value</label>
+                        <input type="number" @bind="NewAlert.ThresholdValue" />
+                    </div>
+                    <div class="form-group">
+                        <label>Severity</label>
+                        <select @bind="NewAlert.Severity">
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" @bind="NewAlert.Description" />
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn" @onclick="() => ShowAlertDialog = false">Cancel</button>
+                        <button class="btn btn-primary" @onclick="SaveNewAlert">Save</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Appearance Section -->
+    <div class="settings-group">
+        <h3>Appearance</h3>
+        
+        <div class="settings-field">
+            <label>Timezone</label>
+            <select @onchange="OnTimezoneChanged">
+                <option value="-12" selected="@(SelectedTimezoneOffset == -12)">UTC-12</option>
+                <option value="-11">UTC-11</option>
+                <option value="-10">UTC-10</option>
+                <option value="-9">UTC-9</option>
+                <option value="-8">UTC-8 (PST)</option>
+                <option value="-7">UTC-7 (MST)</option>
+                <option value="-6">UTC-6 (CST)</option>
+                <option value="-5">UTC-5 (EST)</option>
+                <option value="-4">UTC-4 (AST)</option>
+                <option value="-3">UTC-3</option>
+                <option value="-2">UTC-2</option>
+                <option value="-1">UTC-1</option>
+                <option value="0">UTC</option>
+                <option value="1">UTC+1 (CET)</option>
+                <option value="2">UTC+2</option>
+                <option value="3">UTC+3</option>
+                <option value="4">UTC+4</option>
+                <option value="5">UTC+5</option>
+                <option value="6">UTC+6</option>
+                <option value="7">UTC+7</option>
+                <option value="8">UTC+8 (CST China)</option>
+                <option value="9">UTC+9 (JST)</option>
+                <option value="10">UTC+10</option>
+                <option value="11">UTC+11</option>
+                <option value="12">UTC+12</option>
+                <option value="13">UTC+13 (NZST)</option>
+            </select>
+            <small style="color: var(--text-secondary);">Current: UTC@(SelectedTimezoneOffset >= 0 ? "+" : "")@SelectedTimezoneOffset</small>
+        </div>
+
+        <div class="settings-field">
+            <label>Theme</label>
+            <input type="text" value="Dark (VS Code style)" readonly style="background: var(--bg-secondary); color: var(--text-secondary);" />
+            <small style="color: var(--text-secondary);">Fixed dark theme optimized for readability</small>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? TestResult;
+    private bool TestSuccess;
+    private int SelectedTimezoneOffset = 13;
+    private string SelectedDataSource = "SqlServer";
+    private bool RestartRequired;
+    private string SqlServerConnectionString = "";
+    private bool TrustServerCertificate = false;
+    private bool _isEditingConnectionString = false;
+    private string? SaveResult;
+    private bool SaveSuccess;
+    private bool ShowDiagnosticPane;
+    private string DefaultDashboardId = "";
+    private string? DashboardSaveResult;
+    private string? ConfigValidationResult;
+    private bool ConfigValidationSuccess;
+    private List<string> ConfigErrors = new();
+    private bool IsCheckingUpdates;
+    private string? UpdateCheckResult;
+    private bool UpdateAvailable;
+    private UpdateInfo? UpdateInfo;
+    private bool IsFlushingCache;
+    private string? FlushCacheResult;
+    private bool FlushCacheSuccess;
+    private bool IsRunningMaintenance;
+    private string? MaintenanceResult;
+    private bool MaintenanceSuccess;
+    private string CacheFileSize = "N/A";
+
+    protected override void OnInitialized()
+    {
+        // Load configuration
+        SelectedDataSource = Configuration["DataSource"] ?? "SqlServer";
+        var connStr = Configuration.GetConnectionString("SqlServer") ?? "";
+        TrustServerCertificate = Configuration.GetValue<bool>("TrustServerCertificate", false);
+
+        // Mask the password in the connection string for display
+        SqlServerConnectionString = MaskConnectionStringPassword(connStr);
+        LoadAlerts();
+
+        // Load user settings
+        ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
+        SelectedTimezoneOffset = (int)UserSettings.GetTimezoneOffset();
+        DefaultDashboardId = UserSettings.GetDefaultDashboardId();
+        
+        // Get cache file size
+        UpdateCacheFileSize();
+    }
+
+    private void ToggleDiagnosticPane(ChangeEventArgs e)
+    {
+        ShowDiagnosticPane = (bool)(e.Value ?? false);
+        UserSettings.SetShowDiagnosticPane(ShowDiagnosticPane);
+    }
+
+    private void SaveDefaultDashboard()
+    {
+        UserSettings.SetDefaultDashboardId(DefaultDashboardId);
+        DashboardSaveResult = "Default dashboard saved successfully";
+        StateHasChanged();
+    }
+
+
+
+    private void OnTimezoneChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int offset))
+        {
+            SelectedTimezoneOffset = offset;
+            UserSettings.SetTimezoneOffset(offset);
+        }
+    }
+
+    private string MaskConnectionStringPassword(string connStr)
+    {
+        if (string.IsNullOrEmpty(connStr))
+            return "";
+        
+        try
+        {
+            var builder = new SqlConnectionStringBuilder(connStr);
+            if (!string.IsNullOrEmpty(builder.Password))
+            {
+                builder.Password = "********";
+                return builder.ConnectionString;
+            }
+        }
+        catch
+        {
+            // If parsing fails, return as-is
+        }
+        return connStr;
+    }
+
+    private void ToggleConnectionStringVisibility()
+    {
+        _isEditingConnectionString = !_isEditingConnectionString;
+    }
+
+    private async Task OnDataSourceChanged(ChangeEventArgs e)
+    {
+        var newValue = e.Value?.ToString() ?? "SqlServer";
+        if (newValue == SelectedDataSource)
+            return;
+
+        SelectedDataSource = newValue;
+
+        var appSettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+        var json = await File.ReadAllTextAsync(appSettingsPath);
+        using var doc = JsonDocument.Parse(json);
+        var root = new Dictionary<string, object>();
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            if (prop.Name == "DataSource")
+                root[prop.Name] = newValue;
+            else
+                root[prop.Name] = prop.Value;
+        }
+
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var updatedJson = JsonSerializer.Serialize(root, options);
+        await File.WriteAllTextAsync(appSettingsPath, updatedJson);
+
+        RestartRequired = true;
+    }
+
+    //private async Task SaveConnectionString()
+    //{
+    //    if (string.IsNullOrWhiteSpace(SqlServerConnectionString))
+    //    {
+    //        SaveResult = "Connection string cannot be empty";
+    //        SaveSuccess = false;
+    //        return;
+    //    }
+//
+    //    try
+    //    {
+    //        var appSettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+    //        var json = await File.ReadAllTextAsync(appSettingsPath);
+    //        using var doc = JsonDocument.Parse(json);
+    //        
+    //        // Get the original connection string to preserve the password if user entered ********
+    //        var originalConnStr = doc.RootElement
+    //            .GetProperty("ConnectionStrings")
+    //            .GetProperty("SqlServer")
+    //            .GetString() ?? "";
+    //        
+    //        // Parse both to check if user provided new password or kept the placeholder
+    //        var newConnStr = SqlServerConnectionString;
+    //        try
+    //        {
+    //            var newBuilder = new SqlConnectionStringBuilder(newConnStr);
+    //            var originalBuilder = new SqlConnectionStringBuilder(originalConnStr);
+    //            
+    //            // If new password is placeholder, keep the original password
+    //            if (newBuilder.Password == "********" && !string.IsNullOrEmpty(originalBuilder.Password))
+    //            {
+    //                newBuilder.Password = originalBuilder.Password;
+    //                newConnStr = newBuilder.ConnectionString;
+    //            }
+    //        }
+    //        catch
+    //        {
+    //            // If parsing fails, use what the user provided
+    //        }
+//
+    //        var root = new Dictionary<string, object>();
+    //        foreach (var prop in doc.RootElement.EnumerateObject())
+    //        {
+    //            if (prop.Name == "ConnectionStrings")
+    //            {
+    //                var connStrings = new Dictionary<string, string>();
+    //                foreach (var connProp in prop.Value.EnumerateObject())
+    //                {
+    //                    if (connProp.Name == "SqlServer")
+    //                        connStrings[connProp.Name] = newConnStr;
+    //                    else if (connProp.Name == "sqlite")
+    //                        connStrings[connProp.Name] = connProp.Value.GetString() ?? "";
+    //                }
+    //                root[prop.Name] = connStrings;
+    //            }
+    //            else if (prop.Name == "DataSource")
+    //            {
+    //                root[prop.Name] = prop.Value.GetString() ?? "SqlServer";
+    //            }
+    //            else if (prop.Name == "TrustServerCertificate")
+    //            {
+    //                root[prop.Name] = TrustServerCertificate;
+    //            }
+    //            else if (prop.Name == "RefreshIntervalSeconds")
+    //            {
+    //                root[prop.Name] = prop.Value.GetInt32();
+    //            }
+    //            else if (prop.Name == "DefaultTimeRangeMinutes")
+    //            {
+    //                root[prop.Name] = prop.Value.GetInt32();
+    //            }
+    //        }
+//
+    //        // Ensure TrustServerCertificate is in the config
+    //        if (!root.ContainsKey("TrustServerCertificate"))
+    //        {
+    //            root["TrustServerCertificate"] = TrustServerCertificate;
+    //        }
+//
+    //        var options = new JsonSerializerOptions { WriteIndented = true };
+    //        var updatedJson = JsonSerializer.Serialize(root, options);
+    //        await File.WriteAllTextAsync(appSettingsPath, updatedJson);
+//
+    //        SaveResult = "Connection string saved and applied. No restart required.";
+    //        SaveSuccess = true;
+    //        RestartRequired = false;
+    //        
+    //        // Apply the new connection string without restart
+    //        SqlServerConnectionFactory.UpdateConnectionString(newConnStr, TrustServerCertificate);
+    //        
+    //        // Re-mask the password in the UI
+    //        SqlServerConnectionString = MaskConnectionStringPassword(newConnStr);
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        SaveResult = $"Failed to save: {ex.Message}";
+    //        SaveSuccess = false;
+    //    }
+    //}
+
+    private async Task TestConnection()
+    {
+        TestResult = "Testing...";
+        try
+        {
+            using var conn = ConnectionFactory.CreateConnection();
+            conn.Open();
+            TestResult = $"Connected successfully to {ConnectionFactory.DataSourceType}";
+            TestSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            TestResult = $"Connection failed: {ex.Message}";
+            TestSuccess = false;
+        }
+        await Task.CompletedTask;
+    }
+
+    // Alerting methods
+    private List<AlertThreshold> AlertThresholds = new();
+    private List<AlertNotification> AlertNotifications = new();
+    private bool ShowAlertDialog = false;
+    private AlertThreshold NewAlert = new();
+
+    private void LoadAlerts()
+    {
+        AlertThresholds = Alerting.GetThresholds();
+        AlertNotifications = Alerting.GetNotifications();
+    }
+
+    private void ShowAddAlertDialog()
+    {
+        NewAlert = new AlertThreshold();
+        ShowAlertDialog = true;
+    }
+
+    private void SaveNewAlert()
+    {
+        if (string.IsNullOrWhiteSpace(NewAlert.Name))
+            return;
+        
+        Alerting.AddThreshold(NewAlert);
+        LoadAlerts();
+        ShowAlertDialog = false;
+    }
+
+    private void ToggleThreshold(AlertThreshold threshold)
+    {
+        threshold.Enabled = !threshold.Enabled;
+        Alerting.UpdateThreshold(threshold);
+        LoadAlerts();
+    }
+
+    private void DeleteThreshold(string id)
+    {
+        Alerting.RemoveThreshold(id);
+        LoadAlerts();
+    }
+
+    private void ClearAlerts()
+    {
+        Alerting.ClearNotifications();
+        LoadAlerts();
+    }
+
+    private void ValidateConfig()
+    {
+        var (isValid, errors) = ConfigValidator.Validate();
+        ConfigValidationSuccess = isValid;
+        ConfigErrors = errors;
+        ConfigValidationResult = isValid ? "Configuration is valid" : "Configuration validation failed";
+    }
+
+    private async Task CheckForUpdates()
+    {
+        IsCheckingUpdates = true;
+        UpdateCheckResult = null;
+        StateHasChanged();
+
+        var (available, info) = await UpdateService.CheckForUpdatesAsync();
+        UpdateAvailable = available;
+        UpdateInfo = info;
+        UpdateCheckResult = available ? $"Update available: Version {info?.Version}" : "You are running the latest version";
+        
+        IsCheckingUpdates = false;
+        StateHasChanged();
+    }
+
+    private async Task FlushCache()
+    {
+        IsFlushingCache = true;
+        FlushCacheResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment-cache.db");
+            if (System.IO.File.Exists(dbPath))
+            {
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                
+                System.IO.File.Delete(dbPath);
+                var walPath = dbPath + "-wal";
+                var shmPath = dbPath + "-shm";
+                if (System.IO.File.Exists(walPath)) System.IO.File.Delete(walPath);
+                if (System.IO.File.Exists(shmPath)) System.IO.File.Delete(shmPath);
+                
+                FlushCacheResult = "Cache flushed successfully. All dashboard data will be recreated on next refresh.";
+                FlushCacheSuccess = true;
+                UpdateCacheFileSize();
+            }
+            else
+            {
+                FlushCacheResult = "No cache file found.";
+                FlushCacheSuccess = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            FlushCacheResult = $"Failed to flush cache: {ex.Message}";
+            FlushCacheSuccess = false;
+        }
+        finally
+        {
+            IsFlushingCache = false;
+            StateHasChanged();
+            await Task.CompletedTask;
+        }
+    }
+    
+    private void UpdateCacheFileSize()
+    {
+        try
+        {
+            var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment-cache.db");
+            if (System.IO.File.Exists(dbPath))
+            {
+                var fileInfo = new System.IO.FileInfo(dbPath);
+                var sizeMB = fileInfo.Length / 1024.0 / 1024.0;
+                CacheFileSize = sizeMB < 1 ? $"{(fileInfo.Length / 1024.0):N1} KB" : $"{sizeMB:N1} MB";
+            }
+            else
+            {
+                CacheFileSize = "No cache file";
+            }
+        }
+        catch
+        {
+            CacheFileSize = "N/A";
+        }
+    }
+    
+    private async Task RunMaintenance()
+    {
+        IsRunningMaintenance = true;
+        MaintenanceResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var dbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment-cache.db");
+            if (!System.IO.File.Exists(dbPath))
+            {
+                MaintenanceResult = "No cache file to maintain.";
+                MaintenanceSuccess = true;
+                return;
+            }
+
+            var sizeBefore = new System.IO.FileInfo(dbPath).Length;
+            var connStr = $"Data Source={dbPath}";
+
+            using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
+            {
+                await conn.OpenAsync();
+                
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "PRAGMA optimize;";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "ANALYZE;";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
+            {
+                await conn.OpenAsync();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "VACUUM;";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            var sizeAfter = new System.IO.FileInfo(dbPath).Length;
+            var savedMB = (sizeBefore - sizeAfter) / 1024.0 / 1024.0;
+            
+            UpdateCacheFileSize();
+            MaintenanceResult = $"Maintenance completed. Reclaimed {savedMB:N1} MB.";
+            MaintenanceSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            MaintenanceResult = $"Maintenance failed: {ex.Message}";
+            MaintenanceSuccess = false;
+        }
+        finally
+        {
+            IsRunningMaintenance = false;
+            StateHasChanged();
+        }
+    }
+}
+
+      
