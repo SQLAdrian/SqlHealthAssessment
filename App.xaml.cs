@@ -14,8 +14,11 @@ namespace SqlHealthAssessment
     public partial class App : Application
     {
         public static IServiceProvider? Services { get; private set; }
+        public static WebView2Helper? WebView2Helper { get; private set; }
+        public static bool WebView2Available { get; private set; } = true;
+        public static string? WebView2ErrorMessage { get; private set; }
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
@@ -41,6 +44,29 @@ namespace SqlHealthAssessment
 
             Log.Information("Application starting...");
 
+            // Check WebView2 runtime availability before proceeding
+            var webView2Helper = new WebView2Helper();
+            var webView2Status = await webView2Helper.CheckWebView2StatusAsync();
+            
+            WebView2Helper = webView2Helper;
+            
+            if (!webView2Status.IsInstalled || !webView2Status.IsCompatible)
+            {
+                WebView2Available = false;
+                WebView2ErrorMessage = webView2Status.ErrorMessage ?? "WebView2 runtime is not available";
+                
+                Log.Warning("WebView2 runtime check failed: {ErrorMessage}. Windows Version: {WindowsVersion}. " +
+                            "Application will attempt to start but may fail.", 
+                    WebView2ErrorMessage, WebView2Helper.GetWindowsVersion());
+                
+                // Don't block startup - let the MainWindow handle the error display
+                // This allows users on servers with WebView2 to still run the app
+            }
+            else
+            {
+                Log.Information("WebView2 runtime verified. Version: {Version}", webView2Status.Version);
+            }
+
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
                 .AddJsonFile("config/appsettings.json", optional: false, reloadOnChange: true)
@@ -55,6 +81,9 @@ namespace SqlHealthAssessment
                 builder.AddSerilog(dispose: true);
             });
             services.AddWpfBlazorWebView();
+
+            // Register WebView2 helper for runtime detection
+            services.AddSingleton<WebView2Helper>();
 
             // Register ServerConnectionManager first - it will be used by SqlServerConnectionFactory
             services.AddSingleton<ServerConnectionManager>();

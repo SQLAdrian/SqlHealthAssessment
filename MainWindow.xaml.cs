@@ -11,6 +11,7 @@ namespace SqlHealthAssessment
     public partial class MainWindow : Window
     {
         private readonly ILogger<MainWindow>? _logger;
+        private bool _webView2Initialized = false;
 
         public MainWindow()
         {
@@ -38,6 +39,7 @@ namespace SqlHealthAssessment
             try
             {
                 _logger?.LogInformation("BlazorWebView initialized");
+                _webView2Initialized = true;
 
                 // Wire up PrintService with the live CoreWebView2 instance
                 var printService = App.Services?.GetService<Data.Services.PrintService>();
@@ -59,6 +61,80 @@ namespace SqlHealthAssessment
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error during BlazorWebView initialization");
+                ShowWebView2Error(ex.Message);
+            }
+        }
+
+        private void ShowWebView2Error(string? message = null)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var errorMsg = message ?? App.WebView2ErrorMessage ?? "WebView2 runtime is not available";
+                WebView2ErrorMessage.Text = $"Error: {errorMsg}\n\nWindows Version: {WebView2Helper.GetWindowsVersion()}\n\n" +
+                    "The application requires Microsoft Edge WebView2 Runtime to function. " +
+                    "Please install the runtime and restart the application.";
+                WebView2ErrorOverlay.Visibility = Visibility.Visible;
+            });
+        }
+
+        private async void OnInstallWebView2Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                InstallWebView2Button.IsEnabled = false;
+                InstallWebView2Button.Content = "Installing...";
+
+                _logger?.LogInformation("Starting WebView2 installation...");
+                
+                var helper = App.WebView2Helper ?? new WebView2Helper(null);
+                var result = await helper.TryInstallWebView2Async();
+
+                if (result.Success)
+                {
+                    _logger?.LogInformation("WebView2 installed successfully. Version: {Version}", result.Version);
+                    MessageBox.Show($"WebView2 Runtime installed successfully!\nVersion: {result.Version}\n\nPlease restart the application.",
+                        "Installation Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    Application.Current.Shutdown();
+                }
+                else
+                {
+                    _logger?.LogError("WebView2 installation failed: {Error}", result.ErrorMessage);
+                    MessageBox.Show($"Failed to install WebView2:\n{result.ErrorMessage}\n\n" +
+                        "Please install manually from:\nhttps://developer.microsoft.com/en-us/microsoft-edge/webview2/",
+                        "Installation Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error during WebView2 installation");
+                MessageBox.Show($"Error during installation:\n{ex.Message}",
+                    "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                InstallWebView2Button.IsEnabled = true;
+                InstallWebView2Button.Content = "Auto-Install WebView2";
+            }
+        }
+
+        private void OnRetryClick(object sender, RoutedEventArgs e)
+        {
+            // Check if WebView2 is now available
+            var helper = App.WebView2Helper ?? new WebView2Helper(null);
+            var status = helper.CheckWebView2StatusAsync().GetAwaiter().GetResult();
+
+            if (status.IsInstalled && status.IsCompatible)
+            {
+                _logger?.LogInformation("WebView2 is now available. Version: {Version}", status.Version);
+                WebView2ErrorOverlay.Visibility = Visibility.Collapsed;
+                // The WebView will automatically retry initialization
+            }
+            else
+            {
+                _logger?.LogWarning("WebView2 still not available");
+                MessageBox.Show("WebView2 runtime is still not available.\n\n" +
+                    "Please install the runtime and click Retry.",
+                    "WebView2 Not Available", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
