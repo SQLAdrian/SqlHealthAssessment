@@ -10,6 +10,7 @@
 @inject UserSettingsService UserSettings
 @inject QuickCheckStateService State
 @inject SqlHealthAssessment.Data.Services.PrintService PrintSvc
+@inject SqlHealthAssessment.Data.Services.ReportPageConfigService ReportPageCfg
 @inject SqlHealthAssessment.Data.ToastService Toast
 @implements IDisposable
 
@@ -19,7 +20,26 @@
     DefaultBackgrounds="false"
     OnConfirm="OnPdfConfirmed" />
 
+<SectionEditorModal IsVisible="_editingSection != null"
+    Section="_editingSection"
+    NativeKeys="_availableNativeKeys"
+    AvailableFields="_qcFields"
+    OnSave="HandleSectionSaved"
+    OnCancel="() => _editingSection = null" />
+
+<AddSectionModal IsVisible="_showAddSection"
+    NativeKeys="_availableNativeKeys"
+    OnAdd="HandleSectionAdded"
+    OnCancel="() => _showAddSection = false" />
+
 <div class="quickcheck-page">
+    <EditPageToolbar EditMode="_editMode"
+        PageTitle="Quick Check"
+        HasUnsavedChanges="false"
+        OnAddSection="() => _showAddSection = true"
+        OnDone="() => _editMode = false"
+        OnReset="ResetSections" />
+
     <div class="page-header">
         <div>
             <h2>Quick Check</h2>
@@ -36,6 +56,10 @@
                     @onclick="ToggleDiagnosticPane" title="Toggle diagnostic output">
                 Diagnostics @(ShowDiagnosticPane ? "ON" : "OFF")
             </button>
+            <button class="btn-edit-page @(_editMode ? "btn-edit-page--active" : "")"
+                    @onclick="() => _editMode = !_editMode" title="Edit page layout">
+                <i class="fa-solid fa-pen-to-square"></i> Edit Page
+            </button>
         </div>
     </div>
 
@@ -43,6 +67,11 @@
         <!-- Main Content -->
         <div class="qc-main">
             <!-- Server Selection -->
+            <ReportSectionWrapper Section="@GetSection("server-selection")" EditMode="_editMode"
+                IsFirst="@IsFirstSection("server-selection")" IsLast="@IsLastSection("server-selection")"
+                OnMoveUp="s => MoveSection(s, -1)" OnMoveDown="s => MoveSection(s, 1)"
+                OnEdit="s => _editingSection = s" OnDelete="s => DeleteSection(s)"
+                OnToggle="s => ToggleSection(s)">
             <div class="server-selection">
                 <div class="server-selection-header">
                     <label>Target Servers:</label>
@@ -121,6 +150,7 @@
                     </button>
                 </div>
             </div>
+            </ReportSectionWrapper>
 
             @if (State.IsRunning)
             {
@@ -136,6 +166,11 @@
 
             @if (State.Results.Count > 0)
             {
+                <ReportSectionWrapper Section="@GetSection("summary-cards")" EditMode="_editMode"
+                    IsFirst="@IsFirstSection("summary-cards")" IsLast="@IsLastSection("summary-cards")"
+                    OnMoveUp="s => MoveSection(s, -1)" OnMoveDown="s => MoveSection(s, 1)"
+                    OnEdit="s => _editingSection = s" OnDelete="s => DeleteSection(s)"
+                    OnToggle="s => ToggleSection(s)">
                 <!-- Execution Info -->
                 <div class="execution-info">
                     <span>Executed at @State.ExecutionTime.ToString("HH:mm:ss") | Duration: @State.ExecutionDuration</span>
@@ -188,7 +223,13 @@
                         <span class="summary-label">Total</span>
                     </div>
                 </div>
+                </ReportSectionWrapper>
 
+                <ReportSectionWrapper Section="@GetSection("results-grid")" EditMode="_editMode"
+                    IsFirst="@IsFirstSection("results-grid")" IsLast="@IsLastSection("results-grid")"
+                    OnMoveUp="s => MoveSection(s, -1)" OnMoveDown="s => MoveSection(s, 1)"
+                    OnEdit="s => _editingSection = s" OnDelete="s => DeleteSection(s)"
+                    OnToggle="s => ToggleSection(s)">
                 <!-- Results Filter -->
                 <div class="results-filter">
                     <label>Status:</label>
@@ -291,6 +332,7 @@
                         </tbody>
                     </table>
                 </div>
+                </ReportSectionWrapper>
             }
             else if (!State.IsRunning && State.HasRun)
             {
@@ -344,6 +386,124 @@
     private bool             ShowDiagnosticPane;
     private bool             _disposed;
 
+    // ── Report Page Editor ────────────────────────────────────────────────
+    private bool              _editMode;
+    private List<ReportSection> _sections          = new();
+    private ReportSection?    _editingSection;
+    private bool              _showAddSection;
+    private ReportPageDefinition? _pageDef;
+
+    private static readonly List<string> AllNativeKeys =
+        new() { "server-selection", "summary-cards", "results-grid", "diagnostics" };
+
+    private static readonly List<ReportFieldInfo> _qcFields = new()
+    {
+        new() { Name = "CheckId",          Type = "string",   Description = "Unique identifier for the check",                     IsKey = true  },
+        new() { Name = "DisplayName",      Type = "string",   Description = "Human-readable check name",                          IsKey = false },
+        new() { Name = "Category",         Type = "string",   Description = "Check category (e.g. Security, Performance)",         IsKey = false },
+        new() { Name = "Severity",         Type = "string",   Description = "Finding severity: Critical, Warning, Info, Pass",     IsKey = false },
+        new() { Name = "Result",           Type = "string",   Description = "Raw result value or finding text",                    IsKey = false },
+        new() { Name = "Details",          Type = "string",   Description = "Extended description or recommendation",              IsKey = false },
+        new() { Name = "ServerName",       Type = "string",   Description = "SQL Server instance that produced this result",       IsKey = true  },
+        new() { Name = "RunDateUtc",       Type = "datetime", Description = "UTC timestamp when the check was executed",           IsKey = false },
+        new() { Name = "IsPass",           Type = "bit",      Description = "1 if the check passed, 0 if it raised a finding",     IsKey = false },
+        new() { Name = "ImplementationType", Type = "string", Description = "How the fix should be applied (e.g. Script, Config)", IsKey = false },
+        new() { Name = "SqlQuery",         Type = "string",   Description = "Suggested remediation SQL, if available",             IsKey = false },
+    };
+
+    private List<string> _availableNativeKeys =>
+        AllNativeKeys.Where(k => !_sections.Any(s => s.NativeKey == k && s.SectionType == "native")).ToList();
+
+    private ReportSection GetSection(string nativeKey)
+    {
+        var s = _sections.FirstOrDefault(x => x.NativeKey == nativeKey && x.SectionType == "native");
+        return s ?? new ReportSection { NativeKey = nativeKey, Title = nativeKey, SectionType = "native", Enabled = true };
+    }
+
+    private bool IsFirstSection(string nativeKey)
+    {
+        var ordered = _sections.OrderBy(s => s.Order).ToList();
+        var idx = ordered.FindIndex(s => s.NativeKey == nativeKey && s.SectionType == "native");
+        return idx <= 0;
+    }
+
+    private bool IsLastSection(string nativeKey)
+    {
+        var ordered = _sections.OrderBy(s => s.Order).ToList();
+        var idx = ordered.FindIndex(s => s.NativeKey == nativeKey && s.SectionType == "native");
+        return idx < 0 || idx == ordered.Count - 1;
+    }
+
+    private void LoadSections()
+    {
+        _pageDef = ReportPageCfg.GetPage("/quickcheck");
+        _sections = _pageDef != null
+            ? _pageDef.Sections.OrderBy(s => s.Order).ToList()
+            : AllNativeKeys.Select((k, i) => new ReportSection { NativeKey = k, Title = k, SectionType = "native", Order = i, Enabled = true }).ToList();
+    }
+
+    private void MoveSection(ReportSection section, int direction)
+    {
+        if (_pageDef == null) return;
+        ReportPageCfg.MoveSection(_pageDef.Id, section.Id, direction);
+        LoadSections();
+        StateHasChanged();
+    }
+
+    private void DeleteSection(ReportSection section)
+    {
+        if (_pageDef == null) return;
+        ReportPageCfg.DeleteSection(_pageDef.Id, section.Id);
+        LoadSections();
+        StateHasChanged();
+    }
+
+    private void ToggleSection(ReportSection section)
+    {
+        if (_pageDef == null) return;
+        section.Enabled = !section.Enabled;
+        ReportPageCfg.UpsertSection(_pageDef.Id, section);
+        LoadSections();
+        StateHasChanged();
+    }
+
+    private void HandleSectionSaved(ReportSection section)
+    {
+        if (_pageDef == null) return;
+        ReportPageCfg.UpsertSection(_pageDef.Id, section);
+        LoadSections();
+        _editingSection = null;
+        StateHasChanged();
+    }
+
+    private void HandleSectionAdded(ReportSection section)
+    {
+        if (_pageDef == null) return;
+        section.Order = _sections.Count;
+        ReportPageCfg.UpsertSection(_pageDef.Id, section);
+        LoadSections();
+        _showAddSection = false;
+        StateHasChanged();
+    }
+
+    private void ResetSections()
+    {
+        // Remove all sections and let the service regenerate defaults
+        if (_pageDef == null) return;
+        foreach (var s in _sections.ToList())
+            ReportPageCfg.DeleteSection(_pageDef.Id, s.Id);
+        // Re-seed native keys
+        int i = 0;
+        foreach (var key in AllNativeKeys)
+            ReportPageCfg.UpsertSection(_pageDef.Id, new ReportSection
+            {
+                Id = Guid.NewGuid().ToString("N")[..8],
+                Title = key, NativeKey = key, SectionType = "native", Enabled = true, Order = i++
+            });
+        LoadSections();
+        StateHasChanged();
+    }
+
     private List<ServerConnection> Connections => ConnectionManager.GetConnections();
     private List<ServerConnection> EnabledConnections => ConnectionManager.GetEnabledConnections();
     private int EnabledChecksCount => CheckRepo.GetEnabledChecks().Count;
@@ -385,6 +545,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        LoadSections();
         ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
         await CheckRepo.LoadChecksAsync();
 

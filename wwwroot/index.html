@@ -11,6 +11,8 @@
     <link href="css/tailwind.css" rel="stylesheet" />
     <link href="css/qp.css" rel="stylesheet" />
     <link href="fontawesome/css/all.min.css" rel="stylesheet" />
+    <!-- Radzen theme CSS — swapped dynamically by radzenTheme.setTheme() -->
+    <link id="radzen-theme-css" href="_content/Radzen.Blazor/css/dark-base.css" rel="stylesheet" />
 </head>
 <body>
     <!-- ═══════════════════════════════════════════════════════════
@@ -94,7 +96,19 @@
         <a class="dismiss">Dismiss</a>
     </div>
 
+    <script>
+        // Stamp print header date just before each print/PDF export
+        window.addEventListener('beforeprint', function() {
+            var d = new Date();
+            var stamp = d.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'2-digit' })
+                      + '\u2002'
+                      + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+            var dateEl = document.getElementById('print-header-date');
+            if (dateEl) dateEl.textContent = stamp;
+        });
+    </script>
     <script src="_framework/blazor.webview.js"></script>
+    <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
     <script src="scripts/error-handler.js"></script>
     <script src="scripts/download.js"></script>
     <script src="scripts/qp.js"></script>
@@ -102,6 +116,16 @@
     <script src="scripts/queryPlanV2.js"></script>
     <script src="scripts/bubbleDrag.js"></script>
     <script src="themes.js"></script>
+    <script>
+        window.radzenTheme = {
+            setTheme: function(theme) {
+                var link = document.getElementById('radzen-theme-css');
+                if (link) {
+                    link.href = '_content/Radzen.Blazor/css/' + theme + '-base.css';
+                }
+            }
+        };
+    </script>
     
     <script>
         // Loading screen with 2 second display
@@ -113,14 +137,14 @@
                 loadSavedTheme();
             }
             
-            // Hide loading screen after 0.25s (+ 0.5s fade = 0.75s total)
+            // Hide loading screen after 0.5s (+ 0.5s fade = 1s total)
             setTimeout(function() {
                 loadingScreen.style.opacity = '0';
                 loadingScreen.style.transition = 'opacity 0.5s ease-out';
                 setTimeout(function() {
                     loadingScreen.style.display = 'none';
                 }, 500);
-            }, 250);
+            }, 500);
         })();
     </script>
 </body>

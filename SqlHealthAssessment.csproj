@@ -76,6 +76,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.*" />
     <PackageReference Include="Microsoft.SqlServer.DacFx" Version="162.*" />
     <PackageReference Include="Blazor-ApexCharts" Version="3.*" />
+    <PackageReference Include="Radzen.Blazor" Version="5.*" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.*" />
     <PackageReference Include="Microsoft.SqlServer.Management.Assessment" Version="1.*" />
     <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="172.*" />

@@ -12,11 +12,37 @@
 @inject IJSRuntime JSRuntime
 @inject ILogger<FullAudit> Logger
 @inject SqlHealthAssessment.Data.ToastService Toast
+@inject SqlHealthAssessment.Data.Services.ReportPageConfigService ReportPageCfg
 @using System.Diagnostics;
 <PageTitle>Full Audit - SQLHealthAssessment</PageTitle>
 
+<SqlHealthAssessment.Components.Shared.SectionEditorModal IsVisible="_faEditingSection != null"
+    Section="_faEditingSection"
+    NativeKeys="_faAvailableNativeKeys"
+    AvailableFields="_faFields"
+    OnSave="FaHandleSectionSaved"
+    OnCancel="() => _faEditingSection = null" />
+
+<SqlHealthAssessment.Components.Shared.AddSectionModal IsVisible="_faShowAddSection"
+    NativeKeys="_faAvailableNativeKeys"
+    OnAdd="FaHandleSectionAdded"
+    OnCancel="() => _faShowAddSection = false" />
+
 <div class="full-audit-container">
-    <h1>Full Audit / Diagnostic Scripts</h1>
+    <SqlHealthAssessment.Components.Shared.EditPageToolbar EditMode="_faEditMode"
+        PageTitle="Full Audit"
+        HasUnsavedChanges="false"
+        OnAddSection="() => _faShowAddSection = true"
+        OnDone="() => _faEditMode = false"
+        OnReset="FaResetSections" />
+
+    <div style="display:flex; align-items:baseline; gap:12px;">
+        <h1>Full Audit / Diagnostic Scripts</h1>
+        <button class="btn-edit-page @(_faEditMode ? "btn-edit-page--active" : "")"
+                @onclick="() => _faEditMode = !_faEditMode" title="Edit page layout">
+            <i class="fa-solid fa-pen-to-square"></i> Edit Page
+        </button>
+    </div>
     <p class="description">Run diagnostic scripts on SQL servers and export results to CSV</p>
 
     @if (_isLoading)
@@ -28,6 +54,11 @@
     else
     {
         <!-- Server Connection Section -->
+        <SqlHealthAssessment.Components.Shared.ReportSectionWrapper Section="@FaGetSection("server-selection")" EditMode="_faEditMode"
+            IsFirst="@FaIsFirst("server-selection")" IsLast="@FaIsLast("server-selection")"
+            OnMoveUp="s => FaMoveSection(s, -1)" OnMoveDown="s => FaMoveSection(s, 1)"
+            OnEdit="s => _faEditingSection = s" OnDelete="s => FaDeleteSection(s)"
+            OnToggle="s => FaToggleSection(s)">
         <div class="connection-section">
             <div class="section-header">
                 <h2>Server Connections</h2>
@@ -108,10 +139,16 @@
                 </div>
             </div>
         }
+        </SqlHealthAssessment.Components.Shared.ReportSectionWrapper>
 
-        <!-- Scripts Section -->
+        <!-- Scripts + Progress Section -->
         @if (SelectedConnection != null && SelectedServer != null)
         {
+            <SqlHealthAssessment.Components.Shared.ReportSectionWrapper Section="@FaGetSection("progress")" EditMode="_faEditMode"
+                IsFirst="@FaIsFirst("progress")" IsLast="@FaIsLast("progress")"
+                OnMoveUp="s => FaMoveSection(s, -1)" OnMoveDown="s => FaMoveSection(s, 1)"
+                OnEdit="s => _faEditingSection = s" OnDelete="s => FaDeleteSection(s)"
+                OnToggle="s => FaToggleSection(s)">
             <div class="scripts-section">
                 <div class="section-header">
                     <h2>Diagnostic Scripts - @SelectedServer</h2>
@@ -221,10 +258,16 @@
                     }
                 </div>
             </div>
+            </SqlHealthAssessment.Components.Shared.ReportSectionWrapper>
 
-            <!-- Summary Section -->
+            <!-- Summary / Results Section -->
             @if (_executionResults.Count > 0)
             {
+                <SqlHealthAssessment.Components.Shared.ReportSectionWrapper Section="@FaGetSection("results")" EditMode="_faEditMode"
+                    IsFirst="@FaIsFirst("results")" IsLast="@FaIsLast("results")"
+                    OnMoveUp="s => FaMoveSection(s, -1)" OnMoveDown="s => FaMoveSection(s, 1)"
+                    OnEdit="s => _faEditingSection = s" OnDelete="s => FaDeleteSection(s)"
+                    OnToggle="s => FaToggleSection(s)">
                 <div class="summary-section">
                     <div class="summary-header">
                         <button class="btn btn-sm btn-secondary"@onclick="() => openfolder()">
@@ -267,6 +310,7 @@
                         </tbody>
                     </table>
                 </div>
+                </SqlHealthAssessment.Components.Shared.ReportSectionWrapper>
             }
         }
         else if (SelectedConnection != null)
@@ -290,6 +334,100 @@
     private ServerConnection? SelectedConnection { get; set; }
     private string? SelectedServer { get; set; }
     private bool _isLoading = true;
+
+    // ── Report Page Editor ────────────────────────────────────────────────
+    private bool                  _faEditMode;
+    private List<ReportSection>   _faSections        = new();
+    private ReportSection?        _faEditingSection;
+    private bool                  _faShowAddSection;
+    private ReportPageDefinition? _faPageDef;
+
+    private static readonly List<string> FaAllNativeKeys =
+        new() { "server-selection", "progress", "results" };
+
+    private static readonly List<ReportFieldInfo> _faFields = new()
+    {
+        new() { Name = "CheckId",            Type = "string",   Description = "Unique check identifier",                             IsKey = true  },
+        new() { Name = "DisplayName",        Type = "string",   Description = "Human-readable check name",                          IsKey = false },
+        new() { Name = "Category",           Type = "string",   Description = "Check category (Security, Performance, etc.)",        IsKey = false },
+        new() { Name = "Severity",           Type = "string",   Description = "Finding severity: Critical, Warning, Info, Pass",     IsKey = false },
+        new() { Name = "Result",             Type = "string",   Description = "Raw result or finding text",                          IsKey = false },
+        new() { Name = "Details",            Type = "string",   Description = "Extended description or recommendation",              IsKey = false },
+        new() { Name = "ServerName",         Type = "string",   Description = "SQL Server instance name",                            IsKey = true  },
+        new() { Name = "Database",           Type = "string",   Description = "Target database (if applicable)",                     IsKey = false },
+        new() { Name = "RunDateUtc",         Type = "datetime", Description = "UTC time the assessment was run",                     IsKey = false },
+        new() { Name = "IsPass",             Type = "bit",      Description = "1 if the check passed, 0 if it raised a finding",     IsKey = false },
+        new() { Name = "ImplementationType", Type = "string",   Description = "Fix method: Script, Config, Manual, etc.",            IsKey = false },
+        new() { Name = "SqlQuery",           Type = "string",   Description = "Suggested remediation SQL",                           IsKey = false },
+    };
+
+    private List<string> _faAvailableNativeKeys =>
+        FaAllNativeKeys.Where(k => !_faSections.Any(s => s.NativeKey == k && s.SectionType == "native")).ToList();
+
+    private ReportSection FaGetSection(string nativeKey)
+    {
+        var s = _faSections.FirstOrDefault(x => x.NativeKey == nativeKey && x.SectionType == "native");
+        return s ?? new ReportSection { NativeKey = nativeKey, Title = nativeKey, SectionType = "native", Enabled = true };
+    }
+
+    private bool FaIsFirst(string nativeKey)
+    {
+        var ordered = _faSections.OrderBy(s => s.Order).ToList();
+        return ordered.FindIndex(s => s.NativeKey == nativeKey && s.SectionType == "native") <= 0;
+    }
+
+    private bool FaIsLast(string nativeKey)
+    {
+        var ordered = _faSections.OrderBy(s => s.Order).ToList();
+        var idx = ordered.FindIndex(s => s.NativeKey == nativeKey && s.SectionType == "native");
+        return idx < 0 || idx == ordered.Count - 1;
+    }
+
+    private void FaLoadSections()
+    {
+        _faPageDef  = ReportPageCfg.GetPage("/fullaudit");
+        _faSections = _faPageDef != null
+            ? _faPageDef.Sections.OrderBy(s => s.Order).ToList()
+            : FaAllNativeKeys.Select((k, i) => new ReportSection { NativeKey = k, Title = k, SectionType = "native", Order = i, Enabled = true }).ToList();
+    }
+
+    private void FaMoveSection(ReportSection s, int dir)  { if (_faPageDef != null) { ReportPageCfg.MoveSection(_faPageDef.Id, s.Id, dir); FaLoadSections(); StateHasChanged(); } }
+    private void FaDeleteSection(ReportSection s)         { if (_faPageDef != null) { ReportPageCfg.DeleteSection(_faPageDef.Id, s.Id); FaLoadSections(); StateHasChanged(); } }
+    private void FaToggleSection(ReportSection s)         { if (_faPageDef != null) { s.Enabled = !s.Enabled; ReportPageCfg.UpsertSection(_faPageDef.Id, s); FaLoadSections(); StateHasChanged(); } }
+
+    private void FaHandleSectionSaved(ReportSection s)
+    {
+        if (_faPageDef == null) return;
+        ReportPageCfg.UpsertSection(_faPageDef.Id, s);
+        FaLoadSections();
+        _faEditingSection = null;
+        StateHasChanged();
+    }
+
+    private void FaHandleSectionAdded(ReportSection s)
+    {
+        if (_faPageDef == null) return;
+        s.Order = _faSections.Count;
+        ReportPageCfg.UpsertSection(_faPageDef.Id, s);
+        FaLoadSections();
+        _faShowAddSection = false;
+        StateHasChanged();
+    }
+
+    private void FaResetSections()
+    {
+        if (_faPageDef == null) return;
+        foreach (var s in _faSections.ToList()) ReportPageCfg.DeleteSection(_faPageDef.Id, s.Id);
+        int i = 0;
+        foreach (var key in FaAllNativeKeys)
+            ReportPageCfg.UpsertSection(_faPageDef.Id, new ReportSection
+            {
+                Id = Guid.NewGuid().ToString("N")[..8],
+                Title = key, NativeKey = key, SectionType = "native", Enabled = true, Order = i++
+            });
+        FaLoadSections();
+        StateHasChanged();
+    }
     
     // Progress tracking - now uses state service
     private double ProgressPercent => AuditState.ProgressPercent;
@@ -341,6 +479,7 @@
 
     protected override void OnInitialized()
     {
+        FaLoadSections();
         LoadConnections();
         RestoreState();
     }

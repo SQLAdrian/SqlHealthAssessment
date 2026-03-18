@@ -6,10 +6,13 @@
 @inject DatabaseAvailabilityService DbAvailability
 @inject DashboardConfigService DashboardConfig
 @inject ServerConnectionManager ConnectionManager
+@inject UserSettingsService UserSettings
+@inject SqlHealthAssessment.Data.Services.ThemeService ThemeSvc
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 
-<div class="w-60 min-w-60 bg-app-bg-secondary border-r border-app-border flex flex-col py-3 overflow-y-auto max-h-screen">
+<div class="nav-menu w-60 min-w-60 bg-app-bg-secondary border-r border-app-border flex flex-col py-3 overflow-y-auto max-h-screen">
     <div class="px-4 pb-4 border-b border-app-border mb-2 flex items-center gap-2">
         <span class="text-lg text-app-accent"><i class="fa-solid fa-heart-pulse"></i></span>
         <span class="text-base font-semibold text-app-text-primary">SQL Health Assessment</span>
@@ -134,8 +137,10 @@
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-info-circle"></i></span> About
         </NavLink>
     </nav>
-    <div class="mt-auto p-3 text-center border-t border-app-border">
-        <small class="text-2xs text-app-text-secondary">Ctrl+1-9: Quick Nav</small>
+    <div class="mt-auto border-t border-app-border">
+        <div class="p-3 text-center">
+            <small class="text-2xs text-app-text-secondary">Ctrl+1-9: Quick Nav</small>
+        </div>
     </div>
 </div>
 
@@ -146,10 +151,33 @@
     private bool _performanceMonitorExists = false;
     private bool _SQLWATCHExists = false;
 
+    // ── Radzen theme ──────────────────────────────────────────────────────
+    private string _radzenTheme = "dark";
+
+    private async void OnThemeChanged(ChangeEventArgs e)
+    {
+        _radzenTheme = e.Value?.ToString() ?? "dark";
+        UserSettings.SetRadzenUiTheme(_radzenTheme);
+        ThemeSvc.SetTheme(_radzenTheme);
+        try { await JS.InvokeVoidAsync("radzenTheme.setTheme", _radzenTheme); } catch { }
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        _radzenTheme = UserSettings.GetRadzenUiTheme();
+        ThemeSvc.SetTheme(_radzenTheme);
         ConnectionManager.OnConnectionChanged += OnServerChanged;
         await RefreshDbFlags();
+    }
+
+    private bool _themeApplied = false;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_themeApplied)
+        {
+            _themeApplied = true;
+            try { await JS.InvokeVoidAsync("radzenTheme.setTheme", _radzenTheme); } catch { }
+        }
     }
 
     private void OnServerChanged()

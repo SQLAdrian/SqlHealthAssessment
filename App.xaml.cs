@@ -2,6 +2,7 @@
 
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using Radzen;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -135,10 +136,15 @@ namespace SqlHealthAssessment
             services.AddSingleton<StartupService>();
             services.AddSingleton<Data.Services.PrintService>();
             services.AddSingleton<Data.Services.SqlAssessmentService>();
+            services.AddSingleton<Data.Services.ReportPageConfigService>();
             services.AddSingleton<Data.Services.XEventService>();
             services.AddSingleton<Data.Services.AdminAuthService>();
             services.AddSingleton<QuickCheckStateService>();
             services.AddSingleton<Data.Services.VulnerabilityAssessmentStateService>();
+
+            // Radzen Blazor component library
+            services.AddRadzenComponents();
+            services.AddSingleton<Data.Services.ThemeService>();
 
             // Local log service — thin wrapper over ILogger, routes through Serilog
             services.AddSingleton<LocalLogService>();

@@ -30,11 +30,8 @@
                           Value="@StatData.Value"
                           Unit="@Panel.StatUnit"
                           Color="@StatData.Color"
+                          Description="@Panel.Description"
                           ValueFormat="@Panel.ValueFormat" />
-                @if (!string.IsNullOrEmpty(Panel.Description))
-                {
-                    <div class="panel-description">@Panel.Description</div>
-                }
             </div>
         }
         break;
@@ -47,11 +44,8 @@
                                Value="@StatData.Value"
                                Unit="@Panel.StatUnit"
                                Color="@StatData.Color"
+                               Description="@Panel.Description"
                                ValueFormat="@Panel.ValueFormat" />
-                @if (!string.IsNullOrEmpty(Panel.Description))
-                {
-                    <div class="panel-description">@Panel.Description</div>
-                }
             </div>
         }
         break;

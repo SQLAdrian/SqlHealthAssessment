@@ -1326,18 +1326,25 @@ SELECT @ThisDomain   [ThisDomain],
         {
             var r = new AssessmentResult
             {
-                CheckId     = _prototype.CheckId,
-                DisplayName = _prototype.DisplayName,
-                Message     = _prototype.Message,
-                Severity    = _prototype.Severity,
-                RawSeverity = _prototype.RawSeverity,
-                TargetType  = _prototype.TargetType,
-                Category    = _prototype.Category,
-                Description = _prototype.Description,
-                Remediation = _prototype.Remediation,
-                HelpLink    = _prototype.HelpLink,
-                Status      = _prototype.Status,
-                TargetName  = BuildTargetName()
+                CheckId            = _prototype.CheckId,
+                DisplayName        = _prototype.DisplayName,
+                Message            = _prototype.Message,
+                Severity           = _prototype.Severity,
+                RawSeverity        = _prototype.RawSeverity,
+                TargetType         = _prototype.TargetType,
+                Category           = _prototype.Category,
+                Description        = _prototype.Description,
+                Remediation        = _prototype.Remediation,
+                HelpLink           = _prototype.HelpLink,
+                Status             = _prototype.Status,
+                TargetName         = BuildTargetName(),
+                ImplementationType = _prototype.ImplementationType,
+                SqlQuery           = _prototype.SqlQuery,
+                // ThisServer is intentionally null for multi-server merged results
+                ThisDomain         = _prototype.ThisDomain,
+                IsSQLAzure         = _prototype.IsSQLAzure,
+                IsSQLMI            = _prototype.IsSQLMI,
+                UTCDateTime        = _prototype.UTCDateTime,
             };
             return r;
         }

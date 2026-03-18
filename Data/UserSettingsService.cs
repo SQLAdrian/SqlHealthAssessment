@@ -34,6 +34,8 @@ namespace SqlHealthAssessment.Data
             public string DefaultDashboardId { get; set; } = "";
             /// <summary>Data source: "sqlwatch" or "pm" (PerformanceMonitor)</summary>
             public string DataSource { get; set; } = "master";
+            /// <summary>Radzen Blazor UI theme name (e.g. "dark", "material3", "fluent-dark")</summary>
+            public string RadzenUiTheme { get; set; } = "dark";
         }
 
         /// <summary>
@@ -78,6 +80,14 @@ namespace SqlHealthAssessment.Data
             {
                 // Silently fail if unable to save
             }
+        }
+
+        public string GetRadzenUiTheme() => _settings.RadzenUiTheme;
+
+        public void SetRadzenUiTheme(string theme)
+        {
+            _settings.RadzenUiTheme = theme;
+            SaveSettings();
         }
 
         /// <summary>
