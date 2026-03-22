@@ -67,9 +67,9 @@ namespace SqlHealthAssessment
             }
             else
             {
-                // WebView2 missing — show error overlay with install and server mode options
-                _logger?.LogWarning("WebView2 not available — showing server mode option");
-                ShowWebView2Error(App.WebView2ErrorMessage);
+                // WebView2 missing — auto-start Blazor Server and show link
+                _logger?.LogWarning("WebView2 not available — auto-starting server mode");
+                AutoStartServerMode();
             }
         }
 
@@ -148,6 +148,74 @@ namespace SqlHealthAssessment
                 }
             }
             catch { /* non-critical */ }
+        }
+
+        private async void AutoStartServerMode()
+        {
+            // Show the overlay immediately with a "starting" message
+            Dispatcher.Invoke(() =>
+            {
+                WebView2ErrorTitle.Text = "Starting Server Mode...";
+                WebView2ErrorTitle.Foreground = new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4488ff"));
+                WebView2ErrorMessage.Text = "WebView2 Runtime is not installed.\n\nStarting Blazor Server so you can access the app in your browser...";
+                WebView2ErrorOverlay.Visibility = Visibility.Visible;
+                // Hide buttons that aren't needed during auto-start
+                InstallWebView2Button.Visibility = Visibility.Collapsed;
+                RetryButton.Visibility = Visibility.Collapsed;
+                ServerModeButton.Visibility = Visibility.Collapsed;
+            });
+
+            try
+            {
+                var serverMode = App.Services?.GetService<ServerModeService>();
+                if (serverMode == null)
+                {
+                    _logger?.LogError("ServerModeService not available");
+                    ShowWebView2Error("Server mode service not available. Please install WebView2 Runtime.");
+                    return;
+                }
+
+                // Disable HTTPS for auto-start — not needed for local/fallback use
+                serverMode.EnableHttps = false;
+                await serverMode.StartAsync();
+
+                _logger?.LogInformation("Server mode auto-started at {Url}", serverMode.Url);
+
+                // Open in default browser
+                if (serverMode.Url != null)
+                {
+                    Process.Start(new ProcessStartInfo(serverMode.Url) { UseShellExecute = true });
+                }
+
+                // Update overlay to show the running URL
+                Dispatcher.Invoke(() =>
+                {
+                    WebView2ErrorTitle.Text = "Server Mode Active";
+                    WebView2ErrorMessage.Text = $"WebView2 Runtime is not installed — running in server mode instead.\n\n" +
+                        $"Access the application in your browser:\n\n" +
+                        $"  {serverMode.Url}\n\n" +
+                        "Share this URL with other users on your network.\n" +
+                        "Keep this window open to maintain the server.";
+                    ServerModeButton.Visibility = Visibility.Visible;
+                    ServerModeButton.Content = $"Running at {serverMode.Url}";
+                    ServerModeButton.IsEnabled = false;
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to auto-start server mode");
+                // Fall back to showing the manual options
+                ShowWebView2Error($"Failed to auto-start server mode: {ex.Message}\n\nPlease install WebView2 Runtime.");
+                Dispatcher.Invoke(() =>
+                {
+                    InstallWebView2Button.Visibility = Visibility.Visible;
+                    RetryButton.Visibility = Visibility.Visible;
+                    ServerModeButton.Visibility = Visibility.Visible;
+                    ServerModeButton.IsEnabled = true;
+                    ServerModeButton.Content = "Start Server Mode (no WebView2 needed)";
+                });
+            }
         }
 
         private void ShowWebView2Error(string? message = null)
@@ -251,13 +319,9 @@ namespace SqlHealthAssessment
                 WebView2ErrorTitle.Text = "Server Mode Active";
                 WebView2ErrorTitle.Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4488ff"));
-                var diagUrl = $"http://localhost:{serverMode.Port}/_server/diag";
-                var healthUrl = $"http://localhost:{serverMode.Port}/_server/health";
                 WebView2ErrorMessage.Text = $"Access the application in your browser:\n\n" +
-                    $"  App:      {serverMode.Url}\n" +
-                    $"  Diag:     {diagUrl}\n" +
-                    $"  Health:   {healthUrl}\n\n" +
-                    "Share the App URL with other users on your network.\n" +
+                    $"  {serverMode.Url}\n\n" +
+                    "Share this URL with other users on your network.\n" +
                     "Keep this window open to maintain the server.";
 
                 ServerModeButton.Content = $"Running at {serverMode.Url}";
