@@ -17,6 +17,7 @@ namespace SqlHealthAssessment
         private bool _webView2Initialized = false;
         private bool _suppressZoomSync = false;
         private Microsoft.Web.WebView2.Core.CoreWebView2? _coreWebView2;
+        private Microsoft.AspNetCore.Components.WebView.Wpf.BlazorWebView? BlazorWebView;
 
         public MainWindow()
         {
@@ -24,14 +25,11 @@ namespace SqlHealthAssessment
             _logger = App.Services?.GetService<ILogger<MainWindow>>();
             _userSettings = App.Services?.GetService<UserSettingsService>();
 
-            var version = App.Services?.GetService<AutoUpdateService>()?.GetCurrentVersion() ?? "0.78.6";
+            var version = App.Services?.GetService<AutoUpdateService>()?.GetCurrentVersion() ?? "0.79.0";
             Title = $"SQL Health Assessment v{version}";
 
             // Add keyboard shortcut for DevTools (F12)
             KeyDown += OnKeyDown;
-
-            // Add WebView error handling
-            BlazorWebView.BlazorWebViewInitialized += OnBlazorWebViewInitialized;
             Loaded += OnWindowLoaded;
 
             // Listen for zoom changes from settings UI
@@ -41,7 +39,38 @@ namespace SqlHealthAssessment
 
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
         {
-            _logger?.LogInformation("MainWindow loaded successfully");
+            if (App.WebView2Available)
+            {
+                // WebView2 is available — create and inject the BlazorWebView dynamically
+                try
+                {
+                    BlazorWebView = new Microsoft.AspNetCore.Components.WebView.Wpf.BlazorWebView
+                    {
+                        HostPage = "wwwroot/index.html",
+                        Services = App.Services!
+                    };
+                    BlazorWebView.RootComponents.Add(
+                        new Microsoft.AspNetCore.Components.WebView.Wpf.RootComponent
+                        {
+                            Selector = "#app",
+                            ComponentType = typeof(Components.Layout.MainLayout)
+                        });
+                    BlazorWebView.BlazorWebViewInitialized += OnBlazorWebViewInitialized;
+                    WebViewHost.Content = BlazorWebView;
+                    _logger?.LogInformation("MainWindow loaded — BlazorWebView created successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to create BlazorWebView");
+                    ShowWebView2Error(ex.Message);
+                }
+            }
+            else
+            {
+                // WebView2 missing — show error overlay with install and server mode options
+                _logger?.LogWarning("WebView2 not available — showing server mode option");
+                ShowWebView2Error(App.WebView2ErrorMessage);
+            }
         }
 
         private void OnBlazorWebViewInitialized(object? sender, Microsoft.AspNetCore.Components.WebView.BlazorWebViewInitializedEventArgs e)
@@ -84,6 +113,7 @@ namespace SqlHealthAssessment
 
         private void ApplyZoom(int zoomPercent)
         {
+            if (BlazorWebView == null) return;
             try
             {
                 _suppressZoomSync = true;
@@ -105,7 +135,7 @@ namespace SqlHealthAssessment
 
         private void OnWebViewZoomFactorChanged(object? sender, object e)
         {
-            if (_suppressZoomSync || _userSettings == null) return;
+            if (_suppressZoomSync || _userSettings == null || BlazorWebView == null) return;
             try
             {
                 var newPercent = (int)Math.Round(BlazorWebView.WebView.ZoomFactor * 100);
@@ -180,9 +210,9 @@ namespace SqlHealthAssessment
 
             if (status.IsInstalled && status.IsCompatible)
             {
-                _logger?.LogInformation("WebView2 is now available. Version: {Version}", status.Version);
-                WebView2ErrorOverlay.Visibility = Visibility.Collapsed;
-                // The WebView will automatically retry initialization
+                _logger?.LogInformation("WebView2 is now available. Version: {Version}. Restart required.", status.Version);
+                MessageBox.Show($"WebView2 Runtime is now available (v{status.Version}).\n\nPlease restart the application to use the full UI.",
+                    "Restart Required", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
             {
@@ -244,7 +274,7 @@ namespace SqlHealthAssessment
 
         private void OnKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
-            if (e.Key == System.Windows.Input.Key.F12)
+            if (e.Key == System.Windows.Input.Key.F12 && BlazorWebView != null)
             {
                 try
                 {
