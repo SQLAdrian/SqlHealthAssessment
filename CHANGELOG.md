@@ -7,6 +7,40 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.79.0] — 2026-03-23
+
+**Build 616.** Azure Blob integration, UI consistency overhaul, and reliability fixes.
+
+### Added
+- **Azure Blob Export — connection diagnostics modal** — displays SAS token parameters (version, services, permissions, expiry), endpoint URL, auth mode, and signature (truncated) for troubleshooting 403/400 errors
+- **Azure Blob Export — toast notifications** — real-time success/failure feedback for auto-uploaded audit CSVs (previously logged silently)
+- **Azure Blob Export — AzCopy stdout capture** — AzCopy v10 writes errors to stdout, not stderr; now captures both streams concurrently to surface error details
+- **Azure Blob Export — directory-scoped SAS support** — removed `CreateIfNotExistsAsync` calls that fail with narrow SAS scopes; falls back from `GetPropertiesAsync` to blob listing
+- **Azure Blob Export — container name slash splitting** — `raw/ready` auto-splits into container `raw` with blob prefix `ready/`
+- **Settings page — 2-column layout** — small settings groups rendered in a CSS grid for better information density; wide sections (Cache, Azure Blob, Alerting) span full width below
+- **Settings page — Azure Blob diagnostics button** — one-click access to the connection diagnostics modal from the Azure Blob settings group
+- **SQL Auth error hint** — Servers and Settings pages now show a descriptive hint when SQL Server is configured for Windows-only auth mode
+- **Guide page — Alerting & Service Management cards** — new navigation cards for the Alerting Config and Service & Updates pages
+
+### Changed
+- **AlertingConfig page** — converted from Tailwind CSS to app's native CSS design system (`.settings-page`, `.settings-group`, `.settings-field`, `.settings-btn`, `.severity-badge`)
+- **ServiceManagement page** — converted from Tailwind CSS to app's native CSS design system with CSS variable–based status indicators
+- **`MaxCacheSizeBytes` → `MaxCacheSizeMB`** — config key renamed across `appsettings.Production.json`, `appsettings.Development.json`, `CacheEvictionService`, and `CachingQueryExecutor`; values now specified in megabytes
+- **Azure SDK container client** — changed from `new BlobContainerClient(sasUri)` to `BlobServiceClient` approach, fixing `InvalidUri` (400) errors
+- **AzCopy error capture** — concurrent stdout/stderr reads to prevent process deadlock
+- **Startup zoom** — default zoom level changed from 200% to 150% in `user-settings.json`
+- **About page** — added Azure Blob Export feature card; updated User Experience section
+- **Removed ExportData page** — standalone Azure export page was redundant with Settings auto-upload; removed from nav and codebase
+
+### Fixed
+- **Full Audit progress bar** — fixed calculation that showed 200% with single-server runs (1-based index math); clamped to `Math.Min(pct, 100)`
+- **Doubled blob name** — `UploadLocalCsvAsync` no longer re-decorates filenames through `BuildBlobName`; prepends blob prefix directly
+- **IAsyncDisposable crash on exit** — `App.xaml.cs` now tries `DisposeAsync()` before falling back to `IDisposable.Dispose()`, fixing `ServerModeService` shutdown error
+- **Edit server "already exists"** — duplicate-name check moved into the add-new branch only, unblocking edits of existing servers
+- **Azure Blob hostname normalization** — strips `.blob.core.windows.net` suffix from account name input
+
+---
+
 ## [0.78.6] — 2026-03-13
 
 **Build 282.** Post-release feature expansion and query plan overhaul.

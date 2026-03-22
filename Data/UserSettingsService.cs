@@ -36,50 +36,22 @@ namespace SqlHealthAssessment.Data
             public string DataSource { get; set; } = "master";
             /// <summary>Radzen Blazor UI theme name (e.g. "dark", "material3", "fluent-dark")</summary>
             public string RadzenUiTheme { get; set; } = "dark";
+            /// <summary>WebView2 zoom level as a percentage (e.g. 100, 125, 150). Default 150.</summary>
+            public int ZoomLevel { get; set; } = 150;
         }
 
         /// <summary>
         /// Load settings from file or return defaults
         /// </summary>
-        private UserSettings LoadSettings()
-        {
-            try
-            {
-                if (File.Exists(_settingsFilePath))
-                {
-                    var json = File.ReadAllText(_settingsFilePath);
-                    var settings = JsonSerializer.Deserialize<UserSettings>(json);
-                    if (settings != null)
-                    {
-                        return settings;
-                    }
-                }
-            }
-            catch
-            {
-                // If there's any error, return defaults
-            }
-
-            return new UserSettings();
-        }
+        private UserSettings LoadSettings() => ConfigFileHelper.Load<UserSettings>(_settingsFilePath);
 
         /// <summary>
         /// Save settings to file
         /// </summary>
         public void SaveSettings()
         {
-            try
-            {
-                var json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-                File.WriteAllText(_settingsFilePath, json);
-            }
-            catch
-            {
-                // Silently fail if unable to save
-            }
+            try { ConfigFileHelper.Save(_settingsFilePath, _settings); }
+            catch { }
         }
 
         public string GetRadzenUiTheme() => _settings.RadzenUiTheme;
@@ -208,5 +180,19 @@ namespace SqlHealthAssessment.Data
             _settings.DataSource = source;
             SaveSettings();
         }
+
+        public int GetZoomLevel() => _settings.ZoomLevel;
+
+        public void SetZoomLevel(int zoomPercent)
+        {
+            _settings.ZoomLevel = zoomPercent;
+            SaveSettings();
+            OnZoomChanged?.Invoke(zoomPercent);
+        }
+
+        /// <summary>
+        /// Fired when zoom level changes so MainWindow can apply it to WebView2.
+        /// </summary>
+        public event Action<int>? OnZoomChanged;
     }
 }

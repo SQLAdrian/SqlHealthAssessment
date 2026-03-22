@@ -20,6 +20,7 @@ public class SqlAssessmentService
 {
     private readonly ILogger<SqlAssessmentService> _logger;
     private readonly ServerConnectionManager _connectionManager;
+    private readonly AzureBlobExportService? _blobExport;
 
     // Track total checks executed
     public int TotalChecksRun { get; private set; }
@@ -30,11 +31,12 @@ public class SqlAssessmentService
     private readonly string _rulesetPath;
     private Dictionary<string, AssessmentCheckDefinition> _checkDefById = new(StringComparer.OrdinalIgnoreCase);
 
-    public SqlAssessmentService(ILogger<SqlAssessmentService> logger, ServerConnectionManager connectionManager)
+    public SqlAssessmentService(ILogger<SqlAssessmentService> logger, ServerConnectionManager connectionManager, AzureBlobExportService? blobExport = null)
     {
         _logger = logger;
         _connectionManager = connectionManager;
-        
+        _blobExport = blobExport;
+
         // Find the ruleset.json path
         _rulesetPath = FindRulesetPath();
         
@@ -1103,6 +1105,8 @@ SELECT @ThisDomain   [ThisDomain],
     private string EscapeCsv(string value)
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
+        // Collapse newlines so multi-line values (e.g. SQL queries) don't break single-line CSV rows
+        value = value.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ');
         return value.Replace("\"", "\"\"");
     }
 
@@ -1138,6 +1142,19 @@ SELECT @ThisDomain   [ThisDomain],
             await File.WriteAllTextAsync(filePath, csv);
 
             _logger.LogInformation("CSV export saved to: {FilePath}", filePath);
+
+            // Auto-upload to Azure if enabled — fire-and-forget, never fails the export
+            if (_blobExport is { IsConfigured: true, AutoUploadCsvs: true })
+            {
+                _ = Task.Run(async () =>
+                {
+                    try { await _blobExport.UploadLocalCsvAsync(filePath, serverName); }
+                    catch (Exception uploadEx)
+                    {
+                        _logger.LogWarning(uploadEx, "Azure auto-upload failed for {FileName} (non-blocking)", fileName);
+                    }
+                });
+            }
         }
         catch (Exception ex)
         {

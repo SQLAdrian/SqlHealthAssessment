@@ -3,6 +3,7 @@
 using System;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace SqlHealthAssessment.Data.Caching
 {
@@ -18,12 +19,14 @@ namespace SqlHealthAssessment.Data.Caching
         private readonly TimeSpan _interval;
         private readonly long _maxCacheSizeBytes;
         private readonly MemoryMonitorService? _memoryMonitor;
+        private readonly ILogger<CacheEvictionService> _logger;
         private Timer? _timer;
         private bool _disposed;
 
-        public CacheEvictionService(liveQueriesCacheStore cache, IConfiguration config, MemoryMonitorService? memoryMonitor = null)
+        public CacheEvictionService(liveQueriesCacheStore cache, IConfiguration config, ILogger<CacheEvictionService> logger, MemoryMonitorService? memoryMonitor = null)
         {
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _logger = logger;
             _memoryMonitor = memoryMonitor;
 
             var hours = 24;
@@ -31,8 +34,8 @@ namespace SqlHealthAssessment.Data.Caching
                 hours = h;
             _evictionThreshold = TimeSpan.FromHours(hours);
             
-            // Default max cache size: 500MB
-            _maxCacheSizeBytes = config.GetValue<long>("MaxCacheSizeBytes", 500L * 1024 * 1024);
+            // Default max cache size: 500MB (config value is in MB)
+            _maxCacheSizeBytes = config.GetValue<long>("MaxCacheSizeMB", 500) * 1024 * 1024;
 
             // Run eviction every 5 minutes
             _interval = TimeSpan.FromMinutes(5);
@@ -72,8 +75,7 @@ namespace SqlHealthAssessment.Data.Caching
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[CacheEvictionService] Eviction error: {ex.Message}");
+                _logger.LogError(ex, "Cache eviction failed");
             }
         }
         
@@ -84,11 +86,11 @@ namespace SqlHealthAssessment.Data.Caching
                 try
                 {
                     await _cache.EvictOlderThanAsync(TimeSpan.FromHours(1));
-                    System.Diagnostics.Debug.WriteLine("[CacheEvictionService] Aggressive cache eviction due to memory pressure");
+                    _logger.LogWarning("Aggressive cache eviction triggered due to memory pressure");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[CacheEvictionService] Memory pressure eviction error: {ex.Message}");
+                    _logger.LogError(ex, "Memory pressure eviction failed");
                 }
             }
         }

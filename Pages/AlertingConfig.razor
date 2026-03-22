@@ -1,0 +1,372 @@
+@* In the name of God, the Merciful, the Compassionate *@
+@page "/alerting-config"
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@using SqlHealthAssessment.Data.Services
+@inject NotificationChannelService ChannelService
+@inject AlertingService AlertService
+@implements IDisposable
+
+<div class="settings-page" style="max-width: 900px;">
+    <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-bell" style="color: var(--yellow); margin-right: 8px;"></i>Alerting & Notifications</h2>
+
+    @* ── SMTP Email Channel ── *@
+    <div class="settings-group">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-envelope" style="color: var(--accent);"></i>
+            Email (SMTP)
+            <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: normal;">
+                <input type="checkbox" @bind="_smtp.Enabled" style="width: auto;" />
+                <span style="color: var(--text-secondary);">Enabled</span>
+            </label>
+        </h3>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="settings-field">
+                <label>SMTP Host <span style="color: var(--red);">*</span></label>
+                <input type="text" @bind="_smtp.Host" @bind:event="oninput" placeholder="smtp.office365.com" />
+            </div>
+            <div class="settings-field">
+                <label>Port</label>
+                <input type="number" @bind="_smtp.Port" />
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="settings-field">
+                <label>Username</label>
+                <input type="text" @bind="_smtp.Username" @bind:event="oninput" placeholder="alerts@company.com" />
+            </div>
+            <div class="settings-field">
+                <label>Password</label>
+                <input type="password" @bind="_smtpPassword" @bind:event="oninput"
+                       placeholder="@(_hasExistingSmtpPassword ? "(encrypted — leave blank to keep)" : "Enter password")" />
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="settings-field">
+                <label>From Address</label>
+                <input type="text" @bind="_smtp.FromAddress" @bind:event="oninput" placeholder="sqldba-alerts@company.com" />
+            </div>
+            <div class="settings-field">
+                <label>From Name</label>
+                <input type="text" @bind="_smtp.FromName" @bind:event="oninput" />
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="settings-field">
+                <label>Reply-To Address</label>
+                <input type="text" @bind="_smtp.ReplyToAddress" @bind:event="oninput" placeholder="dba-team@company.com (optional)" />
+            </div>
+            <div class="settings-field">
+                <label>Notification Email (To) <span style="color: var(--red);">*</span></label>
+                <input type="text" @bind="_smtpToAddresses" @bind:event="oninput" placeholder="dba-team@company.com, oncall@company.com" />
+                <small style="display: block; margin-top: 4px; color: var(--text-muted); font-size: 11px;">Comma-separated list of recipient addresses</small>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" @bind="_smtp.UseTls" style="width: auto;" />
+                <label style="margin: 0;">Encrypt connection (TLS)</label>
+            </div>
+            <div class="settings-field">
+                <label>Minimum Severity</label>
+                <select @bind="_smtp.MinimumSeverity">
+                    <option value="info">Info (all alerts)</option>
+                    <option value="warning">Warning & Critical</option>
+                    <option value="critical">Critical only</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @* ── Teams Webhook Channel ── *@
+    <div class="settings-group">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-hashtag" style="color: var(--purple);"></i>
+            Microsoft Teams Webhook
+            <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: normal;">
+                <input type="checkbox" @bind="_teams.Enabled" style="width: auto;" />
+                <span style="color: var(--text-secondary);">Enabled</span>
+            </label>
+        </h3>
+
+        <div class="settings-field">
+            <label>Webhook URL <span style="color: var(--red);">*</span></label>
+            <input type="password" @bind="_teamsWebhookUrl" @bind:event="oninput"
+                   placeholder="@(_hasExistingTeamsUrl ? "(encrypted — leave blank to keep)" : "https://outlook.office.com/webhook/...")" />
+        </div>
+
+        <div class="settings-field">
+            <label>Minimum Severity</label>
+            <select @bind="_teams.MinimumSeverity">
+                <option value="info">Info (all alerts)</option>
+                <option value="warning">Warning & Critical</option>
+                <option value="critical">Critical only</option>
+            </select>
+        </div>
+    </div>
+
+    @* ── Actions ── *@
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+        <button class="settings-btn" @onclick="SaveConfig">
+            <i class="fa-solid fa-floppy-disk" style="margin-right: 4px;"></i> Save Configuration
+        </button>
+
+        <button class="settings-btn" style="background: var(--bg-hover);" @onclick="TestSmtp" disabled="@(_testingSmtp || !_smtp.Enabled)">
+            @if (_testingSmtp)
+            {
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> <span>Testing...</span>
+            }
+            else
+            {
+                <i class="fa-solid fa-envelope" style="margin-right: 4px;"></i> <span>Test Email</span>
+            }
+        </button>
+
+        <button class="settings-btn" style="background: var(--bg-hover);" @onclick="TestTeams" disabled="@(_testingTeams || !_teams.Enabled)">
+            @if (_testingTeams)
+            {
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> <span>Testing...</span>
+            }
+            else
+            {
+                <i class="fa-solid fa-hashtag" style="margin-right: 4px;"></i> <span>Test Teams</span>
+            }
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <p style="padding: 10px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; background: @(_statusSuccess ? "rgba(78, 201, 176, 0.1)" : "rgba(244, 71, 71, 0.1)"); border: 1px solid @(_statusSuccess ? "var(--green)" : "var(--red)"); color: @(_statusSuccess ? "var(--green)" : "var(--red)");">
+            <i class="fa-solid @(_statusSuccess ? "fa-check-circle" : "fa-times-circle")" style="margin-right: 4px;"></i>
+            @_statusMessage
+        </p>
+    }
+
+    @* ── Active Thresholds ── *@
+    <div class="settings-group">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-sliders" style="color: var(--text-secondary);"></i>
+            Alert Thresholds
+            <span style="margin-left: 8px; padding: 2px 8px; font-size: 11px; background: rgba(0, 122, 204, 0.15); color: var(--accent); border-radius: 3px; border: 1px solid rgba(0, 122, 204, 0.3);">@_thresholds.Count configured</span>
+        </h3>
+
+        <div style="overflow-x: auto;">
+            <table class="results-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Metric</th>
+                        <th>Condition</th>
+                        <th>Severity</th>
+                        <th style="text-align: center;">Enabled</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _thresholds)
+                    {
+                        <tr>
+                            <td>@t.Name</td>
+                            <td style="font-family: monospace; font-size: 11px;">@t.Metric</td>
+                            <td>@t.Condition.Replace("_", " ") @t.ThresholdValue</td>
+                            <td>
+                                <span class="severity-badge @SeverityBadgeClass(t.Severity)">@t.Severity</span>
+                            </td>
+                            <td style="text-align: center;">
+                                @if (t.Enabled)
+                                {
+                                    <i class="fa-solid fa-check" style="color: var(--green);"></i>
+                                }
+                                else
+                                {
+                                    <i class="fa-solid fa-minus" style="color: var(--text-muted);"></i>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 12px;">
+            <i class="fa-solid fa-info-circle" style="margin-right: 4px;"></i>
+            Thresholds are evaluated automatically during dashboard refresh. Configure thresholds in Settings.
+        </p>
+    </div>
+</div>
+
+@code {
+    // Local copies for editing
+    private SmtpChannelConfig _smtp = new();
+    private TeamsWebhookChannelConfig _teams = new();
+    private string _smtpPassword = "";
+    private string _smtpToAddresses = "";
+    private string _teamsWebhookUrl = "";
+    private bool _hasExistingSmtpPassword;
+    private bool _hasExistingTeamsUrl;
+
+    // Status
+    private string? _statusMessage;
+    private bool _statusSuccess;
+    private bool _testingSmtp;
+    private bool _testingTeams;
+
+    // Thresholds (read-only display)
+    private List<AlertThreshold> _thresholds = new();
+
+    protected override void OnInitialized()
+    {
+        var config = ChannelService.Config;
+
+        // Deep copy SMTP config
+        _smtp = new SmtpChannelConfig
+        {
+            Enabled = config.Smtp.Enabled,
+            Host = config.Smtp.Host,
+            Port = config.Smtp.Port,
+            UseTls = config.Smtp.UseTls,
+            Username = config.Smtp.Username,
+            FromAddress = config.Smtp.FromAddress,
+            FromName = config.Smtp.FromName,
+            ReplyToAddress = config.Smtp.ReplyToAddress,
+            MinimumSeverity = config.Smtp.MinimumSeverity,
+            ToAddresses = new List<string>(config.Smtp.ToAddresses)
+        };
+        _hasExistingSmtpPassword = !string.IsNullOrEmpty(config.Smtp.Password);
+
+        _smtpToAddresses = string.Join(", ", _smtp.ToAddresses);
+
+        // Deep copy Teams config
+        _teams = new TeamsWebhookChannelConfig
+        {
+            Enabled = config.TeamsWebhook.Enabled,
+            MinimumSeverity = config.TeamsWebhook.MinimumSeverity
+        };
+        _hasExistingTeamsUrl = !string.IsNullOrEmpty(config.TeamsWebhook.WebhookUrl);
+
+        _thresholds = AlertService.GetThresholds();
+
+        ChannelService.OnConfigChanged += OnConfigChanged;
+    }
+
+    private void SaveConfig()
+    {
+        // Parse To addresses
+        _smtp.ToAddresses = _smtpToAddresses
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .ToList();
+
+        // Encrypt password if changed
+        if (!string.IsNullOrEmpty(_smtpPassword))
+        {
+            _smtp.Password = CredentialProtector.Encrypt(_smtpPassword);
+        }
+        else if (_hasExistingSmtpPassword)
+        {
+            // Keep existing encrypted password
+            _smtp.Password = ChannelService.Config.Smtp.Password;
+        }
+
+        // Encrypt Teams webhook URL if changed
+        if (!string.IsNullOrEmpty(_teamsWebhookUrl))
+        {
+            _teams.WebhookUrl = CredentialProtector.Encrypt(_teamsWebhookUrl);
+        }
+        else if (_hasExistingTeamsUrl)
+        {
+            _teams.WebhookUrl = ChannelService.Config.TeamsWebhook.WebhookUrl;
+        }
+
+        var config = new NotificationChannelConfig
+        {
+            Smtp = _smtp,
+            TeamsWebhook = _teams
+        };
+
+        ChannelService.UpdateConfig(config);
+
+        _hasExistingSmtpPassword = !string.IsNullOrEmpty(_smtp.Password);
+        _hasExistingTeamsUrl = !string.IsNullOrEmpty(_teams.WebhookUrl);
+        _smtpPassword = "";
+        _teamsWebhookUrl = "";
+
+        _statusSuccess = true;
+        _statusMessage = "Configuration saved successfully.";
+        StateHasChanged();
+    }
+
+    private async Task TestSmtp()
+    {
+        _testingSmtp = true;
+        _statusMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Save first so the service has current config
+            SaveConfig();
+
+            var (success, message) = await ChannelService.TestSmtpAsync();
+            _statusSuccess = success;
+            _statusMessage = message;
+        }
+        catch (Exception ex)
+        {
+            _statusSuccess = false;
+            _statusMessage = $"SMTP test error: {ex.Message}";
+        }
+        finally
+        {
+            _testingSmtp = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TestTeams()
+    {
+        _testingTeams = true;
+        _statusMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            SaveConfig();
+
+            var (success, message) = await ChannelService.TestTeamsAsync();
+            _statusSuccess = success;
+            _statusMessage = message;
+        }
+        catch (Exception ex)
+        {
+            _statusSuccess = false;
+            _statusMessage = $"Teams test error: {ex.Message}";
+        }
+        finally
+        {
+            _testingTeams = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnConfigChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static string SeverityBadgeClass(string severity) => severity switch
+    {
+        "critical" => "severity-critical",
+        "warning" => "severity-warning",
+        _ => "severity-info"
+    };
+
+    public void Dispose()
+    {
+        ChannelService.OnConfigChanged -= OnConfigChanged;
+    }
+}

@@ -92,6 +92,31 @@
                             Cursor="Hand"
                             HorizontalAlignment="Center"
                             Margin="0,10,0,0"/>
+                    <TextBlock Text="— or —"
+                               FontFamily="Consolas"
+                               FontSize="12"
+                               Foreground="#666666"
+                               HorizontalAlignment="Center"
+                               Margin="0,15,0,5"/>
+                    <Button x:Name="ServerModeButton"
+                            Content="&#xf233;  Start Server Mode (no WebView2 needed)"
+                            Click="OnServerModeClick"
+                            Padding="20,10"
+                            FontFamily="Consolas"
+                            FontSize="14"
+                            Background="#4488ff"
+                            Foreground="#ffffff"
+                            BorderThickness="0"
+                            Cursor="Hand"
+                            HorizontalAlignment="Center"/>
+                    <TextBlock FontFamily="Consolas"
+                               FontSize="11"
+                               Foreground="#888888"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Margin="0,8,0,0">
+                        Starts a web server — access via any browser, no WebView2 required
+                    </TextBlock>
                 </StackPanel>
             </Border>
         </Grid>

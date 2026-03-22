@@ -20,9 +20,16 @@ namespace SqlHealthAssessment.Data
     {
         private readonly ServerConnectionManager _connectionManager;
         private readonly ILogger<DiagnosticScriptRunner> _logger;
+        private readonly Services.AzureBlobExportService? _blobExport;
         private List<ScriptConfiguration>? _scriptConfigurations;
         private readonly object _lock = new();
         private string FiletimeStamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+        /// <summary>
+        /// Raised when an Azure Blob auto-upload completes (success or failure).
+        /// Args: (fileName, success, message)
+        /// </summary>
+        public event Action<string, bool, string>? OnBlobUploadResult;
 
         /// <summary>
         /// Maximum number of rows to read from any single script result set.
@@ -40,10 +47,11 @@ namespace SqlHealthAssessment.Data
             PropertyNameCaseInsensitive = true
         };
 
-        public DiagnosticScriptRunner(ServerConnectionManager connectionManager, ILogger<DiagnosticScriptRunner> logger)
+        public DiagnosticScriptRunner(ServerConnectionManager connectionManager, ILogger<DiagnosticScriptRunner> logger, Services.AzureBlobExportService? blobExport = null)
         {
             _connectionManager = connectionManager;
             _logger = logger;
+            _blobExport = blobExport;
         }
 
         public List<ScriptConfiguration> LoadScriptConfigurations()
@@ -420,11 +428,33 @@ namespace SqlHealthAssessment.Data
                 // Write CSV directly - no need to re-read the file afterward
                 File.WriteAllText(csvFileName, csv, Encoding.UTF8);
                 _logger.LogInformation("CSV exported to {FileName}", csvFileName);
-                
+
                 // Also export JSON
                 var json = ExportToJson(result);
                 File.WriteAllText(jsonFileName, json, Encoding.UTF8);
                 _logger.LogInformation("JSON exported to {FileName}", jsonFileName);
+
+                // Auto-upload to Azure if enabled — fire-and-forget, never fails the export
+                if (_blobExport is { IsConfigured: true, AutoUploadCsvs: true })
+                {
+                    var fileName = Path.GetFileName(csvFileName);
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var uploadResult = await _blobExport.UploadLocalCsvAsync(csvFileName, result.ServerName);
+                            if (uploadResult.Success)
+                                OnBlobUploadResult?.Invoke(fileName, true, uploadResult.Message);
+                            else
+                                OnBlobUploadResult?.Invoke(fileName, false, uploadResult.Message);
+                        }
+                        catch (Exception uploadEx)
+                        {
+                            _logger.LogWarning(uploadEx, "Azure auto-upload failed for {FileName} (non-blocking)", csvFileName);
+                            OnBlobUploadResult?.Invoke(fileName, false, uploadEx.Message);
+                        }
+                    });
+                }
             }
             catch (Exception ex)
             {

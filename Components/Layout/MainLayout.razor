@@ -33,6 +33,7 @@
 <div class="app-container" tabindex="0" role="application" aria-label="SQL Health Assessment Application" @onkeydown="HandleKeyDown">
     <ToastContainer />
     <ShortcutsDialog IsVisible="@showShortcuts" OnClose="@(() => showShortcuts = false)" />
+    <ServerModeToggle />
     <Router AppAssembly="@typeof(MainLayout).Assembly">
     <Found Context="routeData">
         <div class="app-layout" role="main" aria-label="Main content area">

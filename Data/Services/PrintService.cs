@@ -3,6 +3,7 @@
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 
 namespace SqlHealthAssessment.Data.Services
@@ -15,12 +16,14 @@ namespace SqlHealthAssessment.Data.Services
     {
         private CoreWebView2? _webView;
         private readonly AuditLogService? _auditLog;
+        private readonly ILogger<PrintService> _logger;
 
         /// <summary>
         /// Constructor with optional AuditLogService for audit trail.
         /// </summary>
-        public PrintService(AuditLogService? auditLog = null)
+        public PrintService(ILogger<PrintService> logger, AuditLogService? auditLog = null)
         {
+            _logger = logger;
             _auditLog = auditLog;
         }
 
@@ -89,7 +92,7 @@ namespace SqlHealthAssessment.Data.Services
             catch (System.Exception ex)
             {
                 _auditLog?.LogExportOperation("PDF", fileName, false, ex.Message);
-                System.Diagnostics.Debug.WriteLine($"PDF export error: {ex.Message}");
+                _logger.LogError(ex, "PDF export failed for file {FileName}", fileName);
                 return (false, null, ex.Message);
             }
         }

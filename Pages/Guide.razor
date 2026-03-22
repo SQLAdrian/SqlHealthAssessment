@@ -163,6 +163,20 @@
                     Manage Servers
                 </button>
             </div>
+            <div class="guide-card">
+                <h3><i class="fa-solid fa-bell"></i> Alerting</h3>
+                <p>Configure alert rules, notification channels, and severity thresholds for proactive monitoring.</p>
+                <button class="btn btn-primary" @onclick="GoToAlerting">
+                    Configure Alerting
+                </button>
+            </div>
+            <div class="guide-card">
+                <h3><i class="fa-solid fa-microchip"></i> Service &amp; Updates</h3>
+                <p>Manage the background service, check for application updates, and configure Windows Service mode.</p>
+                <button class="btn btn-primary" @onclick="GoToServiceManagement">
+                    Service &amp; Updates
+                </button>
+            </div>
         </div>
     </div>
 
@@ -199,6 +213,8 @@
     private void GoToSettings() => Navigation.NavigateTo("/settings");
     private void GoToDashboardEditor() => Navigation.NavigateTo("/dashboard-editor");
     private void GoToServers() => Navigation.NavigateTo("/servers");
+    private void GoToAlerting() => Navigation.NavigateTo("/alerting-config");
+    private void GoToServiceManagement() => Navigation.NavigateTo("/service-management");
     private void GoToAbout() => Navigation.NavigateTo("/about");
 }
 

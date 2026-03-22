@@ -14,6 +14,7 @@
 @inject SqlHealthAssessment.Data.ToastService Toast
 @inject SqlHealthAssessment.Data.Services.ReportPageConfigService ReportPageCfg
 @using System.Diagnostics;
+@implements IDisposable
 <PageTitle>Full Audit - SQLHealthAssessment</PageTitle>
 
 <SqlHealthAssessment.Components.Shared.SectionEditorModal IsVisible="_faEditingSection != null"
@@ -482,6 +483,23 @@
         FaLoadSections();
         LoadConnections();
         RestoreState();
+        ScriptRunner.OnBlobUploadResult += OnBlobUploadResult;
+    }
+
+    private void OnBlobUploadResult(string fileName, bool success, string message)
+    {
+        InvokeAsync(() =>
+        {
+            if (success)
+                Toast.ShowSuccess($"Azure upload: {fileName}");
+            else
+                Toast.ShowError($"Azure upload failed: {fileName} — {message}");
+        });
+    }
+
+    public void Dispose()
+    {
+        ScriptRunner.OnBlobUploadResult -= OnBlobUploadResult;
     }
 
     private void RestoreState()
@@ -677,11 +695,14 @@
 
         var enabledScripts = _scripts.Where(s => s.Enabled).Count();
         AuditState.StartExecution(1, enabledScripts, false);
+        AuditState.UpdateProgress(1, SelectedServer, 0, "Running...");
         AuditState.ClearExecutionResults();
+        StateHasChanged();
 
         try
         {
             var results = await ScriptRunner.ExecuteAllEnabledScriptsAsync(SelectedConnection, SelectedServer);
+            AuditState.UpdateProgress(1, SelectedServer, enabledScripts, "Complete");
             AuditState.ClearAndAddResults(results);
             Toast.ShowSuccess($"Full Audit complete: {SelectedServer} — {results.Count} script(s) run");
         }
@@ -740,7 +761,7 @@
         if (SelectedServer == null || SelectedConnection == null) return;
 
         AuditState.StartExecution(1, 1, false);
-        AuditState.UpdateProgress(1, SelectedServer, 1, script.Name);
+        AuditState.UpdateProgress(1, SelectedServer, 0, script.Name);
 
         try
         {
@@ -758,75 +779,6 @@
     {
         return _executionResults.FirstOrDefault(r => r.ScriptName == scriptName);
     }
-
-    //private void ExportScriptToCsv(ScriptExecutionResult result)
-    //{
-    //    if (result.Results == null || result.Results.Count == 0)
-    //        return;
-    //
-    //    var csv = ScriptRunner.ExportToCsv(result);
-    //    var outputFolder = Path.Combine(AppContext.BaseDirectory, "output");
-    //    var fileName = outputFolder + $"\\{result.ServerName.Replace("\\", "_")}_{result.ScriptName.Replace(" ", "_")}_{FiletimeStamp}.csv";
-    //
-    //    //DownloadFile(csv, fileName);
-    //    //string file_path = @"file.txt";
-    //
-    //    try {
-    //        // Creating a new file, or overwrite
-    //        // if the file already exists.
-    //        using (FileStream fs = File.Create(fileName))
-    //        {
-    //            // Adding some info into the file
-    //            byte[] info = new UTF8Encoding(true).GetBytes(csv);
-    //            fs.Write(info, 0, info.Length);
-    //        }
-    //
-    //        // Reading the file contents
-    //        using (StreamReader sr = File.OpenText(fileName))
-    //        {
-    //            string s = "";
-    //            while ((s = sr.ReadLine()) != null) {
-    //                Console.WriteLine(s);
-    //            }
-    //        }
-    //    }
-    //    finally
-    //    {
-    //        
-    //    }
-    //}
-
-    //private void ExportAllToCsv()
-    //{
-    //    if (_executionResults.Count == 0)
-    //        return;
-    //
-    //    // Create output folder in application directory
-    //    var outputFolder = Path.Combine(AppContext.BaseDirectory, "output");
-    //    if (!Directory.Exists(outputFolder))
-    //    {
-    //        Directory.CreateDirectory(outputFolder);
-    //    }
-    //
-    //    var serverName = (SelectedServer ?? "Unknown").Replace("\\", "_").Replace(" ", "_");
-    //    var timestamp = FiletimeStamp;// DateTime.Now.ToString("yyyyMMdd_HHmmss");
-    //
-    //    foreach (var result in _executionResults)
-    //    {
-    //        if (result.Success && result.Results != null && result.Results.Count > 0)
-    //        {
-    //            var scriptName = result.ScriptName.Replace(" ", "_").Replace("/", "_").Replace("\\", "_");
-    //            var fileName = $"{scriptName}_{serverName}_{timestamp}.csv";
-    //            var filePath = Path.Combine(outputFolder, fileName);
-    //
-    //            var csv = ScriptRunner.ExportToCsv(result);
-    //            File.WriteAllText(filePath, csv);
-    //            Logger.LogInformation("Saved CSV to {FilePath}", filePath);
-    //        }
-    //    }
-    //
-    //    StatusMessage = $"Exported {_executionResults.Count} files to {outputFolder}";
-    //}
 
     private async void DownloadFile(string content, string fileName)
     {

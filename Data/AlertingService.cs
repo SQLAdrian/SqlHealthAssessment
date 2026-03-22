@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Text.Json;
 using SqlHealthAssessment.Data.Models;
+using SqlHealthAssessment.Data.Services;
 using Microsoft.Extensions.Logging;
 
 namespace SqlHealthAssessment.Data
@@ -11,6 +12,7 @@ namespace SqlHealthAssessment.Data
     public class AlertingService
     {
         private readonly ILogger<AlertingService> _logger;
+        private readonly NotificationChannelService? _notificationChannels;
         private readonly string _alertsFilePath;
         private List<AlertThreshold> _thresholds = new();
         private readonly ConcurrentQueue<AlertNotification> _notifications = new();
@@ -33,9 +35,10 @@ namespace SqlHealthAssessment.Data
         /// </summary>
         private readonly HashSet<string> _acknowledgedIds = new(StringComparer.Ordinal);
 
-        public AlertingService(ILogger<AlertingService> logger)
+        public AlertingService(ILogger<AlertingService> logger, NotificationChannelService? notificationChannels = null)
         {
             _logger = logger;
+            _notificationChannels = notificationChannels;
             _alertsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "alert-configurations.json");
             LoadThresholds();
         }
@@ -200,6 +203,19 @@ namespace SqlHealthAssessment.Data
                             };
                             _notifications.Enqueue(notification);
 
+                            // Dispatch to outbound channels (email, Teams) — fire-and-forget
+                            if (_notificationChannels != null)
+                            {
+                                _ = Task.Run(async () =>
+                                {
+                                    try { await _notificationChannels.DispatchAsync(notification); }
+                                    catch (Exception dispatchEx)
+                                    {
+                                        _logger.LogError(dispatchEx, "Failed to dispatch notification for {AlertName}", notification.AlertName);
+                                    }
+                                });
+                            }
+
                             // A new notification for this metric means the condition re-triggered —
                             // remove stale acks for notifications that have since been dequeued so the
                             // badge reappears correctly rather than staying silenced indefinitely.
@@ -230,8 +246,7 @@ namespace SqlHealthAssessment.Data
             {
                 if (File.Exists(_alertsFilePath))
                 {
-                    var json = File.ReadAllText(_alertsFilePath);
-                    _thresholds = JsonSerializer.Deserialize<List<AlertThreshold>>(json) ?? new List<AlertThreshold>();
+                    _thresholds = ConfigFileHelper.Load<List<AlertThreshold>>(_alertsFilePath, _jsonOptions);
                     _logger.LogInformation("Loaded {Count} alert thresholds", _thresholds.Count);
                 }
                 else
@@ -252,8 +267,7 @@ namespace SqlHealthAssessment.Data
         {
             try
             {
-                var json = JsonSerializer.Serialize(_thresholds, _jsonOptions);
-                File.WriteAllText(_alertsFilePath, json);
+                ConfigFileHelper.Save(_alertsFilePath, _thresholds, _jsonOptions);
                 _logger.LogInformation("Saved {Count} alert thresholds", _thresholds.Count);
             }
             catch (Exception ex)

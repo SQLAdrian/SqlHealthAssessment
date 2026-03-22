@@ -35,6 +35,12 @@ SQL Health Assessment is a desktop application for monitoring multiple SQL Serve
 - **Zero-allocation row reading** — `ArrayPool<T>` and streaming JSON serialisation
 - **Cancellable dashboard loads** — switch servers or hit Cancel to abort in-flight queries instantly
 
+### Data Export
+- **Azure Blob Storage integration** — auto-upload audit CSVs with dual-path upload (Azure SDK + AzCopy fallback)
+- **SAS token & User Delegation SAS** — supports account-level and directory-scoped SAS tokens
+- **Connection diagnostics** — built-in modal to troubleshoot Azure Blob authentication issues
+- **Toast notifications** — real-time upload success/failure feedback
+
 ### Security
 - **DPAPI credential encryption** — passwords never stored in plain text
 - **MFA / Azure AD authentication** — supports modern auth via `Azure.Identity`

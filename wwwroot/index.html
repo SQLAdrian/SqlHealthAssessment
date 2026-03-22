@@ -128,23 +128,23 @@
     </script>
     
     <script>
-        // Loading screen with 2 second display
+        // Loading screen with 1.5 second minimum display
         (function() {
             const loadingScreen = document.getElementById('loading-screen');
-            
+
             // Load saved theme immediately
             if (typeof loadSavedTheme === 'function') {
                 loadSavedTheme();
             }
-            
-            // Hide loading screen after 0.5s (+ 0.5s fade = 1s total)
+
+            // Hide loading screen after 1s (+ 0.5s fade = 1.5s total)
             setTimeout(function() {
                 loadingScreen.style.opacity = '0';
-                loadingScreen.style.transition = 'opacity 0.5s ease-out';
+                loadingScreen.style.transition = 'opacity 1s ease-out';
                 setTimeout(function() {
                     loadingScreen.style.display = 'none';
-                }, 500);
-            }, 500);
+                }, 1000);
+            }, 1500);
         })();
     </script>
 </body>

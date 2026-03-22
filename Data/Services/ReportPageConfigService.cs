@@ -2,6 +2,7 @@
 
 using System.IO;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using SqlHealthAssessment.Data.Models;
 
 namespace SqlHealthAssessment.Data.Services
@@ -12,6 +13,7 @@ namespace SqlHealthAssessment.Data.Services
     /// </summary>
     public class ReportPageConfigService
     {
+        private readonly ILogger<ReportPageConfigService> _logger;
         private readonly string _configPath;
         private ReportPagesRoot _root;
 
@@ -28,8 +30,9 @@ namespace SqlHealthAssessment.Data.Services
 
         public ReportPagesRoot Root => _root;
 
-        public ReportPageConfigService()
+        public ReportPageConfigService(ILogger<ReportPageConfigService> logger)
         {
+            _logger = logger;
             _configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "report-pages.json");
             _root = Load();
         }
@@ -121,7 +124,7 @@ namespace SqlHealthAssessment.Data.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ReportPageConfigService] Load error: {ex.Message}");
+                _logger.LogError(ex, "Failed to load report page config");
             }
 
             var defaults = BuildDefaults();
@@ -144,7 +147,7 @@ namespace SqlHealthAssessment.Data.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ReportPageConfigService] Save error: {ex.Message}");
+                _logger.LogError(ex, "Failed to save report page config");
             }
         }
 

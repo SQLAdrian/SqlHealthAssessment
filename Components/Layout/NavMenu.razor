@@ -19,6 +19,28 @@
     </div>
     <nav>
         <br />
+        <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">Audits</div>
+        <br />
+<NavLink href="/quickcheck" class="nav-link" title="Ctrl+0">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bolt-lightning"></i></span> Quick Check
+        </NavLink>
+        <NavLink href="/fullaudit" class="nav-link" title="Ctrl+4">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clipboard-check"></i></span> Full Audit
+        </NavLink>
+        <NavLink href="/vulnerabilityassessment" class="nav-link">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-shield-halved"></i></span> Vulnerability Assessment
+        </NavLink>
+        @* Config-driven Audits dashboards *@
+        @foreach (var dashboard in DashboardConfig.Config.Dashboards
+            .Where(d => d.Enabled && d.NavCategory == "Audits")
+            .OrderBy(d => d.NavOrder))
+        {
+            <NavLink href="@dashboard.Route" class="nav-link">
+                @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+            </NavLink>
+        }
+
+        <br />
         <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">Live</div>
         <br />
 
@@ -31,6 +53,9 @@
                 @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
             </NavLink>
         }
+        <NavLink href="/bestpractice" class="nav-link">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> BP Checks
+        </NavLink>
 
         <br />
         <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">SQLWATCH</div>
@@ -71,28 +96,6 @@
         }
 
         <br />
-        <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">Audits</div>
-        <br />
-        <NavLink href="/quickcheck" class="nav-link" title="Ctrl+0">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bolt-lightning"></i></span> Quick Check
-        </NavLink>
-        <NavLink href="/fullaudit" class="nav-link" title="Ctrl+4">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clipboard-check"></i></span> Full Audit
-        </NavLink>
-        <NavLink href="/vulnerabilityassessment" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-shield-halved"></i></span> Vulnerability Assessment
-        </NavLink>
-        @* Config-driven Audits dashboards *@
-        @foreach (var dashboard in DashboardConfig.Config.Dashboards
-            .Where(d => d.Enabled && d.NavCategory == "Audits")
-            .OrderBy(d => d.NavOrder))
-        {
-            <NavLink href="@dashboard.Route" class="nav-link">
-                @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
-            </NavLink>
-        }
-
-        <br />
         <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">Monitoring new server</div>
         <br />
         <NavLink href="/deploysqlwatch" class="nav-link">
@@ -102,12 +105,14 @@
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-chart-simple"></i></span> Darling Perf Monitor
         </NavLink>
 
-        @* TOOLS_SECTION_VISIBLE — set to true when XEvent/Profiler, Schema Compare, Dependency Walker are implemented *@
+        <br />
+        <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">Tools</div>
+        <br />
+        <NavLink href="/plan-analysis" class="nav-link">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-diagram-project"></i></span> Plan Analyzer
+        </NavLink>
         @if (ShowToolsSection)
         {
-            <br />
-            <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">Tools</div>
-            <br />
             <NavLink href="/xevents" class="nav-link">
                 <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> XEvent / Profiler
             </NavLink>
@@ -127,8 +132,11 @@
         <NavLink href="/servers" class="nav-link" title="Ctrl+8">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-server"></i></span> Servers
         </NavLink>
-        <NavLink href="/bestpractice" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> BP Checks
+        <NavLink href="/alerting-config" class="nav-link">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bell"></i></span> Alerting
+        </NavLink>
+        <NavLink href="/service-management" class="nav-link">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-microchip"></i></span> Service & Updates
         </NavLink>
         <NavLink href="/guide" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-map"></i></span> Guide

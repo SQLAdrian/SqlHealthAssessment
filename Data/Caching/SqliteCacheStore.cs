@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SqlHealthAssessment.Data.Models;
+using SqlHealthAssessment.Data.Services;
 using Microsoft.Data.Sqlite;
 
 namespace SqlHealthAssessment.Data.Caching
@@ -20,10 +21,13 @@ namespace SqlHealthAssessment.Data.Caching
     /// Manages the local liveQueries cache database for dashboard query results.
     /// All writes are serialized through a SemaphoreSlim; reads are lock-free (WAL mode).
     /// The database file is created automatically in the application's base directory.
+    /// When DataProtectionService is available, all cached data values are encrypted
+    /// at rest using ephemeral AES-256-GCM session keys.
     /// </summary>
     public sealed class liveQueriesCacheStore : IDisposable
     {
         private readonly string _connectionString;
+        private readonly DataProtectionService? _dataProtection;
 
         // Per-(queryId:instanceKey) semaphores for concurrent panel writes.
         // Global ops (eviction, vacuum) use _globalWriteLock exclusively.
@@ -39,11 +43,30 @@ namespace SqlHealthAssessment.Data.Caching
             PropertyNameCaseInsensitive = true
         };
 
-        public liveQueriesCacheStore()
+        public liveQueriesCacheStore(DataProtectionService? dataProtection = null)
         {
+            _dataProtection = dataProtection;
             var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SqlHealthAssessment-cache.db");
             _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
             InitializeSchema();
+        }
+
+        /// <summary>
+        /// Encrypts a value for cache storage. Returns the original value if
+        /// DataProtectionService is not available.
+        /// </summary>
+        private string ProtectValue(string value)
+            => _dataProtection != null ? _dataProtection.Protect(value) : value;
+
+        /// <summary>
+        /// Decrypts a cached value. Falls back to returning the raw value if
+        /// decryption fails (e.g., session key rotated after restart).
+        /// </summary>
+        private string UnprotectValue(string value)
+        {
+            if (_dataProtection == null) return value;
+            var result = _dataProtection.Unprotect(value);
+            return string.IsNullOrEmpty(result) ? value : result; // Fallback for pre-encryption data
         }
 
         // ──────────────────────────── Schema ────────────────────────────
@@ -298,6 +321,7 @@ namespace SqlHealthAssessment.Data.Caching
             DataTable table, DateTime fetchedAt)
         {
             var json = SerializeDataTable(table);
+            var stored = ProtectValue(json);   // Encrypt at rest
 
             var lk = GetLockFor(queryId, instanceKey);
             await lk.WaitAsync();
@@ -313,7 +337,7 @@ namespace SqlHealthAssessment.Data.Caching
                     VALUES (@qid, @ikey, @json, @fa)";
                 cmd.Parameters.AddWithValue("@qid", queryId);
                 cmd.Parameters.AddWithValue("@ikey", instanceKey);
-                cmd.Parameters.AddWithValue("@json", json);
+                cmd.Parameters.AddWithValue("@json", stored);
                 cmd.Parameters.AddWithValue("@fa", fetchedAt.ToString("o"));
                 await cmd.ExecuteNonQueryAsync();
             }
@@ -521,8 +545,10 @@ namespace SqlHealthAssessment.Data.Caching
             cmd.Parameters.AddWithValue("@qid", queryId);
             cmd.Parameters.AddWithValue("@ikey", instanceKey);
 
-            var json = (string?)await cmd.ExecuteScalarAsync();
-            return json != null ? DeserializeDataTable(json) : null;
+            var raw = (string?)await cmd.ExecuteScalarAsync();
+            if (raw == null) return null;
+            var json = UnprotectValue(raw);   // Decrypt from cache
+            return DeserializeDataTable(json);
         }
 
         /// <summary>

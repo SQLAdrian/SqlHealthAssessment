@@ -4,7 +4,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
-    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;Config\**;publish\**;release\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;Config\**;publish\**;release\**;lib\**</DefaultItemExcludes>
     <NoWarn>$(NoWarn);CS0169;CS0414;BL0007</NoWarn>
     <RootNamespace>SqlHealthAssessment</RootNamespace>
     <AssemblyName>SqlHealthAssessment</AssemblyName>
@@ -30,7 +30,19 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <!-- Disable Blazor hot-reload to suppress _wpftmp.csproj side-project generation -->
     <RazorHotReload>false</RazorHotReload>
+    <!-- Custom entry point: Program.Main handles both WPF and service modes -->
+    <StartupObject>SqlHealthAssessment.Program</StartupObject>
   </PropertyGroup>
+
+  <!-- ASP.NET Core framework for Blazor Server mode (Kestrel, SignalR) -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- PerformanceStudio: SQL execution plan analyzer by Erik Darling (git submodule) -->
+  <ItemGroup>
+    <ProjectReference Include="lib\PerformanceStudio\src\PlanViewer.Core\PlanViewer.Core.csproj" />
+  </ItemGroup>
 
   <!-- Release Build Optimizations -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -40,7 +52,10 @@
     <DebugSymbols>false</DebugSymbols>
     <Optimize>true</Optimize>
     <SelfContained>true</SelfContained>
-    <PublishSingleFile>false</PublishSingleFile>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
   <ItemGroup>
@@ -73,11 +88,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="8.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.*" />
     <PackageReference Include="Microsoft.SqlServer.DacFx" Version="162.*" />
     <PackageReference Include="Blazor-ApexCharts" Version="3.*" />
     <PackageReference Include="Radzen.Blazor" Version="5.*" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.*" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" />
     <PackageReference Include="Microsoft.SqlServer.Management.Assessment" Version="1.*" />
     <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="172.*" />
 
@@ -90,6 +107,9 @@
     <PackageReference Include="Serilog" Version="4.*" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="8.*" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.*" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.*" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.*" />
 
   </ItemGroup>
 
@@ -242,6 +262,12 @@
   <!-- Increment build number before build -->
   <Target Name="IncrementBuildNumber" BeforeTargets="BeforeBuild">
     <Exec Command="powershell -ExecutionPolicy Bypass -File increment-build.ps1" />
+  </Target>
+
+  <!-- Update PerformanceStudio submodule to latest on Release builds -->
+  <Target Name="UpdatePerformanceStudio" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release'">
+    <Exec Command="git submodule update --remote lib/PerformanceStudio" ContinueOnError="true" />
+    <Message Importance="high" Text="PerformanceStudio submodule updated to latest" />
   </Target>
 
   <!-- Create release ZIP after publish -->

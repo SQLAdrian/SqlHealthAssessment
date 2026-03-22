@@ -1,7 +1,9 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -26,6 +28,12 @@ namespace SqlHealthAssessment.Data
         private int _buildNumber = 0;
         private string _updateCheckUrl = "https://api.github.com/repos/SQLAdrian/SqlHealthAssessment/releases/latest";
 
+        /// <summary>Path to the staged update ZIP, ready to apply on exit.</summary>
+        public string? StagedUpdatePath { get; private set; }
+
+        /// <summary>True if an update has been downloaded and is waiting to be applied.</summary>
+        public bool HasStagedUpdate => !string.IsNullOrEmpty(StagedUpdatePath) && File.Exists(StagedUpdatePath);
+
         public AutoUpdateService(ILogger<AutoUpdateService> logger)
         {
             _logger = logger;
@@ -39,6 +47,9 @@ namespace SqlHealthAssessment.Data
             try
             {
                 var versionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "version.json");
+                if (!File.Exists(versionPath))
+                    versionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "version.json");
+
                 if (File.Exists(versionPath))
                 {
                     var json = File.ReadAllText(versionPath);
@@ -60,21 +71,33 @@ namespace SqlHealthAssessment.Data
         {
             try
             {
+                _logger.LogInformation("Checking for updates at {Url}", _updateCheckUrl);
                 var response = await _httpClient.GetStringAsync(_updateCheckUrl);
                 var release = JsonDocument.Parse(response).RootElement;
 
-                var latestVersion = release.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "";
+                var tagName = release.GetProperty("tag_name").GetString() ?? "";
+                // Strip common prefixes: "v1.2.3", "Release-1.2.3", "Release"
+                var latestVersion = tagName
+                    .Replace("Release-", "", StringComparison.OrdinalIgnoreCase)
+                    .Replace("Release", "", StringComparison.OrdinalIgnoreCase)
+                    .TrimStart('v', '-', ' ');
+
                 var downloadUrl = "";
-                
+
                 if (release.TryGetProperty("assets", out var assets))
                 {
                     foreach (var asset in assets.EnumerateArray())
                     {
                         var name = asset.GetProperty("name").GetString() ?? "";
-                        if (name.EndsWith(".exe") || name.EndsWith(".zip"))
+                        // Prefer .zip over .exe
+                        if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                         {
                             downloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
                             break;
+                        }
+                        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(downloadUrl))
+                        {
+                            downloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
                         }
                     }
                 }
@@ -85,14 +108,15 @@ namespace SqlHealthAssessment.Data
                     {
                         Version = latestVersion,
                         DownloadUrl = downloadUrl,
-                        ReleaseNotes = release.GetProperty("body").GetString() ?? "",
-                        ReleasedAt = release.GetProperty("published_at").GetDateTime()
+                        ReleaseNotes = release.TryGetProperty("body", out var body) ? body.GetString() ?? "" : "",
+                        ReleasedAt = release.TryGetProperty("published_at", out var pubAt) ? pubAt.GetDateTime() : DateTime.Now
                     };
 
-                    _logger.LogInformation("Update available: {Version}", latestVersion);
+                    _logger.LogInformation("Update available: v{Version} (current: v{Current})", latestVersion, _currentVersion);
                     return (true, updateInfo);
                 }
 
+                _logger.LogInformation("No update available. Current: v{Current}, Latest: v{Latest}", _currentVersion, latestVersion);
                 return (false, null);
             }
             catch (Exception ex)
@@ -102,14 +126,136 @@ namespace SqlHealthAssessment.Data
             }
         }
 
+        /// <summary>
+        /// Downloads the update ZIP to a staging folder. Returns true if successful.
+        /// </summary>
+        public async Task<bool> DownloadUpdateAsync(string downloadUrl, IProgress<int>? progress = null)
+        {
+            try
+            {
+                var stagingDir = Path.Combine(AppContext.BaseDirectory, "update-staging");
+                Directory.CreateDirectory(stagingDir);
+
+                var zipPath = Path.Combine(stagingDir, "update.zip");
+                _logger.LogInformation("Downloading update from {Url} to {Path}", downloadUrl, zipPath);
+
+                using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+
+                var totalBytes = response.Content.Headers.ContentLength ?? -1;
+                long downloadedBytes = 0;
+
+                await using var contentStream = await response.Content.ReadAsStreamAsync();
+                await using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+
+                var buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                    downloadedBytes += bytesRead;
+
+                    if (totalBytes > 0)
+                    {
+                        var pct = (int)(downloadedBytes * 100 / totalBytes);
+                        progress?.Report(pct);
+                    }
+                }
+
+                progress?.Report(100);
+                StagedUpdatePath = zipPath;
+                _logger.LogInformation("Update downloaded successfully: {Size:N0} bytes", downloadedBytes);
+
+                // Write a small script that will apply the update after the app exits
+                WriteUpdateApplierScript(stagingDir);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to download update");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Creates a batch script that extracts the update ZIP over the app directory.
+        /// Called on app exit if an update is staged.
+        /// </summary>
+        public void ApplyUpdateOnExit()
+        {
+            if (!HasStagedUpdate) return;
+
+            try
+            {
+                var scriptPath = Path.Combine(Path.GetDirectoryName(StagedUpdatePath!)!, "apply-update.cmd");
+                if (File.Exists(scriptPath))
+                {
+                    _logger.LogInformation("Launching update applier: {Script}", scriptPath);
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c \"{scriptPath}\"",
+                        UseShellExecute = true,
+                        CreateNoWindow = false,
+                        WindowStyle = ProcessWindowStyle.Minimized
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to launch update applier");
+            }
+        }
+
+        private void WriteUpdateApplierScript(string stagingDir)
+        {
+            var appDir = AppContext.BaseDirectory.TrimEnd('\\', '/');
+            var zipPath = Path.Combine(stagingDir, "update.zip");
+            var scriptPath = Path.Combine(stagingDir, "apply-update.cmd");
+            var exeName = "SqlHealthAssessment.exe";
+
+            // Batch script: wait for app to close, extract ZIP, restart, clean up
+            var script = $@"@echo off
+echo SQL Health Assessment — Applying Update...
+echo Waiting for application to close...
+:wait
+timeout /t 2 /nobreak >nul
+tasklist /FI ""IMAGENAME eq {exeName}"" 2>NUL | find /I ""{exeName}"" >NUL
+if not errorlevel 1 goto wait
+
+echo Extracting update...
+powershell -NoProfile -Command ""Expand-Archive -Path '{zipPath}' -DestinationPath '{appDir}' -Force""
+if errorlevel 1 (
+    echo ERROR: Failed to extract update.
+    pause
+    exit /b 1
+)
+
+echo Update applied successfully.
+echo Cleaning up...
+del ""{zipPath}"" 2>nul
+
+echo Restarting application...
+start """" ""{Path.Combine(appDir, exeName)}""
+echo Done.
+timeout /t 3 /nobreak >nul
+del ""{scriptPath}"" 2>nul
+";
+            File.WriteAllText(scriptPath, script);
+            _logger.LogInformation("Update applier script written to {Path}", scriptPath);
+        }
+
         private bool IsNewerVersion(string latest, string current)
         {
+            if (string.IsNullOrWhiteSpace(latest)) return false;
+
             var latestParts = latest.Split('.');
             var currentParts = current.Split('.');
 
             for (int i = 0; i < Math.Min(latestParts.Length, currentParts.Length); i++)
             {
-                if (int.TryParse(latestParts[i], out var latestNum) && 
+                if (int.TryParse(latestParts[i], out var latestNum) &&
                     int.TryParse(currentParts[i], out var currentNum))
                 {
                     if (latestNum > currentNum) return true;

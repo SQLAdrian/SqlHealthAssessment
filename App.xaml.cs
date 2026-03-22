@@ -119,6 +119,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<DiagnosticScriptRunner>();
             services.AddSingleton<FullAuditStateService>();
             services.AddSingleton<AuditLogService>();
+            services.AddSingleton<Data.Services.NotificationChannelService>();
             services.AddSingleton<AlertingService>();
             services.AddSingleton<HealthCheckService>();
             services.AddSingleton<CheckExecutionService>();
@@ -136,6 +137,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<StartupService>();
             services.AddSingleton<Data.Services.PrintService>();
             services.AddSingleton<Data.Services.SqlAssessmentService>();
+
             services.AddSingleton<Data.Services.ReportPageConfigService>();
             services.AddSingleton<Data.Services.XEventService>();
             services.AddSingleton<Data.Services.AdminAuthService>();
@@ -145,11 +147,18 @@ namespace SqlHealthAssessment
             // Radzen Blazor component library
             services.AddRadzenComponents();
             services.AddSingleton<Data.Services.ThemeService>();
+            services.AddSingleton<Data.Services.ServerModeService>();
+            services.AddSingleton<Data.Services.DataProtectionService>();
+            services.AddSingleton<Data.Services.AzureBlobExportService>();
+            services.AddSingleton<Data.Services.ProcessGuard>();
+            services.AddSingleton<Data.Services.ProductionReadinessGate>();
+            services.AddSingleton<Data.Services.RbacService>();
 
             // Local log service — thin wrapper over ILogger, routes through Serilog
             services.AddSingleton<LocalLogService>();
 
             // liveQueries caching layer — delta-fetch + offline resilience
+            // liveQueriesCacheStore uses DataProtectionService for at-rest encryption
             services.AddSingleton<liveQueriesCacheStore>();
             services.AddSingleton<CacheStateTracker>();
             services.AddSingleton<CachingQueryExecutor>();
@@ -197,21 +206,54 @@ namespace SqlHealthAssessment
                         var (succeeded, failed, errors) = await tableService.EnsureTablesForAllPanelsAsync(
                             connFactory, configService.Config);
 
-                        System.Diagnostics.Debug.WriteLine(
-                            $"[App] liveQueries table provisioning: {succeeded} OK, {failed} failed.");
+                        Log.Information("liveQueries table provisioning: {Succeeded} OK, {Failed} failed", succeeded, failed);
                         foreach (var err in errors)
-                            System.Diagnostics.Debug.WriteLine($"[App]   - {err}");
+                            Log.Warning("liveQueries provisioning issue: {Error}", err);
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[App] liveQueries table provisioning error: {ex.Message}");
+                    Log.Warning(ex, "liveQueries table provisioning error");
                 }
             });
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
+            // Apply staged update if one was downloaded
+            try
+            {
+                var updateService = Services?.GetService<AutoUpdateService>();
+                if (updateService?.HasStagedUpdate == true)
+                {
+                    Log.Information("Applying staged update on exit...");
+                    updateService.ApplyUpdateOnExit();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to apply update on exit");
+            }
+
+            // Dispose the DI container — flushes timers, closes connections, releases resources
+            // Use DisposeAsync when available (some services only implement IAsyncDisposable)
+            if (Services is IAsyncDisposable asyncDisposable)
+            {
+                try { asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+                catch (Exception disposeEx)
+                {
+                    Log.Warning(disposeEx, "Error disposing service provider");
+                }
+            }
+            else if (Services is IDisposable disposable)
+            {
+                try { disposable.Dispose(); }
+                catch (Exception disposeEx)
+                {
+                    Log.Warning(disposeEx, "Error disposing service provider");
+                }
+            }
+
             Log.Information("Application exiting...");
             Log.CloseAndFlush();
             base.OnExit(e);

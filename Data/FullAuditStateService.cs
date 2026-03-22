@@ -101,9 +101,18 @@ namespace SqlHealthAssessment.Data
             set => _isMultiServerExecution = value;
         }
 
-        public double ProgressPercent => _totalServers * _totalScripts > 0 
-            ? (double)(_currentServerIndex * _totalScripts + _currentScriptIndex) / (_totalServers * _totalScripts) * 100 
-            : 0;
+        public double ProgressPercent
+        {
+            get
+            {
+                if (_totalServers * _totalScripts <= 0) return 0;
+                // Indices are 1-based: serverIndex 1..N, scriptIndex 0..M (0 = starting server, M = all scripts done)
+                var completed = (_currentServerIndex - 1) * _totalScripts + _currentScriptIndex;
+                var total = _totalServers * _totalScripts;
+                var pct = (double)completed / total * 100;
+                return Math.Min(pct, 100);
+            }
+        }
 
         public void AddExecutionResult(ScriptExecutionResult result)
         {
