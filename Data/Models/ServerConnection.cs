@@ -20,7 +20,7 @@ namespace SqlHealthAssessment.Data.Models
         public string Database { get; set; } = "master";
 
         [JsonPropertyName("HasSqlWatch")]
-        public bool HasSqlWatch { get; set; } = true;
+        public bool HasSqlWatch { get; set; } = false;
 
         [JsonPropertyName("UseWindowsAuthentication")]
         public bool UseWindowsAuthentication { get; set; } = true;
