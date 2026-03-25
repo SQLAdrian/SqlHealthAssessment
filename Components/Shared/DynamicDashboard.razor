@@ -1159,6 +1159,13 @@
                 builder.AddAttribute(7, "OnTopRowsConfigChanged",
                     EventCallback.Factory.Create<int>(this, val => OnPanelTopRowsChanged(panel.Id, val)));
             }
+            if (!string.IsNullOrEmpty(panel.ActionColumn))
+            {
+                var mode = panel.ActionColumnMode;
+                builder.AddAttribute(8, "OnActionExecute",
+                    new Func<string, CancellationToken, Task<(bool, string)>>(
+                        (sql, ct) => ExecuteActionSqlAsync(sql, ct, mode)));
+            }
         }
         else if (panel.PanelType == "TextCard" && _gridResults.TryGetValue(panel.Id, out var textData))
             builder.AddAttribute(4, "GridData", textData);
@@ -1187,6 +1194,73 @@
         catch (Exception ex)
         {
             _panelErrors[panelId] = $"Panel '{panelId}' error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Executes a SQL action (e.g. CREATE INDEX) on the currently selected server.
+    /// Called by DataGrid action buttons.
+    /// When mode is "query", the cell value is a SELECT that returns the actual DDL — double-hop execution.
+    /// </summary>
+    private async Task<(bool success, string message)> ExecuteActionSqlAsync(string sql, CancellationToken ct, string? mode = null)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+            return (false, "No SQL to execute");
+
+        var conn = ConnectionManager.GetEnabledConnections().FirstOrDefault();
+        if (conn == null)
+            return (false, "No server connection available");
+
+        var serverName = SelectedInstance;
+        if (string.IsNullOrEmpty(serverName))
+            serverName = conn.GetServerList().FirstOrDefault() ?? "";
+        if (string.IsNullOrEmpty(serverName))
+            return (false, "No server selected");
+
+        try
+        {
+            var connString = conn.GetConnectionString(serverName, "master");
+            using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(connString);
+            await sqlConn.OpenAsync(ct);
+
+            var ddl = sql;
+
+            // Double-hop: cell value is a query that returns the DDL to execute
+            if (string.Equals(mode, "query", StringComparison.OrdinalIgnoreCase))
+            {
+                using var queryCmd = new Microsoft.Data.SqlClient.SqlCommand(sql, sqlConn)
+                {
+                    CommandTimeout = 60
+                };
+                ct.Register(() => { try { queryCmd.Cancel(); } catch { } });
+
+                var result = await queryCmd.ExecuteScalarAsync(ct);
+                ddl = result?.ToString();
+
+                if (string.IsNullOrWhiteSpace(ddl))
+                    return (false, "The create script query returned no result");
+
+                Logger.LogInformation("Action double-hop on {Server}: query returned {Length} chars", serverName, ddl.Length);
+            }
+
+            using var cmd = new Microsoft.Data.SqlClient.SqlCommand(ddl, sqlConn)
+            {
+                CommandTimeout = 300 // Index creation can take minutes
+            };
+            ct.Register(() => { try { cmd.Cancel(); } catch { } });
+
+            await cmd.ExecuteNonQueryAsync(ct);
+            Logger.LogInformation("Action SQL executed on {Server}: {Sql}", serverName, ddl.Length > 120 ? ddl[..120] + "..." : ddl);
+            return (true, "Executed successfully on " + serverName);
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // Let DataGrid handle as Cancelled state
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Action SQL failed on {Server}", serverName);
+            return (false, ex.Message);
         }
     }
 

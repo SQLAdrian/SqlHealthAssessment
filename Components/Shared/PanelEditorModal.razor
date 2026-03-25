@@ -3,8 +3,8 @@
 
 @if (IsVisible && _working != null)
 {
-    <div class="modal-backdrop" @onclick="Cancel"></div>
-    <div class="modal-dialog section-editor-modal" @onclick:stopPropagation>
+    <div class="modal-overlay" @onclick="Cancel">
+    <div class="modal section-editor-modal" @onclick:stopPropagation>
 
         <div class="modal-header">
             <h3><i class="fa-solid fa-gear"></i> Configure Panel</h3>
@@ -192,6 +192,7 @@
             </button>
         </div>
     </div>
+    </div>
 }
 
 @code {
@@ -246,6 +247,8 @@
         DataGridIsClickable    = p.DataGridIsClickable,
         DataGridMaxRows        = p.DataGridMaxRows,
         DataGridTopRows        = p.DataGridTopRows,
+        ActionColumn           = p.ActionColumn,
+        ActionColumnMode       = p.ActionColumnMode,
         ColorThresholds        = p.ColorThresholds.Select(t => new ColorThresholdRule
             { Operator = t.Operator, Value = t.Value, Color = t.Color, Label = t.Label }).ToList(),
     };

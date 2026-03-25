@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.Logging;
+using Microsoft.JSInterop;
 using Microsoft.Web.WebView2.Core;
 
 namespace SqlHealthAssessment.Data.Services
@@ -11,6 +12,7 @@ namespace SqlHealthAssessment.Data.Services
     /// <summary>
     /// Wraps CoreWebView2.PrintToPdfAsync to export the current page as a multi-page PDF,
     /// respecting @media print CSS rules.  Saves to .\output\ automatically.
+    /// Falls back to browser window.print() in server mode (no WebView2).
     /// </summary>
     public class PrintService
     {
@@ -48,7 +50,7 @@ namespace SqlHealthAssessment.Data.Services
             if (_webView == null)
             {
                 _auditLog?.LogExportOperation("PDF", fileName, false, "WebView not available");
-                return (false, null, "WebView not available");
+                return (false, null, "WebView not available — use browser print (Ctrl+P) or call PrintViaBrowserAsync.");
             }
 
             var outputDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output");
@@ -93,6 +95,25 @@ namespace SqlHealthAssessment.Data.Services
             {
                 _auditLog?.LogExportOperation("PDF", fileName, false, ex.Message);
                 _logger.LogError(ex, "PDF export failed for file {FileName}", fileName);
+                return (false, null, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Falls back to the browser's native print dialog via JS interop.
+        /// Used in server mode where WebView2 is not available.
+        /// </summary>
+        public async Task<(bool Success, string? Path, string? Error)> PrintViaBrowserAsync(IJSRuntime jsRuntime)
+        {
+            try
+            {
+                await jsRuntime.InvokeVoidAsync("window.print");
+                _auditLog?.LogExportOperation("PDF", "browser-print", true);
+                return (true, null, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Browser print failed");
                 return (false, null, ex.Message);
             }
         }

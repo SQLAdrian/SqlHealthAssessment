@@ -9,6 +9,7 @@
 @inject GlobalInstanceSelector InstanceSelector
 @inject SqlHealthAssessment.Data.Services.PrintService PrintSvc
 @inject SqlHealthAssessment.Data.ToastService Toast
+@inject IJSRuntime JSRuntime
 @using SqlHealthAssessment.Data.Models
 @implements IDisposable
 
@@ -364,6 +365,13 @@
         StateHasChanged();
         try
         {
+            if (!PrintSvc.IsAvailable)
+            {
+                await PrintSvc.PrintViaBrowserAsync(JSRuntime);
+                Toast.ShowInfo("Browser print dialog opened — use 'Save as PDF' to export.");
+                return;
+            }
+
             var orientation = settings.LandscapeOrientation
                 ? Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Landscape
                 : Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait;

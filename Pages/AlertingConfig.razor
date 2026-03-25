@@ -4,11 +4,10 @@
 @using SqlHealthAssessment.Data.Models
 @using SqlHealthAssessment.Data.Services
 @inject NotificationChannelService ChannelService
-@inject AlertingService AlertService
 @implements IDisposable
 
 <div class="settings-page" style="max-width: 900px;">
-    <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-bell" style="color: var(--yellow); margin-right: 8px;"></i>Alerting & Notifications</h2>
+    <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-envelope" style="color: var(--accent); margin-right: 8px;"></i>Notification Channels</h2>
 
     @* ── SMTP Email Channel ── *@
     <div class="settings-group">
@@ -110,8 +109,167 @@
         </div>
     </div>
 
+    @* ── Slack Channel ── *@
+    <div class="settings-group">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-brands fa-slack" style="color: #4A154B;"></i>
+            Slack
+            <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: normal;">
+                <input type="checkbox" @bind="_slack.Enabled" style="width: auto;" />
+                <span style="color: var(--text-secondary);">Enabled</span>
+            </label>
+        </h3>
+
+        <div class="settings-field">
+            <label>Webhook URL <span style="color: var(--red);">*</span></label>
+            <input type="password" @bind="_slackWebhookUrl" @bind:event="oninput"
+                   placeholder="@(_hasExistingSlackUrl ? "(encrypted — leave blank to keep)" : "https://hooks.slack.com/services/T.../B.../...")" />
+            <small style="display: block; margin-top: 4px; color: var(--text-muted); font-size: 11px;">Create at <em>api.slack.com > Your App > Incoming Webhooks</em></small>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="settings-field">
+                <label>Channel Override (optional)</label>
+                <input type="text" @bind="_slack.Channel" @bind:event="oninput" placeholder="#dba-alerts" />
+            </div>
+            <div class="settings-field">
+                <label>Bot Username</label>
+                <input type="text" @bind="_slack.Username" @bind:event="oninput" placeholder="SQL Health Assessment" />
+            </div>
+        </div>
+
+        <div class="settings-field">
+            <label>Minimum Severity</label>
+            <select @bind="_slack.MinimumSeverity">
+                <option value="info">Info (all alerts)</option>
+                <option value="warning">Warning & Critical</option>
+                <option value="critical">Critical only</option>
+            </select>
+        </div>
+    </div>
+
+    @* ── Generic Webhook ── *@
+    <div class="settings-group">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-globe" style="color: var(--accent);"></i>
+            Webhook (Generic HTTP POST)
+            <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: normal;">
+                <input type="checkbox" @bind="_webhook.Enabled" style="width: auto;" />
+                <span style="color: var(--text-secondary);">Enabled</span>
+            </label>
+        </h3>
+
+        <div class="settings-field">
+            <label>Endpoint URL <span style="color: var(--red);">*</span></label>
+            <input type="password" @bind="_webhookUrl" @bind:event="oninput"
+                   placeholder="@(_hasExistingWebhookUrl ? "(encrypted — leave blank to keep)" : "https://api.example.com/webhooks/alerts")" />
+        </div>
+
+        <div class="settings-field">
+            <label>Bearer Token (optional)</label>
+            <input type="password" @bind="_webhookAuthToken" @bind:event="oninput"
+                   placeholder="@(_hasExistingWebhookToken ? "(encrypted — leave blank to keep)" : "API key or Bearer token")" />
+        </div>
+
+        <div class="settings-field">
+            <label>Custom Headers (optional, key=value per line)</label>
+            <textarea rows="2" @bind="_webhook.CustomHeaders" @bind:event="oninput"
+                      style="font-family: monospace; font-size: 11px;"
+                      placeholder="X-Custom-Header=value"></textarea>
+        </div>
+
+        <div class="settings-field">
+            <label>Minimum Severity</label>
+            <select @bind="_webhook.MinimumSeverity">
+                <option value="info">Info (all alerts)</option>
+                <option value="warning">Warning & Critical</option>
+                <option value="critical">Critical only</option>
+            </select>
+        </div>
+    </div>
+
+    @* ── PagerDuty ── *@
+    <div class="settings-group">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-pager" style="color: #06AC38;"></i>
+            PagerDuty
+            <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: normal;">
+                <input type="checkbox" @bind="_pagerDuty.Enabled" style="width: auto;" />
+                <span style="color: var(--text-secondary);">Enabled</span>
+            </label>
+        </h3>
+
+        <div class="settings-field">
+            <label>Integration/Routing Key <span style="color: var(--red);">*</span></label>
+            <input type="password" @bind="_pagerDutyRoutingKey" @bind:event="oninput"
+                   placeholder="@(_hasExistingPagerDutyKey ? "(encrypted — leave blank to keep)" : "Events API v2 integration key")" />
+            <small style="display: block; margin-top: 4px; color: var(--text-muted); font-size: 11px;">Service > Integrations > Events API v2 > Integration Key</small>
+        </div>
+
+        <div class="settings-field">
+            <label>Minimum Severity</label>
+            <select @bind="_pagerDuty.MinimumSeverity">
+                <option value="warning">Warning & Critical</option>
+                <option value="critical">Critical only</option>
+            </select>
+        </div>
+    </div>
+
+    @* ── ServiceNow ── *@
+    <div class="settings-group">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-ticket" style="color: #81B5A1;"></i>
+            ServiceNow
+            <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: normal;">
+                <input type="checkbox" @bind="_serviceNow.Enabled" style="width: auto;" />
+                <span style="color: var(--text-secondary);">Enabled</span>
+            </label>
+        </h3>
+
+        <div class="settings-field">
+            <label>Instance URL <span style="color: var(--red);">*</span></label>
+            <input type="text" @bind="_serviceNow.InstanceUrl" @bind:event="oninput" placeholder="https://mycompany.service-now.com" />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="settings-field">
+                <label>Username <span style="color: var(--red);">*</span></label>
+                <input type="password" @bind="_serviceNowUsername" @bind:event="oninput"
+                       placeholder="@(_hasExistingServiceNowUser ? "(encrypted — leave blank to keep)" : "API user")" />
+            </div>
+            <div class="settings-field">
+                <label>Password <span style="color: var(--red);">*</span></label>
+                <input type="password" @bind="_serviceNowPassword" @bind:event="oninput"
+                       placeholder="@(_hasExistingServiceNowPass ? "(encrypted — leave blank to keep)" : "API password")" />
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+            <div class="settings-field">
+                <label>Table</label>
+                <input type="text" @bind="_serviceNow.Table" @bind:event="oninput" placeholder="incident" />
+            </div>
+            <div class="settings-field">
+                <label>Assignment Group</label>
+                <input type="text" @bind="_serviceNow.AssignmentGroup" @bind:event="oninput" placeholder="DBA Team" />
+            </div>
+            <div class="settings-field">
+                <label>Caller ID</label>
+                <input type="text" @bind="_serviceNow.CallerId" @bind:event="oninput" placeholder="admin" />
+            </div>
+        </div>
+
+        <div class="settings-field">
+            <label>Minimum Severity</label>
+            <select @bind="_serviceNow.MinimumSeverity">
+                <option value="warning">Warning & Critical</option>
+                <option value="critical">Critical only</option>
+            </select>
+        </div>
+    </div>
+
     @* ── Actions ── *@
-    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
         <button class="settings-btn" @onclick="SaveConfig">
             <i class="fa-solid fa-floppy-disk" style="margin-right: 4px;"></i> Save Configuration
         </button>
@@ -137,6 +295,50 @@
                 <i class="fa-solid fa-hashtag" style="margin-right: 4px;"></i> <span>Test Teams</span>
             }
         </button>
+
+        <button class="settings-btn" style="background: var(--bg-hover);" @onclick="TestSlack" disabled="@(_testingSlack || !_slack.Enabled)">
+            @if (_testingSlack)
+            {
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> <span>Testing...</span>
+            }
+            else
+            {
+                <i class="fa-brands fa-slack" style="margin-right: 4px;"></i> <span>Test Slack</span>
+            }
+        </button>
+
+        <button class="settings-btn" style="background: var(--bg-hover);" @onclick="TestWebhook" disabled="@(_testingWebhook || !_webhook.Enabled)">
+            @if (_testingWebhook)
+            {
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> <span>Testing...</span>
+            }
+            else
+            {
+                <i class="fa-solid fa-globe" style="margin-right: 4px;"></i> <span>Test Webhook</span>
+            }
+        </button>
+
+        <button class="settings-btn" style="background: var(--bg-hover);" @onclick="TestPagerDuty" disabled="@(_testingPagerDuty || !_pagerDuty.Enabled)">
+            @if (_testingPagerDuty)
+            {
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> <span>Testing...</span>
+            }
+            else
+            {
+                <i class="fa-solid fa-pager" style="margin-right: 4px;"></i> <span>Test PagerDuty</span>
+            }
+        </button>
+
+        <button class="settings-btn" style="background: var(--bg-hover);" @onclick="TestServiceNow" disabled="@(_testingServiceNow || !_serviceNow.Enabled)">
+            @if (_testingServiceNow)
+            {
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> <span>Testing...</span>
+            }
+            else
+            {
+                <i class="fa-solid fa-ticket" style="margin-right: 4px;"></i> <span>Test ServiceNow</span>
+            }
+        </button>
     </div>
 
     @if (!string.IsNullOrEmpty(_statusMessage))
@@ -147,76 +349,45 @@
         </p>
     }
 
-    @* ── Active Thresholds ── *@
-    <div class="settings-group">
-        <h3 style="display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-sliders" style="color: var(--text-secondary);"></i>
-            Alert Thresholds
-            <span style="margin-left: 8px; padding: 2px 8px; font-size: 11px; background: rgba(0, 122, 204, 0.15); color: var(--accent); border-radius: 3px; border: 1px solid rgba(0, 122, 204, 0.3);">@_thresholds.Count configured</span>
-        </h3>
-
-        <div style="overflow-x: auto;">
-            <table class="results-table" style="width: 100%;">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Metric</th>
-                        <th>Condition</th>
-                        <th>Severity</th>
-                        <th style="text-align: center;">Enabled</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var t in _thresholds)
-                    {
-                        <tr>
-                            <td>@t.Name</td>
-                            <td style="font-family: monospace; font-size: 11px;">@t.Metric</td>
-                            <td>@t.Condition.Replace("_", " ") @t.ThresholdValue</td>
-                            <td>
-                                <span class="severity-badge @SeverityBadgeClass(t.Severity)">@t.Severity</span>
-                            </td>
-                            <td style="text-align: center;">
-                                @if (t.Enabled)
-                                {
-                                    <i class="fa-solid fa-check" style="color: var(--green);"></i>
-                                }
-                                else
-                                {
-                                    <i class="fa-solid fa-minus" style="color: var(--text-muted);"></i>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-
-        <p style="font-size: 11px; color: var(--text-muted); margin-top: 12px;">
-            <i class="fa-solid fa-info-circle" style="margin-right: 4px;"></i>
-            Thresholds are evaluated automatically during dashboard refresh. Configure thresholds in Settings.
-        </p>
-    </div>
 </div>
 
 @code {
     // Local copies for editing
     private SmtpChannelConfig _smtp = new();
     private TeamsWebhookChannelConfig _teams = new();
+    private SlackChannelConfig _slack = new();
+    private WebhookChannelConfig _webhook = new();
+    private PagerDutyChannelConfig _pagerDuty = new();
+    private ServiceNowChannelConfig _serviceNow = new();
+
     private string _smtpPassword = "";
     private string _smtpToAddresses = "";
     private string _teamsWebhookUrl = "";
+    private string _slackWebhookUrl = "";
+    private string _webhookUrl = "";
+    private string _webhookAuthToken = "";
+    private string _pagerDutyRoutingKey = "";
+    private string _serviceNowUsername = "";
+    private string _serviceNowPassword = "";
+
     private bool _hasExistingSmtpPassword;
     private bool _hasExistingTeamsUrl;
+    private bool _hasExistingSlackUrl;
+    private bool _hasExistingWebhookUrl;
+    private bool _hasExistingWebhookToken;
+    private bool _hasExistingPagerDutyKey;
+    private bool _hasExistingServiceNowUser;
+    private bool _hasExistingServiceNowPass;
 
     // Status
     private string? _statusMessage;
     private bool _statusSuccess;
     private bool _testingSmtp;
     private bool _testingTeams;
-
-    // Thresholds (read-only display)
-    private List<AlertThreshold> _thresholds = new();
+    private bool _testingSlack;
+    private bool _testingWebhook;
+    private bool _testingPagerDuty;
+    private bool _testingServiceNow;
 
     protected override void OnInitialized()
     {
@@ -237,7 +408,6 @@
             ToAddresses = new List<string>(config.Smtp.ToAddresses)
         };
         _hasExistingSmtpPassword = !string.IsNullOrEmpty(config.Smtp.Password);
-
         _smtpToAddresses = string.Join(", ", _smtp.ToAddresses);
 
         // Deep copy Teams config
@@ -248,7 +418,46 @@
         };
         _hasExistingTeamsUrl = !string.IsNullOrEmpty(config.TeamsWebhook.WebhookUrl);
 
-        _thresholds = AlertService.GetThresholds();
+        // Deep copy Slack config
+        _slack = new SlackChannelConfig
+        {
+            Enabled = config.Slack.Enabled,
+            Channel = config.Slack.Channel,
+            Username = config.Slack.Username,
+            MinimumSeverity = config.Slack.MinimumSeverity
+        };
+        _hasExistingSlackUrl = !string.IsNullOrEmpty(config.Slack.WebhookUrl);
+
+        // Deep copy Webhook config
+        _webhook = new WebhookChannelConfig
+        {
+            Enabled = config.Webhook.Enabled,
+            CustomHeaders = config.Webhook.CustomHeaders,
+            MinimumSeverity = config.Webhook.MinimumSeverity
+        };
+        _hasExistingWebhookUrl = !string.IsNullOrEmpty(config.Webhook.Url);
+        _hasExistingWebhookToken = !string.IsNullOrEmpty(config.Webhook.AuthToken);
+
+        // Deep copy PagerDuty config
+        _pagerDuty = new PagerDutyChannelConfig
+        {
+            Enabled = config.PagerDuty.Enabled,
+            MinimumSeverity = config.PagerDuty.MinimumSeverity
+        };
+        _hasExistingPagerDutyKey = !string.IsNullOrEmpty(config.PagerDuty.RoutingKey);
+
+        // Deep copy ServiceNow config
+        _serviceNow = new ServiceNowChannelConfig
+        {
+            Enabled = config.ServiceNow.Enabled,
+            InstanceUrl = config.ServiceNow.InstanceUrl,
+            Table = config.ServiceNow.Table,
+            AssignmentGroup = config.ServiceNow.AssignmentGroup,
+            CallerId = config.ServiceNow.CallerId,
+            MinimumSeverity = config.ServiceNow.MinimumSeverity
+        };
+        _hasExistingServiceNowUser = !string.IsNullOrEmpty(config.ServiceNow.Username);
+        _hasExistingServiceNowPass = !string.IsNullOrEmpty(config.ServiceNow.Password);
 
         ChannelService.OnConfigChanged += OnConfigChanged;
     }
@@ -261,39 +470,81 @@
             .Where(a => !string.IsNullOrWhiteSpace(a))
             .ToList();
 
-        // Encrypt password if changed
+        // ── SMTP password ──
         if (!string.IsNullOrEmpty(_smtpPassword))
-        {
             _smtp.Password = CredentialProtector.Encrypt(_smtpPassword);
-        }
         else if (_hasExistingSmtpPassword)
-        {
-            // Keep existing encrypted password
             _smtp.Password = ChannelService.Config.Smtp.Password;
-        }
 
-        // Encrypt Teams webhook URL if changed
+        // ── Teams webhook URL ──
         if (!string.IsNullOrEmpty(_teamsWebhookUrl))
-        {
             _teams.WebhookUrl = CredentialProtector.Encrypt(_teamsWebhookUrl);
-        }
         else if (_hasExistingTeamsUrl)
-        {
             _teams.WebhookUrl = ChannelService.Config.TeamsWebhook.WebhookUrl;
-        }
+
+        // ── Slack webhook URL ──
+        if (!string.IsNullOrEmpty(_slackWebhookUrl))
+            _slack.WebhookUrl = CredentialProtector.Encrypt(_slackWebhookUrl);
+        else if (_hasExistingSlackUrl)
+            _slack.WebhookUrl = ChannelService.Config.Slack.WebhookUrl;
+
+        // ── Generic Webhook URL + auth token ──
+        if (!string.IsNullOrEmpty(_webhookUrl))
+            _webhook.Url = CredentialProtector.Encrypt(_webhookUrl);
+        else if (_hasExistingWebhookUrl)
+            _webhook.Url = ChannelService.Config.Webhook.Url;
+
+        if (!string.IsNullOrEmpty(_webhookAuthToken))
+            _webhook.AuthToken = CredentialProtector.Encrypt(_webhookAuthToken);
+        else if (_hasExistingWebhookToken)
+            _webhook.AuthToken = ChannelService.Config.Webhook.AuthToken;
+
+        // ── PagerDuty routing key ──
+        if (!string.IsNullOrEmpty(_pagerDutyRoutingKey))
+            _pagerDuty.RoutingKey = CredentialProtector.Encrypt(_pagerDutyRoutingKey);
+        else if (_hasExistingPagerDutyKey)
+            _pagerDuty.RoutingKey = ChannelService.Config.PagerDuty.RoutingKey;
+
+        // ── ServiceNow credentials ──
+        if (!string.IsNullOrEmpty(_serviceNowUsername))
+            _serviceNow.Username = CredentialProtector.Encrypt(_serviceNowUsername);
+        else if (_hasExistingServiceNowUser)
+            _serviceNow.Username = ChannelService.Config.ServiceNow.Username;
+
+        if (!string.IsNullOrEmpty(_serviceNowPassword))
+            _serviceNow.Password = CredentialProtector.Encrypt(_serviceNowPassword);
+        else if (_hasExistingServiceNowPass)
+            _serviceNow.Password = ChannelService.Config.ServiceNow.Password;
 
         var config = new NotificationChannelConfig
         {
             Smtp = _smtp,
-            TeamsWebhook = _teams
+            TeamsWebhook = _teams,
+            Slack = _slack,
+            Webhook = _webhook,
+            PagerDuty = _pagerDuty,
+            ServiceNow = _serviceNow
         };
 
         ChannelService.UpdateConfig(config);
 
         _hasExistingSmtpPassword = !string.IsNullOrEmpty(_smtp.Password);
         _hasExistingTeamsUrl = !string.IsNullOrEmpty(_teams.WebhookUrl);
+        _hasExistingSlackUrl = !string.IsNullOrEmpty(_slack.WebhookUrl);
+        _hasExistingWebhookUrl = !string.IsNullOrEmpty(_webhook.Url);
+        _hasExistingWebhookToken = !string.IsNullOrEmpty(_webhook.AuthToken);
+        _hasExistingPagerDutyKey = !string.IsNullOrEmpty(_pagerDuty.RoutingKey);
+        _hasExistingServiceNowUser = !string.IsNullOrEmpty(_serviceNow.Username);
+        _hasExistingServiceNowPass = !string.IsNullOrEmpty(_serviceNow.Password);
+
         _smtpPassword = "";
         _teamsWebhookUrl = "";
+        _slackWebhookUrl = "";
+        _webhookUrl = "";
+        _webhookAuthToken = "";
+        _pagerDutyRoutingKey = "";
+        _serviceNowUsername = "";
+        _serviceNowPassword = "";
 
         _statusSuccess = true;
         _statusMessage = "Configuration saved successfully.";
@@ -353,17 +604,42 @@
         }
     }
 
+    private async Task TestSlack()
+    {
+        _testingSlack = true; _statusMessage = null; StateHasChanged();
+        try { SaveConfig(); var (s, m) = await ChannelService.TestSlackAsync(); _statusSuccess = s; _statusMessage = m; }
+        catch (Exception ex) { _statusSuccess = false; _statusMessage = $"Slack test error: {ex.Message}"; }
+        finally { _testingSlack = false; StateHasChanged(); }
+    }
+
+    private async Task TestWebhook()
+    {
+        _testingWebhook = true; _statusMessage = null; StateHasChanged();
+        try { SaveConfig(); var (s, m) = await ChannelService.TestWebhookAsync(); _statusSuccess = s; _statusMessage = m; }
+        catch (Exception ex) { _statusSuccess = false; _statusMessage = $"Webhook test error: {ex.Message}"; }
+        finally { _testingWebhook = false; StateHasChanged(); }
+    }
+
+    private async Task TestPagerDuty()
+    {
+        _testingPagerDuty = true; _statusMessage = null; StateHasChanged();
+        try { SaveConfig(); var (s, m) = await ChannelService.TestPagerDutyAsync(); _statusSuccess = s; _statusMessage = m; }
+        catch (Exception ex) { _statusSuccess = false; _statusMessage = $"PagerDuty test error: {ex.Message}"; }
+        finally { _testingPagerDuty = false; StateHasChanged(); }
+    }
+
+    private async Task TestServiceNow()
+    {
+        _testingServiceNow = true; _statusMessage = null; StateHasChanged();
+        try { SaveConfig(); var (s, m) = await ChannelService.TestServiceNowAsync(); _statusSuccess = s; _statusMessage = m; }
+        catch (Exception ex) { _statusSuccess = false; _statusMessage = $"ServiceNow test error: {ex.Message}"; }
+        finally { _testingServiceNow = false; StateHasChanged(); }
+    }
+
     private void OnConfigChanged()
     {
         InvokeAsync(StateHasChanged);
     }
-
-    private static string SeverityBadgeClass(string severity) => severity switch
-    {
-        "critical" => "severity-critical",
-        "warning" => "severity-warning",
-        _ => "severity-info"
-    };
 
     public void Dispose()
     {

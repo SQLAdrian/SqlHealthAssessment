@@ -1,6 +1,7 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,10 @@ namespace SqlHealthAssessment
         private Microsoft.Web.WebView2.Core.CoreWebView2? _coreWebView2;
         private Microsoft.AspNetCore.Components.WebView.Wpf.BlazorWebView? BlazorWebView;
 
+        // System tray icon
+        private System.Windows.Forms.NotifyIcon? _trayIcon;
+        private bool _forceClose = false;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -31,46 +36,225 @@ namespace SqlHealthAssessment
             // Add keyboard shortcut for DevTools (F12)
             KeyDown += OnKeyDown;
             Loaded += OnWindowLoaded;
+            StateChanged += OnStateChanged;
 
             // Listen for zoom changes from settings UI
             if (_userSettings != null)
                 _userSettings.OnZoomChanged += OnZoomChanged;
+
+            InitializeTrayIcon(version);
+        }
+
+        // Tray menu items that update dynamically
+        private System.Windows.Forms.ToolStripMenuItem? _trayServerModeItem;
+        private System.Windows.Forms.ToolStripMenuItem? _trayOpenBrowserItem;
+
+        private void InitializeTrayIcon(string version)
+        {
+            try
+            {
+                // Extract icon from the running exe so tray matches the taskbar icon
+                var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                System.Drawing.Icon? icon = null;
+                if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+                    icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                if (icon == null)
+                {
+                    var iconPath = Path.Combine(AppContext.BaseDirectory, "SQLHealthAssessment.ico");
+                    icon = File.Exists(iconPath)
+                        ? new System.Drawing.Icon(iconPath)
+                        : System.Drawing.SystemIcons.Application;
+                }
+
+                _trayIcon = new System.Windows.Forms.NotifyIcon
+                {
+                    Icon = icon,
+                    Text = $"SQL Health Assessment v{version}",
+                    Visible = true
+                };
+
+                _trayOpenBrowserItem = new System.Windows.Forms.ToolStripMenuItem("Open in Browser", null, (_, _) => TrayOpenBrowser());
+                _trayOpenBrowserItem.Enabled = false;
+
+                _trayServerModeItem = new System.Windows.Forms.ToolStripMenuItem("Start Server Mode", null, (_, _) => TrayToggleServerMode());
+
+                var menu = new System.Windows.Forms.ContextMenuStrip();
+                menu.Items.Add("Show Window", null, (_, _) => TrayShow());
+                menu.Items.Add("Hide to Tray", null, (_, _) => TrayHide());
+                menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+                menu.Items.Add(_trayServerModeItem);
+                menu.Items.Add(_trayOpenBrowserItem);
+                menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+                menu.Items.Add("Exit", null, (_, _) => TrayExit());
+                _trayIcon.ContextMenuStrip = menu;
+                _trayIcon.DoubleClick += (_, _) => TrayShow();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to create tray icon");
+            }
+        }
+
+        private void UpdateTrayServerStatus()
+        {
+            var serverMode = App.Services?.GetService<ServerModeService>();
+            if (serverMode == null || _trayServerModeItem == null || _trayOpenBrowserItem == null) return;
+
+            if (serverMode.IsRunning)
+            {
+                _trayServerModeItem.Text = $"Stop Server Mode ({serverMode.Url})";
+                _trayOpenBrowserItem.Text = $"Open {serverMode.Url}";
+                _trayOpenBrowserItem.Enabled = true;
+                _trayIcon!.Text = $"SQL Health Assessment — Server: {serverMode.Url}";
+            }
+            else
+            {
+                _trayServerModeItem.Text = "Start Server Mode";
+                _trayOpenBrowserItem.Text = "Open in Browser";
+                _trayOpenBrowserItem.Enabled = false;
+                var version = App.Services?.GetService<AutoUpdateService>()?.GetCurrentVersion() ?? "";
+                _trayIcon!.Text = $"SQL Health Assessment v{version}";
+            }
+        }
+
+        private void TrayShow()
+        {
+            Show();
+            WindowState = WindowState.Maximized;
+            Activate();
+        }
+
+        private void TrayHide()
+        {
+            Hide();
+        }
+
+        private void TrayOpenBrowser()
+        {
+            var serverMode = App.Services?.GetService<ServerModeService>();
+            if (serverMode?.IsRunning == true && serverMode.Url != null)
+            {
+                Process.Start(new ProcessStartInfo(serverMode.Url) { UseShellExecute = true });
+            }
+        }
+
+        private async void TrayToggleServerMode()
+        {
+            try
+            {
+                var serverMode = App.Services?.GetService<ServerModeService>();
+                if (serverMode == null) return;
+
+                if (serverMode.IsRunning)
+                {
+                    await serverMode.StopAsync();
+                    _logger?.LogInformation("Server mode stopped from tray");
+                    _trayIcon?.ShowBalloonTip(2000, "SQL Health Assessment", "Server mode stopped", System.Windows.Forms.ToolTipIcon.Info);
+                }
+                else
+                {
+                    serverMode.EnableHttps = false;
+                    await serverMode.StartAsync();
+                    _logger?.LogInformation("Server mode started from tray at {Url}", serverMode.Url);
+                    _trayIcon?.ShowBalloonTip(2000, "SQL Health Assessment", $"Server mode started at {serverMode.Url}", System.Windows.Forms.ToolTipIcon.Info);
+
+                    // Open browser automatically
+                    if (serverMode.Url != null)
+                        Process.Start(new ProcessStartInfo(serverMode.Url) { UseShellExecute = true });
+                }
+
+                UpdateTrayServerStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to toggle server mode from tray");
+                _trayIcon?.ShowBalloonTip(3000, "SQL Health Assessment", $"Server mode error: {ex.Message}", System.Windows.Forms.ToolTipIcon.Error);
+            }
+        }
+
+        private void TrayExit()
+        {
+            _forceClose = true;
+            _trayIcon?.Dispose();
+            _trayIcon = null;
+            Application.Current.Shutdown();
+        }
+
+        private void OnStateChanged(object? sender, EventArgs e)
+        {
+            // Minimize to tray
+            if (WindowState == WindowState.Minimized)
+            {
+                Hide();
+                _trayIcon?.ShowBalloonTip(1500, "SQL Health Assessment", "Minimized to system tray", System.Windows.Forms.ToolTipIcon.Info);
+            }
         }
 
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
         {
-            if (App.WebView2Available)
+            // Always attempt WebView2 first, regardless of pre-check result
+            try
             {
-                // WebView2 is available — create and inject the BlazorWebView dynamically
-                try
+                BlazorWebView = new Microsoft.AspNetCore.Components.WebView.Wpf.BlazorWebView
                 {
-                    BlazorWebView = new Microsoft.AspNetCore.Components.WebView.Wpf.BlazorWebView
+                    HostPage = "wwwroot/index.html",
+                    Services = App.Services!
+                };
+                BlazorWebView.RootComponents.Add(
+                    new Microsoft.AspNetCore.Components.WebView.Wpf.RootComponent
                     {
-                        HostPage = "wwwroot/index.html",
-                        Services = App.Services!
-                    };
-                    BlazorWebView.RootComponents.Add(
-                        new Microsoft.AspNetCore.Components.WebView.Wpf.RootComponent
-                        {
-                            Selector = "#app",
-                            ComponentType = typeof(Components.Layout.MainLayout)
-                        });
-                    BlazorWebView.BlazorWebViewInitialized += OnBlazorWebViewInitialized;
-                    WebViewHost.Content = BlazorWebView;
-                    _logger?.LogInformation("MainWindow loaded — BlazorWebView created successfully");
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Failed to create BlazorWebView");
-                    ShowWebView2Error(ex.Message);
-                }
+                        Selector = "#app",
+                        ComponentType = typeof(Components.Layout.MainLayout)
+                    });
+                BlazorWebView.BlazorWebViewInitialized += OnBlazorWebViewInitialized;
+                BlazorWebView.BlazorWebViewInitializing += OnBlazorWebViewInitializing;
+                WebViewHost.Content = BlazorWebView;
+                _logger?.LogInformation("MainWindow loaded — BlazorWebView created successfully");
             }
-            else
+            catch (Exception ex)
             {
-                // WebView2 missing — auto-start Blazor Server and show link
-                _logger?.LogWarning("WebView2 not available — auto-starting server mode");
-                AutoStartServerMode();
+                _logger?.LogWarning(ex, "BlazorWebView failed — falling back to server mode");
+                BlazorWebView = null;
+                SwitchToServerMode();
             }
+        }
+
+        private void OnBlazorWebViewInitializing(object? sender, Microsoft.AspNetCore.Components.WebView.BlazorWebViewInitializingEventArgs e)
+        {
+            // This fires before WebView2 creation — if WebView2 is missing,
+            // the exception occurs AFTER this point during async initialization
+            // and surfaces as TargetInvocationException through the dispatcher.
+            // We hook into Dispatcher.UnhandledException in App.xaml.cs to catch it.
+        }
+
+        /// <summary>
+        /// Called from App.xaml.cs when a WebView2 exception surfaces through the dispatcher.
+        /// </summary>
+        public void FallbackToServerMode()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _logger?.LogWarning("FallbackToServerMode triggered from dispatcher exception");
+                BlazorWebView = null;
+                WebViewHost.Content = null;
+                SwitchToServerMode();
+            });
+        }
+
+        /// <summary>
+        /// Shrinks the window to a compact size for server mode and auto-starts Blazor Server.
+        /// </summary>
+        private void SwitchToServerMode()
+        {
+            WindowState = WindowState.Normal;
+            Width = 700;
+            Height = 450;
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            // Re-center after resize
+            Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
+            Top = (SystemParameters.PrimaryScreenHeight - Height) / 2;
+
+            AutoStartServerMode();
         }
 
         private void OnBlazorWebViewInitialized(object? sender, Microsoft.AspNetCore.Components.WebView.BlazorWebViewInitializedEventArgs e)
@@ -107,7 +291,8 @@ namespace SqlHealthAssessment
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error during BlazorWebView initialization");
-                ShowWebView2Error(ex.Message);
+                BlazorWebView = null;
+                SwitchToServerMode();
             }
         }
 
@@ -200,6 +385,7 @@ namespace SqlHealthAssessment
                     ServerModeButton.Visibility = Visibility.Visible;
                     ServerModeButton.Content = $"Running at {serverMode.Url}";
                     ServerModeButton.IsEnabled = false;
+                    UpdateTrayServerStatus();
                 });
             }
             catch (Exception ex)
@@ -325,6 +511,7 @@ namespace SqlHealthAssessment
                     "Keep this window open to maintain the server.";
 
                 ServerModeButton.Content = $"Running at {serverMode.Url}";
+                UpdateTrayServerStatus();
             }
             catch (Exception ex)
             {
@@ -353,16 +540,31 @@ namespace SqlHealthAssessment
 
         private async void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            // Unsubscribe zoom event to prevent leak
+            if (_userSettings != null)
+                _userSettings.OnZoomChanged -= OnZoomChanged;
+
+            if (_forceClose)
+            {
+                // Tray "Exit" was clicked — shut down for real
+                _trayIcon?.Dispose();
+                _trayIcon = null;
+                return;
+            }
+
             // Show the closing dialog
             ClosingOverlay.Visibility = Visibility.Visible;
-            
+
             // Cancel the close to allow dialog to show
             e.Cancel = true;
-            
+
             // Wait 0.8 seconds then close
             await Task.Delay(800);
-            
+
             // Actually close the window
+            _forceClose = true;
+            _trayIcon?.Dispose();
+            _trayIcon = null;
             Application.Current.Shutdown();
         }
     }

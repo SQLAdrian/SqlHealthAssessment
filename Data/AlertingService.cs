@@ -108,6 +108,7 @@ namespace SqlHealthAssessment.Data
                 var notification = _notifications.FirstOrDefault(n => n.Id == id);
                 if (notification != null)
                     notification.IsAcknowledged = true;
+                PruneAcknowledgedIds();
             }
         }
 
@@ -123,6 +124,7 @@ namespace SqlHealthAssessment.Data
                     _acknowledgedIds.Add(n.Id);
                     n.IsAcknowledged = true;
                 }
+                PruneAcknowledgedIds();
             }
         }
 
@@ -133,6 +135,16 @@ namespace SqlHealthAssessment.Data
                 while (_notifications.TryDequeue(out _)) { }
                 _acknowledgedIds.Clear();
             }
+        }
+
+        /// <summary>
+        /// Removes acknowledged IDs that no longer correspond to any queued notification.
+        /// Must be called inside _lock.
+        /// </summary>
+        private void PruneAcknowledgedIds()
+        {
+            var activeIds = new HashSet<string>(_notifications.Select(n => n.Id));
+            _acknowledgedIds.RemoveWhere(id => !activeIds.Contains(id));
         }
 
         /// <summary>
@@ -216,11 +228,7 @@ namespace SqlHealthAssessment.Data
                                 });
                             }
 
-                            // A new notification for this metric means the condition re-triggered —
-                            // remove stale acks for notifications that have since been dequeued so the
-                            // badge reappears correctly rather than staying silenced indefinitely.
-                            var activeIds = new HashSet<string>(_notifications.Select(n => n.Id));
-                            _acknowledgedIds.RemoveWhere(id => !activeIds.Contains(id));
+                            PruneAcknowledgedIds();
 
                             // Keep only last 100 notifications
                             while (_notifications.Count > 100)

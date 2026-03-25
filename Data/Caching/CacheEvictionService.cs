@@ -63,13 +63,18 @@ namespace SqlHealthAssessment.Data.Caching
             _timer = null;
         }
 
-        private async void OnTimerTick(object? state)
+        private void OnTimerTick(object? state)
+        {
+            _ = RunEvictionAsync();
+        }
+
+        private async Task RunEvictionAsync()
         {
             try
             {
                 // Time-based eviction
                 await _cache.EvictOlderThanAsync(_evictionThreshold);
-                
+
                 // Size-based eviction
                 await _cache.EnforceSizeLimitAsync(_maxCacheSizeBytes);
             }
@@ -78,20 +83,25 @@ namespace SqlHealthAssessment.Data.Caching
                 _logger.LogError(ex, "Cache eviction failed");
             }
         }
-        
-        private async void OnMemoryPressureChanged(object? sender, MemoryPressureEventArgs e)
+
+        private void OnMemoryPressureChanged(object? sender, MemoryPressureEventArgs e)
         {
             if (e.IsUnderPressure)
             {
-                try
-                {
-                    await _cache.EvictOlderThanAsync(TimeSpan.FromHours(1));
-                    _logger.LogWarning("Aggressive cache eviction triggered due to memory pressure");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Memory pressure eviction failed");
-                }
+                _ = RunPressureEvictionAsync();
+            }
+        }
+
+        private async Task RunPressureEvictionAsync()
+        {
+            try
+            {
+                await _cache.EvictOlderThanAsync(TimeSpan.FromHours(1));
+                _logger.LogWarning("Aggressive cache eviction triggered due to memory pressure");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Memory pressure eviction failed");
             }
         }
 

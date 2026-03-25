@@ -208,14 +208,36 @@ namespace SqlHealthAssessment.Data
             }
         }
 
+        /// <summary>
+        /// Config files that contain user data and must survive updates.
+        /// These are backed up before extraction and restored afterwards.
+        /// </summary>
+        private static readonly string[] ProtectedConfigFiles = new[]
+        {
+            "config\\server-connections.json",
+            "config\\alert-definitions.json",
+            "config\\notification-channels.json",
+            "config\\scheduled-tasks.json",
+            "config\\user-settings.json",
+            "config\\appsettings.json",
+            "config\\dashboard-config.json",
+        };
+
         private void WriteUpdateApplierScript(string stagingDir)
         {
             var appDir = AppContext.BaseDirectory.TrimEnd('\\', '/');
             var zipPath = Path.Combine(stagingDir, "update.zip");
+            var backupDir = Path.Combine(stagingDir, "config-backup");
             var scriptPath = Path.Combine(stagingDir, "apply-update.cmd");
             var exeName = "SqlHealthAssessment.exe";
 
-            // Batch script: wait for app to close, extract ZIP, restart, clean up
+            // Build backup/restore lines for each protected config file
+            var backupLines = string.Join("\r\n", ProtectedConfigFiles.Select(f =>
+                $"if exist \"{appDir}\\{f}\" copy /Y \"{appDir}\\{f}\" \"{backupDir}\\{Path.GetFileName(f)}\" >nul"));
+            var restoreLines = string.Join("\r\n", ProtectedConfigFiles.Select(f =>
+                $"if exist \"{backupDir}\\{Path.GetFileName(f)}\" copy /Y \"{backupDir}\\{Path.GetFileName(f)}\" \"{appDir}\\{f}\" >nul"));
+
+            // Batch script: wait for app to close, backup configs, extract ZIP, restore configs, restart, clean up
             var script = $@"@echo off
 echo SQL Health Assessment — Applying Update...
 echo Waiting for application to close...
@@ -223,6 +245,10 @@ echo Waiting for application to close...
 timeout /t 2 /nobreak >nul
 tasklist /FI ""IMAGENAME eq {exeName}"" 2>NUL | find /I ""{exeName}"" >NUL
 if not errorlevel 1 goto wait
+
+echo Backing up user configuration...
+if not exist ""{backupDir}"" mkdir ""{backupDir}""
+{backupLines}
 
 echo Extracting update...
 powershell -NoProfile -Command ""Expand-Archive -Path '{zipPath}' -DestinationPath '{appDir}' -Force""
@@ -232,9 +258,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo Restoring user configuration...
+{restoreLines}
+
 echo Update applied successfully.
 echo Cleaning up...
 del ""{zipPath}"" 2>nul
+rmdir /s /q ""{backupDir}"" 2>nul
 
 echo Restarting application...
 start """" ""{Path.Combine(appDir, exeName)}""

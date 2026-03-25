@@ -1,7 +1,7 @@
 /* بسم الله الرحمن الرحيم  */
 /* In the name of God, the Merciful, the Compassionate */
 IF OBJECT_ID('dbo.sp_triage®') IS NULL
-  EXEC ('CREATE PROCEDURE dbo.sp_triage® AS RETURN 0;');
+  EXEC ('CREATE PROCEDURE dbo.[sp_triage®] AS RETURN 0;');
 GO
 
 ALTER PROCEDURE [dbo].[sp_triage®]  --@Debug = 0]
@@ -6441,7 +6441,7 @@ END
 				, mid.inequality_columns
 				, mid.included_columns
 				, ''SELECT STUFF(( SELECT '''', '''' + [Columns] 
-			FROM ( SELECT TOP 25 c1.[id], [Columns], [Count] 
+			FROM ( SELECT TOP 100 PERCENT c1.[id], [Columns], [Count] 
 			FROM (
 			SELECT ROW_NUMBER() OVER(ORDER BY [RankMe]) [id], LTRIM([Columns]) [Columns] 
 			FROM (VALUES('''''' + REPLACE(ISNULL(mid.equality_columns + ISNULL('',''+ mid.inequality_columns,''''),ISNULL(mid.inequality_columns,'''')) ,'','','''''',1),('''''') 
@@ -6449,8 +6449,8 @@ END
 			+ '' LEFT OUTER JOIN (
 			SELECT ROW_NUMBER() OVER(ORDER BY [Count]) [id] ,LTRIM([Count]) [Count] 
 			FROM (VALUES((SELECT COUNT (DISTINCT '' + REPLACE(ISNULL(mid.equality_columns + ISNULL('',''+ mid.inequality_columns,''''),ISNULL(mid.inequality_columns,'''')) ,'',''
-			,'') FROM '' + [statement] +'')),((SELECT COUNT (DISTINCT '') 
-			+'') FROM '' + [statement] +'')))t ([Count]) )c2 ON c2.id = c1.id 
+			,'') FROM '' + [statement] +'' WITH(NOLOCK)),((SELECT COUNT (DISTINCT '') 
+			+'') FROM '' + [statement] +'' WITH(NOLOCK))))t ([Count]) )c2 ON c2.id = c1.id 
 			ORDER BY c2.[Count] * 1 DESC
 			) t1 FOR XML PATH('''''''')),1,1,'''''''') AS NameValues'' [BeingClever]
 			FROM [sys].dm_db_missing_index_group_stats AS migs 

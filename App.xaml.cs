@@ -121,6 +121,14 @@ namespace SqlHealthAssessment
             services.AddSingleton<AuditLogService>();
             services.AddSingleton<Data.Services.NotificationChannelService>();
             services.AddSingleton<AlertingService>();
+            services.AddSingleton<Data.Services.AlertDefinitionService>();
+            services.AddSingleton<Data.Services.AlertHistoryService>();
+            services.AddSingleton<Data.Services.AlertEvaluationService>();
+
+            // Scheduled Tasks
+            services.AddSingleton<Data.Services.ScheduledTaskDefinitionService>();
+            services.AddSingleton<Data.Services.ScheduledTaskHistoryService>();
+            services.AddSingleton<Data.Services.ScheduledTaskEngine>();
             services.AddSingleton<HealthCheckService>();
             services.AddSingleton<CheckExecutionService>();
             services.AddSingleton<liveQueriesTableService>();
@@ -186,6 +194,12 @@ namespace SqlHealthAssessment
 
             // Start liveQueries maintenance timer (VACUUM + optimize, default every 4 hours)
             Services.GetService<liveQueriesMaintenanceService>()?.Start();
+
+            // Start alert evaluation engine
+            Services.GetService<Data.Services.AlertEvaluationService>()?.Start();
+
+            // Start scheduled task engine
+            Services.GetService<Data.Services.ScheduledTaskEngine>()?.Start();
 
             // Log application start for audit trail
             var auditLog = Services.GetService<AuditLogService>();
@@ -268,7 +282,29 @@ namespace SqlHealthAssessment
         private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             Log.Error(e.Exception, "Unhandled dispatcher exception occurred");
+
+            // If WebView2 is missing, the BlazorWebView throws asynchronously through the
+            // dispatcher as TargetInvocationException → WebView2RuntimeNotFoundException.
+            // Catch it here and trigger server mode fallback on the main window.
+            if (IsWebView2Exception(e.Exception))
+            {
+                Log.Warning("WebView2 runtime exception caught — triggering server mode fallback");
+                var mainWindow = MainWindow as MainWindow;
+                mainWindow?.FallbackToServerMode();
+            }
+
             e.Handled = true; // Prevent application crash
+        }
+
+        private static bool IsWebView2Exception(Exception? ex)
+        {
+            while (ex != null)
+            {
+                if (ex.GetType().Name.Contains("WebView2Runtime", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                ex = ex.InnerException;
+            }
+            return false;
         }
 
         private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)

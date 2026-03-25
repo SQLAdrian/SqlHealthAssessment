@@ -57,8 +57,9 @@ namespace SqlHealthAssessment.Data.Services
             try
             {
                 _config = ConfigFileHelper.Load<NotificationChannelConfig>(_configFilePath);
-                _logger.LogInformation("Loaded notification channel config: SMTP={SmtpEnabled}, Teams={TeamsEnabled}",
-                    _config.Smtp.Enabled, _config.TeamsWebhook.Enabled);
+                _logger.LogInformation("Loaded notification channel config: SMTP={SmtpEnabled}, Teams={TeamsEnabled}, Slack={SlackEnabled}, Webhook={WebhookEnabled}, PagerDuty={PagerDutyEnabled}, ServiceNow={ServiceNowEnabled}",
+                    _config.Smtp.Enabled, _config.TeamsWebhook.Enabled, _config.Slack.Enabled,
+                    _config.Webhook.Enabled, _config.PagerDuty.Enabled, _config.ServiceNow.Enabled);
             }
             catch (Exception ex)
             {
@@ -77,6 +78,22 @@ namespace SqlHealthAssessment.Data.Services
 
                 if (!string.IsNullOrEmpty(_config.TeamsWebhook.WebhookUrl) && !CredentialProtector.IsEncrypted(_config.TeamsWebhook.WebhookUrl))
                     _config.TeamsWebhook.WebhookUrl = CredentialProtector.Encrypt(_config.TeamsWebhook.WebhookUrl);
+
+                if (!string.IsNullOrEmpty(_config.Slack.WebhookUrl) && !CredentialProtector.IsEncrypted(_config.Slack.WebhookUrl))
+                    _config.Slack.WebhookUrl = CredentialProtector.Encrypt(_config.Slack.WebhookUrl);
+
+                if (!string.IsNullOrEmpty(_config.Webhook.Url) && !CredentialProtector.IsEncrypted(_config.Webhook.Url))
+                    _config.Webhook.Url = CredentialProtector.Encrypt(_config.Webhook.Url);
+                if (!string.IsNullOrEmpty(_config.Webhook.AuthToken) && !CredentialProtector.IsEncrypted(_config.Webhook.AuthToken))
+                    _config.Webhook.AuthToken = CredentialProtector.Encrypt(_config.Webhook.AuthToken);
+
+                if (!string.IsNullOrEmpty(_config.PagerDuty.RoutingKey) && !CredentialProtector.IsEncrypted(_config.PagerDuty.RoutingKey))
+                    _config.PagerDuty.RoutingKey = CredentialProtector.Encrypt(_config.PagerDuty.RoutingKey);
+
+                if (!string.IsNullOrEmpty(_config.ServiceNow.Username) && !CredentialProtector.IsEncrypted(_config.ServiceNow.Username))
+                    _config.ServiceNow.Username = CredentialProtector.Encrypt(_config.ServiceNow.Username);
+                if (!string.IsNullOrEmpty(_config.ServiceNow.Password) && !CredentialProtector.IsEncrypted(_config.ServiceNow.Password))
+                    _config.ServiceNow.Password = CredentialProtector.Encrypt(_config.ServiceNow.Password);
 
                 ConfigFileHelper.Save(_configFilePath, _config, _jsonOptions);
                 _logger.LogInformation("Saved notification channel config");
@@ -105,6 +122,26 @@ namespace SqlHealthAssessment.Data.Services
             if (_config.TeamsWebhook.Enabled && MeetsSeverity(notification.Severity, _config.TeamsWebhook.MinimumSeverity))
             {
                 tasks.Add(SendTeamsAsync(notification));
+            }
+
+            if (_config.Slack.Enabled && MeetsSeverity(notification.Severity, _config.Slack.MinimumSeverity))
+            {
+                tasks.Add(SendSlackAsync(notification));
+            }
+
+            if (_config.Webhook.Enabled && MeetsSeverity(notification.Severity, _config.Webhook.MinimumSeverity))
+            {
+                tasks.Add(SendWebhookAsync(notification));
+            }
+
+            if (_config.PagerDuty.Enabled && MeetsSeverity(notification.Severity, _config.PagerDuty.MinimumSeverity))
+            {
+                tasks.Add(SendPagerDutyAsync(notification));
+            }
+
+            if (_config.ServiceNow.Enabled && MeetsSeverity(notification.Severity, _config.ServiceNow.MinimumSeverity))
+            {
+                tasks.Add(SendServiceNowAsync(notification));
             }
 
             if (tasks.Count > 0)
@@ -258,6 +295,37 @@ namespace SqlHealthAssessment.Data.Services
                 };
 
                 // Adaptive Card payload for Teams Incoming Webhook
+                // Using Dictionary for content to support the "$schema" key (C# identifiers can't start with $)
+                var cardContent = new Dictionary<string, object>
+                {
+                    ["type"] = "AdaptiveCard",
+                    ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+                    ["version"] = "1.4",
+                    ["body"] = new object[]
+                    {
+                        new
+                        {
+                            type = "TextBlock",
+                            size = "Medium",
+                            weight = "Bolder",
+                            text = $"\u26a0\ufe0f [{notification.Severity.ToUpper()}] {notification.AlertName}",
+                            color = notification.Severity == "critical" ? "Attention" : (notification.Severity == "warning" ? "Warning" : "Default")
+                        },
+                        new
+                        {
+                            type = "FactSet",
+                            facts = BuildTeamsFacts(notification)
+                        },
+                        new
+                        {
+                            type = "TextBlock",
+                            text = notification.Message,
+                            wrap = true,
+                            spacing = "Medium"
+                        }
+                    }
+                };
+
                 var payload = new
                 {
                     type = "message",
@@ -267,35 +335,7 @@ namespace SqlHealthAssessment.Data.Services
                         {
                             contentType = "application/vnd.microsoft.card.adaptive",
                             contentUrl = (string?)null,
-                            content = new
-                            {
-                                type = "AdaptiveCard",
-                                body = new object[]
-                                {
-                                    new
-                                    {
-                                        type = "TextBlock",
-                                        size = "Medium",
-                                        weight = "Bolder",
-                                        text = $"\u26a0\ufe0f [{notification.Severity.ToUpper()}] {notification.AlertName}",
-                                        color = notification.Severity == "critical" ? "Attention" : (notification.Severity == "warning" ? "Warning" : "Default")
-                                    },
-                                    new
-                                    {
-                                        type = "FactSet",
-                                        facts = BuildTeamsFacts(notification)
-                                    },
-                                    new
-                                    {
-                                        type = "TextBlock",
-                                        text = notification.Message,
-                                        wrap = true,
-                                        spacing = "Medium"
-                                    }
-                                },
-                                schema = "http://adaptivecards.io/schemas/adaptive-card.json",
-                                version = "1.4"
-                            }
+                            content = cardContent
                         }
                     }
                 };
@@ -367,6 +407,390 @@ namespace SqlHealthAssessment.Data.Services
             catch (Exception ex)
             {
                 return (false, $"Teams webhook test failed: {ex.Message}");
+            }
+        }
+
+        // ──────────────── Slack ────────────────
+
+        private async Task SendSlackAsync(AlertNotification notification)
+        {
+            try
+            {
+                var webhookUrl = DecryptIfNeeded(_config.Slack.WebhookUrl);
+                if (string.IsNullOrEmpty(webhookUrl))
+                {
+                    _logger.LogWarning("Slack webhook URL not configured — skipping");
+                    return;
+                }
+
+                var severityEmoji = notification.Severity switch
+                {
+                    "critical" => ":rotating_light:",
+                    "warning" => ":warning:",
+                    _ => ":information_source:"
+                };
+
+                var color = notification.Severity switch
+                {
+                    "critical" => "#dc3545",
+                    "warning" => "#ffc107",
+                    _ => "#17a2b8"
+                };
+
+                var instanceField = string.IsNullOrEmpty(notification.InstanceName)
+                    ? ""
+                    : $"*Instance:* {notification.InstanceName}\n";
+
+                var payload = new Dictionary<string, object>
+                {
+                    ["username"] = string.IsNullOrEmpty(_config.Slack.Username) ? "SQL Health Assessment" : _config.Slack.Username,
+                    ["icon_emoji"] = ":database:",
+                    ["attachments"] = new[]
+                    {
+                        new Dictionary<string, object>
+                        {
+                            ["color"] = color,
+                            ["title"] = $"{severityEmoji} [{notification.Severity.ToUpper()}] {notification.AlertName}",
+                            ["text"] = notification.Message,
+                            ["fields"] = new[]
+                            {
+                                new { title = "Metric", value = notification.Metric, @short = true },
+                                new { title = "Value", value = notification.CurrentValue.ToString("N2"), @short = true },
+                                new { title = "Threshold", value = notification.ThresholdValue.ToString("N2"), @short = true },
+                                new { title = "Machine", value = Environment.MachineName, @short = true }
+                            },
+                            ["footer"] = $"SQL Health Assessment • {notification.TriggeredAt:yyyy-MM-dd HH:mm:ss} UTC",
+                            ["ts"] = new DateTimeOffset(notification.TriggeredAt, TimeSpan.Zero).ToUnixTimeSeconds()
+                        }
+                    }
+                };
+
+                if (!string.IsNullOrEmpty(_config.Slack.Channel))
+                    payload["channel"] = _config.Slack.Channel;
+
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(webhookUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                    _logger.LogInformation("Slack alert sent: {AlertName}", notification.AlertName);
+                else
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Slack webhook returned {StatusCode}: {Body}", (int)response.StatusCode, body);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send Slack alert: {AlertName}", notification.AlertName);
+            }
+        }
+
+        public async Task<(bool Success, string Message)> TestSlackAsync()
+        {
+            var webhookUrl = DecryptIfNeeded(_config.Slack.WebhookUrl);
+            if (string.IsNullOrEmpty(webhookUrl))
+                return (false, "Slack webhook URL is not configured.");
+
+            try
+            {
+                var test = new AlertNotification
+                {
+                    AlertName = "Slack Webhook Test",
+                    Metric = "test",
+                    Severity = "info",
+                    Message = "This is a test notification from SQL Health Assessment. If you see this message, Slack is configured correctly.",
+                    InstanceName = Environment.MachineName
+                };
+                await SendSlackAsync(test);
+                return (true, "Test message sent to Slack channel.");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Slack test failed: {ex.Message}");
+            }
+        }
+
+        // ──────────────── Generic Webhook ────────────────
+
+        private async Task SendWebhookAsync(AlertNotification notification)
+        {
+            try
+            {
+                var url = DecryptIfNeeded(_config.Webhook.Url);
+                if (string.IsNullOrEmpty(url))
+                {
+                    _logger.LogWarning("Webhook URL not configured — skipping");
+                    return;
+                }
+
+                var payload = new
+                {
+                    alertName = notification.AlertName,
+                    metric = notification.Metric,
+                    severity = notification.Severity,
+                    currentValue = notification.CurrentValue,
+                    thresholdValue = notification.ThresholdValue,
+                    message = notification.Message,
+                    instanceName = notification.InstanceName,
+                    machineName = Environment.MachineName,
+                    triggeredAtUtc = notification.TriggeredAt.ToString("o")
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+
+                var authToken = DecryptIfNeeded(_config.Webhook.AuthToken);
+                if (!string.IsNullOrEmpty(authToken))
+                    request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {authToken}");
+
+                // Parse custom headers (key=value per line)
+                if (!string.IsNullOrEmpty(_config.Webhook.CustomHeaders))
+                {
+                    foreach (var line in _config.Webhook.CustomHeaders.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var eqIdx = line.IndexOf('=');
+                        if (eqIdx > 0)
+                            request.Headers.TryAddWithoutValidation(line[..eqIdx].Trim(), line[(eqIdx + 1)..].Trim());
+                    }
+                }
+
+                var response = await _httpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                    _logger.LogInformation("Webhook alert sent: {AlertName} to {Url}", notification.AlertName, url);
+                else
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Webhook returned {StatusCode}: {Body}", (int)response.StatusCode, body);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send webhook alert: {AlertName}", notification.AlertName);
+            }
+        }
+
+        public async Task<(bool Success, string Message)> TestWebhookAsync()
+        {
+            var url = DecryptIfNeeded(_config.Webhook.Url);
+            if (string.IsNullOrEmpty(url))
+                return (false, "Webhook URL is not configured.");
+
+            try
+            {
+                var test = new AlertNotification
+                {
+                    AlertName = "Webhook Test",
+                    Metric = "test",
+                    Severity = "info",
+                    Message = "Test notification from SQL Health Assessment.",
+                    InstanceName = Environment.MachineName
+                };
+                await SendWebhookAsync(test);
+                return (true, $"Test payload sent to {url}");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Webhook test failed: {ex.Message}");
+            }
+        }
+
+        // ──────────────── PagerDuty ────────────────
+
+        private async Task SendPagerDutyAsync(AlertNotification notification)
+        {
+            try
+            {
+                var routingKey = DecryptIfNeeded(_config.PagerDuty.RoutingKey);
+                if (string.IsNullOrEmpty(routingKey))
+                {
+                    _logger.LogWarning("PagerDuty routing key not configured — skipping");
+                    return;
+                }
+
+                var pdSeverity = notification.Severity switch
+                {
+                    "critical" => "critical",
+                    "warning" => "warning",
+                    "info" => "info",
+                    _ => "error"
+                };
+
+                // PagerDuty Events API v2
+                var payload = new
+                {
+                    routing_key = routingKey,
+                    event_action = "trigger",
+                    dedup_key = $"sqlhealth-{notification.AlertName}-{notification.InstanceName}",
+                    payload = new
+                    {
+                        summary = $"[{notification.Severity.ToUpper()}] {notification.AlertName}: {notification.Metric} = {notification.CurrentValue:N2} (threshold: {notification.ThresholdValue:N2})",
+                        source = Environment.MachineName,
+                        severity = pdSeverity,
+                        component = notification.InstanceName ?? Environment.MachineName,
+                        group = "sql-health-assessment",
+                        custom_details = new
+                        {
+                            metric = notification.Metric,
+                            current_value = notification.CurrentValue,
+                            threshold_value = notification.ThresholdValue,
+                            message = notification.Message,
+                            triggered_at_utc = notification.TriggeredAt.ToString("o")
+                        }
+                    }
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync("https://events.pagerduty.com/v2/enqueue", content);
+
+                if (response.IsSuccessStatusCode)
+                    _logger.LogInformation("PagerDuty alert sent: {AlertName}", notification.AlertName);
+                else
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("PagerDuty returned {StatusCode}: {Body}", (int)response.StatusCode, body);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send PagerDuty alert: {AlertName}", notification.AlertName);
+            }
+        }
+
+        public async Task<(bool Success, string Message)> TestPagerDutyAsync()
+        {
+            var routingKey = DecryptIfNeeded(_config.PagerDuty.RoutingKey);
+            if (string.IsNullOrEmpty(routingKey))
+                return (false, "PagerDuty routing key is not configured.");
+
+            try
+            {
+                var test = new AlertNotification
+                {
+                    AlertName = "PagerDuty Integration Test",
+                    Metric = "test",
+                    Severity = "info",
+                    Message = "Test notification from SQL Health Assessment. No action required.",
+                    InstanceName = Environment.MachineName
+                };
+                await SendPagerDutyAsync(test);
+                return (true, "Test event sent to PagerDuty.");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"PagerDuty test failed: {ex.Message}");
+            }
+        }
+
+        // ──────────────── ServiceNow ────────────────
+
+        private async Task SendServiceNowAsync(AlertNotification notification)
+        {
+            try
+            {
+                var cfg = _config.ServiceNow;
+                var instanceUrl = cfg.InstanceUrl.TrimEnd('/');
+                var username = DecryptIfNeeded(cfg.Username);
+                var password = DecryptIfNeeded(cfg.Password);
+
+                if (string.IsNullOrEmpty(instanceUrl) || string.IsNullOrEmpty(username))
+                {
+                    _logger.LogWarning("ServiceNow not fully configured — skipping");
+                    return;
+                }
+
+                var snowSeverity = notification.Severity switch
+                {
+                    "critical" => "1",  // Critical
+                    "warning" => "2",   // High
+                    _ => "3"            // Medium
+                };
+
+                var table = string.IsNullOrEmpty(cfg.Table) ? "incident" : cfg.Table;
+                var url = $"{instanceUrl}/api/now/table/{table}";
+
+                var incidentData = new Dictionary<string, string>
+                {
+                    ["short_description"] = $"[{notification.Severity.ToUpper()}] {notification.AlertName}: {notification.Metric} = {notification.CurrentValue:N2}",
+                    ["description"] = $"{notification.Message}\n\nMetric: {notification.Metric}\nCurrent Value: {notification.CurrentValue:N2}\nThreshold: {notification.ThresholdValue:N2}\nInstance: {notification.InstanceName}\nMachine: {Environment.MachineName}\nTime (UTC): {notification.TriggeredAt:yyyy-MM-dd HH:mm:ss}",
+                    ["urgency"] = snowSeverity,
+                    ["impact"] = snowSeverity,
+                    ["category"] = "Database",
+                    ["subcategory"] = "SQL Server"
+                };
+
+                if (!string.IsNullOrEmpty(cfg.AssignmentGroup))
+                    incidentData["assignment_group"] = cfg.AssignmentGroup;
+                if (!string.IsNullOrEmpty(cfg.CallerId))
+                    incidentData["caller_id"] = cfg.CallerId;
+
+                var json = JsonSerializer.Serialize(incidentData);
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+
+                var authBytes = Encoding.ASCII.GetBytes($"{username}:{password}");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(authBytes));
+                request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+                var response = await _httpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogInformation("ServiceNow incident created: {AlertName}. Response: {Response}",
+                        notification.AlertName, responseBody.Length > 200 ? responseBody[..200] : responseBody);
+                }
+                else
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("ServiceNow returned {StatusCode}: {Body}", (int)response.StatusCode, body);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create ServiceNow incident: {AlertName}", notification.AlertName);
+            }
+        }
+
+        public async Task<(bool Success, string Message)> TestServiceNowAsync()
+        {
+            var cfg = _config.ServiceNow;
+            if (string.IsNullOrEmpty(cfg.InstanceUrl))
+                return (false, "ServiceNow instance URL is not configured.");
+            if (string.IsNullOrEmpty(DecryptIfNeeded(cfg.Username)))
+                return (false, "ServiceNow username is not configured.");
+
+            try
+            {
+                // Test connectivity by querying the table API (GET, no incident created)
+                var instanceUrl = cfg.InstanceUrl.TrimEnd('/');
+                var username = DecryptIfNeeded(cfg.Username);
+                var password = DecryptIfNeeded(cfg.Password);
+                var table = string.IsNullOrEmpty(cfg.Table) ? "incident" : cfg.Table;
+                var url = $"{instanceUrl}/api/now/table/{table}?sysparm_limit=1";
+
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                var authBytes = Encoding.ASCII.GetBytes($"{username}:{password}");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(authBytes));
+                request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+                var response = await _httpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                    return (true, $"Connected to ServiceNow ({instanceUrl}). Table '{table}' is accessible.");
+                else
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    return (false, $"ServiceNow returned {(int)response.StatusCode}: {(body.Length > 200 ? body[..200] : body)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, $"ServiceNow test failed: {ex.Message}");
             }
         }
 

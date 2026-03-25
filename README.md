@@ -35,6 +35,9 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 ### Real-Time Monitoring
 - **Live Dashboards** — configurable panels for sessions, wait events, query stats, and memory pressure
 - **Multi-Server Support** — switch between servers or view aggregated data across all instances
+- **Always On AG Dashboard** — replica sync status, redo/send queue trends, listener configuration, failover readiness
+- **Replication Monitor** — publications, subscriptions, undistributed commands, distribution agent history
+- **SQL Agent Job Monitor** — running/failed/succeeded job counts, failure detail, schedules, long-running job tracking
 - **Auto-Refresh** — configurable polling interval with idle-mode throttling
 - **Session Viewer** — active sessions with blocking chain analysis and kill capability
 
@@ -45,6 +48,12 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 - **Interactive Execution Plan Viewer (V2)** — graphical plan with hover detail pane (object path, cost breakdown, predicate, copy button); root operator always shows 100%; pane fades after 1.5 s with hover-cancel
 - **Long Query Detection** — surface queries exceeding configurable duration thresholds
 - **Wait Statistics** — categorised wait event history and trends, including locking-waits %
+
+### Alerting & Notifications
+- **Timer-based evaluation** — 30-second alert cycle with configurable severity thresholds and cooldowns
+- **6 notification channels** — Email (SMTP), Microsoft Teams, Slack, generic Webhooks, PagerDuty, ServiceNow
+- **Alert history** — SQLite-backed alert log with acknowledgement and auto-resolution
+- **Scheduled tasks** — automated task engine with CSV export, Azure Blob upload, and email delivery
 
 ### Performance & Reliability
 - **SQLite WAL-mode cache** — panels serve cached data when SQL Server is temporarily unreachable
@@ -71,12 +80,17 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 - **Rate limiting** — configurable max queries per minute with optional UI warnings
 - **Windows Service mode** — headless deployment with Kestrel HTTPS support
 
+### Server Management
+- **Server tagging** — assign tags (e.g. `finance`, `critical`, `east-us`) and environment labels (Production, Staging, Dev, QA, DR)
+- **Filter by tag or environment** — click-to-filter across the server inventory
+- **Connection pool** — configurable pool (default 50 connections) with idle cleanup and overflow handling
+- **Blazor Server circuit monitoring** — tracks active circuits with lifecycle logging for long-running server-mode deployments
+
 ### Developer Experience
 - **JSON-based dashboard editor** — add, reorder, drag-and-drop panels without code changes
 - **10 UI themes** — dark and light options, switchable at runtime
 - **Keyboard shortcuts** — full keyboard navigation (`Ctrl+1–9`, `?` to show help)
 - **Serilog structured logging** — 30-day rolling logs with configurable verbosity
-- **Configurable alerting** — rules, notification channels, and severity thresholds
 
 ---
 
@@ -159,6 +173,9 @@ Or deploy `Dacpacs\SQLWATCH.dacpac` via SSMS (right-click Databases → Deploy D
 | Live Query Stats | Plan cache hit ratio, top CPU / IO / duration queries | — |
 | Live Jobs | Running jobs, failures (24 h), all-jobs status | — |
 | Live TempDB | TempDB usage, version store, long transactions | — |
+| Replication | Publications, subscriptions, undistributed commands, agent history | — |
+| Always On AG | AG health, replica sync, redo/send queue trends, listeners | — |
+| Job Monitor | Agent jobs overview, failure detail, schedules, long-running jobs | — |
 | Vulnerability Assessment | SQL Server security assessment results | — |
 | Checks | Automated health check results | — |
 | Quick Check | Instant health snapshot | `Ctrl+Q` |
@@ -206,8 +223,9 @@ See the [Deployment Guide](DEPLOYMENT_GUIDE.md) for the full configuration refer
 │  │  QueryExecutor · CachingQueryExecutor                   │  │
 │  │  DashboardConfigService · AutoRefreshService            │  │
 │  │  DiagnosticScriptRunner · SqlAssessmentService          │  │
-│  │  AlertingService · HealthCheckService                   │  │
+│  │  AlertingService · NotificationChannelService            │  │
 │  │  AzureBlobExportService · ServerModeService             │  │
+│  │  ScheduledTaskEngine · AppCircuitHandler                │  │
 │  │  CredentialProtector (AES-256-GCM + DPAPI)              │  │
 │  └───────┬──────────────┬──────────────┬─────────────────┘   │
 │          │              │              │                      │

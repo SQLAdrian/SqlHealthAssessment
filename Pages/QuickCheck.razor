@@ -12,6 +12,7 @@
 @inject SqlHealthAssessment.Data.Services.PrintService PrintSvc
 @inject SqlHealthAssessment.Data.Services.ReportPageConfigService ReportPageCfg
 @inject SqlHealthAssessment.Data.ToastService Toast
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
 <PdfExportModal @ref="_pdfModal"
@@ -584,6 +585,65 @@
         UserSettings.SetShowDiagnosticPane(ShowDiagnosticPane);
     }
 
+    private async Task AutoExportQuickCheckResults()
+    {
+        var settings = UserSettings.GetSettings();
+        if (!settings.AutoExportQuickCheckCsv && !settings.AutoExportQuickCheckPdf) return;
+        if (State.Results.Count == 0) return;
+
+        var outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output");
+        Directory.CreateDirectory(outputDir);
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+        if (settings.AutoExportQuickCheckCsv)
+        {
+            try
+            {
+                var csv = new System.Text.StringBuilder();
+                csv.AppendLine("Instance,CheckId,CheckName,Category,Severity,Passed,ActualValue,ExpectedValue,Message,DurationMs,ExecutedAt");
+                foreach (var r in State.Results)
+                {
+                    var msg = (r.Message ?? "").Replace("\"", "\"\"");
+                    csv.AppendLine($"\"{r.InstanceName}\",\"{r.CheckId}\",\"{r.CheckName}\",\"{r.Category}\",\"{r.Severity}\",{r.Passed},{r.ActualValue},{r.ExpectedValue},\"{msg}\",{r.DurationMs},\"{r.ExecutedAt:o}\"");
+                }
+                var fileName = $"QuickCheck_{timestamp}.csv";
+                await File.WriteAllTextAsync(Path.Combine(outputDir, fileName), csv.ToString());
+                Toast.ShowInfo($"Quick Check CSV exported: {fileName}");
+            }
+            catch (Exception ex)
+            {
+                Toast.ShowError($"CSV export failed: {ex.Message}");
+            }
+        }
+
+        if (settings.AutoExportQuickCheckPdf)
+        {
+            try
+            {
+                await Task.Delay(500); // let UI render final state
+                if (!PrintSvc.IsAvailable)
+                {
+                    await PrintSvc.PrintViaBrowserAsync(JSRuntime);
+                    Toast.ShowInfo("Browser print dialog opened for PDF export.");
+                }
+                else
+                {
+                    var fileName = $"QuickCheck_{timestamp}.pdf";
+                    var (success, path, error) = await PrintSvc.PrintToPdfAsync(
+                        fileName,
+                        printBackgrounds: false,
+                        orientation: Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait);
+                    if (success)
+                        Toast.ShowInfo($"Quick Check PDF exported: {fileName}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Toast.ShowError($"PDF export failed: {ex.Message}");
+            }
+        }
+    }
+
     private void PrintResults()
     {
         var stem = $"QuickCheck_{DateTime.Now:yyyyMMdd_HHmmss}";
@@ -595,6 +655,14 @@
         await Task.Delay(350);
         try
         {
+            if (!PrintSvc.IsAvailable)
+            {
+                // Server mode — use browser's native print dialog
+                await PrintSvc.PrintViaBrowserAsync(JSRuntime);
+                Toast.ShowInfo("Browser print dialog opened — use 'Save as PDF' to export.");
+                return;
+            }
+
             var orientation = settings.LandscapeOrientation
                 ? Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Landscape
                 : Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait;
@@ -745,6 +813,8 @@
             }
 
             State.AddDiagEntry($"=== Complete: {State.Results.Count} total results in {State.ExecutionDuration} ===", "info");
+
+            await AutoExportQuickCheckResults();
         }
         catch (Exception ex)
         {

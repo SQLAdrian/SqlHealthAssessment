@@ -1395,7 +1395,8 @@ body {
     border-top: 1px solid var(--border);
 }
 
-.close-btn {
+.close-btn,
+.modal-close {
     background: none;
     border: none;
     font-size: 24px;
@@ -1405,7 +1406,8 @@ body {
     line-height: 1;
 }
 
-.close-btn:hover {
+.close-btn:hover,
+.modal-close:hover {
     color: var(--text-primary);
 }
 
@@ -2439,6 +2441,82 @@ tr.clickable:hover .datagrid-plan-badge {
     gap: 12px;
     margin-bottom: 20px;
 }
+
+.servers-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: var(--surface-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.servers-filter-bar .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.servers-filter-bar .filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 4px;
+}
+
+.filter-chip {
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.filter-chip:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.filter-chip.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.tag-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: var(--surface-tertiary, rgba(255,255,255,0.08));
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    border: 1px solid var(--border);
+}
+
+.env-badge {
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.env-badge.env-production { color: var(--red, #e74c3c); }
+.env-badge.env-staging { color: var(--orange, #e67e22); }
+.env-badge.env-development { color: var(--green, #2ecc71); }
+.env-badge.env-qa { color: var(--blue, #3498db); }
+.env-badge.env-dr { color: var(--purple, #9b59b6); }
 
 .servers-grid {
     display: grid;
@@ -4696,6 +4774,46 @@ tr.clickable:hover .datagrid-plan-badge {
     line-height: 1.4;
     font-style: italic;
 }
+
+/* ── DataGrid Action Buttons ── */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: background 0.15s, opacity 0.15s;
+}
+.action-btn i { font-size: 11px; }
+.action-btn:hover { opacity: 0.85; }
+.action-btn-execute {
+    background: var(--accent, #2196f3);
+    color: #fff !important;
+}
+.action-btn-execute i { color: #fff !important; }
+.action-btn-cancel {
+    background: var(--danger, #f44336);
+    color: #fff !important;
+    margin-left: 6px;
+}
+.action-btn-cancel i { color: #fff !important; }
+.action-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.action-status i { font-size: 12px; }
+.action-status-executing { color: var(--accent, #2196f3); }
+.action-status-success   { color: var(--success, #4caf50); }
+.action-status-failed    { color: var(--danger, #f44336); }
+.action-status-cancelled { color: var(--text-muted, #888); }
 
 /* Panel Type Grouping */
 .panel-group-header {

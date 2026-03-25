@@ -49,30 +49,35 @@ namespace SqlHealthAssessment.Data
                     };
                 }
 
-                // Get version from the WebView2 runtime executable
+                // Get version from the environment (most reliable) or folder scan
                 string? version = null;
                 try
                 {
-                    var webview2Path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "EdgeWebView", "Application");
-                    if (Directory.Exists(webview2Path))
+                    version = env.BrowserVersionString;
+                }
+                catch { }
+
+                if (string.IsNullOrEmpty(version))
+                {
+                    try
                     {
-                        var folders = Directory.GetDirectories(webview2Path);
-                        if (folders.Length > 0)
+                        var webview2Path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "EdgeWebView", "Application");
+                        if (Directory.Exists(webview2Path))
                         {
-                            version = Path.GetFileName(folders[0]);
+                            var folders = Directory.GetDirectories(webview2Path);
+                            if (folders.Length > 0)
+                                version = Path.GetFileName(folders[0]);
                         }
                     }
+                    catch { }
                 }
-                catch
-                {
-                    // Ignore and continue without version
-                }
-                
+
                 _logger?.LogInformation("WebView2 runtime found. Version: {Version}", version ?? "unknown");
 
-                // Check if version meets minimum requirements
-                var isCompatible = IsVersionCompatible(version, MinVersion);
-                
+                // If CreateAsync() succeeded, WebView2 is functional.
+                // Only fail compatibility if we have a concrete version that's too old.
+                var isCompatible = string.IsNullOrEmpty(version) || IsVersionCompatible(version, MinVersion);
+
                 return new WebView2Status
                 {
                     IsInstalled = true,

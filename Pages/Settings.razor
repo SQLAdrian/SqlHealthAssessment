@@ -12,7 +12,6 @@
 @inject IDbConnectionFactory ConnectionFactory
 @inject SqlServerConnectionFactory SqlServerConnectionFactory
 @inject IConfiguration Configuration
-@inject AlertingService Alerting
 @inject IJSRuntime JS
 @inject UserSettingsService UserSettings
 @inject DashboardConfigService DashboardConfig
@@ -20,6 +19,7 @@
 @inject ConfigurationValidator ConfigValidator
 @inject AutoUpdateService UpdateService
 @inject AzureBlobExportService BlobExport
+@inject SqlHealthAssessment.Data.ToastService Toast
 
 <div class="settings-page" style="max-width: 1000px;">
     <h2 style="margin-bottom: 20px;">Settings</h2>
@@ -266,6 +266,18 @@
     <div class="settings-group">
         <h3>Azure Blob Export</h3>
 
+        <div style="margin-bottom: 12px; padding: 10px 14px; background: var(--bg-hover); border-radius: 6px; border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <strong style="font-size: 13px;">Quick Setup</strong>
+                <p style="margin: 2px 0 0; font-size: 11px; color: var(--text-secondary);">
+                    Pre-fill with SQLDBA.ORG community storage settings.
+                </p>
+            </div>
+            <button class="settings-btn" style="background: var(--accent); white-space: nowrap;" @onclick="() => _showSqldbaConsent = true">
+                <i class="fa-solid fa-cloud-arrow-up" style="margin-right: 4px;"></i> Use SQLDBA.ORG Settings
+            </button>
+        </div>
+
         <div class="settings-field">
             <label>Authentication Method</label>
             <select @bind="_azureAuthMode" style="width: 280px;">
@@ -344,11 +356,14 @@
             </label>
         </div>
 
-        <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
             <button class="settings-btn" @onclick="SaveAzureConfig">Save Azure Config</button>
             <button class="settings-btn" @onclick="TestAzureConnection" disabled="@_testingAzure">@(_testingAzure ? "Testing..." : "Test Connection")</button>
             <button class="settings-btn" style="background: var(--bg-hover);" @onclick="ShowAzureDiagnostics">
                 <i class="fa-solid fa-stethoscope" style="margin-right: 4px;"></i> Diagnostics
+            </button>
+            <button class="settings-btn" style="background: var(--accent);" @onclick="ScanOutputForUpload" disabled="@_uploadingOutput">
+                <i class="fa-solid fa-cloud-arrow-up" style="margin-right: 4px;"></i> @(_uploadingOutput ? "Uploading..." : "Upload Output to Azure")
             </button>
         </div>
         @if (!string.IsNullOrEmpty(_azureResult))
@@ -357,106 +372,107 @@
         }
     </div>
 
-    <!-- Alerting Section -->
+    <!-- Auto-Export Settings -->
     <div class="settings-group">
-        <div class="section-header">
-            <h3>Alerting</h3>
-            <button class="btn btn-sm" @onclick="ShowAddAlertDialog">+ Add Alert</button>
-        </div>
-        
-        @if (AlertNotifications.Count > 0)
-        {
-            <div class="alert-notifications">
-                <h4>Recent Alerts</h4>
-                @foreach (var notification in AlertNotifications.Take(5))
-                {
-                    <div class="alert-notification @notification.Severity">
-                        <span class="alert-badge">@notification.Severity.ToUpper()</span>
-                        <span>@notification.Message</span>
-                        <small>@notification.TriggeredAt.ToString("g")</small>
-                    </div>
-                }
-                <button class="btn btn-sm" style="margin-top: 8px;" @onclick="ClearAlerts">Clear Alerts</button>
-            </div>
-        }
-
-        <div class="alert-thresholds">
-            <h4>Alert Thresholds</h4>
-            @foreach (var threshold in AlertThresholds)
-            {
-                <div class="alert-threshold @(threshold.Enabled ? "enabled" : "disabled")">
-                    <div class="threshold-info">
-                        <strong>@threshold.Name</strong>
-                        <span class="threshold-condition">
-                            @threshold.Metric @threshold.Condition.Replace("_", " ") @threshold.ThresholdValue
-                        </span>
-                        <span class="severity-badge @threshold.Severity">@threshold.Severity</span>
-                    </div>
-                    <div class="threshold-actions">
-                        <button class="btn btn-sm" @onclick="() => ToggleThreshold(threshold)">
-                            @(threshold.Enabled ? "Disable" : "Enable")
-                        </button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteThreshold(threshold.Id)">Delete</button>
-                    </div>
-                </div>
-            }
-        </div>
-
-        @if (ShowAlertDialog)
-        {
-            <div class="modal-overlay">
-                <div class="modal">
-                    <h3>Add Alert Threshold</h3>
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" @bind="NewAlert.Name" placeholder="High CPU Alert" />
-                    </div>
-                    <div class="form-group">
-                        <label>Metric</label>
-                        <select @bind="NewAlert.Metric">
-                            <option value="cpu">CPU Usage (%)</option>
-                            <option value="memory">Memory Usage (%)</option>
-                            <option value="connections">Connections</option>
-                            <option value="deadlocks">Deadlocks</option>
-                            <option value="batch_requests">Batch Requests/sec</option>
-                            <option value="page_life_expectancy">Page Life Expectancy</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Condition</label>
-                        <select @bind="NewAlert.Condition">
-                            <option value="greater_than">Greater than</option>
-                            <option value="less_than">Less than</option>
-                            <option value="equals">Equals</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Threshold Value</label>
-                        <input type="number" @bind="NewAlert.ThresholdValue" />
-                    </div>
-                    <div class="form-group">
-                        <label>Severity</label>
-                        <select @bind="NewAlert.Severity">
-                            <option value="info">Info</option>
-                            <option value="warning">Warning</option>
-                            <option value="critical">Critical</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" @bind="NewAlert.Description" />
-                    </div>
-                    <div class="modal-actions">
-                        <button class="btn" @onclick="() => ShowAlertDialog = false">Cancel</button>
-                        <button class="btn btn-primary" @onclick="SaveNewAlert">Save</button>
-                    </div>
-                </div>
-            </div>
-        }
+        <h3>Auto-Export Reports</h3>
+        <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Automatically save reports to the <code>./output/</code> folder when checks complete.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <th style="text-align: left; padding: 6px 8px;">Report</th>
+                    <th style="text-align: center; padding: 6px 8px; width: 70px;">CSV</th>
+                    <th style="text-align: center; padding: 6px 8px; width: 70px;">JSON</th>
+                    <th style="text-align: center; padding: 6px 8px; width: 70px;">PDF</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 6px 8px;">Full Audit</td>
+                    <td style="text-align: center; padding: 6px 8px;">
+                        <input type="checkbox" @bind="_autoExportAuditCsv" @bind:after="SaveAutoExportSettings" />
+                    </td>
+                    <td style="text-align: center; padding: 6px 8px;">
+                        <input type="checkbox" @bind="_autoExportAuditJson" @bind:after="SaveAutoExportSettings" />
+                    </td>
+                    <td style="text-align: center; padding: 6px 8px;">
+                        <input type="checkbox" @bind="_autoExportAuditPdf" @bind:after="SaveAutoExportSettings" />
+                    </td>
+                </tr>
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 6px 8px;">Quick Check</td>
+                    <td style="text-align: center; padding: 6px 8px;">
+                        <input type="checkbox" @bind="_autoExportQuickCheckCsv" @bind:after="SaveAutoExportSettings" />
+                    </td>
+                    <td style="text-align: center; padding: 6px 8px; color: var(--text-muted);">—</td>
+                    <td style="text-align: center; padding: 6px 8px;">
+                        <input type="checkbox" @bind="_autoExportQuickCheckPdf" @bind:after="SaveAutoExportSettings" />
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px;">Vulnerability Assessment</td>
+                    <td style="text-align: center; padding: 6px 8px;">
+                        <input type="checkbox" @bind="_autoExportVaCsv" @bind:after="SaveAutoExportSettings" />
+                    </td>
+                    <td style="text-align: center; padding: 6px 8px; color: var(--text-muted);">—</td>
+                    <td style="text-align: center; padding: 6px 8px;">
+                        <input type="checkbox" @bind="_autoExportVaPdf" @bind:after="SaveAutoExportSettings" />
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
 
+
 </div>
+
+@* ── SQLDBA.ORG Consent Modal ── *@
+@if (_showSqldbaConsent)
+{
+    <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center;"
+         @onclick="() => _showSqldbaConsent = false">
+        <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 24px; min-width: 480px; max-width: 600px;"
+             @onclick:stopPropagation="true">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size: 20px; color: var(--accent);"></i>
+                <h3 style="margin: 0; font-size: 15px;">Use SQLDBA.ORG Community Storage</h3>
+            </div>
+
+            <p style="font-size: 13px; color: var(--text-primary); margin-bottom: 12px;">
+                This will configure Azure Blob Export to upload assessment data to the
+                <strong>SQLDBA.ORG</strong> community storage account.
+            </p>
+
+            <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 14px; font-size: 12px;">
+                <p style="margin: 0 0 8px; font-weight: 600; color: var(--text-primary);">
+                    <i class="fa-solid fa-circle-info" style="margin-right: 4px; color: var(--accent);"></i>
+                    Data shared with SQLDBA.ORG:
+                </p>
+                <ul style="margin: 0; padding-left: 18px; color: var(--text-secondary); line-height: 1.8;">
+                    <li>Diagnostic data related to your SQL Server instances</li>
+                    <li>Server names, database names, and schema details</li>
+                    <li>Operational details related to your SQL instance(s)</li>
+                    <li>Health assessment, vulnerability assessment, and audit results</li>
+                </ul>
+            </div>
+
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                <i class="fa-solid fa-shield-halved" style="margin-right: 4px;"></i>
+                Details about data processing and data security are available at
+                <a href="https://sqldba.org" target="_blank" style="color: var(--accent); text-decoration: underline;">sqldba.org</a>.
+            </p>
+
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="settings-btn" @onclick="() => _showSqldbaConsent = false">Cancel</button>
+                <button class="settings-btn" style="background: var(--accent);" @onclick="ApplySqldbaDefaults">
+                    <i class="fa-solid fa-check" style="margin-right: 4px;"></i> Accept &amp; Apply
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 @* ── Azure Blob Diagnostics Modal ── *@
 @if (_showAzureDiag)
@@ -492,6 +508,33 @@
                 <i class="fa-solid fa-shield-halved" style="margin-right: 4px;"></i>
                 Account keys and full signatures are never shown. SAS signatures are truncated.
             </p>
+        </div>
+    </div>
+}
+
+@* Upload Output Confirmation Modal *@
+@if (_showUploadConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal" style="max-width: 600px;">
+            <h3><i class="fa-solid fa-cloud-arrow-up" style="margin-right: 6px;"></i> Upload Output to Azure</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                Found <strong style="color: var(--accent);">@_outputFiles.Count</strong> file(s) in the output folder:
+            </p>
+            <div style="max-height: 300px; overflow-y: auto; background: var(--bg-secondary); border-radius: 6px; padding: 8px; margin-bottom: 16px;">
+                @foreach (var file in _outputFiles)
+                {
+                    <div style="padding: 4px 8px; font-family: Consolas; font-size: 12px; color: var(--text-primary); border-bottom: 1px solid var(--border);">
+                        <i class="fa-solid fa-file-csv" style="margin-right: 6px; color: var(--green);"></i>
+                        @System.IO.Path.GetFileName(file)
+                        <span style="float: right; color: var(--text-muted);">@(new System.IO.FileInfo(file).Length / 1024) KB</span>
+                    </div>
+                }
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button class="settings-btn" style="background: var(--bg-hover);" @onclick="() => _showUploadConfirm = false">Cancel</button>
+                <button class="settings-btn" style="background: var(--accent);" @onclick="ConfirmUploadOutput">Upload All</button>
+            </div>
         </div>
     </div>
 }
@@ -544,7 +587,19 @@
     private bool _azureSuccess;
     private bool _showAzureDiag;
     private Dictionary<string, string>? _azureDiagData;
+    private bool _uploadingOutput;
+    private bool _showUploadConfirm;
+    private bool _showSqldbaConsent;
+    private List<string> _outputFiles = new();
 
+    // Auto-Export
+    private bool _autoExportAuditCsv;
+    private bool _autoExportAuditJson;
+    private bool _autoExportAuditPdf;
+    private bool _autoExportQuickCheckCsv;
+    private bool _autoExportQuickCheckPdf;
+    private bool _autoExportVaCsv;
+    private bool _autoExportVaPdf;
 
     protected override void OnInitialized()
     {
@@ -555,8 +610,6 @@
 
         // Mask the password in the connection string for display
         SqlServerConnectionString = MaskConnectionStringPassword(connStr);
-        LoadAlerts();
-
         // Load user settings
         ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
         DefaultDashboardId = UserSettings.GetDefaultDashboardId();
@@ -577,6 +630,15 @@
         _hasExistingAzureConnStr = BlobExport.AuthMode == "connectionstring" && BlobExport.IsConfigured;
         _hasExistingAzureSas = BlobExport.AuthMode == "sastoken" && BlobExport.IsConfigured;
 
+        // Load auto-export settings
+        var s = UserSettings.GetSettings();
+        _autoExportAuditCsv = s.AutoExportAuditCsv;
+        _autoExportAuditJson = s.AutoExportAuditJson;
+        _autoExportAuditPdf = s.AutoExportAuditPdf;
+        _autoExportQuickCheckCsv = s.AutoExportQuickCheckCsv;
+        _autoExportQuickCheckPdf = s.AutoExportQuickCheckPdf;
+        _autoExportVaCsv = s.AutoExportVulnerabilityAssessmentCsv;
+        _autoExportVaPdf = s.AutoExportVulnerabilityAssessmentPdf;
     }
 
     private void OnZoomLevelChanged(ChangeEventArgs e)
@@ -774,52 +836,14 @@
         await Task.CompletedTask;
     }
 
-    // Alerting methods
-    private List<AlertThreshold> AlertThresholds = new();
-    private List<AlertNotification> AlertNotifications = new();
-    private bool ShowAlertDialog = false;
-    private AlertThreshold NewAlert = new();
-
-    private void LoadAlerts()
+    private void SaveAutoExportSettings()
     {
-        AlertThresholds = Alerting.GetThresholds();
-        AlertNotifications = Alerting.GetNotifications();
+        UserSettings.UpdateAutoExportSettings(
+            _autoExportAuditCsv, _autoExportAuditJson, _autoExportAuditPdf,
+            _autoExportQuickCheckCsv, _autoExportQuickCheckPdf,
+            _autoExportVaCsv, _autoExportVaPdf);
     }
 
-    private void ShowAddAlertDialog()
-    {
-        NewAlert = new AlertThreshold();
-        ShowAlertDialog = true;
-    }
-
-    private void SaveNewAlert()
-    {
-        if (string.IsNullOrWhiteSpace(NewAlert.Name))
-            return;
-        
-        Alerting.AddThreshold(NewAlert);
-        LoadAlerts();
-        ShowAlertDialog = false;
-    }
-
-    private void ToggleThreshold(AlertThreshold threshold)
-    {
-        threshold.Enabled = !threshold.Enabled;
-        Alerting.UpdateThreshold(threshold);
-        LoadAlerts();
-    }
-
-    private void DeleteThreshold(string id)
-    {
-        Alerting.RemoveThreshold(id);
-        LoadAlerts();
-    }
-
-    private void ClearAlerts()
-    {
-        Alerting.ClearNotifications();
-        LoadAlerts();
-    }
 
     private void ValidateConfig()
     {
@@ -1011,6 +1035,22 @@
         StateHasChanged();
     }
 
+    private void ApplySqldbaDefaults()
+    {
+        _showSqldbaConsent = false;
+        _azureAuthMode = "sastoken";
+        _azureAccountName = "sqldbaorgstorage";
+        _azureSasToken = "sp=acw&st=2023-04-05T21:18:07Z&se=2033-06-04T05:18:07Z&spr=https&sv=2021-12-02&sr=d&sig=zCRXJULTwR6aTB5%2FBvt0T7dX98avVCafRtLOJzCT0y0%3D&sdd=1";
+        _azureContainer = "raw";
+        _azurePrefix = "ready";
+        _azureUploadMethod = "sdk";
+        _azureCompress = true;
+        _azureAutoUpload = true;
+
+        SaveAzureConfig();
+        StateHasChanged();
+    }
+
     private void ShowAzureDiagnostics()
     {
         SaveAzureConfig(); // ensure latest config is applied
@@ -1042,6 +1082,93 @@
         finally
         {
             _testingAzure = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ScanOutputForUpload()
+    {
+        var outputDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output");
+        if (!System.IO.Directory.Exists(outputDir))
+        {
+            _azureResult = "No output folder found. Run an audit or assessment first to generate output files.";
+            _azureSuccess = false;
+            return;
+        }
+
+        _outputFiles = System.IO.Directory.GetFiles(outputDir, "*.*")
+            .OrderByDescending(f => new System.IO.FileInfo(f).LastWriteTime)
+            .ToList();
+
+        if (_outputFiles.Count == 0)
+        {
+            _azureResult = "Output folder is empty. Run an audit or assessment first.";
+            _azureSuccess = false;
+            return;
+        }
+
+        _showUploadConfirm = true;
+    }
+
+    private async Task ConfirmUploadOutput()
+    {
+        _showUploadConfirm = false;
+        _uploadingOutput = true;
+        _azureResult = null;
+        StateHasChanged();
+
+        try
+        {
+            if (BlobExport == null || !BlobExport.IsConfigured)
+            {
+                _azureResult = "Azure Blob Storage is not configured. Save your Azure config first.";
+                _azureSuccess = false;
+                return;
+            }
+
+            int uploaded = 0, failed = 0;
+            var errors = new List<string>();
+
+            foreach (var filePath in _outputFiles)
+            {
+                try
+                {
+                    var fileName = System.IO.Path.GetFileName(filePath);
+                    var content = await System.IO.File.ReadAllTextAsync(filePath);
+                    var lineCount = content.Split('\n').Length;
+
+                    var result = await BlobExport.ExportRawCsvAsync(content, fileName, lineCount);
+                    if (result.Success)
+                    {
+                        uploaded++;
+                        Toast?.ShowSuccess($"Uploaded: {fileName}");
+                    }
+                    else
+                    {
+                        failed++;
+                        errors.Add($"{fileName}: {result.Message}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    errors.Add($"{System.IO.Path.GetFileName(filePath)}: {ex.Message}");
+                }
+            }
+
+            _azureSuccess = failed == 0;
+            _azureResult = $"Upload complete: {uploaded} succeeded, {failed} failed.";
+            if (errors.Count > 0)
+                _azureResult += $"\nErrors: {string.Join("; ", errors)}";
+        }
+        catch (Exception ex)
+        {
+            _azureResult = $"Upload failed: {ex.Message}";
+            _azureSuccess = false;
+        }
+        finally
+        {
+            _uploadingOutput = false;
             StateHasChanged();
         }
     }

@@ -11,6 +11,7 @@
 @inject ServerConnectionManager ConnectionManager
 @inject PrintService PrintSvc
 @inject ToastService Toast
+@inject IJSRuntime JSRuntime
 
 <PdfExportModal @ref="_pdfModal"
     Title="Export Dashboard to PDF"
@@ -250,6 +251,13 @@
         StateHasChanged();
         try
         {
+            if (!PrintSvc.IsAvailable)
+            {
+                await PrintSvc.PrintViaBrowserAsync(JSRuntime);
+                Toast.ShowInfo("Browser print dialog opened — use 'Save as PDF' to export.");
+                return;
+            }
+
             var orientation = settings.LandscapeOrientation
                 ? Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Landscape
                 : Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait;

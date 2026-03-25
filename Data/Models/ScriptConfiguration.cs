@@ -28,7 +28,7 @@ namespace SqlHealthAssessment.Data.Models
         public bool Enabled { get; set; }
 
         [JsonPropertyName("TimeoutSeconds")]
-        public int TimeoutSeconds { get; set; } = 300;
+        public int TimeoutSeconds { get; set; } = 900;
 
         [JsonPropertyName("Category")]
         public string Category { get; set; } = "Diagnostic";

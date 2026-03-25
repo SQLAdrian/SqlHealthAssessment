@@ -32,12 +32,6 @@ namespace SqlHealthAssessment.Data
         public event Action<string, bool, string>? OnBlobUploadResult;
 
         /// <summary>
-        /// Maximum number of rows to read from any single script result set.
-        /// Prevents unbounded memory consumption from runaway queries.
-        /// </summary>
-        public int MaxResultRows { get; set; } = 10_000;
-
-        /// <summary>
         /// Maximum number of scripts to execute concurrently when running all enabled scripts.
         /// </summary>
         public int MaxConcurrency { get; set; } = 3;
@@ -286,15 +280,6 @@ namespace SqlHealthAssessment.Data
 
                     while (await reader.ReadAsync(cancellationToken))
                     {
-                        // Enforce MaxRows limit to prevent unbounded memory usage
-                        if (result.RowsAffected >= MaxResultRows)
-                        {
-                            _logger.LogWarning(
-                                "Script {Name} on {Server} hit MaxResultRows limit ({MaxRows}). Truncating results.",
-                                config.Name, targetServer, MaxResultRows);
-                            break;
-                        }
-
                         var row = new Dictionary<string, object>();
                         for (int i = 0; i < reader.FieldCount; i++)
                         {

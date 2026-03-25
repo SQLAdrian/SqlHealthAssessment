@@ -6,6 +6,8 @@
 @using System.IO
 @using System.Text
 @using Microsoft.Extensions.Logging
+@using System.Diagnostics
+@using System.Text.Json
 @inject DiagnosticScriptRunner ScriptRunner
 @inject ServerConnectionManager ConnectionManager
 @inject FullAuditStateService AuditState
@@ -13,7 +15,7 @@
 @inject ILogger<FullAudit> Logger
 @inject SqlHealthAssessment.Data.ToastService Toast
 @inject SqlHealthAssessment.Data.Services.ReportPageConfigService ReportPageCfg
-@using System.Diagnostics;
+@inject UserSettingsService UserSettings
 @implements IDisposable
 <PageTitle>Full Audit - SQLHealthAssessment</PageTitle>
 
@@ -160,8 +162,8 @@
                                 @(_isRunning ? "Running..." : "Run against all servers")
                             </button>
                         }
-                        <button class="btn btn-primary" @onclick="RunAllEnabledScripts" disabled="@_isRunning">
-                            @(_isRunning ? "Running..." : "Run All Enabled Scripts")
+                        <button class="btn btn-primary" @onclick="RunSelectedScripts" disabled="@(_isRunning || _selectedScriptIds.Count == 0)">
+                            @(_isRunning ? "Running..." : "Run Selected (" + _selectedScriptIds.Count + ")")
                         </button>
                         <!--<button class="btn btn-secondary" @onclick="ExportAllToCsv" disabled="@(_executionResults.Count == 0)">
                             Export All to CSV
@@ -190,14 +192,28 @@
                     </div>
                 }
 
+                <div class="script-select-bar" style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                        <input type="checkbox" checked="@(_selectedScriptIds.Count == _scripts.Count)"
+                               @onchange="ToggleSelectAll" />
+                        Select All
+                    </label>
+                    <span class="text-muted" style="font-size:0.85em;">@_selectedScriptIds.Count of @_scripts.Count selected</span>
+                </div>
                 <div class="script-list">
                     @foreach (var script in _scripts)
                     {
-                        <div class="script-card @(script.Enabled ? "enabled" : "disabled")">
+                        var sid = script.Id;
+                        <div class="script-card @(_selectedScriptIds.Contains(sid) ? "enabled" : "disabled")">
                             <div class="script-header">
-                                <div class="script-info">
-                                    <h3>@script.Name</h3>
-                                    <p>@script.Description</p>
+                                <div class="script-info" style="display:flex; align-items:flex-start; gap:8px;">
+                                    <input type="checkbox" checked="@(_selectedScriptIds.Contains(sid))"
+                                           @onchange="() => ToggleScriptSelection(sid)"
+                                           style="margin-top:4px; cursor:pointer;" />
+                                    <div>
+                                        <h3>@script.Name</h3>
+                                        <p>@script.Description</p>
+                                    </div>
                                 </div>
                                 <div class="script-actions">
                                     <button class="btn btn-sm" @onclick="() => RunScript(script)" disabled="@_isRunning">
@@ -332,6 +348,7 @@
 @code {
     private List<ServerConnection> _connections = new();
     private List<ScriptConfiguration> _scripts = new();
+    private HashSet<string> _selectedScriptIds = new();
     private ServerConnection? SelectedConnection { get; set; }
     private string? SelectedServer { get; set; }
     private bool _isLoading = true;
@@ -558,6 +575,7 @@
         try
         {
             _scripts = ScriptRunner.LoadScriptConfigurations();
+            _selectedScriptIds = new HashSet<string>(_scripts.Where(s => s.Enabled).Select(s => s.Id));
         }
         catch (Exception ex)
         {
@@ -689,22 +707,50 @@
         _isTesting = false;
     }
 
-    private async Task RunAllEnabledScripts()
+    private void ToggleScriptSelection(string scriptId)
+    {
+        if (!_selectedScriptIds.Remove(scriptId))
+            _selectedScriptIds.Add(scriptId);
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (_selectedScriptIds.Count == _scripts.Count)
+            _selectedScriptIds.Clear();
+        else
+            _selectedScriptIds = new HashSet<string>(_scripts.Select(s => s.Id));
+    }
+
+    private List<ScriptConfiguration> GetSelectedScripts() =>
+        _scripts.Where(s => _selectedScriptIds.Contains(s.Id)).OrderBy(s => s.ExecutionOrder).ToList();
+
+    private async Task RunSelectedScripts()
     {
         if (SelectedServer == null || SelectedConnection == null) return;
+        var selected = GetSelectedScripts();
+        if (selected.Count == 0) return;
 
-        var enabledScripts = _scripts.Where(s => s.Enabled).Count();
-        AuditState.StartExecution(1, enabledScripts, false);
+        AuditState.StartExecution(1, selected.Count, false);
         AuditState.UpdateProgress(1, SelectedServer, 0, "Running...");
         AuditState.ClearExecutionResults();
         StateHasChanged();
 
         try
         {
-            var results = await ScriptRunner.ExecuteAllEnabledScriptsAsync(SelectedConnection, SelectedServer);
-            AuditState.UpdateProgress(1, SelectedServer, enabledScripts, "Complete");
-            AuditState.ClearAndAddResults(results);
-            Toast.ShowSuccess($"Full Audit complete: {SelectedServer} — {results.Count} script(s) run");
+            var results = new List<ScriptExecutionResult>();
+            int idx = 0;
+            foreach (var script in selected)
+            {
+                idx++;
+                AuditState.UpdateProgress(1, SelectedServer, idx, script.Name);
+                StateHasChanged();
+                var result = await ScriptRunner.ExecuteScriptAsync(script, SelectedConnection, SelectedServer);
+                results.Add(result);
+                AuditState.AddExecutionResult(result);
+            }
+            AuditState.UpdateProgress(1, SelectedServer, selected.Count, "Complete");
+            Toast.ShowSuccess("Full Audit complete: " + SelectedServer + " — " + results.Count + " script(s) run");
+            await AutoExportAuditResults(results, SelectedServer);
         }
         finally
         {
@@ -716,16 +762,17 @@
     {
         var allServers = AllSuccessfulServers;
         if (allServers.Count == 0) return;
+        var selected = GetSelectedScripts();
+        if (selected.Count == 0) return;
 
-        var enabledScripts = _scripts.Where(s => s.Enabled).Count();
-        AuditState.StartExecution(allServers.Count, enabledScripts, true);
+        AuditState.StartExecution(allServers.Count, selected.Count, true);
         AuditState.ClearExecutionResults();
 
         try
         {
             var groupedByConnection = allServers.GroupBy(s => s.Connection.Id);
             int serverIndex = 0;
-            
+
             foreach (var group in groupedByConnection)
             {
                 var connection = group.First().Connection;
@@ -733,20 +780,21 @@
                 {
                     serverIndex++;
                     AuditState.UpdateProgress(serverIndex, server, 0, "");
-                    
-                    var results = await ScriptRunner.ExecuteAllEnabledScriptsAsync(conn, server);
-                    
+
+                    var results = new List<ScriptExecutionResult>();
                     int scriptIndex = 0;
-                    foreach (var result in results)
+                    foreach (var script in selected)
                     {
                         scriptIndex++;
-                        AuditState.UpdateProgress(serverIndex, server, scriptIndex, result.ScriptName);
+                        AuditState.UpdateProgress(serverIndex, server, scriptIndex, script.Name);
                         StateHasChanged();
-
-                        result.ScriptName = $"[{server}] {result.ScriptName}";
+                        var result = await ScriptRunner.ExecuteScriptAsync(script, conn, server);
+                        result.ScriptName = "[" + server + "] " + result.ScriptName;
+                        results.Add(result);
                         AuditState.AddExecutionResult(result);
                     }
-                    Toast.ShowInfo($"Full Audit: {server} complete ({results.Count} scripts, {serverIndex}/{allServers.Count})");
+                    Toast.ShowInfo("Full Audit: " + server + " complete (" + results.Count + " scripts, " + serverIndex + "/" + allServers.Count + ")");
+                    await AutoExportAuditResults(results, server);
                 }
             }
         }
@@ -778,6 +826,66 @@
     private ScriptExecutionResult? GetResultForScript(string scriptName)
     {
         return _executionResults.FirstOrDefault(r => r.ScriptName == scriptName);
+    }
+
+    private async Task AutoExportAuditResults(List<ScriptExecutionResult> results, string serverName)
+    {
+        try
+        {
+            var settings = UserSettings.GetSettings();
+            if (!settings.AutoExportAuditCsv && !settings.AutoExportAuditJson) return;
+
+            var outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output");
+            Directory.CreateDirectory(outputDir);
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var safeServer = serverName.Replace(@"\", "_").Replace("/", "_").Replace(":", "_");
+
+            if (settings.AutoExportAuditCsv)
+            {
+                var csv = new StringBuilder();
+                csv.AppendLine("Server,Script,Success,RowsAffected,ExecutionTime,ErrorMessage");
+                foreach (var r in results)
+                {
+                    var error = (r.ErrorMessage ?? "").Replace("\"", "\"\"");
+                    var execSec = r.ExecutionTime.TotalSeconds.ToString("F1");
+                    csv.AppendLine("\"" + safeServer + "\",\"" + r.ScriptName + "\"," + r.Success + "," + r.RowsAffected + "," + execSec + ",\"" + error + "\"");
+
+                    if (r.Success && r.Results != null && r.Results.Count > 0)
+                    {
+                        var scriptCsv = new StringBuilder();
+                        var headers = r.Results[0].Keys.ToList();
+                        scriptCsv.AppendLine(string.Join(",", headers.Select(h => "\"" + h + "\"")));
+                        foreach (var row in r.Results)
+                        {
+                            var vals = headers.Select(h =>
+                            {
+                                var v = row.TryGetValue(h, out var val) ? val?.ToString() ?? "" : "";
+                                return "\"" + v.Replace("\"", "\"\"") + "\"";
+                            });
+                            scriptCsv.AppendLine(string.Join(",", vals));
+                        }
+                        var scriptFileName = "FullAudit_" + safeServer + "_" + r.ScriptName.Replace(" ", "_") + "_" + timestamp + ".csv";
+                        await File.WriteAllTextAsync(Path.Combine(outputDir, scriptFileName), scriptCsv.ToString());
+                    }
+                }
+                var summaryFile = "FullAudit_" + safeServer + "_Summary_" + timestamp + ".csv";
+                await File.WriteAllTextAsync(Path.Combine(outputDir, summaryFile), csv.ToString());
+                Toast.ShowInfo("Audit CSV exported: " + safeServer);
+            }
+
+            if (settings.AutoExportAuditJson)
+            {
+                var jsonFile = "FullAudit_" + safeServer + "_" + timestamp + ".json";
+                var jsonOpts = new JsonSerializerOptions { WriteIndented = true };
+                var json = JsonSerializer.Serialize(results, jsonOpts);
+                await File.WriteAllTextAsync(Path.Combine(outputDir, jsonFile), json);
+                Toast.ShowInfo("Audit JSON exported: " + safeServer);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Auto-export failed for server: " + serverName);
+        }
     }
 
     private async void DownloadFile(string content, string fileName)

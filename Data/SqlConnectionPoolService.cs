@@ -30,7 +30,7 @@ namespace SqlHealthAssessment.Data
         public SqlConnectionPoolService(IConfiguration configuration, ILogger<SqlConnectionPoolService> logger)
         {
             _logger = logger;
-            _maxPoolSize = configuration.GetValue<int>("ConnectionPool:MaxSize", 20);
+            _maxPoolSize = configuration.GetValue<int>("ConnectionPool:MaxSize", 50);
             _minPoolSize = configuration.GetValue<int>("ConnectionPool:MinSize", 2);
             _connectionTimeout = TimeSpan.FromSeconds(configuration.GetValue<int>("ConnectionPool:TimeoutSeconds", 30));
             _idleTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("ConnectionPool:IdleTimeoutMinutes", 5));

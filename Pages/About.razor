@@ -100,7 +100,8 @@
         <p>
             <strong>SQL Health Assessment</strong> is a free, open-source SQL Server monitoring and health assessment tool
             for Windows DBAs. Built on the battle-tested SQLWATCH framework, it provides real-time monitoring, comprehensive
-            health checks, interactive query execution plans, wait statistics, and performance dashboards for multiple instances.
+            health checks, interactive query execution plans, wait statistics, Always On AG monitoring, replication health,
+            SQL Agent job tracking, multi-channel alerting, and performance dashboards for multiple instances.
         </p>
         <p>
             The application is designed to be a UI interface from various SQL Server health check scripts, with a focus on performance, security, and usability.
@@ -193,6 +194,28 @@
                     <li>Top usage queries by CPU / duration / reads</li>
                     <li>Long-running query detection</li>
                     <li>Blocking chain analysis</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3><i class="fa-solid fa-bell"></i> Alerting &amp; Notifications</h3>
+                <ul>
+                    <li>Timer-based alert evaluation (30 s cycle)</li>
+                    <li>6 notification channels: Email (SMTP), Teams, Slack, Webhooks, PagerDuty, ServiceNow</li>
+                    <li>Configurable severity thresholds and cooldowns</li>
+                    <li>Alert history with SQLite persistence</li>
+                    <li>Scheduled task engine (60 s cycle) with CSV/Blob output</li>
+                    <li>All credentials AES-256-GCM encrypted</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3><i class="fa-solid fa-tags"></i> Server Management</h3>
+                <ul>
+                    <li>Multi-server connection management</li>
+                    <li>Server tagging and environment labels (Prod/Staging/Dev/QA/DR)</li>
+                    <li>Filter servers by tag or environment</li>
+                    <li>Windows, SQL Server, and Entra MFA authentication</li>
+                    <li>Automatic connection testing on startup</li>
+                    <li>RBAC: Admin / Operator / Viewer roles with OAuth</li>
                 </ul>
             </div>
             <div class="feature-card">
@@ -304,6 +327,9 @@
                 <tr><td>Live Query Stats</td><td>Plan cache hit ratio, top CPU / IO / duration queries</td><td>—</td></tr>
                 <tr><td>Live Jobs</td><td>Running jobs, failed jobs (24 h), job history</td><td>—</td></tr>
                 <tr><td>Live TempDB</td><td>TempDB usage, version store, long transactions</td><td>—</td></tr>
+                <tr><td>Replication</td><td>Publications, subscriptions, undistributed commands, agent history</td><td>—</td></tr>
+                <tr><td>Always On AG</td><td>AG health, replica status, redo/send queue trends, listeners</td><td>—</td></tr>
+                <tr><td>Job Monitor</td><td>Agent jobs overview, failures detail, schedules, long-running jobs</td><td>—</td></tr>
                 <tr><td>Vulnerability Assessment</td><td>SQL Server security assessment results</td><td>—</td></tr>
                 <tr><td>Checks</td><td>Automated health check results</td><td>—</td></tr>
                 <tr><td>Quick Check</td><td>Instant health snapshot</td><td>Ctrl+Q</td></tr>

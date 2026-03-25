@@ -4,7 +4,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
-    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;Config\**;publish\**;release\**;lib\**</DefaultItemExcludes>
+    <UseWindowsForms>true</UseWindowsForms>
+    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;publish\**;release\**;lib\**</DefaultItemExcludes>
     <NoWarn>$(NoWarn);CS0169;CS0414;BL0007</NoWarn>
     <RootNamespace>SqlHealthAssessment</RootNamespace>
     <AssemblyName>SqlHealthAssessment</AssemblyName>
@@ -81,10 +82,13 @@
     <None Remove="PerformanceMonitor-main\**" />
   </ItemGroup>
 
-  <!-- Include Deploy and Config folders in publish output for database scripts and configuration -->
+  <!-- Include Deploy folder in publish output for database scripts -->
   <ItemGroup>
     <Content Include="Deploy\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="Config\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Config\*.json files are auto-included by the SDK (Config is not in DefaultItemExcludes).
+         TargetPath for each is set via Content Update entries below. -->
+    <Content Remove="Config\Ignore\**" />
+    <Content Remove="Config\*.backup" />
   </ItemGroup>
 
   <ItemGroup>
@@ -118,6 +122,26 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>config/ruleset.json</TargetPath>
     </Content>
+    <Content Update="Config\sql-checks.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/sql-checks.json</TargetPath>
+    </Content>
+    <Content Update="Config\script-configurations.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/script-configurations.json</TargetPath>
+    </Content>
+    <Content Update="Config\user-settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/user-settings.json</TargetPath>
+    </Content>
+    <Content Update="Config\alert-definitions.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/alert-definitions.json</TargetPath>
+    </Content>
+    <Content Update="Config\scheduled-tasks.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>config/scheduled-tasks.json</TargetPath>
+    </Content>
     <Content Update="Config\appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>config/appsettings.json</TargetPath>
@@ -134,7 +158,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>config/version.json</TargetPath>
     </Content>
-    <Content Update="dashboard-config.json" Condition="Exists('dashboard-config.json')">
+    <Content Update="Config\dashboard-config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>config/dashboard-config.json</TargetPath>
     </Content>
@@ -142,7 +166,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="SQLHealthAssessment.ico" />
+    <Content Include="SQLHealthAssessment.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -203,23 +227,8 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="Config\appsettings.Development.json" />
-    <None Include="Config\appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="Config\appsettings.Production.json" />
-    <None Include="Config\script-configurations.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="Config\sql-checks.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="Config\user-settings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="Config\version.json" />
-  </ItemGroup>
+  <!-- Config files are included via Content Include="Config\*.json" above.
+       Do NOT re-declare them as None — that overrides Content and breaks publish. -->
 
   <ItemGroup>
     <Resource Include="SQLHealthAssessment.png" />
@@ -259,8 +268,8 @@
     <RemoveDir Directories="@(LanguageFolders)" ContinueOnError="true" />
   </Target>
 
-  <!-- Increment build number before build -->
-  <Target Name="IncrementBuildNumber" BeforeTargets="BeforeBuild">
+  <!-- Increment build number on Release builds only -->
+  <Target Name="IncrementBuildNumber" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release'">
     <Exec Command="powershell -ExecutionPolicy Bypass -File increment-build.ps1" />
   </Target>
 

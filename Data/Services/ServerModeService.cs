@@ -274,6 +274,12 @@ namespace SqlHealthAssessment.Data.Services
             TryAdd<AutoUpdateService>(services, wpf);
             TryAdd<UserSettingsService>(services, wpf);
             TryAdd<AlertingService>(services, wpf);
+            TryAdd<AlertDefinitionService>(services, wpf);
+            TryAdd<AlertHistoryService>(services, wpf);
+            TryAdd<AlertEvaluationService>(services, wpf);
+            TryAdd<ScheduledTaskDefinitionService>(services, wpf);
+            TryAdd<ScheduledTaskHistoryService>(services, wpf);
+            TryAdd<ScheduledTaskEngine>(services, wpf);
             TryAdd<MemoryMonitorService>(services, wpf);
             TryAdd<ConfigurationValidator>(services, wpf);
             TryAdd<LogCleanupService>(services, wpf);
@@ -323,6 +329,9 @@ namespace SqlHealthAssessment.Data.Services
 
             // Scoped services — each browser tab/circuit gets its own instance
             services.AddScoped<DashboardDataService>();
+
+            // Circuit handler — monitors Blazor Server circuit lifecycle
+            services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, AppCircuitHandler>();
         }
 
         private static void TryAdd<T>(IServiceCollection services, IServiceProvider provider) where T : class
