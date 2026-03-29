@@ -31,6 +31,10 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <!-- Disable Blazor hot-reload to suppress _wpftmp.csproj side-project generation -->
     <RazorHotReload>false</RazorHotReload>
+    <!-- Work around _wpftmp.csproj Razor source generator NullReferenceException.
+         The WPF temp project cannot run the Razor source generator; skip Razor compilation
+         for the temp project only. The main project handles Razor normally. -->
+    <EnableDefaultRazorGenerateItems Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</EnableDefaultRazorGenerateItems>
     <!-- Custom entry point: Program.Main handles both WPF and service modes -->
     <StartupObject>SqlHealthAssessment.Program</StartupObject>
   </PropertyGroup>

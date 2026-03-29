@@ -202,7 +202,7 @@ namespace SqlHealthAssessment.Data.Caching
                     cmd.ExecuteNonQuery();
                 }
 
-                // Enforce row limit: keep only newest 5000 rows
+                // Enforce row limit: keep only newest 50000 rows (supports ~2 weeks at 1-min intervals)
                 using var trimCmd = conn.CreateCommand();
                 trimCmd.Transaction = transaction;
                 trimCmd.CommandText = @"
@@ -211,7 +211,7 @@ namespace SqlHealthAssessment.Data.Caching
                     AND rowid NOT IN (
                         SELECT rowid FROM cache_timeseries
                         WHERE query_id = @qid AND instance_key = @ikey
-                        ORDER BY time_value DESC LIMIT 5000
+                        ORDER BY time_value DESC LIMIT 50000
                     )";
                 trimCmd.Parameters.AddWithValue("@qid", queryId);
                 trimCmd.Parameters.AddWithValue("@ikey", instanceKey);
@@ -630,7 +630,7 @@ namespace SqlHealthAssessment.Data.Caching
                 var currentSize = await GetCacheSizeBytes();
                 if (currentSize > maxSizeBytes)
                 {
-                    await EvictOlderThanAsync(TimeSpan.FromHours(6));
+                    await EvictOlderThanAsync(TimeSpan.FromHours(48));
                     await RunMaintenanceAsync(includeIntegrityCheck: false);
                 }
             }

@@ -163,6 +163,14 @@ namespace SqlHealthAssessment.Data.Models
         public string? ActionColumnMode { get; set; }
 
         /// <summary>
+        /// Ordered list of column names to display in the DataGrid.
+        /// When set, only these columns are shown, in this order.
+        /// When null/empty, all columns from the query are shown in query order.
+        /// </summary>
+        [JsonPropertyName("dataGridColumns")]
+        public List<string>? DataGridColumns { get; set; }
+
+        /// <summary>
         /// Column-level color gradient rules for DataGrid cells.
         /// Each rule maps a column name to a color gradient based on the cell's numeric value.
         /// </summary>

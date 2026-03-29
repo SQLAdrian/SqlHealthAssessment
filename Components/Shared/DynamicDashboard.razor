@@ -19,6 +19,7 @@
 @inject IDbConnectionFactory _connectionFactory
 @inject ILogger<DynamicDashboard> Logger
 @inject LocalLogService LocalLogger
+@inject liveQueriesCacheStore CacheStore
 @implements IDisposable
 
 
@@ -95,7 +96,9 @@
                   IsLoading="@IsLoading"
                   LoadedPanels="@_loadedPanelCount"
                   TotalPanels="@_totalPanelCount"
-                  DashboardName="@(Dashboard?.NavTitle ?? DashboardId)" />
+                  DashboardName="@(Dashboard?.NavTitle ?? DashboardId)"
+                  ShowBaseline="@_showBaseline"
+                  OnBaselineToggled="ToggleBaseline" />
 
 <EditPageToolbar EditMode="_dashEditMode"
     PageTitle="@(Dashboard?.NavTitle ?? DashboardId)"
@@ -266,6 +269,7 @@
                         <div class="panel-maximize-body">
                             <DynamicPanel Panel="@_maximizedPanelExpanded"
                                           TimeSeriesData="@(_timeSeriesResults.TryGetValue(_maximizedPanel.Id, out var mts) ? mts : null)"
+                                          BaselineData="@(_showBaseline && _baselineResults.TryGetValue(_maximizedPanel.Id, out var mbl) ? mbl : null)"
                                           GridData="@(_gridResults.TryGetValue(_maximizedPanel.Id, out var mgd) ? mgd : null)"
                                           BarGaugeData="@(_barGaugeResults.TryGetValue(_maximizedPanel.Id, out var mbg) ? mbg : null)"
                                           TimezoneOffsetHours="@TimezoneOffsetHours" />
@@ -326,6 +330,8 @@
     private ConcurrentDictionary<string, DataTable> _gridResults = new();
     private ConcurrentDictionary<string, List<CheckStatus>> _checkResults = new();
     private ConcurrentDictionary<string, string> _panelErrors = new();
+    private ConcurrentDictionary<string, List<TimeSeriesPoint>> _baselineResults = new();
+    private bool _showBaseline = false;
 
     // Cached panel lists to avoid repeated LINQ on each render
     private List<PanelDefinition>? _enabledPanelsCache;
@@ -959,6 +965,20 @@
         _gridResults = gridResults;
         _checkResults = checkResults;
 
+        // Load baseline data (7 days ago) from cache for TimeSeries panels
+        if (_showBaseline)
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await LoadBaselineDataAsync(filter); }
+                catch (Exception ex) { Logger.LogDebug(ex, "Baseline data load failed"); }
+            });
+        }
+        else
+        {
+            _baselineResults.Clear();
+        }
+
         var resultSummary = $"TS:{tsResults.Count}, Stat:{statResults.Count}, BarGauge:{bgResults.Count}, Grid:{gridResults.Count}, Check:{checkResults.Count}";
         Logger.LogInformation("[DynamicDashboard:{DashboardId}] Data load completed - {ResultSummary}", DashboardId, resultSummary);
         LocalLogger.LogInfo($"[DynamicDashboard:{DashboardId}] LoadData COMPLETE - {resultSummary}");
@@ -1044,6 +1064,7 @@
                     break;
                 case "DataGrid":
                 case "TextCard":
+                case "Deadlock":
                     Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Loading {PanelType} data", DashboardId, panel.Id, panel.PanelType);
                     Dictionary<string, object>? gridParams = null;
                     if (panel.DataGridTopRows > 0)
@@ -1148,7 +1169,11 @@
         builder.AddAttribute(5, "TimezoneOffsetHours", TimezoneOffsetHours);
 
         if (panel.PanelType == "TimeSeries" && _timeSeriesResults.TryGetValue(panel.Id, out var tsData))
+        {
             builder.AddAttribute(2, "TimeSeriesData", tsData);
+            if (_showBaseline && _baselineResults.TryGetValue(panel.Id, out var baselineData))
+                builder.AddAttribute(9, "BaselineData", baselineData);
+        }
         else if (panel.PanelType == "DataGrid" && _gridResults.TryGetValue(panel.Id, out var gridData))
         {
             builder.AddAttribute(3, "GridData", gridData);
@@ -1169,6 +1194,8 @@
         }
         else if (panel.PanelType == "TextCard" && _gridResults.TryGetValue(panel.Id, out var textData))
             builder.AddAttribute(4, "GridData", textData);
+        else if (panel.PanelType == "Deadlock" && _gridResults.TryGetValue(panel.Id, out var deadlockData))
+            builder.AddAttribute(4, "GridData", deadlockData);
         else if ((panel.PanelType == "Donut" || panel.PanelType == "HorizontalBar") && _barGaugeResults.TryGetValue(panel.Id, out var chartData))
             builder.AddAttribute(4, "BarGaugeData", chartData);
 
@@ -1378,6 +1405,69 @@
         Series = reader["Series"]?.ToString() ?? "",
         Value = reader["Value"] != DBNull.Value ? Convert.ToDouble(reader["Value"]) : 0.0
     };
+
+    // ── Baseline Comparison ──
+
+    private async Task LoadBaselineDataAsync(DashboardFilter currentFilter)
+    {
+        var baselineResults = new ConcurrentDictionary<string, List<TimeSeriesPoint>>();
+        var shift = TimeSpan.FromDays(7);
+        var instanceKey = CachingQueryExecutor.BuildInstanceKey(currentFilter);
+
+        var tsPanels = _enabledPanelsCache?.Where(p => p.PanelType == "TimeSeries") ?? Enumerable.Empty<PanelDefinition>();
+
+        foreach (var panel in tsPanels)
+        {
+            try
+            {
+                var baselineFrom = currentFilter.TimeFrom - shift;
+                var baselineTo = currentFilter.TimeTo - shift;
+                var cached = await CacheStore.GetTimeSeriesAsync(panel.Id, instanceKey, baselineFrom, baselineTo);
+
+                if (cached.Count > 0)
+                {
+                    // Shift timestamps forward by 7 days to align with current range
+                    var shifted = cached.Select(p => new TimeSeriesPoint
+                    {
+                        Time = p.Time + shift,
+                        Series = p.Series,
+                        Value = p.Value
+                    }).ToList();
+                    baselineResults[panel.Id] = shifted;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to load baseline for panel {PanelId}", panel.Id);
+            }
+        }
+
+        _baselineResults = baselineResults;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleBaseline()
+    {
+        _showBaseline = !_showBaseline;
+        if (!_showBaseline)
+        {
+            _baselineResults.Clear();
+            StateHasChanged();
+        }
+        else
+        {
+            // Trigger baseline load with current filter
+            var filter = BuildFilter();
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await LoadBaselineDataAsync(filter);
+                }
+                catch (Exception ex) { Logger.LogDebug(ex, "Baseline toggle load failed"); }
+            });
+        }
+    }
 
 }
 

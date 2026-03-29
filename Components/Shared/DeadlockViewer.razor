@@ -1,0 +1,210 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@using System.Xml.Linq
+@using System.Data
+
+<div class="deadlock-viewer">
+    @if (DeadlockEvents == null || DeadlockEvents.Rows.Count == 0)
+    {
+        <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+            <i class="fa-solid fa-check-circle" style="font-size: 24px; margin-bottom: 8px; color: var(--green);"></i>
+            <div>No deadlocks detected in the selected time range</div>
+        </div>
+    }
+    else
+    {
+        <div style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 12px; color: var(--text-muted);">
+                @DeadlockEvents.Rows.Count deadlock(s) found
+            </span>
+        </div>
+
+        @foreach (DataRow row in DeadlockEvents.Rows)
+        {
+            var eventTime = row["event_time"]?.ToString() ?? "";
+            var xml = row["deadlock_xml"]?.ToString() ?? "";
+            var parsed = ParseDeadlockXml(xml);
+            var isExpanded = _expandedIndex == DeadlockEvents.Rows.IndexOf(row);
+            var idx = DeadlockEvents.Rows.IndexOf(row);
+
+            <div class="deadlock-event" style="border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-secondary); cursor: pointer;"
+                     @onclick="() => _expandedIndex = isExpanded ? -1 : idx">
+                    <i class="fa-solid @(isExpanded ? "fa-chevron-down" : "fa-chevron-right")" style="font-size: 10px; color: var(--text-muted); width: 12px;"></i>
+                    <span class="severity-badge severity-high" style="font-size: 11px;">Deadlock</span>
+                    <span style="font-size: 12px; color: var(--text-primary);">@eventTime</span>
+                    @if (parsed.Victim != null)
+                    {
+                        <span style="font-size: 11px; color: var(--text-muted);">
+                            Victim: SPID @parsed.Victim.Spid — @TruncateText(parsed.Victim.ProcName, 40)
+                        </span>
+                    }
+                </div>
+
+                @if (isExpanded && parsed.Processes.Any())
+                {
+                    <div style="padding: 12px; font-size: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            @foreach (var proc in parsed.Processes)
+                            {
+                                var isVictim = proc.IsVictim;
+                                <div style="border: 1px solid @(isVictim ? "var(--red)" : "var(--border)"); border-radius: 4px; padding: 10px;
+                                            background: @(isVictim ? "rgba(244,67,54,0.05)" : "var(--bg-tertiary)");">
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                        <span style="font-weight: 600; color: var(--text-primary);">SPID @proc.Spid</span>
+                                        @if (isVictim)
+                                        {
+                                            <span class="severity-badge severity-high" style="font-size: 10px;">VICTIM</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="severity-badge severity-info" style="font-size: 10px;">SURVIVOR</span>
+                                        }
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; color: var(--text-secondary); font-size: 11px;">
+                                        <span style="color: var(--text-muted);">Database:</span> <span>@proc.Database</span>
+                                        <span style="color: var(--text-muted);">Login:</span> <span>@proc.LoginName</span>
+                                        <span style="color: var(--text-muted);">Host:</span> <span>@proc.HostName</span>
+                                        <span style="color: var(--text-muted);">Wait:</span> <span>@proc.WaitResource</span>
+                                        <span style="color: var(--text-muted);">Lock Mode:</span> <span>@proc.LockMode</span>
+                                        @if (!string.IsNullOrEmpty(proc.ProcName))
+                                        {
+                                            <span style="color: var(--text-muted);">Procedure:</span> <span>@proc.ProcName</span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(proc.SqlText))
+                                    {
+                                        <div style="margin-top: 8px;">
+                                            <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 2px;">SQL:</div>
+                                            <pre style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 3px;
+                                                        padding: 6px 8px; font-size: 10px; color: var(--text-primary); white-space: pre-wrap;
+                                                        word-break: break-all; max-height: 120px; overflow-y: auto; margin: 0;">@proc.SqlText</pre>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (parsed.Resources.Any())
+                        {
+                            <div style="margin-top: 8px;">
+                                <div style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
+                                    <i class="fa-solid fa-lock" style="margin-right: 4px;"></i> Lock Resources
+                                </div>
+                                <table class="results-table" style="width: 100%; font-size: 11px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="padding: 4px 8px;">Object</th>
+                                            <th style="padding: 4px 8px;">Lock Type</th>
+                                            <th style="padding: 4px 8px;">Owner SPID</th>
+                                            <th style="padding: 4px 8px;">Owner Mode</th>
+                                            <th style="padding: 4px 8px;">Waiter SPID</th>
+                                            <th style="padding: 4px 8px;">Waiter Mode</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var res in parsed.Resources)
+                                        {
+                                            <tr>
+                                                <td style="padding: 4px 8px;">@res.ObjectName</td>
+                                                <td style="padding: 4px 8px;">@res.LockType</td>
+                                                <td style="padding: 4px 8px;">@res.OwnerSpid</td>
+                                                <td style="padding: 4px 8px;">@res.OwnerMode</td>
+                                                <td style="padding: 4px 8px;">@res.WaiterSpid</td>
+                                                <td style="padding: 4px 8px;">@res.WaiterMode</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public DataTable? DeadlockEvents { get; set; }
+
+    private int _expandedIndex = -1;
+
+    private record DeadlockProcess(string Spid, string Database, string LoginName, string HostName,
+        string WaitResource, string LockMode, string ProcName, string SqlText, bool IsVictim);
+
+    private record LockResource(string ObjectName, string LockType, string OwnerSpid, string OwnerMode,
+        string WaiterSpid, string WaiterMode);
+
+    private record ParsedDeadlock(List<DeadlockProcess> Processes, List<LockResource> Resources, DeadlockProcess? Victim);
+
+    private ParsedDeadlock ParseDeadlockXml(string xml)
+    {
+        var processes = new List<DeadlockProcess>();
+        var resources = new List<LockResource>();
+
+        if (string.IsNullOrWhiteSpace(xml))
+            return new ParsedDeadlock(processes, resources, null);
+
+        try
+        {
+            var doc = XDocument.Parse(xml);
+            var deadlockNode = doc.Descendants("deadlock").FirstOrDefault()
+                ?? doc.Descendants("deadlock-list").Descendants("deadlock").FirstOrDefault();
+
+            if (deadlockNode == null)
+                return new ParsedDeadlock(processes, resources, null);
+
+            var victimId = deadlockNode.Element("victim-list")?.Element("victimProcess")?.Attribute("id")?.Value ?? "";
+
+            var processList = deadlockNode.Element("process-list")?.Elements("process") ?? Enumerable.Empty<XElement>();
+            foreach (var proc in processList)
+            {
+                var id = proc.Attribute("id")?.Value ?? "";
+                var inputBuf = proc.Element("inputbuf")?.Value?.Trim() ?? "";
+                var execStack = proc.Element("executionStack")?.Elements("frame").FirstOrDefault();
+                var procName = execStack?.Attribute("procname")?.Value ?? "";
+
+                processes.Add(new DeadlockProcess(
+                    Spid: proc.Attribute("spid")?.Value ?? proc.Attribute("id")?.Value ?? "?",
+                    Database: proc.Attribute("currentdb")?.Value ?? proc.Attribute("databasename")?.Value ?? "",
+                    LoginName: proc.Attribute("loginname")?.Value ?? "",
+                    HostName: proc.Attribute("hostname")?.Value ?? "",
+                    WaitResource: proc.Attribute("waitresource")?.Value ?? "",
+                    LockMode: proc.Attribute("lockMode")?.Value ?? "",
+                    ProcName: procName,
+                    SqlText: !string.IsNullOrEmpty(inputBuf) ? inputBuf : (execStack?.Value?.Trim() ?? ""),
+                    IsVictim: id == victimId
+                ));
+            }
+
+            var resourceList = deadlockNode.Element("resource-list")?.Elements() ?? Enumerable.Empty<XElement>();
+            foreach (var res in resourceList)
+            {
+                var ownerList = res.Elements("owner-list").Elements("owner").ToList();
+                var waiterList = res.Elements("waiter-list").Elements("waiter").ToList();
+
+                var objectName = res.Attribute("objectname")?.Value
+                    ?? res.Attribute("dbid")?.Value ?? res.Name.LocalName;
+
+                resources.Add(new LockResource(
+                    ObjectName: objectName,
+                    LockType: res.Name.LocalName,
+                    OwnerSpid: ownerList.FirstOrDefault()?.Attribute("spid")?.Value ?? "",
+                    OwnerMode: ownerList.FirstOrDefault()?.Attribute("mode")?.Value ?? "",
+                    WaiterSpid: waiterList.FirstOrDefault()?.Attribute("spid")?.Value ?? "",
+                    WaiterMode: waiterList.FirstOrDefault()?.Attribute("requestType")?.Value
+                        ?? waiterList.FirstOrDefault()?.Attribute("mode")?.Value ?? ""
+                ));
+            }
+
+            return new ParsedDeadlock(processes, resources, processes.FirstOrDefault(p => p.IsVictim));
+        }
+        catch
+        {
+            return new ParsedDeadlock(processes, resources, null);
+        }
+    }
+
+    private static string TruncateText(string text, int maxLen)
+        => string.IsNullOrEmpty(text) ? "" : text.Length <= maxLen ? text : text[..maxLen] + "...";
+}

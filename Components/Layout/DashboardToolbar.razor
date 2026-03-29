@@ -71,6 +71,10 @@
             }
             @(_pdfExporting ? " Saving..." : " PDF")
         </button>
+        <button class="toolbar-btn @(ShowBaseline ? "active" : "")" @onclick="() => OnBaselineToggled.InvokeAsync()"
+                title="Show baseline comparison (7 days ago)">
+            <i class="fa-solid fa-chart-line"></i> Baseline
+        </button>
     </div>
 
     @if (ServerConnections.Count > 1)
@@ -127,6 +131,8 @@
     [Parameter] public int LoadedPanels { get; set; }
     [Parameter] public int TotalPanels { get; set; }
     [Parameter] public string DashboardName { get; set; } = "Dashboard";
+    [Parameter] public bool ShowBaseline { get; set; }
+    [Parameter] public EventCallback OnBaselineToggled { get; set; }
 
     private PdfExportModal _pdfModal = default!;
     private string ServerDisplayName = "SqlServer";

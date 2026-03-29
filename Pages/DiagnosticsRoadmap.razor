@@ -1,0 +1,433 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/diagnostics-roadmap"
+
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@using Microsoft.Extensions.Logging
+@inject CheckRepositoryService CheckRepo
+@inject QuickCheckStateService QuickCheckState
+@inject NavigationManager Navigation
+@inject ILogger<DiagnosticsRoadmap> Logger
+
+<div class="settings-page" style="max-width: 1400px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Diagnostics Maturity Roadmap</h2>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            @if (QuickCheckState.Results.Count > 0)
+            {
+                <span style="font-size: 11px; color: var(--text-muted);">
+                    Based on @QuickCheckState.Results.Count check results
+                </span>
+            }
+            <button class="settings-btn" @onclick='() => Navigation.NavigateTo("/quickcheck")'>
+                <i class="fa-solid fa-stethoscope"></i> Run Quick Check
+            </button>
+        </div>
+    </div>
+
+    @* ── Overall Maturity Score ── *@
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 24px;">
+            <div style="text-align: center; min-width: 120px;">
+                <div style="font-size: 48px; font-weight: 700; color: @GetMaturityColor(_overallLevel);">
+                    L@(_overallLevel)
+                </div>
+                <div style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">@GetMaturityName(_overallLevel)</div>
+            </div>
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 12px; color: var(--text-secondary);">Overall Maturity Progress</span>
+                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">@(_overallScore.ToString("N0"))%</span>
+                </div>
+                <div style="height: 10px; background: var(--bg-tertiary); border-radius: 5px; overflow: hidden;">
+                    <div style="height: 100%; width: @(_overallScore)%; background: @GetMaturityColor(_overallLevel); border-radius: 5px; transition: width 0.5s ease;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        var level = i;
+                        <div style="text-align: center; font-size: 10px; color: @(level <= _overallLevel ? GetMaturityColor(level) : "var(--text-muted)");">
+                            <i class="fa-solid @(level <= _overallLevel ? "fa-circle-check" : "fa-circle")" style="font-size: 14px;"></i>
+                            <div>@GetMaturityName(level)</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Maturity Levels ── *@
+    @foreach (var level in _maturityLevels)
+    {
+        var isCurrentLevel = level.Level == _overallLevel;
+        var isCompleted = level.Level < _overallLevel;
+        var isFuture = level.Level > _overallLevel;
+
+        <div style="border: 1px solid @(isCurrentLevel ? GetMaturityColor(level.Level) : "var(--border)"); border-radius: 8px; margin-bottom: 12px; overflow: hidden;
+                    @(isCurrentLevel ? $"box-shadow: 0 0 0 1px {GetMaturityColor(level.Level)}20;" : "")">
+            @* Level Header *@
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: @(isCurrentLevel ? $"{GetMaturityColor(level.Level)}10" : "var(--bg-secondary)"); cursor: pointer;"
+                 @onclick="() => ToggleLevel(level.Level)">
+                <div style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+                            background: @(isCompleted ? GetMaturityColor(level.Level) : "var(--bg-tertiary)"); color: @(isCompleted ? "white" : GetMaturityColor(level.Level));">
+                    @if (isCompleted)
+                    {
+                        <i class="fa-solid fa-check"></i>
+                    }
+                    else
+                    {
+                        <span>L@(level.Level)</span>
+                    }
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">
+                        @level.Name
+                        @if (isCurrentLevel)
+                        {
+                            <span style="font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+                                        background: @(GetMaturityColor(level.Level))20; color: @GetMaturityColor(level.Level);">CURRENT</span>
+                        }
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted);">@level.Description</div>
+                </div>
+                <div style="text-align: right; min-width: 80px;">
+                    <div style="font-size: 14px; font-weight: 600; color: @GetMaturityColor(level.Level);">@level.PassRate.ToString("N0")%</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">@level.PassedChecks / @level.TotalChecks passed</div>
+                </div>
+                <i class="fa-solid @(_expandedLevels.Contains(level.Level) ? "fa-chevron-up" : "fa-chevron-down")" style="color: var(--text-muted);"></i>
+            </div>
+
+            @* Level Details *@
+            @if (_expandedLevels.Contains(level.Level))
+            {
+                <div style="padding: 12px 16px; border-top: 1px solid var(--border);">
+                    @* Category breakdown within this level *@
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
+                        @foreach (var cat in level.Categories)
+                        {
+                            <div style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg-primary);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span style="font-weight: 600; font-size: 12px; color: var(--text-primary);">
+                                        <i class="fa-solid @GetCategoryIcon(cat.Category)" style="color: @GetMaturityColor(level.Level); margin-right: 4px;"></i>
+                                        @cat.Category
+                                    </span>
+                                    <span class="severity-badge @(cat.PassRate >= 100 ? "severity-info" : cat.PassRate >= 70 ? "severity-warning" : "severity-high")"
+                                          style="font-size: 10px;">
+                                        @cat.Passed / @cat.Total
+                                    </span>
+                                </div>
+                                @* Mini progress bar *@
+                                <div style="height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden; margin-bottom: 6px;">
+                                    <div style="height: 100%; width: @(cat.PassRate)%; background: @(cat.PassRate >= 100 ? "var(--green)" : cat.PassRate >= 70 ? "var(--orange)" : "var(--red)"); border-radius: 2px;"></div>
+                                </div>
+                                @* Failed checks *@
+                                @if (cat.FailedChecks.Count > 0)
+                                {
+                                    <div style="font-size: 10px; color: var(--text-muted); max-height: 80px; overflow-y: auto;">
+                                        @foreach (var fail in cat.FailedChecks.Take(5))
+                                        {
+                                            <div style="padding: 1px 0; display: flex; gap: 4px; align-items: start;">
+                                                <i class="fa-solid fa-xmark" style="color: var(--red); margin-top: 2px; font-size: 9px;"></i>
+                                                <span>@fail</span>
+                                            </div>
+                                        }
+                                        @if (cat.FailedChecks.Count > 5)
+                                        {
+                                            <div style="color: var(--text-muted); font-style: italic;">+@(cat.FailedChecks.Count - 5) more</div>
+                                        }
+                                    </div>
+                                }
+                                else if (cat.Total > 0)
+                                {
+                                    <div style="font-size: 10px; color: var(--green);">
+                                        <i class="fa-solid fa-check"></i> All checks passing
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="font-size: 10px; color: var(--text-muted); font-style: italic;">
+                                        No results — run Quick Check
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @* Recommendations for this level *@
+                    @if (!isCompleted && level.Recommendations.Count > 0)
+                    {
+                        <div style="margin-top: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: 6px;">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">
+                                <i class="fa-solid fa-lightbulb" style="color: var(--orange);"></i> Recommendations to reach this level
+                            </div>
+                            @foreach (var rec in level.Recommendations)
+                            {
+                                <div style="font-size: 11px; color: var(--text-secondary); padding: 2px 0; display: flex; gap: 6px; align-items: start;">
+                                    <i class="fa-solid fa-arrow-right" style="color: var(--text-muted); margin-top: 3px; font-size: 9px;"></i>
+                                    <span>@rec</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Legend ── *@
+    <div style="padding: 12px 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; margin-top: 8px;">
+        <div style="font-size: 11px; color: var(--text-muted);">
+            <strong>How maturity is calculated:</strong> Each level groups related check categories. A level is considered complete when 80%+ of its checks pass.
+            Your overall maturity level is the highest level where all preceding levels are complete. Run Quick Check regularly to update your scores.
+        </div>
+    </div>
+</div>
+
+@code {
+    private int _overallLevel = 1;
+    private double _overallScore = 0;
+    private List<MaturityLevel> _maturityLevels = new();
+    private HashSet<int> _expandedLevels = new();
+
+    // Category → Maturity Level mapping
+    // L1 = Foundational (backup, reliability, integrity) — must-have for any production server
+    // L2 = Hardened (security, configuration) — secure and properly configured
+    // L3 = Performant (performance, indexes, I/O, TempDB) — optimized for workload
+    // L4 = Observable (monitoring, maintenance, informational) — proactive monitoring in place
+    // L5 = Governed (custom, naming, availability, database) — org-level standards enforced
+    private static readonly Dictionary<string, int> CategoryLevelMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Backup"] = 1,
+        ["Reliability"] = 1,
+        ["Integrity"] = 1,
+        ["Security"] = 2,
+        ["Security checks"] = 2,
+        ["Configuration"] = 2,
+        ["Performance"] = 3,
+        ["Indexes"] = 3,
+        ["I/O"] = 3,
+        ["TempDB"] = 3,
+        ["Monitoring"] = 4,
+        ["Maintenance Monitoring checks"] = 4,
+        ["Informational"] = 4,
+        ["Custom"] = 5,
+        ["Naming checks"] = 5,
+        ["Availability"] = 5,
+        ["Database"] = 5,
+    };
+
+    private static readonly Dictionary<int, (string Name, string Description, List<string> Recommendations)> LevelDefinitions = new()
+    {
+        [1] = ("Foundation", "Backup, disaster recovery, and data integrity essentials",
+            new List<string>
+            {
+                "Ensure all databases have recent full backups with verified restore tests",
+                "Configure transaction log backups for RPO compliance",
+                "Enable DBCC CHECKDB on a regular schedule for all user databases",
+                "Set up reliability checks: auto-close OFF, page verify CHECKSUM, recovery model aligned to SLA"
+            }),
+        [2] = ("Hardened", "Security posture and server configuration best practices",
+            new List<string>
+            {
+                "Disable SA account or rename it; enforce strong password policies",
+                "Review server-level permissions — limit sysadmin membership",
+                "Configure max memory, max degree of parallelism, and cost threshold for parallelism",
+                "Enable audit logging for login failures at minimum",
+                "Set appropriate TempDB file count and pre-sizing"
+            }),
+        [3] = ("Performant", "Query performance, indexing, and I/O optimization",
+            new List<string>
+            {
+                "Identify and fix missing indexes with high impact scores",
+                "Remove or disable unused indexes to reduce write overhead",
+                "Review high-cost queries from Query Store or Plan Cache",
+                "Ensure TempDB is on fast storage with appropriate file configuration",
+                "Check for I/O latency issues on data and log file volumes"
+            }),
+        [4] = ("Observable", "Proactive monitoring, maintenance plans, and alerting",
+            new List<string>
+            {
+                "Set up alerting for critical conditions (disk space, job failures, AG health)",
+                "Implement index maintenance (rebuild/reorganize) on a schedule",
+                "Configure statistics update strategy (auto-update + scheduled manual)",
+                "Review SQL Agent job history for recurring failures",
+                "Deploy monitoring collection (SQLWATCH, custom, or this tool's cache)"
+            }),
+        [5] = ("Governed", "Organizational standards, compliance, and operational maturity",
+            new List<string>
+            {
+                "Enforce naming conventions for databases, jobs, and objects",
+                "Implement database-level standards (compatibility level, owner, collation)",
+                "Document and enforce change management procedures",
+                "Set up availability group or mirroring health checks",
+                "Define and enforce custom checks specific to your organization's requirements"
+            })
+    };
+
+    protected override void OnInitialized()
+    {
+        CalculateMaturity();
+        // Auto-expand current level
+        _expandedLevels.Add(_overallLevel);
+    }
+
+    private void CalculateMaturity()
+    {
+        var checks = CheckRepo.GetAllChecks();
+        var results = QuickCheckState.Results;
+
+        // Build result lookup: CheckId → passed/failed
+        var resultLookup = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in results)
+        {
+            // Keep the latest result per check
+            resultLookup[r.CheckId] = r.Passed;
+        }
+
+        // Build levels
+        _maturityLevels = new List<MaturityLevel>();
+
+        for (int level = 1; level <= 5; level++)
+        {
+            var def = LevelDefinitions[level];
+            var levelCategories = CategoryLevelMap
+                .Where(kv => kv.Value == level)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            var categories = new List<CategoryProgress>();
+            int levelPassed = 0, levelTotal = 0;
+
+            foreach (var catName in levelCategories)
+            {
+                var catChecks = checks.Where(c =>
+                    string.Equals(c.Category, catName, StringComparison.OrdinalIgnoreCase) && c.Enabled).ToList();
+
+                int passed = 0, failed = 0;
+                var failedNames = new List<string>();
+
+                foreach (var check in catChecks)
+                {
+                    if (resultLookup.TryGetValue(check.Id, out var didPass))
+                    {
+                        if (didPass) passed++;
+                        else
+                        {
+                            failed++;
+                            failedNames.Add(check.Name);
+                        }
+                    }
+                    // If no result, count as not passed but don't list as failed
+                }
+
+                int total = catChecks.Count;
+                levelPassed += passed;
+                levelTotal += total;
+
+                categories.Add(new CategoryProgress
+                {
+                    Category = catName,
+                    Total = total,
+                    Passed = passed,
+                    PassRate = total > 0 ? passed * 100.0 / total : 0,
+                    FailedChecks = failedNames
+                });
+            }
+
+            _maturityLevels.Add(new MaturityLevel
+            {
+                Level = level,
+                Name = def.Name,
+                Description = def.Description,
+                Recommendations = def.Recommendations,
+                Categories = categories.OrderByDescending(c => c.Total).ToList(),
+                TotalChecks = levelTotal,
+                PassedChecks = levelPassed,
+                PassRate = levelTotal > 0 ? levelPassed * 100.0 / levelTotal : 0
+            });
+        }
+
+        // Calculate overall level: highest level where all prior levels have >= 80% pass rate
+        _overallLevel = 1;
+        for (int i = 0; i < _maturityLevels.Count; i++)
+        {
+            if (_maturityLevels[i].PassRate >= 80)
+                _overallLevel = _maturityLevels[i].Level + 1;
+            else
+                break;
+        }
+        _overallLevel = Math.Min(_overallLevel, 5);
+
+        // Overall score = weighted average across all levels
+        int totalAll = _maturityLevels.Sum(l => l.TotalChecks);
+        int passedAll = _maturityLevels.Sum(l => l.PassedChecks);
+        _overallScore = totalAll > 0 ? passedAll * 100.0 / totalAll : 0;
+    }
+
+    private void ToggleLevel(int level)
+    {
+        if (!_expandedLevels.Remove(level))
+            _expandedLevels.Add(level);
+    }
+
+    private static string GetMaturityColor(int level) => level switch
+    {
+        1 => "var(--red)",
+        2 => "var(--orange)",
+        3 => "#e6b800",
+        4 => "var(--green)",
+        5 => "#6366f1",
+        _ => "var(--text-muted)"
+    };
+
+    private static string GetMaturityName(int level) => level switch
+    {
+        1 => "Foundation",
+        2 => "Hardened",
+        3 => "Performant",
+        4 => "Observable",
+        5 => "Governed",
+        _ => "Unknown"
+    };
+
+    private static string GetCategoryIcon(string category) => category.ToLower() switch
+    {
+        "backup" => "fa-database",
+        "reliability" => "fa-shield",
+        "integrity" => "fa-check-double",
+        "security" or "security checks" => "fa-lock",
+        "configuration" => "fa-sliders",
+        "performance" => "fa-gauge-high",
+        "indexes" => "fa-list-ol",
+        "i/o" => "fa-hard-drive",
+        "tempdb" => "fa-temperature-half",
+        "monitoring" or "maintenance monitoring checks" => "fa-eye",
+        "informational" => "fa-info-circle",
+        "custom" => "fa-wrench",
+        "naming checks" => "fa-tag",
+        "availability" => "fa-tower-broadcast",
+        "database" => "fa-database",
+        _ => "fa-circle"
+    };
+
+    private record MaturityLevel
+    {
+        public int Level { get; init; }
+        public string Name { get; init; } = "";
+        public string Description { get; init; } = "";
+        public List<string> Recommendations { get; init; } = new();
+        public List<CategoryProgress> Categories { get; init; } = new();
+        public int TotalChecks { get; init; }
+        public int PassedChecks { get; init; }
+        public double PassRate { get; init; }
+    }
+
+    private record CategoryProgress
+    {
+        public string Category { get; init; } = "";
+        public int Total { get; init; }
+        public int Passed { get; init; }
+        public double PassRate { get; init; }
+        public List<string> FailedChecks { get; init; } = new();
+    }
+}

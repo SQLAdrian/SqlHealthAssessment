@@ -1,5 +1,10 @@
 @* In the name of God, the Merciful, the Compassionate *@
 @using SqlHealthAssessment.Data.Models
+@using SqlHealthAssessment.Data
+@using System.Data
+@using Microsoft.Data.SqlClient
+@inject ServerConnectionManager ConnectionManager
+@inject ToastService Toast
 
 @if (IsVisible && _working != null)
 {
@@ -160,6 +165,93 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="form-section">
+                        <h4 style="display: flex; justify-content: space-between; align-items: center;">
+                            Column Selection &amp; Order
+                            <button class="settings-btn" style="font-size: 10px; padding: 3px 8px;"
+                                    @onclick="DetectColumns" disabled="@_detectingColumns">
+                                <i class="fa-solid @(_detectingColumns ? "fa-spinner fa-spin" : "fa-wand-magic-sparkles")"></i>
+                                @(_detectingColumns ? "Detecting..." : "Detect from Query")
+                            </button>
+                        </h4>
+                        <small style="color: var(--text-muted); display: block; margin-bottom: 8px;">
+                            Select and reorder columns. When empty, all query columns are shown in query order.
+                        </small>
+
+                        @if (_availableColumns.Count > 0)
+                        {
+                            <div style="display: flex; gap: 12px;">
+                                @* Selected columns (ordered) *@
+                                <div style="flex: 1; border: 1px solid var(--border); border-radius: 4px; padding: 8px; background: var(--bg-primary);">
+                                    <div style="font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Visible (drag to reorder)</div>
+                                    @if (_working?.DataGridColumns != null && _working.DataGridColumns.Count > 0)
+                                    {
+                                        @for (int i = 0; i < _working.DataGridColumns.Count; i++)
+                                        {
+                                            var idx = i;
+                                            var colName = _working.DataGridColumns[idx];
+                                            <div style="display: flex; align-items: center; gap: 4px; padding: 3px 6px; margin: 2px 0;
+                                                        background: var(--bg-secondary); border-radius: 3px; font-size: 11px;">
+                                                <button style="background: none; border: none; cursor: pointer; padding: 0 2px; color: var(--text-muted); font-size: 10px;"
+                                                        @onclick="() => MoveColumnUp(idx)" disabled="@(idx == 0)">
+                                                    <i class="fa-solid fa-chevron-up"></i>
+                                                </button>
+                                                <button style="background: none; border: none; cursor: pointer; padding: 0 2px; color: var(--text-muted); font-size: 10px;"
+                                                        @onclick="() => MoveColumnDown(idx)" disabled="@(idx == _working.DataGridColumns.Count - 1)">
+                                                    <i class="fa-solid fa-chevron-down"></i>
+                                                </button>
+                                                <span style="flex: 1; color: var(--text-primary);">@colName</span>
+                                                <button style="background: none; border: none; cursor: pointer; padding: 0 2px; color: var(--red); font-size: 10px;"
+                                                        @onclick="() => RemoveColumn(colName)" title="Remove">
+                                                    <i class="fa-solid fa-xmark"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div style="font-size: 10px; color: var(--text-muted); font-style: italic; padding: 4px;">
+                                            All columns shown (no filter)
+                                        </div>
+                                    }
+                                </div>
+
+                                @* Available columns *@
+                                <div style="flex: 1; border: 1px solid var(--border); border-radius: 4px; padding: 8px; background: var(--bg-primary);">
+                                    <div style="font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Available</div>
+                                    @foreach (var col in _availableColumns)
+                                    {
+                                        var isSelected = _working?.DataGridColumns?.Contains(col) == true;
+                                        <div style="display: flex; align-items: center; gap: 4px; padding: 3px 6px; margin: 2px 0;
+                                                    border-radius: 3px; font-size: 11px;
+                                                    opacity: @(isSelected ? "0.4" : "1"); color: var(--text-primary);">
+                                            <button style="background: none; border: none; cursor: pointer; padding: 0 2px; color: var(--green); font-size: 10px;"
+                                                    @onclick="() => AddColumn(col)" disabled="@isSelected" title="Add column">
+                                                <i class="fa-solid fa-plus"></i>
+                                            </button>
+                                            <span>@col</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 6px; display: flex; gap: 6px;">
+                                <button class="settings-btn" style="font-size: 10px; padding: 3px 8px;" @onclick="SelectAllColumns">
+                                    <i class="fa-solid fa-check-double"></i> Select All
+                                </button>
+                                <button class="settings-btn" style="font-size: 10px; padding: 3px 8px;" @onclick="ClearColumnSelection">
+                                    <i class="fa-solid fa-eraser"></i> Clear (show all)
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="font-size: 11px; color: var(--text-muted); font-style: italic;">
+                                Click "Detect from Query" to discover available columns, or configure manually in dashboard-config.json.
+                            </div>
+                        }
+                    </div>
                 }
             }
 
@@ -178,8 +270,60 @@
                         <textarea @bind="_working.Query.SqlServer" @bind:event="oninput"
                                   rows="20" placeholder="SELECT ..."
                                   style="font-family: 'Consolas', monospace; font-size: 12px; resize: vertical;"></textarea>
-                        <small>Query runs against the dashboard's default database context unless overridden above.</small>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                            <small>Query runs against the dashboard's default database context unless overridden above.</small>
+                            <button class="settings-btn" style="font-size: 11px; padding: 4px 10px;"
+                                    @onclick="TestQuery"
+                                    disabled="@(_testingQuery || string.IsNullOrWhiteSpace(_working?.Query?.SqlServer))">
+                                <i class="fa-solid @(_testingQuery ? "fa-spinner fa-spin" : "fa-vial")"></i>
+                                @(_testingQuery ? "Running..." : "Test Query")
+                            </button>
+                        </div>
                     </div>
+
+                    @if (_testQueryError != null)
+                    {
+                        <div style="padding: 8px 12px; font-size: 11px; color: var(--red); background: var(--bg-secondary);
+                                    border: 1px solid var(--red); border-radius: 4px; font-family: monospace;
+                                    white-space: pre-wrap; max-height: 120px; overflow-y: auto; margin-top: 8px;">@_testQueryError</div>
+                    }
+                    else if (_testQueryResult != null)
+                    {
+                        <div style="margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;
+                                        background: var(--bg-tertiary); font-size: 11px; color: var(--text-secondary);">
+                                <span>@_testQueryResult.Rows.Count row(s) returned in @_testQueryElapsed</span>
+                                <button class="settings-btn" style="font-size: 10px; padding: 2px 6px;" @onclick="ClearTestResults">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                            <div style="max-height: 200px; overflow: auto;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                    <thead>
+                                        <tr>
+                                            @foreach (DataColumn col in _testQueryResult.Columns)
+                                            {
+                                                <th style="padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--border);
+                                                           background: var(--bg-secondary); position: sticky; top: 0; font-weight: 600;">@col.ColumnName</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (DataRow row in _testQueryResult.Rows)
+                                        {
+                                            <tr>
+                                                @foreach (DataColumn col in _testQueryResult.Columns)
+                                                {
+                                                    <td style="padding: 3px 8px; border-bottom: 1px solid var(--border); color: var(--text-secondary);
+                                                               white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">@row[col]</td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
                 </div>
             }
 
@@ -203,6 +347,12 @@
 
     private PanelDefinition? _working;
     private int _tab = 0;
+    private bool _testingQuery;
+    private DataTable? _testQueryResult;
+    private string? _testQueryError;
+    private string? _testQueryElapsed;
+    private bool _detectingColumns;
+    private List<string> _availableColumns = new();
 
     protected override void OnParametersSet()
     {
@@ -210,6 +360,14 @@
         {
             _working = Clone(Panel);
             _tab = 0;
+            _availableColumns.Clear();
+            ClearTestResults();
+
+            // Pre-populate available columns from existing config
+            if (_working.DataGridColumns != null && _working.DataGridColumns.Count > 0)
+            {
+                _availableColumns = new List<string>(_working.DataGridColumns);
+            }
         }
     }
 
@@ -222,7 +380,225 @@
     private async Task Cancel()
     {
         _working = null;
+        ClearTestResults();
         await OnCancel.InvokeAsync();
+    }
+
+    private async Task TestQuery()
+    {
+        if (_working == null || string.IsNullOrWhiteSpace(_working.Query?.SqlServer)) return;
+
+        var server = ConnectionManager.CurrentServer;
+        if (server == null)
+        {
+            Toast.ShowWarning("No server selected — go to Servers and connect first");
+            return;
+        }
+
+        _testingQuery = true;
+        _testQueryResult = null;
+        _testQueryError = null;
+        StateHasChanged();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var db = !string.IsNullOrWhiteSpace(_working.DefaultDatabase) ? _working.DefaultDatabase : "master";
+            var connString = server.GetConnectionString(server.ServerNames, db);
+
+            // Replace dashboard parameters with sensible defaults for testing
+            var sql = _working.Query.SqlServer
+                .Replace("@SqlInstance", "@@SERVERNAME", StringComparison.OrdinalIgnoreCase)
+                .Replace("@DateFrom", "DATEADD(HOUR, -1, GETUTCDATE())", StringComparison.OrdinalIgnoreCase)
+                .Replace("@DateTo", "GETUTCDATE()", StringComparison.OrdinalIgnoreCase);
+
+            var dt = new DataTable();
+            await Task.Run(async () =>
+            {
+                using var conn = new SqlConnection(connString);
+                await conn.OpenAsync();
+                using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 15 };
+                using var reader = await cmd.ExecuteReaderAsync();
+                dt.Load(reader);
+            });
+
+            sw.Stop();
+            _testQueryElapsed = sw.ElapsedMilliseconds < 1000
+                ? $"{sw.ElapsedMilliseconds}ms"
+                : $"{sw.Elapsed.TotalSeconds:F1}s";
+
+            if (dt.Rows.Count > 50)
+            {
+                var trimmed = dt.Clone();
+                for (int i = 0; i < 50; i++)
+                    trimmed.ImportRow(dt.Rows[i]);
+                _testQueryResult = trimmed;
+                _testQueryElapsed += " (showing first 50)";
+            }
+            else
+            {
+                _testQueryResult = dt;
+            }
+        }
+        catch (SqlException ex)
+        {
+            sw.Stop();
+            _testQueryError = $"SQL Error {ex.Number}: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _testQueryError = ex.Message;
+        }
+        finally
+        {
+            _testingQuery = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearTestResults()
+    {
+        _testQueryResult = null;
+        _testQueryError = null;
+        _testQueryElapsed = null;
+    }
+
+    private async Task DetectColumns()
+    {
+        if (_working == null || string.IsNullOrWhiteSpace(_working.Query?.SqlServer)) return;
+
+        var server = ConnectionManager.CurrentServer;
+        if (server == null)
+        {
+            Toast.ShowWarning("No server selected — connect to a server first");
+            return;
+        }
+
+        _detectingColumns = true;
+        StateHasChanged();
+
+        try
+        {
+            var db = !string.IsNullOrWhiteSpace(_working.DefaultDatabase) ? _working.DefaultDatabase : "master";
+            var connString = server.GetConnectionString(server.ServerNames, db);
+
+            var sql = _working.Query.SqlServer
+                .Replace("@SqlInstance", "@@SERVERNAME", StringComparison.OrdinalIgnoreCase)
+                .Replace("@DateFrom", "DATEADD(HOUR, -1, GETUTCDATE())", StringComparison.OrdinalIgnoreCase)
+                .Replace("@DateTo", "GETUTCDATE()", StringComparison.OrdinalIgnoreCase);
+
+            // Wrap in SET FMTONLY to get schema without executing (fallback: TOP 0)
+            var schemaSql = $"SET FMTONLY ON;\n{sql}\nSET FMTONLY OFF;";
+
+            var dt = new DataTable();
+            await Task.Run(async () =>
+            {
+                using var conn = new SqlConnection(connString);
+                await conn.OpenAsync();
+                try
+                {
+                    using var cmd = new SqlCommand(schemaSql, conn) { CommandTimeout = 10 };
+                    using var reader = await cmd.ExecuteReaderAsync();
+                    dt = reader.GetSchemaTable() ?? new DataTable();
+                }
+                catch
+                {
+                    // FMTONLY may fail on complex queries; fallback to TOP 1
+                    var fallbackSql = $"SELECT TOP 1 * FROM ({sql}) AS __cols";
+                    try
+                    {
+                        using var cmd2 = new SqlCommand(fallbackSql, conn) { CommandTimeout = 10 };
+                        using var reader2 = await cmd2.ExecuteReaderAsync();
+                        var result = new DataTable();
+                        result.Load(reader2);
+                        dt = result;
+                    }
+                    catch
+                    {
+                        // Last resort: run the actual query with short timeout
+                        using var cmd3 = new SqlCommand(sql, conn) { CommandTimeout = 10 };
+                        using var reader3 = await cmd3.ExecuteReaderAsync();
+                        var result = new DataTable();
+                        result.Load(reader3);
+                        dt = result;
+                    }
+                }
+            });
+
+            // Extract column names
+            List<string> detected;
+            if (dt.Columns.Contains("ColumnName"))
+            {
+                // From GetSchemaTable()
+                detected = dt.AsEnumerable()
+                    .Select(r => r["ColumnName"]?.ToString() ?? "")
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .ToList();
+            }
+            else
+            {
+                detected = dt.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
+            }
+
+            if (detected.Count > 0)
+            {
+                _availableColumns = detected;
+                Toast.ShowSuccess($"Detected {detected.Count} columns");
+            }
+            else
+            {
+                Toast.ShowWarning("No columns detected — check the query");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowWarning($"Column detection failed: {ex.Message}");
+        }
+        finally
+        {
+            _detectingColumns = false;
+            StateHasChanged();
+        }
+    }
+
+    private void AddColumn(string col)
+    {
+        if (_working == null) return;
+        _working.DataGridColumns ??= new List<string>();
+        if (!_working.DataGridColumns.Contains(col))
+            _working.DataGridColumns.Add(col);
+    }
+
+    private void RemoveColumn(string col)
+    {
+        _working?.DataGridColumns?.Remove(col);
+    }
+
+    private void MoveColumnUp(int index)
+    {
+        if (_working?.DataGridColumns == null || index <= 0) return;
+        (_working.DataGridColumns[index], _working.DataGridColumns[index - 1]) =
+            (_working.DataGridColumns[index - 1], _working.DataGridColumns[index]);
+    }
+
+    private void MoveColumnDown(int index)
+    {
+        if (_working?.DataGridColumns == null || index >= _working.DataGridColumns.Count - 1) return;
+        (_working.DataGridColumns[index], _working.DataGridColumns[index + 1]) =
+            (_working.DataGridColumns[index + 1], _working.DataGridColumns[index]);
+    }
+
+    private void SelectAllColumns()
+    {
+        if (_working == null) return;
+        _working.DataGridColumns = new List<string>(_availableColumns);
+    }
+
+    private void ClearColumnSelection()
+    {
+        if (_working == null) return;
+        _working.DataGridColumns = null;
     }
 
     private static PanelDefinition Clone(PanelDefinition p) => new()
@@ -247,6 +623,7 @@
         DataGridIsClickable    = p.DataGridIsClickable,
         DataGridMaxRows        = p.DataGridMaxRows,
         DataGridTopRows        = p.DataGridTopRows,
+        DataGridColumns        = p.DataGridColumns != null ? new List<string>(p.DataGridColumns) : null,
         ActionColumn           = p.ActionColumn,
         ActionColumnMode       = p.ActionColumnMode,
         ColorThresholds        = p.ColorThresholds.Select(t => new ColorThresholdRule

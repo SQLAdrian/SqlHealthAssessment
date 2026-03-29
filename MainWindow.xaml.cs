@@ -558,6 +558,16 @@ namespace SqlHealthAssessment
             // Cancel the close to allow overlay to render
             e.Cancel = true;
 
+            // Hard deadline: if we haven't exited within 8 seconds, force-kill.
+            // This catches any scenario where the async shutdown path hangs
+            // (Kestrel stuck, DI dispose deadlock, dispatcher blocked, etc.).
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(8));
+                _logger?.LogWarning("Shutdown watchdog: force-killing process after 8 second timeout");
+                Environment.Exit(1);
+            });
+
             // Brief delay so the user sees the closing overlay
             await Task.Delay(800);
 

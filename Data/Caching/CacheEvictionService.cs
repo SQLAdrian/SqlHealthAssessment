@@ -96,7 +96,7 @@ namespace SqlHealthAssessment.Data.Caching
         {
             try
             {
-                await _cache.EvictOlderThanAsync(TimeSpan.FromHours(1));
+                await _cache.EvictOlderThanAsync(TimeSpan.FromHours(24));
                 _logger.LogWarning("Aggressive cache eviction triggered due to memory pressure");
             }
             catch (Exception ex)

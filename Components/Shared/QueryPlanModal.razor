@@ -9,6 +9,10 @@
             <div class="panel-maximize-header">
                 <span class="panel-maximize-title">Query Execution Plan</span>
                 <div style="display:flex;gap:8px;align-items:center;">
+                    <button class="panel-maximize-btn" style="position:static;opacity:1;"
+                            @onclick="ToggleSummary" title="@(_showSummary ? "Hide Summary" : "Show Summary")">
+                        <i class="fa-solid fa-chart-bar"></i>
+                    </button>
                     @if (!string.IsNullOrWhiteSpace(QueryText))
                     {
                         <button class="panel-maximize-btn" style="position:static;opacity:1;"
@@ -42,6 +46,7 @@
     public bool IsVisible { get; private set; }
 
     private bool _showQueryText = false;
+    private bool _showSummary = true;
 
     // ── ROLLBACK FLAG ────────────────────────────────────────────────────────
     // Set to false to instantly revert to the legacy JS-only renderer.
@@ -103,5 +108,16 @@
     private void ToggleQueryText()
     {
         _showQueryText = !_showQueryText;
+    }
+
+    private async Task ToggleSummary()
+    {
+        _showSummary = !_showSummary;
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"document.querySelector('.qp-v2-summary').style.display = '{(_showSummary ? "" : "none")}'");
+        }
+        catch { /* summary may not exist for this plan */ }
     }
 }

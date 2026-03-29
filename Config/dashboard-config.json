@@ -1232,6 +1232,37 @@
           "actionColumn": null
         },
         {
+          "id": "live.deadlocks",
+          "title": "Recent Deadlocks",
+          "description": "Deadlock events captured from the system_health extended event session. Shows process details, lock resources, and SQL text.",
+          "enabled": true,
+          "source": "",
+          "panelType": "Deadlock",
+          "chartType": "Line",
+          "height": 400,
+          "refreshIntervalSeconds": 60,
+          "layout": {
+            "column": 1,
+            "order": 10,
+            "spanColumns": true
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "SELECT TOP 20 xed.value('(@timestamp)', 'DATETIME2') AS event_time, xed.query('.') AS deadlock_xml FROM (SELECT CAST(target_data AS XML) AS target_data FROM sys.dm_xe_session_targets st JOIN sys.dm_xe_sessions s ON s.address = st.event_session_address WHERE s.name = 'system_health' AND st.target_name = 'ring_buffer') AS data CROSS APPLY target_data.nodes('RingBufferTarget/event[@name=\"xml_deadlock_report\"]') AS xevent(xed) ORDER BY event_time DESC"
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 20,
+          "dataGridTopRows": 0,
+          "actionColumn": null
+        },
+        {
           "id": "sessions.top",
           "title": "Top Usage Queries",
           "description": "Top active sessions by CPU, reads, or duration. Shows session_id, login, database, and current query text.",

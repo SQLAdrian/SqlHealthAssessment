@@ -77,7 +77,7 @@ namespace SqlHealthAssessment.Data.Caching
             if (workingSet > _memoryThresholdBytes)
             {
                 _logger.LogWarning("Memory pressure detected ({WorkingSet:N0} bytes). Triggering aggressive cache eviction.", workingSet);
-                await _cache.EvictOlderThanAsync(TimeSpan.FromMinutes(30)); // Keep last 30 minutes only
+                await _cache.EvictOlderThanAsync(TimeSpan.FromHours(6)); // Keep last 6 hours under memory pressure
                 GC.Collect(2, GCCollectionMode.Aggressive, true);
             }
         }

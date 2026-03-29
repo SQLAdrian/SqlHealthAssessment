@@ -42,9 +42,12 @@
     [Parameter] public int Height { get; set; } = 250;
     [Parameter] public SeriesType ChartSeriesType { get; set; } = SeriesType.Line;
     [Parameter] public int MaxDataPoints { get; set; } = 1000;
-    
+
     // Timezone offset in hours from UTC (e.g., 13 for UTC+13 like Pacific/Auckland)
     [Parameter] public double TimezoneOffsetHours { get; set; } = 0;
+
+    /// <summary>Baseline data from 7 days ago, timestamps already shifted to align with current range.</summary>
+    [Parameter] public List<TimeSeriesPoint>? BaselineData { get; set; }
 
     // Cached values for performance
     private List<string>? _distinctSeries;
@@ -132,8 +135,9 @@
             },
             Stroke = new Stroke
             {
-                Width = 2,
-                Curve = Curve.Smooth
+                Width = GetStrokeWidths(),
+                Curve = Curve.Smooth,
+                DashArray = GetDashArrays()
             },
             Grid = new Grid
             {
@@ -178,12 +182,51 @@
                         .Where(d => string.Equals(d.Series, series, StringComparison.OrdinalIgnoreCase))
                         .ToList(),
                     StringComparer.OrdinalIgnoreCase);
+
+            // Merge baseline series (7d ago) — dashed overlay with "(7d ago)" suffix
+            if (BaselineData != null && BaselineData.Any())
+            {
+                int bOffsetMinutes = (int)(TimezoneOffsetHours * 60);
+                var baselineAdjusted = BaselineData.Select(p => new TimeSeriesPoint
+                {
+                    Time = DateTime.SpecifyKind(p.Time.AddMinutes(bOffsetMinutes), DateTimeKind.Utc),
+                    Value = p.Value,
+                    Series = p.Series + " (7d ago)"
+                }).ToList();
+
+                var baselineSeries = baselineAdjusted
+                    .Select(d => d.Series)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                foreach (var bs in baselineSeries)
+                {
+                    _distinctSeries.Add(bs);
+                    _seriesDataCache[bs] = baselineAdjusted
+                        .Where(d => string.Equals(d.Series, bs, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                }
+            }
         }
         else
         {
             _distinctSeries = null;
             _seriesDataCache = null;
         }
+    }
+
+    /// <summary>Returns per-series stroke widths: 2 for current, 1.5 for baseline.</summary>
+    private List<double> GetStrokeWidths()
+    {
+        if (_distinctSeries == null) return new List<double> { 2 };
+        return _distinctSeries.Select(s => s.Contains("(7d ago)") ? 1.5 : 2.0).ToList();
+    }
+
+    /// <summary>Returns per-series dash arrays: 0 (solid) for current, 5 (dashed) for baseline.</summary>
+    private List<double> GetDashArrays()
+    {
+        if (_distinctSeries == null) return new List<double> { 0 };
+        return _distinctSeries.Select(s => s.Contains("(7d ago)") ? 5.0 : 0.0).ToList();
     }
 
 }

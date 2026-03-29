@@ -13,6 +13,13 @@
 window.queryPlanInteropV2 = (function () {
     'use strict';
 
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
     // ── Layout constants ──────────────────────────────────────────────────────
     const NODE_W = 144;   // node box width
     const NODE_H = 70;    // node box height
@@ -86,7 +93,107 @@ window.queryPlanInteropV2 = (function () {
         'Split':                     'Split',
     };
 
+    // ── V2 Icon set (individual PNGs from vscode-mssql) ──────────────────────
+    // Set to true to use higher-quality individual PNG icons instead of sprite sheet.
+    // Set to false to revert to legacy sprite-based icons.
+    const USE_V2_ICONS = true;
+
+    // V2 map — same keys as ICON_MAP but values are qp-icon2-* suffixes
+    // matching the CSS classes in qp_icons_v2.css.
+    const ICON_MAP_V2 = {
+        'Adaptive Join':             'AdaptiveJoin',
+        'Clustered Index Scan':      'ClusteredIndexScan',
+        'Clustered Index Seek':      'ClusteredIndexSeek',
+        'Clustered Index Delete':    'ClusteredIndexDelete',
+        'Clustered Index Insert':    'ClusteredIndexInsert',
+        'Clustered Index Update':    'ClusteredIndexUpdate',
+        'Clustered Index Merge':     'ClusteredIndexMerge',
+        'Clustered Update':          'ClusteredUpdate',
+        'Columnstore Index Scan':    'ColumnstoreIndexScan',
+        'Columnstore Index Delete':  'ColumnstoreIndexDelete',
+        'Columnstore Index Insert':  'ColumnstoreIndexInsert',
+        'Columnstore Index Merge':   'ColumnstoreIndexMerge',
+        'Columnstore Index Update':  'ColumnstoreIndexUpdate',
+        'Index Scan':                'IndexScan',
+        'Index Seek':                'IndexSeek',
+        'Index Delete':              'IndexDelete',
+        'Index Insert':              'IndexInsert',
+        'Index Update':              'IndexUpdate',
+        'Index Spool':               'IndexSpool',
+        'Table Scan':                'TableScan',
+        'Table Delete':              'TableDelete',
+        'Table Insert':              'TableInsert',
+        'Table Update':              'TableUpdate',
+        'Table Merge':               'TableMerge',
+        'Table Spool':               'TableSpool',
+        'Key Lookup':                'KeyLookup',
+        'RID Lookup':                'RIDLookup',
+        'Bookmark Lookup':           'BookmarkLookup',
+        'Hash Match':                'HashMatch',
+        'Hash Aggregate':            'HashMatch',
+        'Nested Loops':              'NestedLoops',
+        'Merge Join':                'MergeJoin',
+        'Sort':                      'Sort',
+        'Stream Aggregate':          'StreamAggregate',
+        'Compute Scalar':            'ComputeScalar',
+        'Filter':                    'Filter',
+        'Top':                       'Top',
+        'Result':                    'Result',
+        'Select':                    'Result',
+        'Concatenation':             'Concatenation',
+        'Parallelism':               'Parallelism',
+        'Bitmap':                    'Bitmap',
+        'Lazy Spool':                'Spool',
+        'Eager Spool':               'Spool',
+        'Assert':                    'Assert',
+        'Constant Scan':             'ConstantScan',
+        'Remote Query':              'RemoteQuery',
+        'Remote Scan':               'RemoteScan',
+        'Remote Index Scan':         'RemoteIndexScan',
+        'Remote Index Seek':         'RemoteIndexSeek',
+        'Remote Insert':             'RemoteInsert',
+        'Remote Delete':             'RemoteDelete',
+        'Remote Update':             'RemoteUpdate',
+        'Aggregate':                 'Aggregate',
+        'Table Valued Function':     'TableValuedFunction',
+        'Table-valued function':     'TableValuedFunction',
+        'Collapse':                  'Collapse',
+        'Deleted Scan':              'DeletedScan',
+        'Inserted Scan':             'InsertedScan',
+        'Log Row Scan':              'LogRowScan',
+        'Print':                     'Print',
+        'Sequence':                  'Sequence',
+        'Sequence Project':          'SequenceProject',
+        'Segment':                   'Segment',
+        'Row Count Spool':           'RowCountSpool',
+        'Merge':                     'MergeInterval',
+        'Update':                    'Update',
+        'Delete':                    'Delete',
+        'Insert':                    'Insert',
+        'Statement':                 'SQL',
+        'Parameter Table Scan':      'ParameterTableScan',
+        'UDX':                       'UDX',
+        'Split':                     'Split',
+        'Window Aggregate':          'WindowAggregate',
+        'Assign':                    'Assign',
+        'Convert':                   'Convert',
+        'Declare':                   'Declare',
+        'If':                        'If',
+        'Intrinsic':                 'Intrinsic',
+        'Predict':                   'Predict',
+        'Rank':                      'Rank',
+        'Switch':                    'Switch',
+        'Trim':                      'Trim',
+        'Union':                     'Union',
+        'Union All':                 'UnionAll',
+        'Apply':                     'Apply',
+        'Foreign Key References Check': 'ForeignKeyReferencesCheck',
+    };
+
     function iconClass(type) {
+        if (USE_V2_ICONS) {
+            return 'qp-icon2-' + (ICON_MAP_V2[type] || 'IteratorCatchAll');
+        }
         return 'qp-icon-' + (ICON_MAP[type] || 'Catchall');
     }
 
@@ -564,6 +671,177 @@ window.queryPlanInteropV2 = (function () {
 
         const canvasW = Math.max(...allPos.map(p => p.x)) + NODE_W + PAD * 2;
         const canvasH = Math.max(...allPos.map(p => p.y)) + NODE_H + PAD * 2;
+
+        // ── Plan Summary panel ───────────────────────────────────────────────
+        if (graph.summary) {
+            const s = graph.summary;
+            const panel = document.createElement('div');
+            panel.className = 'qp-v2-summary';
+
+            // Header (collapsible)
+            const header = document.createElement('div');
+            header.className = 'qp-v2-summary-header';
+            header.innerHTML = '<i class="fa-solid fa-chart-bar"></i> Plan Summary';
+            const toggle = document.createElement('span');
+            toggle.className = 'qp-v2-summary-toggle';
+            toggle.textContent = '▼';
+            header.appendChild(toggle);
+            panel.appendChild(header);
+
+            const body = document.createElement('div');
+            body.className = 'qp-v2-summary-body';
+
+            header.addEventListener('click', function () {
+                body.classList.toggle('collapsed');
+                toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
+            });
+
+            // ── Summary warnings (top, highlighted) ─────────────────────────────
+            if (s.warnings && s.warnings.length > 0) {
+                const warnBox = document.createElement('div');
+                warnBox.className = 'qp-v2-summary-warnings';
+                s.warnings.forEach(function (w) {
+                    const item = document.createElement('div');
+                    item.className = 'qp-v2-summary-warn-item';
+                    item.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + escHtml(w);
+                    warnBox.appendChild(item);
+                });
+                body.appendChild(warnBox);
+            }
+
+            // ── Metrics grid ────────────────────────────────────────────────────
+            const grid = document.createElement('div');
+            grid.className = 'qp-v2-summary-grid';
+
+            function addMetric(label, value, cls) {
+                if (value == null || value === '') return;
+                const cell = document.createElement('div');
+                cell.className = 'qp-v2-summary-metric' + (cls ? ' ' + cls : '');
+                cell.innerHTML = '<span class="qp-v2-sm-label">' + escHtml(label) + '</span>' +
+                                 '<span class="qp-v2-sm-value">' + escHtml(String(value)) + '</span>';
+                grid.appendChild(cell);
+            }
+
+            addMetric('CE Version', s.ceVersion);
+            addMetric('Optimization', s.optimizationLevel);
+            if (s.earlyAbortReason) addMetric('Abort Reason', s.earlyAbortReason, 'warn');
+            addMetric('DOP', s.dop);
+            if (s.nonParallelReason) addMetric('Serial Reason', s.nonParallelReason);
+            if (s.compileTimeMs != null) addMetric('Compile Time', s.compileTimeMs + ' ms');
+            if (s.compileCpuMs != null) addMetric('Compile CPU', s.compileCpuMs + ' ms');
+            if (s.compileMemoryKB != null) addMetric('Compile Memory', Math.round(s.compileMemoryKB) + ' KB');
+            if (s.memoryGrantKB != null) addMetric('Memory Grant', Math.round(s.memoryGrantKB).toLocaleString() + ' KB');
+            if (s.cachedPlanSizeKB != null) addMetric('Cached Plan', Math.round(s.cachedPlanSizeKB) + ' KB');
+            addMetric('Parameterization', s.parameterization);
+            if (s.queryHash) addMetric('Query Hash', s.queryHash);
+            if (s.planHash) addMetric('Plan Hash', s.planHash);
+
+            if (grid.children.length > 0) body.appendChild(grid);
+
+            // ── Parameters table ────────────────────────────────────────────────
+            if (s.parameters && s.parameters.length > 0) {
+                const sec = document.createElement('div');
+                sec.className = 'qp-v2-summary-section';
+                sec.innerHTML = '<div class="qp-v2-summary-sec-title"><i class="fa-solid fa-at"></i> Parameters</div>';
+                const tbl = document.createElement('table');
+                tbl.className = 'qp-v2-summary-table';
+                tbl.innerHTML = '<tr><th>Name</th><th>Type</th><th>Compiled</th><th>Runtime</th></tr>';
+                s.parameters.forEach(function (p) {
+                    const mismatch = p.compiledValue && p.runtimeValue && p.compiledValue !== p.runtimeValue;
+                    const tr = document.createElement('tr');
+                    if (mismatch) tr.className = 'qp-v2-param-mismatch';
+                    tr.innerHTML = '<td>' + escHtml(p.name) + '</td>' +
+                                   '<td>' + escHtml(p.dataType || '') + '</td>' +
+                                   '<td>' + escHtml(p.compiledValue || '-') + '</td>' +
+                                   '<td>' + escHtml(p.runtimeValue || '-') + '</td>';
+                    tbl.appendChild(tr);
+                });
+                sec.appendChild(tbl);
+                body.appendChild(sec);
+            }
+
+            // ── Wait stats ──────────────────────────────────────────────────────
+            if (s.waitStats && s.waitStats.length > 0) {
+                const sec = document.createElement('div');
+                sec.className = 'qp-v2-summary-section';
+                sec.innerHTML = '<div class="qp-v2-summary-sec-title"><i class="fa-solid fa-hourglass-half"></i> Wait Stats</div>';
+                const tbl = document.createElement('table');
+                tbl.className = 'qp-v2-summary-table';
+                tbl.innerHTML = '<tr><th>Wait Type</th><th>Time (ms)</th><th>Count</th></tr>';
+                s.waitStats.forEach(function (w) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + escHtml(w.waitType) + '</td>' +
+                                   '<td>' + w.waitMs.toFixed(1) + '</td>' +
+                                   '<td>' + w.waitCount + '</td>';
+                    tbl.appendChild(tr);
+                });
+                sec.appendChild(tbl);
+                body.appendChild(sec);
+            }
+
+            // ── Statistics used ─────────────────────────────────────────────────
+            if (s.statsUsed && s.statsUsed.length > 0) {
+                const sec = document.createElement('div');
+                sec.className = 'qp-v2-summary-section';
+                sec.innerHTML = '<div class="qp-v2-summary-sec-title"><i class="fa-solid fa-chart-simple"></i> Statistics Used (' + s.statsUsed.length + ')</div>';
+                const tbl = document.createElement('table');
+                tbl.className = 'qp-v2-summary-table';
+                tbl.innerHTML = '<tr><th>Statistic</th><th>Table</th><th>Modifications</th><th>Sampling %</th><th>Last Update</th></tr>';
+                s.statsUsed.forEach(function (st) {
+                    const stale = st.modCount && st.modCount > 1000;
+                    const tr = document.createElement('tr');
+                    if (stale) tr.className = 'qp-v2-stat-stale';
+                    tr.innerHTML = '<td>' + escHtml(st.name) + '</td>' +
+                                   '<td>' + escHtml(st.table || '') + '</td>' +
+                                   '<td>' + (st.modCount != null ? st.modCount.toLocaleString() : '-') + '</td>' +
+                                   '<td>' + (st.samplingPct != null ? st.samplingPct.toFixed(1) + '%' : '-') + '</td>' +
+                                   '<td>' + escHtml(st.lastUpdate || '-') + '</td>';
+                    tbl.appendChild(tr);
+                });
+                sec.appendChild(tbl);
+                body.appendChild(sec);
+            }
+
+            // ── SET options ─────────────────────────────────────────────────────
+            if (s.setOptions) {
+                const keys = Object.keys(s.setOptions);
+                if (keys.length > 0) {
+                    const sec = document.createElement('div');
+                    sec.className = 'qp-v2-summary-section';
+                    sec.innerHTML = '<div class="qp-v2-summary-sec-title"><i class="fa-solid fa-sliders"></i> SET Options</div>';
+                    const chips = document.createElement('div');
+                    chips.className = 'qp-v2-set-options';
+                    keys.forEach(function (k) {
+                        const chip = document.createElement('span');
+                        chip.className = 'qp-v2-set-chip ' + (s.setOptions[k] ? 'on' : 'off');
+                        chip.textContent = k + ': ' + (s.setOptions[k] ? 'ON' : 'OFF');
+                        chips.appendChild(chip);
+                    });
+                    sec.appendChild(chips);
+                    body.appendChild(sec);
+                }
+            }
+
+            // ── Trace flags ─────────────────────────────────────────────────────
+            if (s.traceFlags && s.traceFlags.length > 0) {
+                const sec = document.createElement('div');
+                sec.className = 'qp-v2-summary-section';
+                sec.innerHTML = '<div class="qp-v2-summary-sec-title"><i class="fa-solid fa-flag"></i> Trace Flags</div>';
+                const chips = document.createElement('div');
+                chips.className = 'qp-v2-set-options';
+                s.traceFlags.forEach(function (tf) {
+                    const chip = document.createElement('span');
+                    chip.className = 'qp-v2-set-chip on';
+                    chip.textContent = tf;
+                    chips.appendChild(chip);
+                });
+                sec.appendChild(chips);
+                body.appendChild(sec);
+            }
+
+            panel.appendChild(body);
+            container.appendChild(panel);
+        }
 
         // ── Recommendations banner ────────────────────────────────────────────
         if (graph.recommendations && graph.recommendations.length > 0) {

@@ -39,24 +39,20 @@
                         {
                             <th role="columnheader" class="w-12 px-3 py-2 text-left text-xs font-semibold text-app-text-secondary bg-app-bg-secondary border-b border-app-border">Plan</th>
                         }
-                        @foreach (DataColumn col in Data.Columns)
+                        @foreach (var col in GetVisibleColumns())
                         {
-                            @if ((HiddenColumns == null || !HiddenColumns.Contains(col.ColumnName))
-                                && !(col.ColumnName == ActionColumn && OnActionExecute != null))
-                            {
-                                <th @onclick="() => SortBy(col.ColumnName)"
-                                    role="columnheader"
-                                    tabindex="0"
-                                    @onkeydown="@(e => HandleHeaderKeyDown(e, col.ColumnName))"
-                                    aria-sort="@GetAriaSortValue(col.ColumnName)"
-                                    class="px-3 py-2 text-left text-xs font-semibold text-app-text-secondary bg-app-bg-secondary border-b border-app-border cursor-pointer select-none hover:text-app-text-primary @(SortColumn == col.ColumnName ? "text-app-accent" : "")">
-                                    @col.ColumnName
-                                    @if (SortColumn == col.ColumnName)
-                                    {
-                                        <span aria-hidden="true">@(SortAscending ? " ▲" : " ▼")</span>
-                                    }
-                                </th>
-                            }
+                            <th @onclick="() => SortBy(col.ColumnName)"
+                                role="columnheader"
+                                tabindex="0"
+                                @onkeydown="@(e => HandleHeaderKeyDown(e, col.ColumnName))"
+                                aria-sort="@GetAriaSortValue(col.ColumnName)"
+                                class="px-3 py-2 text-left text-xs font-semibold text-app-text-secondary bg-app-bg-secondary border-b border-app-border cursor-pointer select-none hover:text-app-text-primary @(SortColumn == col.ColumnName ? "text-app-accent" : "")">
+                                @col.ColumnName
+                                @if (SortColumn == col.ColumnName)
+                                {
+                                    <span aria-hidden="true">@(SortAscending ? " ▲" : " ▼")</span>
+                                }
+                            </th>
                         }
                     </tr>
                 </thead>
@@ -125,24 +121,20 @@
                                     }
                                 </td>
                             }
-                            @foreach (DataColumn col in Data.Columns)
+                            @foreach (var col in GetVisibleColumns())
                             {
-                                @if ((HiddenColumns == null || !HiddenColumns.Contains(col.ColumnName))
-                                && !(col.ColumnName == ActionColumn && OnActionExecute != null))
-                                {
-                                    <td role="cell" class="px-3 py-2 border-b border-app-border text-app-text-primary max-w-xs overflow-hidden text-ellipsis whitespace-nowrap"
-                                        style="@(GetCellStyle(col.ColumnName, row[col]))"
-                                        title="@row[col]?.ToString()">
-                                        @try
-                                        {
-                                            @FormatCell(row[col], col.ColumnName)
-                                        }
-                                        catch (Exception)
-                                        {
-                                            <span>-</span>
-                                        }
-                                    </td>
-                                }
+                                <td role="cell" class="px-3 py-2 border-b border-app-border text-app-text-primary max-w-xs overflow-hidden text-ellipsis whitespace-nowrap"
+                                    style="@(GetCellStyle(col.ColumnName, row[col]))"
+                                    title="@row[col]?.ToString()">
+                                    @try
+                                    {
+                                        @FormatCell(row[col], col.ColumnName)
+                                    }
+                                    catch (Exception)
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
                             }
                         </tr>
                     }
@@ -178,6 +170,9 @@
     [Parameter] public bool IsClickable { get; set; } = false;
     [Parameter] public int MaxRows { get; set; } = 500;
     [Parameter] public HashSet<string>? HiddenColumns { get; set; }
+
+    /// <summary>Ordered list of columns to display. When set, only these columns are shown in this order.</summary>
+    [Parameter] public List<string>? ColumnOrder { get; set; }
     [Parameter] public string? PlanIndicatorColumn { get; set; }
     [Parameter] public int? TopRowsConfig { get; set; }
     [Parameter] public EventCallback<int> OnTopRowsConfigChanged { get; set; }
@@ -236,6 +231,31 @@
         }
         // Invalidate cache
         _cachedSortedRows = null;
+    }
+
+    /// <summary>Returns visible columns in the configured order, respecting ColumnOrder and HiddenColumns.</summary>
+    private List<DataColumn> GetVisibleColumns()
+    {
+        if (Data == null) return new();
+
+        IEnumerable<DataColumn> cols;
+
+        if (ColumnOrder != null && ColumnOrder.Count > 0)
+        {
+            // Use configured order — only include columns that exist in the data
+            cols = ColumnOrder
+                .Where(name => Data.Columns.Contains(name))
+                .Select(name => Data.Columns[name]!);
+        }
+        else
+        {
+            cols = Data.Columns.Cast<DataColumn>();
+        }
+
+        return cols
+            .Where(c => (HiddenColumns == null || !HiddenColumns.Contains(c.ColumnName))
+                      && !(c.ColumnName == ActionColumn && OnActionExecute != null))
+            .ToList();
     }
 
     private DataRow[] GetSortedRows()

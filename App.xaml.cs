@@ -163,6 +163,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<Data.Services.DataProtectionService>();
             services.AddSingleton<Data.Services.AzureBlobExportService>();
             services.AddSingleton<Data.Services.ProcessGuard>();
+            services.AddSingleton<Data.Services.ForecastService>();
             services.AddSingleton<Data.Services.ProductionReadinessGate>();
             services.AddSingleton<Data.Services.RbacService>();
 

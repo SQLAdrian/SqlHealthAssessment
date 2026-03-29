@@ -14,6 +14,54 @@ public class PlanGraph
     [JsonPropertyName("edges")]          public List<PlanEdge> Edges           { get; set; } = [];
     [JsonPropertyName("query")]          public string?        Query            { get; set; }
     [JsonPropertyName("recommendations")] public List<string>  Recommendations  { get; set; } = [];
+    [JsonPropertyName("summary")]        public PlanSummary?   Summary          { get; set; }
+}
+
+public class PlanSummary
+{
+    [JsonPropertyName("ceVersion")]           public string? CeVersion            { get; set; }
+    [JsonPropertyName("compileTimeMs")]       public double? CompileTimeMs        { get; set; }
+    [JsonPropertyName("compileMemoryKB")]     public double? CompileMemoryKB      { get; set; }
+    [JsonPropertyName("compileCpuMs")]        public double? CompileCpuMs         { get; set; }
+    [JsonPropertyName("optimizationLevel")]   public string? OptimizationLevel    { get; set; }
+    [JsonPropertyName("earlyAbortReason")]    public string? EarlyAbortReason     { get; set; }
+    [JsonPropertyName("nonParallelReason")]   public string? NonParallelReason    { get; set; }
+    [JsonPropertyName("queryHash")]           public string? QueryHash            { get; set; }
+    [JsonPropertyName("planHash")]            public string? PlanHash             { get; set; }
+    [JsonPropertyName("cachedPlanSizeKB")]    public double? CachedPlanSizeKB     { get; set; }
+    [JsonPropertyName("dop")]                 public int?    Dop                  { get; set; }
+    [JsonPropertyName("memoryGrantKB")]       public double? MemoryGrantKB        { get; set; }
+    [JsonPropertyName("parameterization")]    public string? Parameterization     { get; set; }
+    [JsonPropertyName("setOptions")]          public Dictionary<string, bool>? SetOptions { get; set; }
+    [JsonPropertyName("parameters")]          public List<PlanParameter>? Parameters { get; set; }
+    [JsonPropertyName("statsUsed")]           public List<PlanStatistic>?  StatsUsed  { get; set; }
+    [JsonPropertyName("waitStats")]           public List<PlanWaitStat>?   WaitStats  { get; set; }
+    [JsonPropertyName("traceFlags")]          public List<string>?         TraceFlags { get; set; }
+    [JsonPropertyName("warnings")]            public List<string>?         Warnings   { get; set; }
+}
+
+public class PlanParameter
+{
+    [JsonPropertyName("name")]           public string  Name          { get; set; } = "";
+    [JsonPropertyName("dataType")]       public string? DataType      { get; set; }
+    [JsonPropertyName("compiledValue")]  public string? CompiledValue { get; set; }
+    [JsonPropertyName("runtimeValue")]   public string? RuntimeValue  { get; set; }
+}
+
+public class PlanStatistic
+{
+    [JsonPropertyName("name")]            public string  Name           { get; set; } = "";
+    [JsonPropertyName("table")]           public string? Table          { get; set; }
+    [JsonPropertyName("modCount")]        public long?   ModCount       { get; set; }
+    [JsonPropertyName("samplingPct")]     public double? SamplingPct    { get; set; }
+    [JsonPropertyName("lastUpdate")]      public string? LastUpdate     { get; set; }
+}
+
+public class PlanWaitStat
+{
+    [JsonPropertyName("waitType")]  public string WaitType { get; set; } = "";
+    [JsonPropertyName("waitMs")]    public double WaitMs   { get; set; }
+    [JsonPropertyName("waitCount")] public long   WaitCount { get; set; }
 }
 
 public class PlanNode
@@ -142,6 +190,9 @@ public static class ExecutionPlanParser
             var full = $"{summary}\n{ddl}";
             graph.Recommendations.Add(full);
         }
+
+        // ── Plan Summary (statement-level metadata) ────────────────────────────
+        graph.Summary = ExtractSummary(stmtSimple, queryPlan);
 
         // Synthetic SELECT root node — SSMS always renders the statement wrapper as the
         // leftmost box (Cost: 0 %). NodeId = -1 so it never collides with XML NodeIds (≥ 0).
@@ -516,6 +567,171 @@ public static class ExecutionPlanParser
 
         if (cols.Count > 0)
             node.Properties[label] = string.Join(", ", cols);
+    }
+
+    private static PlanSummary ExtractSummary(XElement stmt, XElement queryPlan)
+    {
+        var summary = new PlanSummary();
+
+        // ── Statement-level attributes ──────────────────────────────────────────
+        summary.CeVersion         = stmt.Attribute("CardinalityEstimationModelVersion")?.Value;
+        summary.OptimizationLevel = stmt.Attribute("StatementOptmLevel")?.Value;
+        summary.EarlyAbortReason  = stmt.Attribute("StatementOptmEarlyAbortReason")?.Value;
+        summary.QueryHash         = stmt.Attribute("QueryHash")?.Value;
+        summary.PlanHash          = stmt.Attribute("QueryPlanHash")?.Value;
+        summary.Parameterization  = stmt.Attribute("StatementParameterizationType")?.Value;
+
+        var compileTimeAttr = stmt.Attribute("CompileTime")?.Value;
+        if (compileTimeAttr != null) summary.CompileTimeMs = ParseDouble(compileTimeAttr);
+
+        var compileMemAttr = stmt.Attribute("CompileMemory")?.Value;
+        if (compileMemAttr != null) summary.CompileMemoryKB = ParseDouble(compileMemAttr);
+
+        var compileCpuAttr = stmt.Attribute("CompileCPU")?.Value;
+        if (compileCpuAttr != null) summary.CompileCpuMs = ParseDouble(compileCpuAttr);
+
+        // ── QueryPlan-level attributes ──────────────────────────────────────────
+        var dopAttr = queryPlan.Attribute("DegreeOfParallelism")?.Value;
+        if (dopAttr != null && int.TryParse(dopAttr, out var dop)) summary.Dop = dop;
+
+        var nonParallelAttr = queryPlan.Attribute("NonParallelPlanReason")?.Value;
+        if (nonParallelAttr != null) summary.NonParallelReason = nonParallelAttr;
+
+        var cachedPlanAttr = queryPlan.Attribute("CachedPlanSize")?.Value;
+        if (cachedPlanAttr != null) summary.CachedPlanSizeKB = ParseDouble(cachedPlanAttr);
+
+        // Memory grant at statement level
+        var memGrantEl = queryPlan.Elements().FirstOrDefault(e => e.Name.LocalName == "MemoryGrantInfo");
+        if (memGrantEl != null)
+        {
+            var grantedKB = memGrantEl.Attribute("GrantedMemory")?.Value
+                         ?? memGrantEl.Attribute("SerialDesiredMemory")?.Value;
+            if (grantedKB != null) summary.MemoryGrantKB = ParseDouble(grantedKB);
+        }
+
+        // ── Parameters (compiled vs runtime values) ─────────────────────────────
+        var paramList = queryPlan.Descendants()
+            .Where(e => e.Name.LocalName == "ColumnReference"
+                     && e.Parent?.Name.LocalName == "ParameterList")
+            .ToList();
+        if (paramList.Count > 0)
+        {
+            summary.Parameters = paramList.Select(p => new PlanParameter
+            {
+                Name          = p.Attribute("Column")?.Value ?? "",
+                DataType      = p.Attribute("ParameterDataType")?.Value,
+                CompiledValue = p.Attribute("ParameterCompiledValue")?.Value,
+                RuntimeValue  = p.Attribute("ParameterRuntimeValue")?.Value
+            }).ToList();
+        }
+
+        // ── Statistics used ─────────────────────────────────────────────────────
+        var statsUsed = queryPlan.Descendants()
+            .Where(e => e.Name.LocalName == "StatisticsInfo")
+            .ToList();
+        if (statsUsed.Count > 0)
+        {
+            summary.StatsUsed = statsUsed.Select(s =>
+            {
+                var stat = new PlanStatistic
+                {
+                    Name       = s.Attribute("Statistics")?.Value ?? "",
+                    Table      = s.Attribute("Table")?.Value?.Trim('[', ']'),
+                    LastUpdate = s.Attribute("LastUpdate")?.Value
+                };
+                var modCount = s.Attribute("ModificationCount")?.Value;
+                if (modCount != null && long.TryParse(modCount, out var mc)) stat.ModCount = mc;
+                var sampling = s.Attribute("SamplingPercent")?.Value;
+                if (sampling != null) stat.SamplingPct = ParseDouble(sampling);
+                return stat;
+            }).ToList();
+        }
+
+        // ── Wait stats ──────────────────────────────────────────────────────────
+        var waitStats = queryPlan.Descendants()
+            .Where(e => e.Name.LocalName == "WaitStats")
+            .SelectMany(ws => ws.Elements().Where(e => e.Name.LocalName == "Wait"))
+            .ToList();
+        if (waitStats.Count > 0)
+        {
+            summary.WaitStats = waitStats.Select(w => new PlanWaitStat
+            {
+                WaitType  = w.Attribute("WaitType")?.Value ?? "",
+                WaitMs    = ParseDouble(w.Attribute("WaitTimeMs")?.Value),
+                WaitCount = long.TryParse(w.Attribute("WaitCount")?.Value, out var wc) ? wc : 0
+            }).ToList();
+        }
+
+        // ── Trace flags ─────────────────────────────────────────────────────────
+        var traceFlags = queryPlan.Descendants()
+            .Where(e => e.Name.LocalName == "TraceFlag")
+            .Select(tf =>
+            {
+                var val   = tf.Attribute("Value")?.Value;
+                var scope = tf.Attribute("Scope")?.Value;
+                return scope != null ? $"TF {val} ({scope})" : $"TF {val}";
+            })
+            .Distinct()
+            .ToList();
+        if (traceFlags.Count > 0) summary.TraceFlags = traceFlags;
+
+        // ── SET options ─────────────────────────────────────────────────────────
+        var setOpts = queryPlan.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "OptimizerStatsUsage")
+            ?.Parent; // Navigate up to find StatementSetOptions
+        var setOptsEl = stmt.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "StatementSetOptions");
+        if (setOptsEl != null)
+        {
+            var opts = new Dictionary<string, bool>();
+            foreach (var attr in setOptsEl.Attributes())
+            {
+                opts[attr.Name.LocalName] = attr.Value is "true" or "1";
+            }
+            if (opts.Count > 0) summary.SetOptions = opts;
+        }
+
+        // ── Statement-level warnings ────────────────────────────────────────────
+        var warnings = new List<string>();
+
+        if (summary.EarlyAbortReason != null)
+            warnings.Add($"Optimization aborted: {summary.EarlyAbortReason}");
+
+        if (summary.NonParallelReason != null)
+            warnings.Add($"Serial plan: {summary.NonParallelReason}");
+
+        if (summary.Parameters != null)
+        {
+            foreach (var p in summary.Parameters)
+            {
+                if (p.CompiledValue != null && p.RuntimeValue != null
+                    && p.CompiledValue != p.RuntimeValue)
+                {
+                    warnings.Add($"Parameter sniffing: {p.Name} compiled={p.CompiledValue}, runtime={p.RuntimeValue}");
+                }
+            }
+        }
+
+        if (summary.StatsUsed != null)
+        {
+            foreach (var s in summary.StatsUsed)
+            {
+                if (s.ModCount > 1000)
+                    warnings.Add($"Stale stats: {s.Table}.{s.Name} — {s.ModCount:N0} modifications since last update");
+            }
+        }
+
+        if (summary.SetOptions != null)
+        {
+            if (summary.SetOptions.TryGetValue("ARITHABORT", out var aa) && !aa)
+                warnings.Add("ARITHABORT is OFF — can cause plan cache issues");
+            if (summary.SetOptions.TryGetValue("ANSI_NULLS", out var an) && !an)
+                warnings.Add("ANSI_NULLS is OFF — may cause unexpected NULL comparison behavior");
+        }
+
+        if (warnings.Count > 0) summary.Warnings = warnings;
+
+        return summary;
     }
 
     private static double ParseDouble(string? s)

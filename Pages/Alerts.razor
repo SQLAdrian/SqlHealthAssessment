@@ -9,6 +9,9 @@
 @inject AlertHistoryService History
 @inject AlertingService Alerting
 @inject ToastService Toast
+@inject ServerConnectionManager ConnectionManager
+@using System.Data
+@using Microsoft.Data.SqlClient
 @implements IDisposable
 
 <div class="settings-page" style="max-width: 1400px;">
@@ -296,7 +299,7 @@
     @if (_editingAlert != null)
     {
         <div class="modal-overlay" @onclick="CancelEdit">
-            <div class="modal-dialog" style="max-width: 500px;" @onclick:stopPropagation="true">
+            <div class="modal-dialog" style="max-width: 700px;" @onclick:stopPropagation="true">
                 <h3 style="margin-top: 0;">Edit Alert: @_editingAlert.Name</h3>
                 <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 16px;">@_editingAlert.Description</p>
 
@@ -342,7 +345,65 @@
                               background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border);
                               border-radius: 4px; padding: 8px; resize: vertical;"
                               @bind="_editingAlert.Query"></textarea>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                        <button class="settings-btn" style="font-size: 11px; padding: 3px 10px;"
+                                @onclick="TestQuery" disabled="@(_testingQuery || string.IsNullOrWhiteSpace(_editingAlert?.Query))">
+                            <i class="fa-solid fa-play" style="margin-right: 4px;"></i>
+                            @(_testingQuery ? "Running..." : "Test Query")
+                        </button>
+                        @if (ConnectionManager.CurrentServer != null)
+                        {
+                            <span style="font-size: 11px; color: var(--text-muted);">
+                                on @ConnectionManager.CurrentServer.ServerNames
+                            </span>
+                        }
+                        else
+                        {
+                            <span style="font-size: 11px; color: var(--orange);">
+                                <i class="fa-solid fa-triangle-exclamation" style="margin-right: 2px;"></i> No server selected
+                            </span>
+                        }
+                    </div>
                 </div>
+
+                @if (_testQueryResult != null || _testQueryError != null)
+                {
+                    <div style="margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
+                        @if (_testQueryError != null)
+                        {
+                            <div style="padding: 8px 12px; font-size: 11px; color: var(--red); background: var(--bg-secondary); font-family: monospace; white-space: pre-wrap; max-height: 120px; overflow-y: auto;">@_testQueryError</div>
+                        }
+                        else if (_testQueryResult != null)
+                        {
+                            <div style="padding: 4px 8px; font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
+                                @_testQueryResult.Rows.Count row(s) returned in @_testQueryElapsed
+                            </div>
+                            <div style="max-height: 200px; overflow: auto;">
+                                <table class="results-table" style="width: 100%; font-size: 11px;">
+                                    <thead>
+                                        <tr>
+                                            @foreach (DataColumn col in _testQueryResult.Columns)
+                                            {
+                                                <th style="padding: 4px 8px; white-space: nowrap; position: sticky; top: 0; background: var(--bg-tertiary);">@col.ColumnName</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (DataRow row in _testQueryResult.Rows)
+                                        {
+                                            <tr>
+                                                @foreach (DataColumn col in _testQueryResult.Columns)
+                                                {
+                                                    <td style="padding: 4px 8px; white-space: nowrap;">@(row[col]?.ToString() ?? "")</td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                }
 
                 <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
                     <button class="settings-btn" @onclick="CancelEdit">Cancel</button>
@@ -437,6 +498,12 @@
     private double? _editWarning;
     private double? _editCritical;
     private int? _editCooldown;
+
+    // Test query state
+    private bool _testingQuery;
+    private DataTable? _testQueryResult;
+    private string? _testQueryError;
+    private string? _testQueryElapsed;
 
     private List<AlertDefinition> FilteredAlerts =>
         _selectedCategory == null
@@ -541,7 +608,79 @@
         Toast.ShowSuccess("Alert definition saved");
     }
 
-    private void CancelEdit() => _editingAlert = null;
+    private void CancelEdit()
+    {
+        _editingAlert = null;
+        _testQueryResult = null;
+        _testQueryError = null;
+    }
+
+    private async Task TestQuery()
+    {
+        if (_editingAlert == null || string.IsNullOrWhiteSpace(_editingAlert.Query)) return;
+
+        var server = ConnectionManager.CurrentServer;
+        if (server == null)
+        {
+            Toast.ShowWarning("No server selected — go to Servers and connect first");
+            return;
+        }
+
+        _testingQuery = true;
+        _testQueryResult = null;
+        _testQueryError = null;
+        StateHasChanged();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var connString = server.GetConnectionString(server.ServerNames, "master");
+            var dt = new DataTable();
+
+            await Task.Run(async () =>
+            {
+                using var conn = new SqlConnection(connString);
+                await conn.OpenAsync();
+                using var cmd = new SqlCommand(_editingAlert.Query, conn) { CommandTimeout = 15 };
+                using var reader = await cmd.ExecuteReaderAsync();
+                dt.Load(reader);
+            });
+
+            sw.Stop();
+            _testQueryElapsed = sw.ElapsedMilliseconds < 1000
+                ? $"{sw.ElapsedMilliseconds}ms"
+                : $"{sw.Elapsed.TotalSeconds:F1}s";
+
+            // Limit to 50 rows for display
+            if (dt.Rows.Count > 50)
+            {
+                var trimmed = dt.Clone();
+                for (int i = 0; i < 50; i++)
+                    trimmed.ImportRow(dt.Rows[i]);
+                _testQueryResult = trimmed;
+                _testQueryElapsed += " (showing first 50)";
+            }
+            else
+            {
+                _testQueryResult = dt;
+            }
+        }
+        catch (SqlException ex)
+        {
+            sw.Stop();
+            _testQueryError = $"SQL Error {ex.Number}: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _testQueryError = ex.Message;
+        }
+        finally
+        {
+            _testingQuery = false;
+            StateHasChanged();
+        }
+    }
 
     private void AcknowledgeOne(AlertState alert)
     {
