@@ -186,6 +186,17 @@
     </div>
 
     <div class="settings-group">
+        <h3>Query Plan Viewer</h3>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="useV2PlanIcons" checked="@_useV2PlanIcons"
+                   @onchange="ToggleV2PlanIcons" style="width: auto;" />
+            <label for="useV2PlanIcons" style="margin: 0; font-weight: normal;">
+                Use high-resolution plan icons (individual PNGs — uncheck for coloured sprite icons)
+            </label>
+        </div>
+    </div>
+
+    <div class="settings-group">
         <h3>Default Dashboard</h3>
         <div class="settings-field">
             <label>Dashboard to Display First</label>
@@ -563,6 +574,7 @@
     private bool SaveSuccess;
     private bool ShowDiagnosticPane;
     private bool _debugLogging;
+    private bool _useV2PlanIcons;
     private string DefaultDashboardId = "";
     private string? DashboardSaveResult;
     private string? ConfigValidationResult;
@@ -626,6 +638,7 @@
         // Load user settings
         ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
         _debugLogging = UserSettings.GetDebugLogging();
+        _useV2PlanIcons = UserSettings.GetUseV2PlanIcons();
         DefaultDashboardId = UserSettings.GetDefaultDashboardId();
         _zoomLevel = UserSettings.GetZoomLevel();
 
@@ -674,6 +687,13 @@
     {
         _debugLogging = (bool)(e.Value ?? false);
         UserSettings.SetDebugLogging(_debugLogging);
+    }
+
+    private async Task ToggleV2PlanIcons(ChangeEventArgs e)
+    {
+        _useV2PlanIcons = (bool)(e.Value ?? false);
+        UserSettings.SetUseV2PlanIcons(_useV2PlanIcons);
+        try { await JS.InvokeVoidAsync("queryPlanInteropV2.setUseV2Icons", _useV2PlanIcons); } catch { }
     }
 
     private void SaveDefaultDashboard()

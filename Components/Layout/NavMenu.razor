@@ -8,6 +8,7 @@
 @inject ServerConnectionManager ConnectionManager
 @inject UserSettingsService UserSettings
 @inject SqlHealthAssessment.Data.Services.ThemeService ThemeSvc
+@inject AuditLogService AuditLog
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -109,8 +110,17 @@
         <NavLink href="/plan-analysis" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-diagram-project"></i></span> Plan Analyzer
         </NavLink>
-        <NavLink href="/bestpractice" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> BP Scripts
+        @if (_noPantsMode)
+        {
+            <NavLink href="/bestpractice" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> BP Scripts
+            </NavLink>
+            <NavLink href="/dbatools" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-brands fa-windows"></i></span> dbatools
+            </NavLink>
+        }
+        <NavLink href="/environment" class="nav-link">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-network-wired"></i></span> Environment View
         </NavLink>
         <NavLink href="/capacity" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-chart-line"></i></span> Capacity Planning
@@ -133,21 +143,27 @@
         <NavLink href="/settings" class="nav-link" title="Ctrl+6">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-gear"></i></span> Settings
         </NavLink>
-        <NavLink href="/dashboard-editor" class="nav-link" title="Ctrl+7">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-table-columns"></i></span> Dashboard Editor
-        </NavLink>
+        @if (_noPantsMode)
+        {
+            <NavLink href="/dashboard-editor" class="nav-link" title="Ctrl+7">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-table-columns"></i></span> Dashboard Editor
+            </NavLink>
+        }
         <NavLink href="/servers" class="nav-link" title="Ctrl+8">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-server"></i></span> Servers
         </NavLink>
         <NavLink href="/alerts" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bell"></i></span> Alerting
         </NavLink>
-        <NavLink href="/alerting-config" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-envelope"></i></span> Notifications
-        </NavLink>
-        <NavLink href="/scheduled-tasks" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clock"></i></span> Scheduled Tasks
-        </NavLink>
+        @if (_noPantsMode)
+        {
+            <NavLink href="/alerting-config" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-envelope"></i></span> Notifications
+            </NavLink>
+            <NavLink href="/scheduled-tasks" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clock"></i></span> Scheduled Tasks
+            </NavLink>
+        }
         <NavLink href="/service-management" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-microchip"></i></span> Service & Updates
         </NavLink>
@@ -159,11 +175,74 @@
         </NavLink>
     </nav>
     <div class="mt-auto border-t border-app-border">
-        <div class="p-3 text-center">
+        <div class="px-3 py-2 flex items-center justify-between">
+            <label class="flex items-center gap-2 cursor-pointer select-none" title="No-Pants Mode: show dangerous server controls">
+                <span class="no-pants-icon @(_noPantsMode ? "no-pants-active" : "")">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M4 4h16v2l-2 14h-4l-1-8h-2l-1 8H6L4 6V4zm2 2v.5l1.8 12.5h2.4l1-8h1.6l1 8h2.4L18 6.5V6H6z"/>
+                    </svg>
+                </span>
+                <span class="text-2xs text-app-text-secondary">No Pants</span>
+            </label>
+            <div class="no-pants-toggle" @onclick="ToggleNoPantsMode">
+                <div class="no-pants-track @(_noPantsMode ? "no-pants-track-on" : "")">
+                    <div class="no-pants-thumb @(_noPantsMode ? "no-pants-thumb-on" : "")"></div>
+                </div>
+            </div>
+        </div>
+        <div class="p-3 pt-0 text-center">
             <small class="text-2xs text-app-text-secondary">Ctrl+1-9: Quick Nav</small>
         </div>
     </div>
 </div>
+
+@if (_showNoPantsModal)
+{
+    <div class="panel-maximize-overlay" style="z-index:9999;">
+        <div class="query-plan-modal-content" style="max-width:560px;" @onclick:stopPropagation>
+            <div class="panel-maximize-header" style="background:linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
+                <span class="panel-maximize-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:6px;">
+                        <path d="M4 4h16v2l-2 14h-4l-1-8h-2l-1 8H6L4 6V4zm2 2v.5l1.8 12.5h2.4l1-8h1.6l1 8h2.4L18 6.5V6H6z"/>
+                    </svg>
+                    No-Pants Mode
+                </span>
+                <button class="panel-maximize-close" @onclick="CancelNoPantsModal" title="Cancel">✕</button>
+            </div>
+            <div style="padding:20px;color:var(--text-primary);line-height:1.6;">
+                <p style="font-size:14px;margin-bottom:12px;">
+                    <strong style="color:#f59e0b;">&#9888; You are about to enable No-Pants Mode.</strong>
+                </p>
+                <p style="font-size:13px;margin-bottom:12px;">
+                    This will reveal controls that allow you to make <strong style="color:#ef4444;">direct modifications to your SQL Server instances</strong> —
+                    including killing sessions, forcing failovers, rebuilding indexes, updating configurations, and other operations
+                    that can impact production workloads.
+                </p>
+                <p style="font-size:13px;margin-bottom:12px;">
+                    These actions are <em>irreversible</em> once executed. There is no undo button. There is no safety net.
+                    Just you, your SQL Servers, and whatever courage (or recklessness) brought you here.
+                </p>
+                <p style="font-size:13px;margin-bottom:16px;padding:10px;border-radius:6px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);">
+                    I either know what I'm doing, or I'm brave enough to find out. Who even needs pants when you're a DBA?
+                    Show me the controls that let me make changes to my servers. I accept full responsibility for any and all
+                    actions I take while in No-Pants Mode, and I understand that no one else is to blame if something goes sideways.
+                </p>
+                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                    <button class="btn-secondary" style="padding:8px 16px;border-radius:6px;cursor:pointer;" @onclick="CancelNoPantsModal">
+                        Keep My Pants On
+                    </button>
+                    <button style="padding:8px 20px;border-radius:6px;cursor:pointer;background:#dc2626;color:white;border:1px solid #b91c1c;font-weight:600;"
+                            @onclick="AcceptNoPantsDisclaimer">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:4px;">
+                            <path d="M4 4h16v2l-2 14h-4l-1-8h-2l-1 8H6L4 6V4zm2 2v.5l1.8 12.5h2.4l1-8h1.6l1 8h2.4L18 6.5V6H6z"/>
+                        </svg>
+                        Drop the Pants
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     // Set to true once XEvent/Profiler, Schema Compare, and Dependency Walker pages are ready
@@ -171,6 +250,57 @@
 
     private bool _performanceMonitorExists = false;
     private bool _SQLWATCHExists = false;
+
+    // ── No-Pants Mode ────────────────────────────────────────────────────
+    private bool _noPantsMode = false;
+    private bool _showNoPantsModal = false;
+
+    private void ToggleNoPantsMode()
+    {
+        if (!_noPantsMode)
+        {
+            // Turning ON — check if disclaimer was previously accepted
+            if (!UserSettings.GetNoPantsDisclaimerAccepted())
+            {
+                _showNoPantsModal = true;
+                return;
+            }
+            // Already accepted before — just enable
+            _noPantsMode = true;
+            UserSettings.SetNoPantsMode(true);
+            AuditLog.LogSecurityEvent(
+                $"No-Pants Mode ENABLED by {Environment.UserName}",
+                AuditSeverity.Warning,
+                new Dictionary<string, string> { ["User"] = Environment.UserName, ["Action"] = "Enabled" });
+        }
+        else
+        {
+            // Turning OFF — no confirmation needed
+            _noPantsMode = false;
+            UserSettings.SetNoPantsMode(false);
+            AuditLog.LogSecurityEvent(
+                $"No-Pants Mode DISABLED by {Environment.UserName}",
+                AuditSeverity.Info,
+                new Dictionary<string, string> { ["User"] = Environment.UserName, ["Action"] = "Disabled" });
+        }
+    }
+
+    private void AcceptNoPantsDisclaimer()
+    {
+        _showNoPantsModal = false;
+        _noPantsMode = true;
+        UserSettings.SetNoPantsDisclaimerAccepted(true);
+        UserSettings.SetNoPantsMode(true);
+        AuditLog.LogSecurityEvent(
+            $"No-Pants Mode disclaimer ACCEPTED and ENABLED by {Environment.UserName}",
+            AuditSeverity.Warning,
+            new Dictionary<string, string> { ["User"] = Environment.UserName, ["Action"] = "DisclaimerAccepted" });
+    }
+
+    private void CancelNoPantsModal()
+    {
+        _showNoPantsModal = false;
+    }
 
     // ── Radzen theme ──────────────────────────────────────────────────────
     private string _radzenTheme = "dark";
@@ -186,6 +316,7 @@
     protected override async Task OnInitializedAsync()
     {
         _radzenTheme = UserSettings.GetRadzenUiTheme();
+        _noPantsMode = UserSettings.GetNoPantsMode();
         ThemeSvc.SetTheme(_radzenTheme);
         ConnectionManager.OnConnectionChanged += OnServerChanged;
         await RefreshDbFlags();

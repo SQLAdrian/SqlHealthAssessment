@@ -33,6 +33,76 @@
     OnAdd="DashHandlePanelAdded"
     OnCancel="() => _dashShowAddPanel = false" />
 
+@if (_showJobDetailsModal)
+{
+    <div class="panel-maximize-overlay" @onclick="CloseJobDetailsModal">
+        <div class="query-plan-modal-content" style="max-width:900px;max-height:80vh;" @onclick:stopPropagation>
+            <div class="panel-maximize-header">
+                <span class="panel-maximize-title">
+                    <i class="fa-solid fa-calendar-check" style="margin-right:6px;"></i>
+                    Job History — @_jobDetailsName
+                </span>
+                <button class="panel-maximize-close" @onclick="CloseJobDetailsModal" title="Close">&#10005;</button>
+            </div>
+            <div style="overflow:auto;max-height:calc(80vh - 50px);padding:0;">
+                @if (_jobDetailsLoading)
+                {
+                    <div style="text-align:center;padding:40px;color:var(--text-muted);">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Loading job history...
+                    </div>
+                }
+                else if (_jobDetailsData != null && _jobDetailsData.Rows.Count > 0)
+                {
+                    <table class="w-full border-collapse text-sm" style="min-width:700px;">
+                        <thead>
+                            <tr>
+                                @foreach (DataColumn col in _jobDetailsData.Columns)
+                                {
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-app-text-secondary bg-app-bg-secondary border-b border-app-border sticky top-0">@col.ColumnName</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (DataRow row in _jobDetailsData.Rows)
+                            {
+                                var status = row.Table.Columns.Contains("Status") ? row["Status"]?.ToString() : "";
+                                var rowClass = status == "Failed" ? "background:rgba(239,68,68,0.08);" : "";
+                                <tr style="@rowClass" class="hover:bg-app-bg-hover">
+                                    @foreach (DataColumn col in _jobDetailsData.Columns)
+                                    {
+                                        var val = row[col]?.ToString() ?? "";
+                                        var cellStyle = col.ColumnName == "Status" && status == "Failed" ? "color:#ef4444;font-weight:600;" : "";
+                                        <td class="px-3 py-2 border-b border-app-border text-app-text-primary" style="@cellStyle"
+                                            title="@val">
+                                            @if (col.ColumnName == "Message" && val.Length > 120)
+                                            {
+                                                <span>@val[..120]...</span>
+                                            }
+                                            else
+                                            {
+                                                @val
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="px-4 py-2 text-xs text-app-text-muted border-t border-app-border">
+                        @_jobDetailsData.Rows.Count row(s)
+                    </div>
+                }
+                else
+                {
+                    <div style="text-align:center;padding:40px;color:var(--text-muted);">
+                        No job history found for '@_jobDetailsName'.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @if (ConnectionManager.CurrentServer != null || Instances.Length > 0)
 {
     <div class="server-context-header">
@@ -73,11 +143,14 @@
     <div class="dashboard-title-header">
         <h2>@Dashboard.NavTitle</h2>
         <span class="dashboard-db-context">Database: @Dashboard.DefaultDatabase</span>
-        <button class="btn-edit-page @(_dashEditMode ? "btn-edit-page--active" : "")"
-                @onclick="() => _dashEditMode = !_dashEditMode" title="Edit dashboard panels">
-            <i class="fa-solid fa-pen-to-square"></i>
-            @(_dashEditMode ? "Done Editing" : "Edit Page")
-        </button>
+        @if (_noPantsMode)
+        {
+            <button class="btn-edit-page @(_dashEditMode ? "btn-edit-page--active" : "")"
+                    @onclick="() => _dashEditMode = !_dashEditMode" title="Edit dashboard panels">
+                <i class="fa-solid fa-pen-to-square"></i>
+                @(_dashEditMode ? "Done Editing" : "Edit Page")
+            </button>
+        }
     </div>
     @if (!string.IsNullOrEmpty(Dashboard.Description))
     {
@@ -340,6 +413,16 @@
     private List<PanelDefinition>? _gaugePanelsCache;
     private List<PanelDefinition>? _chartPanelsCache;
 
+    // ── No-Pants Mode ─────────────────────────────────────────────────────
+    private bool _noPantsMode;
+
+    private void OnNoPantsModeChanged(bool enabled)
+    {
+        _noPantsMode = enabled;
+        if (!enabled) _dashEditMode = false; // exit edit mode when pants go back on
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     // ── Dashboard edit mode ───────────────────────────────────────────────
     private bool               _dashEditMode;
     private PanelDefinition?   _dashEditingPanel;
@@ -519,9 +602,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _noPantsMode = UserSettings.GetNoPantsMode();
         RefreshService.OnRefresh += OnAutoRefresh;
         ConfigService.OnConfigChanged += OnConfigChanged;
         InstanceSelector.OnInstanceChanged += OnGlobalInstanceChanged;
+        UserSettings.OnNoPantsModeChanged += OnNoPantsModeChanged;
         await InitializeDashboard();
     }
 
@@ -1184,12 +1269,30 @@
                 builder.AddAttribute(7, "OnTopRowsConfigChanged",
                     EventCallback.Factory.Create<int>(this, val => OnPanelTopRowsChanged(panel.Id, val)));
             }
-            if (!string.IsNullOrEmpty(panel.ActionColumn))
+            if (!string.IsNullOrEmpty(panel.ActionColumn) && _noPantsMode)
             {
                 var mode = panel.ActionColumnMode;
                 builder.AddAttribute(8, "OnActionExecute",
                     new Func<string, CancellationToken, Task<(bool, string)>>(
                         (sql, ct) => ExecuteActionSqlAsync(sql, ct, mode)));
+            }
+
+            // ── Job Monitor: Run Job + Details ──
+            if (panel.Id == "jobs.overview")
+            {
+                // Details button — always visible
+                builder.AddAttribute(10, "JobOutcomeColumn", "LastOutcome");
+                builder.AddAttribute(11, "JobNameColumn", "Job Name");
+                builder.AddAttribute(12, "OnJobDetails",
+                    EventCallback.Factory.Create<string>(this, ShowJobDetails));
+
+                // Run Job button — no-pants only
+                if (_noPantsMode)
+                {
+                    builder.AddAttribute(13, "RunJobColumn", "Job Name");
+                    builder.AddAttribute(14, "OnRunJob",
+                        new Func<string, CancellationToken, Task<(bool, string)>>(RunAgentJobAsync));
+                }
             }
         }
         else if (panel.PanelType == "TextCard" && _gridResults.TryGetValue(panel.Id, out var textData))
@@ -1291,6 +1394,120 @@
         }
     }
 
+    // ── Job Monitor: Run Job + Details ─────────────────────────────────
+
+    private async Task<(bool success, string message)> RunAgentJobAsync(string jobName, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(jobName))
+            return (false, "No job name");
+
+        var conn = ConnectionManager.GetEnabledConnections().FirstOrDefault();
+        if (conn == null) return (false, "No server connection available");
+
+        var serverName = SelectedInstance;
+        if (string.IsNullOrEmpty(serverName))
+            serverName = conn.GetServerList().FirstOrDefault() ?? "";
+        if (string.IsNullOrEmpty(serverName))
+            return (false, "No server selected");
+
+        try
+        {
+            var connString = conn.GetConnectionString(serverName, "msdb");
+            using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(connString);
+            await sqlConn.OpenAsync(ct);
+
+            using var cmd = new Microsoft.Data.SqlClient.SqlCommand(
+                "EXEC msdb.dbo.sp_start_job @job_name = @JobName", sqlConn)
+            {
+                CommandTimeout = 30
+            };
+            cmd.Parameters.AddWithValue("@JobName", jobName);
+            ct.Register(() => { try { cmd.Cancel(); } catch { } });
+
+            await cmd.ExecuteNonQueryAsync(ct);
+            Logger.LogInformation("Agent job '{JobName}' started on {Server}", jobName, serverName);
+            return (true, $"Job '{jobName}' started on {serverName}");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to start agent job '{JobName}' on {Server}", jobName, serverName);
+            return (false, ex.Message);
+        }
+    }
+
+    private bool _showJobDetailsModal = false;
+    private string _jobDetailsName = "";
+    private DataTable? _jobDetailsData;
+    private bool _jobDetailsLoading = false;
+
+    private async Task ShowJobDetails(string jobName)
+    {
+        _jobDetailsName = jobName;
+        _jobDetailsLoading = true;
+        _showJobDetailsModal = true;
+        _jobDetailsData?.Dispose();
+        _jobDetailsData = null;
+        StateHasChanged();
+
+        var conn = ConnectionManager.GetEnabledConnections().FirstOrDefault();
+        if (conn == null) { _jobDetailsLoading = false; StateHasChanged(); return; }
+
+        var serverName = SelectedInstance;
+        if (string.IsNullOrEmpty(serverName))
+            serverName = conn.GetServerList().FirstOrDefault() ?? "";
+
+        try
+        {
+            var connString = conn.GetConnectionString(serverName, "msdb");
+            using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(connString);
+            await sqlConn.OpenAsync();
+
+            using var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                SELECT
+                    h.step_id        AS [Step],
+                    h.step_name      AS [Step Name],
+                    CASE h.run_status
+                        WHEN 0 THEN 'Failed' WHEN 1 THEN 'Succeeded'
+                        WHEN 2 THEN 'Retry'  WHEN 3 THEN 'Cancelled'
+                        WHEN 4 THEN 'In Progress' ELSE 'Unknown'
+                    END AS [Status],
+                    CONVERT(VARCHAR, msdb.dbo.agent_datetime(h.run_date, h.run_time), 120) AS [Run Time],
+                    RIGHT('0'+CAST(h.run_duration/10000 AS VARCHAR),2) + ':' +
+                    RIGHT('0'+CAST((h.run_duration/100)%100 AS VARCHAR),2) + ':' +
+                    RIGHT('0'+CAST(h.run_duration%100 AS VARCHAR),2) AS [Duration],
+                    h.sql_severity   AS [Severity],
+                    REPLACE(REPLACE(h.message, CHAR(13), ' '), CHAR(10), ' ') AS [Message]
+                FROM msdb.dbo.sysjobhistory h WITH (NOLOCK)
+                INNER JOIN msdb.dbo.sysjobs j WITH (NOLOCK) ON h.job_id = j.job_id
+                WHERE j.name = @JobName
+                ORDER BY msdb.dbo.agent_datetime(h.run_date, h.run_time) DESC", sqlConn)
+            {
+                CommandTimeout = 30
+            };
+            cmd.Parameters.AddWithValue("@JobName", jobName);
+
+            var dt = new DataTable();
+            using var reader = await cmd.ExecuteReaderAsync();
+            dt.Load(reader);
+            _jobDetailsData = dt;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load job history for '{JobName}'", jobName);
+        }
+
+        _jobDetailsLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CloseJobDetailsModal()
+    {
+        _showJobDetailsModal = false;
+        _jobDetailsData?.Dispose();
+        _jobDetailsData = null;
+    }
+
     private async Task OnManualRefresh()
     {
         await StartLoad();
@@ -1379,6 +1596,7 @@
         RefreshService.OnRefresh -= OnAutoRefresh;
         ConfigService.OnConfigChanged -= OnConfigChanged;
         InstanceSelector.OnInstanceChanged -= OnGlobalInstanceChanged;
+        UserSettings.OnNoPantsModeChanged -= OnNoPantsModeChanged;
         
         Logger.LogInformation("[DynamicDashboard:{DashboardId}] Disposed successfully - Cleared: {GridCount} grids, {TsCount} timeseries, {StatCount} stats, {BgCount} bargauges, {CheckCount} checks, {ErrorCount} errors", 
             DashboardId, gridCount, tsCount, statCount, bgCount, checkCount, errorCount);

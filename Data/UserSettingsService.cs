@@ -53,6 +53,16 @@ namespace SqlHealthAssessment.Data
             // ── Diagnostics ──
             /// <summary>When true, silent catch blocks emit warnings to the log file. No restart required.</summary>
             public bool EnableDebugLogging { get; set; } = false;
+
+            // ── Query Plan Icons ──
+            /// <summary>When true, uses high-res individual PNG icons for query plans. When false, uses coloured sprite sheet (v1).</summary>
+            public bool UseV2PlanIcons { get; set; } = false;
+
+            // ── No-Pants Mode ──
+            /// <summary>When true, shows dangerous server-modification controls in dashboards. Off by default.</summary>
+            public bool NoPantsMode { get; set; } = false;
+            /// <summary>Whether the user has accepted the no-pants disclaimer at least once.</summary>
+            public bool NoPantsDisclaimerAccepted { get; set; } = false;
         }
 
         private UserSettings LoadSettings() => ConfigFileHelper.Load<UserSettings>(_settingsFilePath);
@@ -159,6 +169,36 @@ namespace SqlHealthAssessment.Data
 
         /// <summary>Fired when debug logging is toggled so App can adjust Serilog level at runtime.</summary>
         public event Action<bool>? OnDebugLoggingChanged;
+
+        // ── Query Plan Icons ──
+        public bool GetUseV2PlanIcons() { lock (_lock) return _settings.UseV2PlanIcons; }
+
+        public void SetUseV2PlanIcons(bool enabled)
+        {
+            lock (_lock) _settings.UseV2PlanIcons = enabled;
+            SaveSettings();
+        }
+
+        // ── No-Pants Mode ──
+        public bool GetNoPantsMode() { lock (_lock) return _settings.NoPantsMode; }
+
+        public void SetNoPantsMode(bool enabled)
+        {
+            lock (_lock) _settings.NoPantsMode = enabled;
+            SaveSettings();
+            OnNoPantsModeChanged?.Invoke(enabled);
+        }
+
+        public bool GetNoPantsDisclaimerAccepted() { lock (_lock) return _settings.NoPantsDisclaimerAccepted; }
+
+        public void SetNoPantsDisclaimerAccepted(bool accepted)
+        {
+            lock (_lock) _settings.NoPantsDisclaimerAccepted = accepted;
+            SaveSettings();
+        }
+
+        /// <summary>Fired when no-pants mode is toggled so dashboard components can show/hide dangerous controls.</summary>
+        public event Action<bool>? OnNoPantsModeChanged;
 
         // ── Auto-Export Accessors ──
         public UserSettings GetSettings() { lock (_lock) return _settings; }

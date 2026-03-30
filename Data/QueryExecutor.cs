@@ -89,7 +89,7 @@ namespace SqlHealthAssessment.Data
                 int rowCount = 0;
                 dt.BeginLoadData();
 
-                var schemaTable = reader.GetSchemaTable();
+                using var schemaTable = reader.GetSchemaTable();
                 if (schemaTable != null)
                 {
                     foreach (DataRow schemaRow in schemaTable.Rows)

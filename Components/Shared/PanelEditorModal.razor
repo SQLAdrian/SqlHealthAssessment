@@ -5,6 +5,7 @@
 @using Microsoft.Data.SqlClient
 @inject ServerConnectionManager ConnectionManager
 @inject ToastService Toast
+@implements IDisposable
 
 @if (IsVisible && _working != null)
 {
@@ -396,6 +397,7 @@
         }
 
         _testingQuery = true;
+        _testQueryResult?.Dispose();
         _testQueryResult = null;
         _testQueryError = null;
         StateHasChanged();
@@ -432,6 +434,7 @@
                 var trimmed = dt.Clone();
                 for (int i = 0; i < 50; i++)
                     trimmed.ImportRow(dt.Rows[i]);
+                dt.Dispose(); // dispose the full result — we only keep the trimmed copy
                 _testQueryResult = trimmed;
                 _testQueryElapsed += " (showing first 50)";
             }
@@ -459,6 +462,7 @@
 
     private void ClearTestResults()
     {
+        _testQueryResult?.Dispose();
         _testQueryResult = null;
         _testQueryError = null;
         _testQueryElapsed = null;
@@ -491,7 +495,7 @@
             // Wrap in SET FMTONLY to get schema without executing (fallback: TOP 0)
             var schemaSql = $"SET FMTONLY ON;\n{sql}\nSET FMTONLY OFF;";
 
-            var dt = new DataTable();
+            DataTable? dt = null;
             await Task.Run(async () =>
             {
                 using var conn = new SqlConnection(connString);
@@ -510,18 +514,18 @@
                     {
                         using var cmd2 = new SqlCommand(fallbackSql, conn) { CommandTimeout = 10 };
                         using var reader2 = await cmd2.ExecuteReaderAsync();
-                        var result = new DataTable();
-                        result.Load(reader2);
-                        dt = result;
+                        dt?.Dispose();
+                        dt = new DataTable();
+                        dt.Load(reader2);
                     }
                     catch
                     {
                         // Last resort: run the actual query with short timeout
                         using var cmd3 = new SqlCommand(sql, conn) { CommandTimeout = 10 };
                         using var reader3 = await cmd3.ExecuteReaderAsync();
-                        var result = new DataTable();
-                        result.Load(reader3);
-                        dt = result;
+                        dt?.Dispose();
+                        dt = new DataTable();
+                        dt.Load(reader3);
                     }
                 }
             });
@@ -540,6 +544,8 @@
             {
                 detected = dt.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
             }
+
+            dt?.Dispose(); // schema DataTable no longer needed
 
             if (detected.Count > 0)
             {
@@ -649,4 +655,10 @@
             <option value="0.## s">Seconds (1.23 s)</option>
         </select>
     };
+
+    public void Dispose()
+    {
+        _testQueryResult?.Dispose();
+        _testQueryResult = null;
+    }
 }

@@ -31,6 +31,10 @@
             <table class="w-full border-collapse text-sm" role="table" aria-labelledby="@($"grid-title-{Title.GetHashCode()}")">
                 <thead>
                     <tr role="row">
+                        @if (!string.IsNullOrEmpty(RunJobColumn) && OnRunJob != null && Data.Columns.Contains(RunJobColumn))
+                        {
+                            <th role="columnheader" class="w-10 px-2 py-2 text-center text-xs font-semibold text-app-text-secondary bg-app-bg-secondary border-b border-app-border" title="Run Job"></th>
+                        }
                         @if (!string.IsNullOrEmpty(ActionColumn) && OnActionExecute != null)
                         {
                             <th role="columnheader" class="px-3 py-2 text-left text-xs font-semibold text-app-text-secondary bg-app-bg-secondary border-b border-app-border">Action</th>
@@ -66,6 +70,38 @@
                             tabindex="@(IsClickable ? "0" : "-1")"
                             @onkeydown="@(e => HandleRowKeyDown(e, row))"
                             class="@(IsClickable ? "cursor-pointer" : "") hover:bg-app-bg-hover">
+                            @if (!string.IsNullOrEmpty(RunJobColumn) && OnRunJob != null && Data.Columns.Contains(RunJobColumn))
+                            {
+                                var jobName = row[RunJobColumn]?.ToString() ?? "";
+                                var rjState = _runJobStates.TryGetValue(ri, out var rjs) ? rjs : RunJobState.Idle;
+                                var rjMsg = _runJobMessages.TryGetValue(ri, out var rjm) ? rjm : "";
+                                <td role="cell" class="w-10 px-2 py-2 border-b border-app-border text-center" @onclick:stopPropagation>
+                                    @if (rjState == RunJobState.Idle)
+                                    {
+                                        <button class="action-btn action-btn-execute" style="padding:2px 6px;font-size:12px;" title="Run job: @jobName" @onclick="() => ExecuteRunJob(ri, jobName)">
+                                            <i class="fa-solid fa-play"></i>
+                                        </button>
+                                    }
+                                    else if (rjState == RunJobState.Running)
+                                    {
+                                        <span class="action-status action-status-executing" style="font-size:11px;">
+                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                        </span>
+                                    }
+                                    else if (rjState == RunJobState.Success)
+                                    {
+                                        <span class="action-status action-status-success" style="font-size:11px;" title="@rjMsg">
+                                            <i class="fa-solid fa-check"></i>
+                                        </span>
+                                    }
+                                    else if (rjState == RunJobState.Failed)
+                                    {
+                                        <span class="action-status action-status-failed" style="font-size:11px;" title="@rjMsg">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </span>
+                                    }
+                                </td>
+                            }
                             @if (!string.IsNullOrEmpty(ActionColumn) && Data.Columns.Contains(ActionColumn) && OnActionExecute != null)
                             {
                                 var sql = row[ActionColumn]?.ToString() ?? "";
@@ -134,6 +170,16 @@
                                     {
                                         <span>-</span>
                                     }
+                                    @if (col.ColumnName == JobOutcomeColumn && OnJobDetails.HasDelegate
+                                        && !string.IsNullOrEmpty(JobNameColumn) && Data.Columns.Contains(JobNameColumn)
+                                        && (row[col]?.ToString() == "Failed" || row[col]?.ToString() == "Retry" || row[col]?.ToString() == "Cancelled"))
+                                    {
+                                        var detailJobName = row[JobNameColumn]?.ToString() ?? "";
+                                        <button class="job-details-btn" title="View failure details for @detailJobName"
+                                                @onclick="() => OnJobDetails.InvokeAsync(detailJobName)" @onclick:stopPropagation>
+                                            <i class="fa-solid fa-circle-info"></i>
+                                        </button>
+                                    }
                                 </td>
                             }
                         </tr>
@@ -185,6 +231,25 @@
 
     /// <summary>Column-level color gradient rules. Applies color to cell text based on numeric value within the column's data range.</summary>
     [Parameter] public List<SqlHealthAssessment.Data.Models.DataGridColumnColorRule>? ColumnColorRules { get; set; }
+
+    /// <summary>Column name containing job names. When set with OnRunJob, renders a play button per row.</summary>
+    [Parameter] public string? RunJobColumn { get; set; }
+
+    /// <summary>Callback to start a SQL Agent job by name. Returns (success, message).</summary>
+    [Parameter] public Func<string, CancellationToken, Task<(bool success, string message)>>? OnRunJob { get; set; }
+
+    /// <summary>Column name containing last outcome (e.g. "Failed"/"Succeeded"). When set with OnJobDetails, renders a details button next to failed outcomes.</summary>
+    [Parameter] public string? JobOutcomeColumn { get; set; }
+
+    /// <summary>Column name containing the job name for detail lookups.</summary>
+    [Parameter] public string? JobNameColumn { get; set; }
+
+    /// <summary>Callback to show job history details. Receives the job name.</summary>
+    [Parameter] public EventCallback<string> OnJobDetails { get; set; }
+
+    private enum RunJobState { Idle, Running, Success, Failed }
+    private readonly Dictionary<int, RunJobState> _runJobStates = new();
+    private readonly Dictionary<int, string> _runJobMessages = new();
 
     private enum ActionRowState { Idle, Executing, Success, Failed, Cancelled }
     private readonly Dictionary<int, ActionRowState> _actionStates = new();
@@ -357,6 +422,28 @@
     {
         if (_actionCts.TryGetValue(rowIndex, out var cts))
             cts.Cancel();
+    }
+
+    private async Task ExecuteRunJob(int rowIndex, string jobName)
+    {
+        if (OnRunJob == null || string.IsNullOrWhiteSpace(jobName)) return;
+
+        _runJobStates[rowIndex] = RunJobState.Running;
+        StateHasChanged();
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var (success, message) = await OnRunJob(jobName, cts.Token);
+            _runJobStates[rowIndex] = success ? RunJobState.Success : RunJobState.Failed;
+            _runJobMessages[rowIndex] = message;
+        }
+        catch (Exception ex)
+        {
+            _runJobStates[rowIndex] = RunJobState.Failed;
+            _runJobMessages[rowIndex] = ex.Message;
+        }
+        StateHasChanged();
     }
 
     // ── Column color gradient ──────────────────────────────────────────

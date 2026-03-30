@@ -1,5 +1,7 @@
 /* In the name of God, the Merciful, the Compassionate */
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -344,16 +346,31 @@ namespace SqlHealthAssessment.Data.Services
                 var config = context.RequestServices.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
                 var expectedKey = config?["ApiKey"];
 
-                // If no API key is configured, allow all requests (open mode)
+                // If no API key is configured, enforce same-origin check on
+                // state-changing methods to prevent CSRF attacks in open mode.
                 if (string.IsNullOrWhiteSpace(expectedKey))
                 {
+                    var method = context.Request.Method;
+                    if (!HttpMethods.IsGet(method) && !HttpMethods.IsHead(method) && !HttpMethods.IsOptions(method))
+                    {
+                        if (!IsLocalOrSameOriginRequest(context))
+                        {
+                            context.Response.StatusCode = 403;
+                            context.Response.ContentType = "application/json";
+                            await context.Response.WriteAsync(
+                                JsonSerializer.Serialize(new { error = "Cross-origin state-changing request blocked. Configure an API key or use same-origin requests." }));
+                            return;
+                        }
+                    }
                     await next();
                     return;
                 }
 
-                // Validate the API key header
+                // Validate the API key header (constant-time comparison to prevent timing attacks)
                 if (!context.Request.Headers.TryGetValue(ApiKeyHeader, out var providedKey)
-                    || providedKey.ToString() != expectedKey)
+                    || !CryptographicOperations.FixedTimeEquals(
+                        Encoding.UTF8.GetBytes(providedKey.ToString()),
+                        Encoding.UTF8.GetBytes(expectedKey)))
                 {
                     context.Response.StatusCode = 401;
                     context.Response.ContentType = "application/json";
@@ -364,6 +381,41 @@ namespace SqlHealthAssessment.Data.Services
 
                 await next();
             });
+        }
+
+        /// <summary>
+        /// Checks if a request originates from the same host (localhost or matching Origin/Referer).
+        /// Used to prevent CSRF on open-mode (no API key) state-changing requests.
+        /// </summary>
+        private static bool IsLocalOrSameOriginRequest(HttpContext context)
+        {
+            var host = context.Request.Host.Host;
+
+            // Allow requests from localhost / 127.0.0.1 / ::1
+            if (host == "localhost" || host == "127.0.0.1" || host == "::1")
+                return true;
+
+            // Check Origin header first (set by browsers on cross-origin requests)
+            var origin = context.Request.Headers["Origin"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(origin))
+            {
+                if (Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
+                    return string.Equals(originUri.Host, host, StringComparison.OrdinalIgnoreCase);
+                return false;
+            }
+
+            // Fall back to Referer header
+            var referer = context.Request.Headers["Referer"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(referer))
+            {
+                if (Uri.TryCreate(referer, UriKind.Absolute, out var refererUri))
+                    return string.Equals(refererUri.Host, host, StringComparison.OrdinalIgnoreCase);
+                return false;
+            }
+
+            // No Origin or Referer — likely a programmatic call (curl, PowerShell, RMM agent)
+            // Allow it since there's no browser context for CSRF to exploit
+            return true;
         }
     }
 }

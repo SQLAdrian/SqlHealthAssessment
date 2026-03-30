@@ -86,6 +86,11 @@
                   OnTopRowsConfigChanged="@OnTopRowsConfigChanged"
                   ActionColumn="@Panel.ActionColumn"
                   OnActionExecute="@OnActionExecute"
+                  RunJobColumn="@RunJobColumn"
+                  OnRunJob="@OnRunJob"
+                  JobOutcomeColumn="@JobOutcomeColumn"
+                  JobNameColumn="@JobNameColumn"
+                  OnJobDetails="@OnJobDetails"
                   ColumnOrder="@Panel.DataGridColumns"
                   ColumnColorRules="@Panel.DataGridColumnColors" />
         @if (!string.IsNullOrEmpty(Panel.Description))
@@ -192,6 +197,13 @@
     [Parameter] public int? TopRowsValue { get; set; }
     [Parameter] public EventCallback<int> OnTopRowsConfigChanged { get; set; }
     [Parameter] public Func<string, CancellationToken, Task<(bool success, string message)>>? OnActionExecute { get; set; }
+
+    // ── Job Monitor ──
+    [Parameter] public Func<string, CancellationToken, Task<(bool success, string message)>>? OnRunJob { get; set; }
+    [Parameter] public EventCallback<string> OnJobDetails { get; set; }
+    [Parameter] public string? RunJobColumn { get; set; }
+    [Parameter] public string? JobOutcomeColumn { get; set; }
+    [Parameter] public string? JobNameColumn { get; set; }
 
     private QueryPlanModal? _queryPlanModal;
 

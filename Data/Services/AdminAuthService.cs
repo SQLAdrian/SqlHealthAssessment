@@ -17,6 +17,12 @@ public class AdminAuthService
     private readonly IConfiguration _config;
     private bool _sessionUnlocked;
 
+    // ── Rate limiting ──
+    private int _failedAttempts;
+    private DateTime _lockoutUntil = DateTime.MinValue;
+    private const int MaxAttempts = 5;
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(1);
+
     public AdminAuthService(IConfiguration config)
     {
         _config = config;
@@ -30,16 +36,47 @@ public class AdminAuthService
         !string.IsNullOrWhiteSpace(_config["AdminAuth:Hash"]) &&
         !string.IsNullOrWhiteSpace(_config["AdminAuth:Salt"]);
 
+    /// <summary>True when too many failed attempts have triggered a lockout.</summary>
+    public bool IsLockedOut => _lockoutUntil > DateTime.UtcNow;
+
+    /// <summary>Remaining lockout time, or zero if not locked out.</summary>
+    public TimeSpan LockoutRemaining => IsLockedOut ? _lockoutUntil - DateTime.UtcNow : TimeSpan.Zero;
+
     /// <summary>Verify the supplied password and unlock the session if correct.</summary>
     public bool Unlock(string password)
     {
         if (!HasPassword) { _sessionUnlocked = true; return true; }
+
+        // Enforce lockout
+        if (IsLockedOut)
+        {
+            Serilog.Log.Warning("[AdminAuth] Unlock attempt rejected — locked out for {Remaining:N0}s", LockoutRemaining.TotalSeconds);
+            return false;
+        }
+
         var hash    = _config["AdminAuth:Hash"]!;
         var salt    = _config["AdminAuth:Salt"]!;
         var computed = ComputeHash(password, Convert.FromBase64String(salt));
         _sessionUnlocked = CryptographicOperations.FixedTimeEquals(
             Convert.FromBase64String(hash),
             Convert.FromBase64String(computed));
+
+        if (_sessionUnlocked)
+        {
+            _failedAttempts = 0;
+        }
+        else
+        {
+            _failedAttempts++;
+            Serilog.Log.Warning("[AdminAuth] Failed unlock attempt {Attempt}/{Max}", _failedAttempts, MaxAttempts);
+            if (_failedAttempts >= MaxAttempts)
+            {
+                _lockoutUntil = DateTime.UtcNow + LockoutDuration;
+                Serilog.Log.Warning("[AdminAuth] Locked out for {Duration} after {Attempts} failed attempts",
+                    LockoutDuration, _failedAttempts);
+            }
+        }
+
         return _sessionUnlocked;
     }
 

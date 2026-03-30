@@ -95,8 +95,9 @@ window.queryPlanInteropV2 = (function () {
 
     // ── V2 Icon set (individual PNGs from vscode-mssql) ──────────────────────
     // Set to true to use higher-quality individual PNG icons instead of sprite sheet.
-    // Set to false to revert to legacy sprite-based icons.
-    const USE_V2_ICONS = true;
+    // Set to false to revert to legacy sprite-based icons (coloured).
+    // Controlled at runtime via queryPlanInteropV2.setUseV2Icons(bool).
+    let USE_V2_ICONS = false;
 
     // V2 map — same keys as ICON_MAP but values are qp-icon2-* suffixes
     // matching the CSS classes in qp_icons_v2.css.
@@ -1106,6 +1107,10 @@ window.queryPlanInteropV2 = (function () {
         clearPlan: function (containerId) {
             const el = document.getElementById(containerId);
             if (el) el.innerHTML = '';
+        },
+
+        setUseV2Icons: function (enabled) {
+            USE_V2_ICONS = !!enabled;
         }
     };
 })();

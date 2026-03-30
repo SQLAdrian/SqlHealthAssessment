@@ -26,6 +26,21 @@ namespace SqlHealthAssessment.Data.Caching
     /// </summary>
     public sealed class liveQueriesCacheStore : IDisposable
     {
+        // Whitelist of valid cache table names — prevents SQL injection if table name
+        // construction is ever refactored to accept external input.
+        private static readonly HashSet<string> AllowedTables = new(StringComparer.Ordinal)
+        {
+            "cache_timeseries", "cache_stat", "cache_bargauge",
+            "cache_datatable", "cache_checkstatus", "cache_metadata"
+        };
+
+        private static string ValidateTableName(string table)
+        {
+            if (!AllowedTables.Contains(table))
+                throw new ArgumentException($"Invalid cache table name: '{table}'");
+            return table;
+        }
+
         private readonly string _connectionString;
         private readonly DataProtectionService? _dataProtection;
 
@@ -678,7 +693,7 @@ namespace SqlHealthAssessment.Data.Caching
             foreach (var table in tables)
             {
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"DELETE FROM {table} WHERE fetched_at < @cutoff";
+                cmd.CommandText = $"DELETE FROM {ValidateTableName(table)} WHERE fetched_at < @cutoff";
                 cmd.Parameters.AddWithValue("@cutoff", cutoff);
                 await cmd.ExecuteNonQueryAsync();
             }
@@ -730,7 +745,7 @@ namespace SqlHealthAssessment.Data.Caching
             foreach (var table in tables)
             {
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"DELETE FROM {table} WHERE fetched_at < @cutoff";
+                cmd.CommandText = $"DELETE FROM {ValidateTableName(table)} WHERE fetched_at < @cutoff";
                 cmd.Parameters.AddWithValue("@cutoff", cutoff);
                 totalDeleted += await cmd.ExecuteNonQueryAsync();
             }
@@ -807,7 +822,7 @@ namespace SqlHealthAssessment.Data.Caching
             foreach (var table in tables)
             {
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"DELETE FROM {table}";
+                cmd.CommandText = $"DELETE FROM {ValidateTableName(table)}";
                 await cmd.ExecuteNonQueryAsync();
             }
         }

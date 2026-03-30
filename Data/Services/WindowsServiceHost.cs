@@ -243,6 +243,7 @@ namespace SqlHealthAssessment.Data.Services
             services.AddSingleton<ProcessGuard>();
             services.AddSingleton<ProductionReadinessGate>();
             services.AddSingleton<LocalLogService>();
+            services.AddSingleton<PowerShellService>();
 
             // Caching layer
             services.AddSingleton<liveQueriesCacheStore>();

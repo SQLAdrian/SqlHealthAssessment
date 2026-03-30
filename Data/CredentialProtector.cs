@@ -40,11 +40,16 @@ namespace SqlHealthAssessment.Data
             {
                 return EncryptAesGcm(plainText);
             }
-            catch
+            catch (Exception aesEx)
             {
+                Serilog.Log.Warning(aesEx, "[CredentialProtector] AES-GCM encryption failed, falling back to DPAPI");
                 // Fallback to DPAPI CurrentUser if AES fails
                 try { return EncryptDpapi(plainText, DataProtectionScope.CurrentUser, "enc:"); }
-                catch { return string.Empty; }
+                catch (Exception dpapiEx)
+                {
+                    Serilog.Log.Error(dpapiEx, "[CredentialProtector] Both AES-GCM and DPAPI encryption failed — credential will NOT be saved");
+                    return string.Empty;
+                }
             }
         }
 
@@ -100,12 +105,14 @@ namespace SqlHealthAssessment.Data
                 var plainBytes = AesGcmHelper.Decrypt(data, key);
                 return Encoding.UTF8.GetString(plainBytes);
             }
-            catch (CryptographicException)
+            catch (CryptographicException ex)
             {
+                Serilog.Log.Warning(ex, "[CredentialProtector] AES-GCM decryption failed — credential may be corrupted or tampered with");
                 return string.Empty;
             }
-            catch (FormatException)
+            catch (FormatException ex)
             {
+                Serilog.Log.Warning(ex, "[CredentialProtector] AES-GCM decryption failed — invalid Base64 format");
                 return string.Empty;
             }
         }
@@ -183,12 +190,14 @@ namespace SqlHealthAssessment.Data
                     return Encoding.UTF8.GetString(decryptedBytes);
                 }
             }
-            catch (CryptographicException)
+            catch (CryptographicException ex)
             {
+                Serilog.Log.Warning(ex, "[CredentialProtector] DPAPI decryption failed — credential may be from a different machine or user");
                 return string.Empty;
             }
-            catch (FormatException)
+            catch (FormatException ex)
             {
+                Serilog.Log.Warning(ex, "[CredentialProtector] DPAPI decryption failed — invalid Base64 format, returning raw value");
                 return encryptedText;
             }
         }

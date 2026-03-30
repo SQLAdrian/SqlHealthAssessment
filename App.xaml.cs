@@ -41,7 +41,7 @@ namespace SqlHealthAssessment
                 .Enrich.WithProperty("User", Environment.UserName)
                 .Enrich.WithProperty("Machine", Environment.MachineName)
                 .WriteTo.File(
-                    path: "logs/app-.log",
+                    path: System.IO.Path.Combine(AppContext.BaseDirectory, "logs", "app-.log"),
                     rollingInterval: RollingInterval.Day,
                     retainedFileCountLimit: 30,
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
@@ -169,6 +169,7 @@ namespace SqlHealthAssessment
 
             // Local log service — thin wrapper over ILogger, routes through Serilog
             services.AddSingleton<LocalLogService>();
+            services.AddSingleton<Data.Services.PowerShellService>();
 
             // liveQueries caching layer — delta-fetch + offline resilience
             // liveQueriesCacheStore uses DataProtectionService for at-rest encryption
