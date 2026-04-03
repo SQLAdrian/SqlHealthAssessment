@@ -28,7 +28,7 @@ namespace SqlHealthAssessment.Data.Services
             _databaseName = databaseName;
         }
 
-        public async Task<DeploymentResult> TestConnectionAsync(IProgress<DeploymentProgress> progress = null, CancellationToken cancellationToken = default)
+        public async Task<DeploymentResult> TestConnectionAsync(IProgress<DeploymentProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             var result = new DeploymentResult { Success = false };
 
@@ -53,7 +53,7 @@ namespace SqlHealthAssessment.Data.Services
             return result;
         }
 
-        public async Task<DeploymentResult> DeployDatabaseAsync(string sqlScriptPath, IProgress<DeploymentProgress> progress = null, CancellationToken cancellationToken = default)
+        public async Task<DeploymentResult> DeployDatabaseAsync(string sqlScriptPath, IProgress<DeploymentProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             var result = new DeploymentResult { Success = false };
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
