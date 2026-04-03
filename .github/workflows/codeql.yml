@@ -8,29 +8,26 @@ on:
   schedule:
     - cron: '23 15 * * 0'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
-    runs-on: ${{ matrix.language == 'csharp' && 'windows-latest' || 'ubuntu-latest' }}
+    name: Analyze (csharp)
+    runs-on: windows-latest
     permissions:
       security-events: write
       packages: read
       actions: read
       contents: read
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: csharp
-            build-mode: manual
-
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (with submodules)
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Setup .NET
-        if: matrix.language == 'csharp'
+      - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -38,16 +35,15 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          languages: csharp
+          build-mode: manual
           queries: security-extended
 
-      - name: Build (C#)
-        if: matrix.build-mode == 'manual'
+      - name: Build
         shell: bash
         run: dotnet build SqlHealthAssessment.sln -c Debug
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: "/language:${{matrix.language}}"
+          category: "/language:csharp"
