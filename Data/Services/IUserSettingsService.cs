@@ -45,6 +45,9 @@ namespace SqlHealthAssessment.Data.Services
         bool GetUseV2PlanIcons();
         void SetUseV2PlanIcons(bool enabled);
 
+        bool GetShowVaQueries();
+        void SetShowVaQueries(bool enabled);
+
         bool GetNoPantsMode();
         void SetNoPantsMode(bool enabled);
 

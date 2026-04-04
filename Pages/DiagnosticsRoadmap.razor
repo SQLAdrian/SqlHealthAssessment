@@ -1701,49 +1701,9 @@
             _expandedLevels.Add(level);
     }
 
-    // Detect delimiter from header line — tilde takes priority over comma
-    private static char DetectDelimiter(string headerLine)
-        => headerLine.Contains('~') ? '~' : ',';
-
-    // Minimal DSV parser — handles quoted fields (comma-delimited) and plain tilde-delimited
-    private static List<string> ParseCsvLine(string line, char delimiter = ',')
-    {
-        var result = new List<string>();
-        if (delimiter != ',')
-        {
-            // Non-comma files (e.g. tilde-delimited sqlmagic) are plain-split.
-            // SQL Server raw output has no quoting convention — strip any stray quotes literally.
-            foreach (var part in line.Split(delimiter))
-                result.Add(part.Trim().Trim('"').Trim('\''));
-            return result;
-        }
-        int i = 0;
-        while (i <= line.Length)
-        {
-            if (i == line.Length) { result.Add(""); break; }
-            if (line[i] == '"')
-            {
-                i++;
-                var sb = new System.Text.StringBuilder();
-                while (i < line.Length)
-                {
-                    if (line[i] == '"' && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i += 2; }
-                    else if (line[i] == '"') { i++; break; }
-                    else { sb.Append(line[i++]); }
-                }
-                result.Add(sb.ToString());
-                if (i < line.Length && line[i] == ',') i++;
-            }
-            else
-            {
-                int comma = line.IndexOf(',', i);
-                if (comma < 0) { result.Add(line.Substring(i)); break; }
-                result.Add(line.Substring(i, comma - i));
-                i = comma + 1;
-            }
-        }
-        return result;
-    }
+    // Delegate to shared CsvParser utility (testable, single source of truth)
+    private static char         DetectDelimiter(string headerLine)                  => SqlHealthAssessment.Data.CsvParser.DetectDelimiter(headerLine);
+    private static List<string> ParseCsvLine(string line, char delimiter = ',')     => SqlHealthAssessment.Data.CsvParser.ParseLine(line, delimiter);
 
     private static string GetMaturityColor(int level) => level switch
     {

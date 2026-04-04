@@ -60,6 +60,10 @@ namespace SqlHealthAssessment.Data
             /// <summary>When true, uses high-res individual PNG icons for query plans. When false, uses coloured sprite sheet (v1).</summary>
             public bool UseV2PlanIcons { get; set; } = false;
 
+            // ── VA Query Visibility ──
+            /// <summary>When true, the SQL query executed for each VA check is shown inline in the results table.</summary>
+            public bool ShowVaQueries { get; set; } = false;
+
             // ── No-Pants Mode ──
             /// <summary>When true, shows dangerous server-modification controls in dashboards. Off by default.</summary>
             public bool NoPantsMode { get; set; } = false;
@@ -253,6 +257,15 @@ namespace SqlHealthAssessment.Data
         public void SetUseV2PlanIcons(bool enabled)
         {
             lock (_lock) _settings.UseV2PlanIcons = enabled;
+            SaveSettings();
+        }
+
+        // ── VA Query Visibility ──
+        public bool GetShowVaQueries() { lock (_lock) return _settings.ShowVaQueries; }
+
+        public void SetShowVaQueries(bool enabled)
+        {
+            lock (_lock) _settings.ShowVaQueries = enabled;
             SaveSettings();
         }
 
