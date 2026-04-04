@@ -11,7 +11,7 @@ namespace SqlHealthAssessment.Data
     /// Stores settings in a JSON file in the application directory.
     /// Thread-safe: all reads/writes are protected by a lock.
     /// </summary>
-    public class UserSettingsService
+    public class UserSettingsService : Services.IUserSettingsService
     {
         private readonly string _settingsFilePath;
         private readonly object _lock = new();

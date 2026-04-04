@@ -14,7 +14,7 @@ namespace SqlHealthAssessment.Data.Services
     /// respecting @media print CSS rules.  Saves to .\output\ automatically.
     /// Falls back to browser window.print() in server mode (no WebView2).
     /// </summary>
-    public class PrintService
+    public class PrintService : IPrintService
     {
         private CoreWebView2? _webView;
         private readonly AuditLogService? _auditLog;
@@ -47,7 +47,8 @@ namespace SqlHealthAssessment.Data.Services
             bool printBackgrounds = false,
             CoreWebView2PrintOrientation orientation = CoreWebView2PrintOrientation.Landscape,
             string? headerTitle = null,
-            string? footerUri = null)
+            string? footerUri = null,
+            int timeoutSeconds = 30)
         {
             if (_webView == null)
             {
@@ -91,7 +92,18 @@ namespace SqlHealthAssessment.Data.Services
 
             try
             {
-                await tcs.Task;
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                var timeoutTask = Task.Delay(Timeout.Infinite, cts.Token);
+                var completed   = await Task.WhenAny(tcs.Task, timeoutTask);
+
+                if (completed == timeoutTask)
+                {
+                    _logger.LogError("PDF export timed out after {Seconds}s for file {FileName}", timeoutSeconds, fileName);
+                    _auditLog?.LogExportOperation("PDF", fileName, false, $"Timed out after {timeoutSeconds}s");
+                    return (false, null, $"PDF export timed out after {timeoutSeconds} seconds.");
+                }
+
+                await tcs.Task; // unwrap any exception
                 _auditLog?.LogExportOperation("PDF", fileName, true);
                 return (true, filePath, null);
             }

@@ -92,6 +92,7 @@ namespace SqlHealthAssessment
 
             // Register ServerConnectionManager first - it will be used by SqlServerConnectionFactory
             services.AddSingleton<ServerConnectionManager>();
+            services.AddSingleton<IServerConnectionManager>(sp => sp.GetRequiredService<ServerConnectionManager>());
             services.AddSingleton<GlobalInstanceSelector>();
 
             // Register SQL Server connection - uses ServerConnectionManager for dynamic server selection
@@ -138,6 +139,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<liveQueriesTableService>();
             services.AddSingleton<SessionManager>();
             services.AddSingleton<UserSettingsService>();
+            services.AddSingleton<Data.Services.IUserSettingsService>(sp => sp.GetRequiredService<UserSettingsService>());
             services.AddSingleton<SessionDataService>();
             services.AddSingleton<ToastService>();
             services.AddSingleton<LogCleanupService>();
@@ -148,6 +150,8 @@ namespace SqlHealthAssessment
             services.AddSingleton<SqlConnectionPoolService>();
             services.AddSingleton<StartupService>();
             services.AddSingleton<Data.Services.PrintService>();
+            services.AddSingleton<Data.Services.IPrintService>(sp => sp.GetRequiredService<Data.Services.PrintService>());
+            services.AddSingleton<Data.Services.ConnectionHealthService>();
             services.AddSingleton<Data.Services.SqlAssessmentService>();
 
             services.AddSingleton<Data.Services.ReportPageConfigService>();
@@ -195,6 +199,9 @@ namespace SqlHealthAssessment
                         : Serilog.Events.LogEventLevel.Information;
                     Log.Information("Debug logging {State}", enabled ? "enabled" : "disabled");
                 };
+
+                // Apply server name anonymisation setting on startup
+                Data.LogAnon.Enabled = userSettings.GetAnonymiseServerNames();
             }
 
             // Validate configuration
@@ -222,6 +229,9 @@ namespace SqlHealthAssessment
 
             // Start scheduled task engine
             Services.GetService<Data.Services.ScheduledTaskEngine>()?.Start();
+
+            // Start connection health monitor (30s ping per enabled server)
+            Services.GetService<Data.Services.ConnectionHealthService>()?.Start();
 
             // Log application start for audit trail
             var auditLog = Services.GetService<AuditLogService>();

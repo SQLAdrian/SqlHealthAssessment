@@ -10,7 +10,7 @@ using SqlHealthAssessment.Data.Models;
 
 namespace SqlHealthAssessment.Data
 {
-    public class ServerConnectionManager
+    public class ServerConnectionManager : IServerConnectionManager
     {
         private readonly ILogger<ServerConnectionManager> _logger;
         private readonly string _connectionsFilePath;

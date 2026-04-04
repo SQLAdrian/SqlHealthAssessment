@@ -105,7 +105,11 @@
         {
             await JS.InvokeVoidAsync("blazorErrorLogger.logError", ex.Message, ex.StackTrace);
         }
-        catch { }
+        catch (Exception jsEx)
+        {
+            // JS interop unavailable (server mode or WebView2 not ready) — non-fatal
+            Console.WriteLine($"[MainLayout] blazorErrorLogger unavailable: {jsEx.Message}");
+        }
     }
 
     private void HandleKeyDown(KeyboardEventArgs args)

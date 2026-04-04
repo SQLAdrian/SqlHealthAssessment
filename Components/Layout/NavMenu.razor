@@ -10,6 +10,7 @@
 @inject SqlHealthAssessment.Data.Services.ThemeService ThemeSvc
 @inject AuditLogService AuditLog
 @inject IJSRuntime JS
+@inject SqlHealthAssessment.Data.Services.ConnectionHealthService ConnectionHealth
 @implements IAsyncDisposable
 
 
@@ -22,6 +23,9 @@
         <br />
         <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-app-text-secondary mt-2 border-t border-app-border">Audits</div>
         <br />
+        <NavLink href="/servers" class="nav-link" title="Ctrl+8">
+            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-server"></i></span> Servers
+        </NavLink>
 <NavLink href="/quickcheck" class="nav-link" title="Ctrl+0">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bolt-lightning"></i></span> Quick Check
         </NavLink>
@@ -31,12 +35,6 @@
         <NavLink href="/vulnerabilityassessment" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-shield-halved"></i></span> Vulnerability Assessment
         </NavLink>
-        @if (_experimentalMode)
-        {
-            <NavLink href="/bpcheck" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-flask"></i></span> BP Check
-            </NavLink>
-        }
         @* Config-driven Audits dashboards *@
         @foreach (var dashboard in DashboardConfig.Config.Dashboards
             .Where(d => d.Enabled && d.NavCategory == "Audits")
@@ -163,9 +161,6 @@
                 <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-table-columns"></i></span> Dashboard Editor
             </NavLink>
         }
-        <NavLink href="/servers" class="nav-link" title="Ctrl+8">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-server"></i></span> Servers
-        </NavLink>
         <NavLink href="/alerts" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bell"></i></span> Alerting
         </NavLink>
@@ -192,6 +187,47 @@
         </NavLink>
     </nav>
     <div class="mt-auto border-t border-app-border">
+        @* ── Server health strip ── *@
+        @{
+            var healthAll    = ConnectionHealth.AllStatuses;
+            var healthOnline  = ConnectionHealth.OnlineCount;
+            var healthOffline = ConnectionHealth.OfflineCount;
+        }
+        @if (healthAll.Count > 0)
+        {
+            <div style="padding:6px 12px 4px; border-bottom:1px solid var(--border);">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+                    <span style="font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Server Health</span>
+                    <span style="font-size:10px; color:var(--text-muted);">
+                        @if (healthOffline > 0)
+                        {
+                            <span style="color:#e2583e; font-weight:700;">@healthOffline offline</span>
+                            @if (healthOnline > 0) { <span> · </span> }
+                        }
+                        @if (healthOnline > 0)
+                        {
+                            <span style="color:#22c55e;">@healthOnline online</span>
+                        }
+                    </span>
+                </div>
+                @foreach (var kvp in healthAll)
+                {
+                    var dot = kvp.Value.Status switch
+                    {
+                        SqlHealthAssessment.Data.Services.ConnectionHealthService.ServerStatus.Online  => "#22c55e",
+                        SqlHealthAssessment.Data.Services.ConnectionHealthService.ServerStatus.Offline => "#e2583e",
+                        _ => "#888"
+                    };
+                    var tip = kvp.Value.Status == SqlHealthAssessment.Data.Services.ConnectionHealthService.ServerStatus.Offline && kvp.Value.Error != null
+                        ? kvp.Value.Error
+                        : kvp.Value.Status.ToString();
+                    <div style="display:flex; align-items:center; gap:5px; padding:1px 0;" title="@tip">
+                        <span style="width:7px; height:7px; border-radius:50%; background:@dot; flex-shrink:0; @(kvp.Value.Status == SqlHealthAssessment.Data.Services.ConnectionHealthService.ServerStatus.Offline ? "box-shadow:0 0 4px #e2583e66;" : "")"></span>
+                        <span style="font-size:10px; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@kvp.Key</span>
+                    </div>
+                }
+            </div>
+        }
         <div class="nav-toggle-row">
             <span class="no-pants-icon @(_noPantsMode ? "no-pants-active" : "")">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -264,7 +300,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:4px;">
                             <path d="M4 4h16v2l-2 14h-4l-1-8h-2l-1 8H6L4 6V4zm2 2v.5l1.8 12.5h2.4l1-8h1.6l1 8h2.4L18 6.5V6H6z"/>
                         </svg>
-                        Drop the Pants
+                        Who Needs Pants
                     </button>
                 </div>
             </div>
@@ -357,8 +393,11 @@
         _experimentalMode = UserSettings.GetExperimentalMode();
         ThemeSvc.SetTheme(_radzenTheme);
         ConnectionManager.OnConnectionChanged += OnServerChanged;
+        ConnectionHealth.OnStatusChanged       += OnHealthChanged;
         await RefreshDbFlags();
     }
+
+    private void OnHealthChanged() => InvokeAsync(StateHasChanged);
 
     private bool _themeApplied = false;
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -409,6 +448,7 @@
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
         ConnectionManager.OnConnectionChanged -= OnServerChanged;
+        ConnectionHealth.OnStatusChanged       -= OnHealthChanged;
         await ValueTask.CompletedTask;
     }
 }
