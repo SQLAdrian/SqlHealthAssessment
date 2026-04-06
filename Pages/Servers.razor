@@ -485,13 +485,16 @@
                 }
 
                 // For new, create separate connection for each server name on separate line
+                var addedConnections = new List<ServerConnection>();
+
                 if (newServerNames.Count == 1)
                 {
                     // Single server - create one connection
                     EditingConnection.ServerNames = newServerNames[0];
                     ConnectionManager.AddConnection(EditingConnection);
-                    StatusMessage = skippedCount > 0 
-                        ? $"Added 1 server ({skippedCount} skipped - already exists)" 
+                    addedConnections.Add(EditingConnection);
+                    StatusMessage = skippedCount > 0
+                        ? $"Added 1 server ({skippedCount} skipped - already exists)"
                         : "Server connection added successfully";
                 }
                 else
@@ -514,27 +517,30 @@
                             Tags = new List<string>(EditingConnection.Tags ?? new List<string>())
                         };
                         ConnectionManager.AddConnection(newConn);
+                        addedConnections.Add(newConn);
                     }
-                    StatusMessage = skippedCount > 0 
-                        ? $"Added {newServerNames.Count} servers ({skippedCount} skipped - already exist)" 
+                    StatusMessage = skippedCount > 0
+                        ? $"Added {newServerNames.Count} servers ({skippedCount} skipped - already exist)"
                         : $"Added {newServerNames.Count} server connections";
                 }
+
+                IsSuccess = true;
+                LoadConnections();
+                CloseDialog();
+
+                // Auto-test every newly added connection
+                foreach (var conn in addedConnections)
+                    await TestConnection(conn);
+
+                return;
             }
-            
+
             IsSuccess = true;
             LoadConnections();
             CloseDialog();
-            
-            // Auto-test connection after saving
-            if (!IsEditing)
-            {
-                var savedConnection = Connections.LastOrDefault();
-                if (savedConnection != null)
-                {
-                    await TestConnection(savedConnection);
-                }
-            }
-            else
+
+            // Edit path — test the updated connection
+            if (IsEditing)
             {
                 await TestConnection(EditingConnection);
             }
