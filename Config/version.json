@@ -1,7 +1,16 @@
 {
-    "version":  "0.83.0",
-    "buildNumber":  791,
-    "buildDate":  "2026-04-04",
+    "version":  "0.84.0",
+    "buildNumber":  818,
+    "buildDate":  "2026-04-06",
     "releaseType":  "Production",
-    "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SqlHealthAssessment/releases/latest"
+    "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SqlHealthAssessment/releases/latest",
+    "whatsnew":  [
+                     "Keyboard shortcuts: Ctrl+R to run, Ctrl+P for PDF export, Ctrl+E for CSV export — press ? to see all shortcuts",
+                     "No-Pants and Experimental mode toggles are now configurable in Settings",
+                     "First-run onboarding wizard guides new users through server setup",
+                     "Show VA Queries toggle — see the SQL code behind each Vulnerability Assessment check",
+                     "Connection health monitor — live server up/down indicator in the nav sidebar",
+                     "Unit tests: 32 tests covering CredentialProtector and CSV parser",
+                     "PDF export timeout (30 s) prevents WebView2 hang"
+                 ]
 }

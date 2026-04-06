@@ -64,6 +64,14 @@ namespace SqlHealthAssessment.Data
             /// <summary>When true, the SQL query executed for each VA check is shown inline in the results table.</summary>
             public bool ShowVaQueries { get; set; } = false;
 
+            // ── Onboarding ──
+            /// <summary>Set to true once the user completes or dismisses the first-run onboarding wizard.</summary>
+            public bool OnboardingComplete { get; set; } = false;
+
+            // ── Release Notes ──
+            /// <summary>The last version for which the "What's new" modal was shown. Empty = never shown.</summary>
+            public string LastSeenVersion { get; set; } = "";
+
             // ── No-Pants Mode ──
             /// <summary>When true, shows dangerous server-modification controls in dashboards. Off by default.</summary>
             public bool NoPantsMode { get; set; } = false;
@@ -302,6 +310,14 @@ namespace SqlHealthAssessment.Data
 
         /// <summary>Fired when experimental mode is toggled.</summary>
         public event Action<bool>? OnExperimentalModeChanged;
+
+        // ── Onboarding ──
+        public bool GetOnboardingComplete() { lock (_lock) return _settings.OnboardingComplete; }
+        public void SetOnboardingComplete(bool complete) { lock (_lock) _settings.OnboardingComplete = complete; SaveSettings(); }
+
+        // ── Release Notes ──
+        public string GetLastSeenVersion() { lock (_lock) return _settings.LastSeenVersion; }
+        public void SetLastSeenVersion(string version) { lock (_lock) _settings.LastSeenVersion = version; SaveSettings(); }
 
         // ── Auto-Export Accessors ──
         public UserSettings GetSettings() { lock (_lock) return _settings; }

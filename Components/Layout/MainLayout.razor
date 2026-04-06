@@ -4,6 +4,9 @@
 @using SqlHealthAssessment.Components.Shared
 @using Radzen.Blazor
 @inject SqlHealthAssessment.Data.Services.ThemeService ThemeSvc
+@inject SqlHealthAssessment.Data.Services.KeyboardShortcutService ShortcutSvc
+@inject SqlHealthAssessment.Data.UserSettingsService UserSettings
+@inject SqlHealthAssessment.Data.ServerConnectionManager ConnectionManager
 @implements IDisposable
 
 <!-- Skip link for screen readers -->
@@ -33,6 +36,8 @@
 <div class="app-container" tabindex="0" role="application" aria-label="SQL Health Assessment Application" @onkeydown="HandleKeyDown">
     <ToastContainer />
     <ShortcutsDialog IsVisible="@showShortcuts" OnClose="@(() => showShortcuts = false)" />
+    <OnboardingWizard IsVisible="@_showOnboarding" OnComplete="OnOnboardingComplete" />
+    <ReleaseNotesModal IsVisible="@_showReleaseNotes" OnClose="OnReleaseNotesClosed" />
     <ServerModeToggle />
     <Router AppAssembly="@typeof(MainLayout).Assembly">
     <Found Context="routeData">
@@ -73,10 +78,39 @@
     [Inject] private IJSRuntime JS { get; set; } = null!;
     private bool showShortcuts = false;
     private bool _afterFirstRender = false;
+    private bool _showOnboarding    = false;
+    private bool _showReleaseNotes  = false;
 
     protected override void OnInitialized()
     {
         ThemeSvc.OnThemeChanged += OnThemeChanged;
+
+        // Show onboarding wizard on first run (no servers configured and not dismissed before)
+        if (!UserSettings.GetOnboardingComplete() && ConnectionManager.GetConnections().Count == 0)
+        {
+            _showOnboarding = true;
+        }
+        else
+        {
+            // Show release notes when version has changed since last seen
+            var currentVersion = GetCurrentVersion();
+            if (!string.IsNullOrEmpty(currentVersion) && UserSettings.GetLastSeenVersion() != currentVersion)
+                _showReleaseNotes = true;
+        }
+    }
+
+    private static string GetCurrentVersion()
+    {
+        try
+        {
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "version.json");
+            if (!File.Exists(path))
+                path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "version.json");
+            if (!File.Exists(path)) return "";
+            var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            return doc.RootElement.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
+        }
+        catch { return ""; }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -87,6 +121,22 @@
             StateHasChanged();
         }
         await Task.CompletedTask;
+    }
+
+    private void OnOnboardingComplete()
+    {
+        _showOnboarding = false;
+        UserSettings.SetOnboardingComplete(true);
+        StateHasChanged();
+    }
+
+    private void OnReleaseNotesClosed()
+    {
+        _showReleaseNotes = false;
+        var version = GetCurrentVersion();
+        if (!string.IsNullOrEmpty(version))
+            UserSettings.SetLastSeenVersion(version);
+        StateHasChanged();
     }
 
     private void OnThemeChanged()
@@ -128,10 +178,32 @@
             return;
         }
 
-        // Ctrl+1-9 for quick navigation
         if (args.CtrlKey)
         {
             var key = args.Key;
+
+            // Ctrl+R — Run/Scan on active page
+            if (key is "r" or "R")
+            {
+                _ = ShortcutSvc.TriggerRun();
+                return;
+            }
+
+            // Ctrl+P — PDF export on active page
+            if (key is "p" or "P")
+            {
+                _ = ShortcutSvc.TriggerExportPdf();
+                return;
+            }
+
+            // Ctrl+E — CSV export on active page
+            if (key is "e" or "E")
+            {
+                _ = ShortcutSvc.TriggerExportCsv();
+                return;
+            }
+
+            // Ctrl+1-9 for quick navigation
             string? route = key switch
             {
                 "1" => "/",
@@ -145,14 +217,11 @@
                 "9" => "/bulkeditchecks",
                 "h" or "H" => "/health",
                 "q" or "Q" => "/checks",
-                "e" or "E" => "/dashboard-editor",
                 _ => null
             };
-            
+
             if (route != null)
-            {
                 Navigation.NavigateTo(route);
-            }
         }
     }
 }

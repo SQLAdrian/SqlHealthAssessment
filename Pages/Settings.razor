@@ -175,12 +175,37 @@
     </div>
 
     <div class="settings-group">
+        <h3>Modes</h3>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="noPantsMode" checked="@_noPantsMode"
+                   @onchange="OnNoPantsModeChanged" style="width: auto;" />
+            <label for="noPantsMode" style="margin: 0; font-weight: normal;">
+                <strong style="color:#ef4444;">No-Pants Mode</strong> — show dangerous server controls (deployment, drop database, force restarts)
+            </label>
+        </div>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="experimentalMode" checked="@_experimentalMode"
+                   @onchange="OnExperimentalModeChanged" style="width: auto;" />
+            <label for="experimentalMode" style="margin: 0; font-weight: normal;">
+                <strong style="color:#f59e0b;">Experimental Mode</strong> — show preview features that are still in development
+            </label>
+        </div>
+    </div>
+
+    <div class="settings-group">
         <h3>Diagnostics</h3>
         <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="enableDebugLogging" checked="@_debugLogging"
                    @onchange="ToggleDebugLogging" style="width: auto;" />
             <label for="enableDebugLogging" style="margin: 0; font-weight: normal;">
                 Enable Debug Logging (verbose output to log file — no restart required)
+            </label>
+        </div>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="anonymiseServerNames" checked="@_anonymiseServerNames"
+                   @onchange="ToggleAnonymiseServerNames" style="width: auto;" />
+            <label for="anonymiseServerNames" style="margin: 0; font-weight: normal;">
+                Anonymise server names in log file (replaces real names with SRV-001, SRV-002 … — useful when sharing logs)
             </label>
         </div>
     </div>
@@ -574,7 +599,10 @@
     private bool SaveSuccess;
     private bool ShowDiagnosticPane;
     private bool _debugLogging;
+    private bool _anonymiseServerNames;
     private bool _useV2PlanIcons;
+    private bool _noPantsMode;
+    private bool _experimentalMode;
     private string DefaultDashboardId = "";
     private string? DashboardSaveResult;
     private string? ConfigValidationResult;
@@ -638,7 +666,11 @@
         // Load user settings
         ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
         _debugLogging = UserSettings.GetDebugLogging();
-        _useV2PlanIcons = UserSettings.GetUseV2PlanIcons();
+        _anonymiseServerNames = UserSettings.GetAnonymiseServerNames();
+        LogAnon.Enabled = _anonymiseServerNames;
+        _useV2PlanIcons   = UserSettings.GetUseV2PlanIcons();
+        _noPantsMode      = UserSettings.GetNoPantsMode();
+        _experimentalMode = UserSettings.GetExperimentalMode();
         DefaultDashboardId = UserSettings.GetDefaultDashboardId();
         _zoomLevel = UserSettings.GetZoomLevel();
 
@@ -689,11 +721,33 @@
         UserSettings.SetDebugLogging(_debugLogging);
     }
 
+    private void ToggleAnonymiseServerNames(ChangeEventArgs e)
+    {
+        _anonymiseServerNames = (bool)(e.Value ?? false);
+        UserSettings.SetAnonymiseServerNames(_anonymiseServerNames);
+        LogAnon.Enabled = _anonymiseServerNames;
+        if (!_anonymiseServerNames) LogAnon.Reset();
+    }
+
     private async Task ToggleV2PlanIcons(ChangeEventArgs e)
     {
         _useV2PlanIcons = (bool)(e.Value ?? false);
         UserSettings.SetUseV2PlanIcons(_useV2PlanIcons);
         try { await JS.InvokeVoidAsync("queryPlanInteropV2.setUseV2Icons", _useV2PlanIcons); } catch { }
+    }
+
+    private void OnNoPantsModeChanged(ChangeEventArgs e)
+    {
+        _noPantsMode = (bool)(e.Value ?? false);
+        UserSettings.SetNoPantsMode(_noPantsMode);
+        // disclaimer is implicitly accepted when enabled via Settings
+        if (_noPantsMode) UserSettings.SetNoPantsDisclaimerAccepted(true);
+    }
+
+    private void OnExperimentalModeChanged(ChangeEventArgs e)
+    {
+        _experimentalMode = (bool)(e.Value ?? false);
+        UserSettings.SetExperimentalMode(_experimentalMode);
     }
 
     private void SaveDefaultDashboard()

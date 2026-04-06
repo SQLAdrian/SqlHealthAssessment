@@ -57,6 +57,12 @@ namespace SqlHealthAssessment.Data.Services
         bool GetExperimentalMode();
         void SetExperimentalMode(bool enabled);
 
+        bool GetOnboardingComplete();
+        void SetOnboardingComplete(bool complete);
+
+        string GetLastSeenVersion();
+        void SetLastSeenVersion(string version);
+
         void UpdateAutoExportSettings(
             bool auditCsv, bool auditJson, bool auditPdf,
             bool quickCheckCsv, bool quickCheckPdf,

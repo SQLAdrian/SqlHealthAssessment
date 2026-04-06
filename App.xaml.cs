@@ -152,6 +152,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<Data.Services.PrintService>();
             services.AddSingleton<Data.Services.IPrintService>(sp => sp.GetRequiredService<Data.Services.PrintService>());
             services.AddSingleton<Data.Services.ConnectionHealthService>();
+            services.AddSingleton<Data.Services.KeyboardShortcutService>();
             services.AddSingleton<Data.Services.SqlAssessmentService>();
 
             services.AddSingleton<Data.Services.ReportPageConfigService>();

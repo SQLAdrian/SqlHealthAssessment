@@ -76,6 +76,7 @@
     <Compile Remove="BenchmarkSuite1\**" />
     <Compile Remove="Release\**" />
     <Compile Remove="PerformanceMonitor-main\**" />
+    <Compile Remove="Config\Ignore\**" />
     <EmbeddedResource Remove="SqlWatch.Monitor\**" />
     <EmbeddedResource Remove="Tests\**" />
     <EmbeddedResource Remove="BenchmarkSuite1\**" />

@@ -12,6 +12,7 @@
 @inject SqlHealthAssessment.Data.Services.PrintService PrintSvc
 @inject SqlHealthAssessment.Data.Services.ReportPageConfigService ReportPageCfg
 @inject SqlHealthAssessment.Data.ToastService Toast
+@inject SqlHealthAssessment.Data.Services.KeyboardShortcutService ShortcutSvc
 @inject IJSRuntime JSRuntime
 @implements IDisposable
 
@@ -105,7 +106,13 @@
                     <div class="all-servers-preview">
                         @if (EnabledConnections.Count == 0)
                         {
-                            <span class="no-servers">No enabled server connections configured. Go to Servers page to add connections.</span>
+                            <div style="padding:32px; text-align:center;">
+                                <i class="fa-solid fa-server" style="font-size:32px; color:var(--text-muted); margin-bottom:12px; display:block;"></i>
+                                <div style="font-size:14px; color:var(--text-secondary); margin-bottom:16px;">No server connections configured.</div>
+                                <a href="/servers" style="display:inline-flex; align-items:center; gap:8px; padding:8px 20px; background:var(--primary); color:#fff; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
+                                    <i class="fa-solid fa-plus"></i> Add Server
+                                </a>
+                            </div>
                         }
                         else
                         {
@@ -553,6 +560,10 @@
         // Re-attach to state change notifications each time the page mounts
         State.StateChanged += OnStateChanged;
 
+        // Keyboard shortcuts
+        ShortcutSvc.OnRunRequested       += OnShortcutRun;
+        ShortcutSvc.OnExportPdfRequested += OnShortcutPdf;
+
         // Ensure categories are populated (may have been loaded on a prior visit)
         if (State.Categories.Count == 0)
             State.Categories = CheckRepo.GetEnabledChecks()
@@ -563,7 +574,12 @@
     {
         _disposed = true;
         State.StateChanged -= OnStateChanged;
+        ShortcutSvc.OnRunRequested       -= OnShortcutRun;
+        ShortcutSvc.OnExportPdfRequested -= OnShortcutPdf;
     }
+
+    private async Task OnShortcutRun() => await InvokeAsync(RunChecks);
+    private Task OnShortcutPdf()       { InvokeAsync(PrintResults); return Task.CompletedTask; }
 
     private void OnStateChanged()
     {

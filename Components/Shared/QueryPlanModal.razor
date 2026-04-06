@@ -66,8 +66,8 @@
         {
             try
             {
-                // Apply icon set preference before rendering
-                await JS.InvokeVoidAsync("queryPlanInteropV2.setUseV2Icons", UserSettings.GetUseV2PlanIcons());
+                // Apply icon set preference before rendering (guard: older published versions may not have this method)
+                try { await JS.InvokeVoidAsync("queryPlanInteropV2.setUseV2Icons", UserSettings.GetUseV2PlanIcons()); } catch { }
                 var json = ExecutionPlanParser.ParseToJson(xml);
                 await JS.InvokeVoidAsync("queryPlanInteropV2.showPlan", "qp-container", json);
                 return;
