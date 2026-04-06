@@ -26,7 +26,11 @@ namespace SqlHealthAssessment
         protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            _ = OnStartupAsync(e);
+        }
 
+        private async Task OnStartupAsync(StartupEventArgs e)
+        {
             // Set up global exception handling
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
             DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -52,18 +56,18 @@ namespace SqlHealthAssessment
             // Check WebView2 runtime availability before proceeding
             var webView2Helper = new WebView2Helper();
             var webView2Status = await webView2Helper.CheckWebView2StatusAsync();
-            
+
             WebView2Helper = webView2Helper;
-            
+
             if (!webView2Status.IsInstalled || !webView2Status.IsCompatible)
             {
                 WebView2Available = false;
                 WebView2ErrorMessage = webView2Status.ErrorMessage ?? "WebView2 runtime is not available";
-                
+
                 Log.Warning("WebView2 runtime check failed: {ErrorMessage}. Windows Version: {WindowsVersion}. " +
-                            "Application will attempt to start but may fail.", 
-                    WebView2ErrorMessage, WebView2Helper.GetWindowsVersion());
-                
+                            "Application will attempt to start but may fail.",
+                        WebView2ErrorMessage, WebView2Helper.GetWindowsVersion());
+
                 // Don't block startup - let the MainWindow handle the error display
                 // This allows users on servers with WebView2 to still run the app
             }
@@ -98,7 +102,7 @@ namespace SqlHealthAssessment
             // Register SQL Server connection - uses ServerConnectionManager for dynamic server selection
             var connStr = configuration.GetConnectionString("SqlServer") ?? "Server=.;Database=SQLWATCH;Integrated Security=true;";
             var trustServerCert = configuration.GetValue<bool>("TrustServerCertificate", false);
-            
+
             // Create a temporary factory to get the registered ServerConnectionManager
             services.AddSingleton<IDbConnectionFactory>(sp =>
             {

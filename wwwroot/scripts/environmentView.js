@@ -36,7 +36,6 @@ window.environmentView = (function () {
     var RAD_SERVER = 42;     // server node radius
     var HOST_W     = 136;
     var HOST_H     = 50;
-    var FONT       = '500 11px "Segoe UI",system-ui,sans-serif';
     var FONT_SMALL = '10px "Segoe UI",system-ui,sans-serif';
     var FONT_NAME  = '600 12px "Segoe UI",system-ui,sans-serif';
 
@@ -465,6 +464,8 @@ window.environmentView = (function () {
         var _tx = 0, _ty = 0, _scale = 1;
         var _drag = false, _lx = 0, _ly = 0;
         var _nodeDrag = null, _ndOffX = 0, _ndOffY = 0;
+        var _mouseDownPos = null;   // {x,y} at mousedown — used to distinguish click from drag
+        var DRAG_THRESHOLD = 5;     // px movement before treating as a drag
 
         function toWorld(cx, cy) {
             return { x: (cx - _tx) / _scale, y: (cy - _ty) / _scale };
@@ -571,6 +572,7 @@ window.environmentView = (function () {
             if (e.button !== 0) return;
             var p = canvasXY(e); var w = toWorld(p.cx, p.cy);
             var hit = hitNode(nodes, w.x, w.y);
+            _mouseDownPos = { x: e.clientX, y: e.clientY };
             if (hit) {
                 _nodeDrag = hit;
                 _ndOffX   = hit.x - w.x;
@@ -584,18 +586,32 @@ window.environmentView = (function () {
             e.preventDefault();
         });
 
-        window.addEventListener('mouseup', function() {
+        function onMouseUp() {
+            var wasDraggingNode = _nodeDrag;
             if (_nodeDrag) { _nodeDrag.pinned = false; _nodeDrag = null; }
             if (_drag) { _drag = false; cvs.style.cursor = _hover ? 'pointer' : 'grab'; }
-        });
+            return wasDraggingNode;
+        }
+        window.addEventListener('mouseup', onMouseUp);
 
         cvs.addEventListener('click', function(e) {
+            // Ignore if the mouse moved more than threshold — it was a drag, not a click
+            if (_mouseDownPos) {
+                var dx = e.clientX - _mouseDownPos.x;
+                var dy = e.clientY - _mouseDownPos.y;
+                if (dx*dx + dy*dy > DRAG_THRESHOLD*DRAG_THRESHOLD) { _mouseDownPos = null; return; }
+                _mouseDownPos = null;
+            }
             var p = canvasXY(e); var w = toWorld(p.cx, p.cy);
             var hit = hitNode(nodes, w.x, w.y);
             if (hit && hit.type === 'host') {
-                _active = (_active === hit) ? null : hit;
-                if (_active && window._envDotNetRef) {
+                var toggling = (_active === hit);
+                _active = toggling ? null : hit;
+                if (!toggling && window._envDotNetRef) {
                     window._envDotNetRef.invokeMethodAsync('OnHostNodeClicked', hit.label);
+                } else if (toggling) {
+                    // Clicking active node again — close the detail panel
+                    window._envDotNetRef && window._envDotNetRef.invokeMethodAsync('OnHostNodeClicked', '');
                 }
             }
         });
@@ -661,7 +677,7 @@ window.environmentView = (function () {
     }
 
     function setHostCallback(dotNetRef) {
-        window._envDotNetRef = dotNetRef;
+        window._envDotNetRef = dotNetRef || null;
     }
 
     // Keep renderMini as alias so existing Blazor calls don't break during transition

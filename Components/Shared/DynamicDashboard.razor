@@ -408,6 +408,7 @@
 
     // Per-load cancellation (sqltoolsservice pattern: cancel in-flight load before starting new one)
     private CancellationTokenSource? _loadCts;
+    private volatile bool _disposed = false;
 
     // Data results keyed by panel ID
     private ConcurrentDictionary<string, List<TimeSeriesPoint>> _timeSeriesResults = new();
@@ -433,7 +434,7 @@
     {
         _noPantsMode = enabled;
         if (!enabled) _dashEditMode = false; // exit edit mode when pants go back on
-        _ = InvokeAsync(StateHasChanged);
+        _ = SafeStateHasChanged();
     }
 
     // ── Dashboard edit mode ───────────────────────────────────────────────
@@ -734,7 +735,7 @@
             try
             {
                 await StartLoad();
-                StateHasChanged();
+                if (!_disposed) StateHasChanged();
                 Logger.LogDebug("[DynamicDashboard:{DashboardId}] Instance change completed successfully", DashboardId);
             }
             catch (Exception ex)
@@ -1032,7 +1033,7 @@
                     {
                         await LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, cancellationToken);
                         Interlocked.Increment(ref _loadedPanelCount);
-                        await InvokeAsync(StateHasChanged);
+                        await SafeStateHasChanged();
                         return Task.CompletedTask;
                     },
                     isHeavy: panel.PanelType == "TimeSeries",
@@ -1091,7 +1092,7 @@
         
         _hasLoadedOnce = true;
         IsLoading = false;
-        await InvokeAsync(StateHasChanged);
+        await SafeStateHasChanged();
     }
 
     private async Task LoadPanelDataAsync(
@@ -1203,15 +1204,19 @@
         }
         catch (OperationCanceledException)
         {
-            Logger.LogWarning("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Operation was cancelled", DashboardId, panel.Id);
-            LocalLogger.LogWarning($"[DynamicDashboard:{DashboardId}] [Panel:{panel.Id}] Operation cancelled");
+            Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Operation cancelled (navigation)", DashboardId, panel.Id);
+        }
+        catch (Exception ex) when (IsCancellationException(ex, cancellationToken))
+        {
+            // SqlException "Operation cancelled by user" — navigation away cancelled the query, not an error
+            Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Query cancelled by navigation", DashboardId, panel.Id);
         }
         catch (Exception ex)
         {
             var errorMsg = $"Panel '{panel.Id}' error: {ex.Message}";
             _panelErrors[panel.Id] = errorMsg;
-            
-            Logger.LogError(ex, "[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Panel loading failed: {ErrorMessage}", 
+
+            Logger.LogError(ex, "[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Panel loading failed: {ErrorMessage}",
                 DashboardId, panel.Id, ex.Message);
             LocalLogger.LogError($"[DynamicDashboard:{DashboardId}] [Panel:{panel.Id}] ERROR - {ex.Message}", ex);
             System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] [Panel:{panel.Id}] ERROR - {ex.Message}\n{ex.StackTrace}");
@@ -1332,7 +1337,7 @@
             var newData = await CachingExecutor.ExecuteQueryAsync(panelId, filter, gridParams);
             if (_gridResults.TryGetValue(panelId, out var old)) old?.Dispose();
             _gridResults[panelId] = newData;
-            await InvokeAsync(StateHasChanged);
+            await SafeStateHasChanged();
         }
         catch (Exception ex)
         {
@@ -1511,7 +1516,7 @@
         }
 
         _jobDetailsLoading = false;
-        await InvokeAsync(StateHasChanged);
+        await SafeStateHasChanged();
     }
 
     private void CloseJobDetailsModal()
@@ -1574,8 +1579,35 @@
         await InvokeAsync(() => LoadData());
     }
 
+    /// <summary>Returns true when a SqlException is caused by query cancellation (navigation away),
+    /// not a real SQL error. Suppresses false ERR log entries on dashboard navigation.</summary>
+    private static bool IsCancellationException(Exception ex, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested) return true;
+        // SqlException wraps "Operation cancelled by user" as error number 0 / severity >= 20
+        if (ex is Microsoft.Data.SqlClient.SqlException sqlEx)
+        {
+            var msg = sqlEx.Message;
+            return msg.Contains("Operation cancelled", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("cancelled by user", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("severe error", StringComparison.OrdinalIgnoreCase);
+        }
+        return ex.InnerException != null && IsCancellationException(ex.InnerException, ct);
+    }
+
+    /// <summary>Guards InvokeAsync(StateHasChanged) calls — no-ops after disposal to prevent
+    /// WebView2 "removeChild on null" / render-batch-sequence errors.</summary>
+    private Task SafeStateHasChanged()
+    {
+        if (_disposed) return Task.CompletedTask;
+        try { return InvokeAsync(StateHasChanged); }
+        catch (ObjectDisposedException) { return Task.CompletedTask; }
+        catch (InvalidOperationException) { return Task.CompletedTask; }
+    }
+
     public void Dispose()
     {
+        _disposed = true;
         Logger.LogInformation("[DynamicDashboard:{DashboardId}] Starting disposal", DashboardId);
         LocalLogger.LogInfo($"[DynamicDashboard:{DashboardId}] Starting disposal");
         
@@ -1674,7 +1706,7 @@
         }
 
         _baselineResults = baselineResults;
-        await InvokeAsync(StateHasChanged);
+        await SafeStateHasChanged();
     }
 
     private void ToggleBaseline()

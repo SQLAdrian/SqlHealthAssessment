@@ -278,7 +278,7 @@
       "operator": "greater_than",
       "durationSeconds": 0,
       "frequencySeconds": 300,
-      "query": "SELECT CAST(physical_memory_in_use_kb AS FLOAT) / NULLIF(committed_target_kb, 0) * 100 AS value FROM sys.dm_os_process_memory"
+      "query": "SELECT memory_utilization_percentage AS value FROM sys.dm_os_process_memory"
     },
     {
       "id": "os_paging",
@@ -835,7 +835,7 @@
       "durationSeconds": 0,
       "frequencySeconds": 3600,
       "cooldownMinutes": 60,
-      "query": "SELECT MAX(DATEDIFF(HOUR, DBCC_LastKnownGood, GETDATE())) AS value FROM (SELECT d.name, DATABASEPROPERTYEX(d.name, 'LastGoodCheckDbTime') AS DBCC_LastKnownGood FROM sys.databases d WHERE d.database_id > 4 AND d.state = 0) x WHERE DBCC_LastKnownGood IS NOT NULL"
+      "query": "SELECT ISNULL(MAX(DATEDIFF(HOUR, CONVERT(DATETIME, DBCC_LastKnownGood), GETDATE())), 0) AS value FROM (SELECT d.name, DATABASEPROPERTYEX(d.name, 'LastGoodCheckDbTime') AS DBCC_LastKnownGood FROM sys.databases d WHERE d.database_id > 4 AND d.state = 0) x WHERE DBCC_LastKnownGood IS NOT NULL"
     },
     {
       "id": "ag_failover",
@@ -1123,7 +1123,7 @@
       "operator": "greater_than",
       "durationSeconds": 0,
       "frequencySeconds": 300,
-      "query": "SELECT MAX(ABS(DATEDIFF(SECOND, ja.start_execution_date, ja.stop_execution_date) - median_duration) * 100.0 / NULLIF(median_duration, 0)) AS value FROM msdb.dbo.sysjobactivity ja JOIN msdb.dbo.sysjobs j ON ja.job_id = j.job_id CROSS APPLY (SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY DATEDIFF(SECOND, h.run_date, h.run_time)) AS median_duration FROM (SELECT TOP 10 DATEDIFF(SECOND, run_date, run_time) FROM msdb.dbo.sysjobhistory WHERE job_id = j.job_id AND run_status = 1 ORDER BY instance_id DESC)) med WHERE ja.start_execution_date IS NOT NULL AND ja.stop_execution_date IS NOT NULL AND ja.session_id = (SELECT MAX(session_id) FROM msdb.dbo.sysjobactivity WHERE job_id = j.job_id)"
+      "query": "SELECT ISNULL(MAX(ABS(DATEDIFF(SECOND, ja.start_execution_date, ja.stop_execution_date) - avg_duration) * 100.0 / NULLIF(avg_duration, 0)), 0) AS value FROM msdb.dbo.sysjobactivity ja JOIN msdb.dbo.sysjobs j ON ja.job_id = j.job_id CROSS APPLY (SELECT AVG(CAST(run_duration AS FLOAT)) AS avg_duration FROM (SELECT TOP 10 run_duration FROM msdb.dbo.sysjobhistory WHERE job_id = j.job_id AND run_status = 1 ORDER BY instance_id DESC) h) med WHERE ja.start_execution_date IS NOT NULL AND ja.stop_execution_date IS NOT NULL AND ja.session_id = (SELECT MAX(session_id) FROM msdb.dbo.sysjobactivity WHERE job_id = j.job_id)"
     },
     {
       "id": "page_verify_disabled",
@@ -1205,7 +1205,7 @@
       "operator": "greater_than",
       "durationSeconds": 30,
       "frequencySeconds": 30,
-      "query": "SELECT COUNT(*) AS value FROM sys.availability_groups ag WHERE ag.automated_backup_preference_desc = 'PRIMARY' AND NOT EXISTS (SELECT 1 FROM sys.availability_replicas ar WHERE ar.group_id = ag.group_id AND ar.replica_id <> (SELECT replica_id FROM sys.availability_replicas WHERE group_id = ag.group_id AND is_local = 1) AND ar.failover_mode_desc = 'AUTOMATIC')"
+      "query": "SELECT COUNT(*) AS value FROM sys.availability_groups ag WHERE NOT EXISTS (SELECT 1 FROM sys.availability_replicas ar WHERE ar.group_id = ag.group_id AND ar.replica_server_name <> CAST(SERVERPROPERTY('ServerName') AS NVARCHAR(256)) AND ar.failover_mode_desc = 'AUTOMATIC')"
     },
     {
       "id": "processor_under_utilization",

@@ -37,6 +37,14 @@
          The WPF temp project cannot run the Razor source generator; skip Razor compilation
          for the temp project only. The main project handles Razor normally. -->
     <EnableDefaultRazorGenerateItems Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</EnableDefaultRazorGenerateItems>
+    <!-- Suppress duplicate AssemblyInfo attributes in the WPF hot-reload temp project -->
+    <GenerateAssemblyInfo Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</GenerateTargetFrameworkAttribute>
+    <!-- Suppress Razor compilation in the WPF hot-reload temp project -->
+    <RazorCompileOnBuild Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</RazorCompileOnBuild>
+    <RazorCompileOnPublish Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</RazorCompileOnPublish>
+    <!-- Suppress the Razor SDK's duplicate AssemblyInfo generation — standard .NET SDK handles this -->
+    <GenerateRazorTargetAssemblyInfo>false</GenerateRazorTargetAssemblyInfo>
     <!-- Custom entry point: Program.Main handles both WPF and service modes -->
     <StartupObject>SqlHealthAssessment.Program</StartupObject>
   </PropertyGroup>
@@ -44,6 +52,18 @@
   <!-- ASP.NET Core framework for Blazor Server mode (Kestrel, SignalR) -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Exclude orphaned scratch projects from compilation -->
+  <ItemGroup>
+    <Compile Remove="CheckValidator\**" />
+    <Content Remove="CheckValidator\**" />
+    <EmbeddedResource Remove="CheckValidator\**" />
+    <None Remove="CheckValidator\**" />
+    <Compile Remove="CheckMerger\**" />
+    <Content Remove="CheckMerger\**" />
+    <EmbeddedResource Remove="CheckMerger\**" />
+    <None Remove="CheckMerger\**" />
   </ItemGroup>
 
   <!-- PerformanceStudio: SQL execution plan analyzer by Erik Darling (git submodule) -->

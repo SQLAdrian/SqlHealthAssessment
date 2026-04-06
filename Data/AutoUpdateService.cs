@@ -228,51 +228,88 @@ namespace SqlHealthAssessment.Data
             var appDir = AppContext.BaseDirectory.TrimEnd('\\', '/');
             var zipPath = Path.Combine(stagingDir, "update.zip");
             var backupDir = Path.Combine(stagingDir, "config-backup");
+            var extractDir = Path.Combine(stagingDir, "extracted");
+            var logPath = Path.Combine(stagingDir, "update.log");
             var scriptPath = Path.Combine(stagingDir, "apply-update.cmd");
             var exeName = "SqlHealthAssessment.exe";
+            var exePath = Path.Combine(appDir, exeName);
 
-            // Build backup/restore lines for each protected config file
-            var backupLines = string.Join("\r\n", ProtectedConfigFiles.Select(f =>
-                $"if exist \"{appDir}\\{f}\" copy /Y \"{appDir}\\{f}\" \"{backupDir}\\{Path.GetFileName(f)}\" >nul"));
-            var restoreLines = string.Join("\r\n", ProtectedConfigFiles.Select(f =>
-                $"if exist \"{backupDir}\\{Path.GetFileName(f)}\" copy /Y \"{backupDir}\\{Path.GetFileName(f)}\" \"{appDir}\\{f}\" >nul"));
+            // Build backup/restore lines for each protected config file.
+            // Using string concatenation (not interpolation) for paths so % signs in the
+            // batch script template don't interfere with C# string interpolation.
+            var nl = "\r\n";
+            var backupLines = string.Join(nl, ProtectedConfigFiles.Select(f =>
+                "if exist \"" + appDir + "\\" + f + "\" copy /Y \"" + appDir + "\\" + f + "\" \"" + backupDir + "\\" + Path.GetFileName(f) + "\" >>\"" + logPath + "\" 2>&1"));
+            var restoreLines = string.Join(nl, ProtectedConfigFiles.Select(f =>
+                "if exist \"" + backupDir + "\\" + Path.GetFileName(f) + "\" copy /Y \"" + backupDir + "\\" + Path.GetFileName(f) + "\" \"" + appDir + "\\" + f + "\" >>\"" + logPath + "\" 2>&1"));
 
-            // Batch script: wait for app to close, backup configs, extract ZIP, restore configs, restart, clean up
-            var script = $@"@echo off
-echo SQL Health Assessment — Applying Update...
-echo Waiting for application to close...
-:wait
-timeout /t 2 /nobreak >nul
-tasklist /FI ""IMAGENAME eq {exeName}"" 2>NUL | find /I ""{exeName}"" >NUL
-if not errorlevel 1 goto wait
+            // Build the script using StringBuilder — avoids C# interpolation conflicts with
+            // batch tokens like %date%, %time%, %%D, %errorlevel%, etc.
+            var sb = new System.Text.StringBuilder();
+            sb.Append("@echo off").Append(nl);
+            sb.Append("setlocal").Append(nl);
+            sb.Append("set LOG=\"" + logPath + "\"").Append(nl);
+            sb.Append("echo [%date% %time%] SQL Health Assessment Update Applier started >> %LOG%").Append(nl);
+            sb.Append(nl);
+            sb.Append("echo Waiting for application to close...").Append(nl);
+            sb.Append(":wait").Append(nl);
+            sb.Append("timeout /t 2 /nobreak >nul").Append(nl);
+            sb.Append("tasklist /FI \"IMAGENAME eq " + exeName + "\" 2>NUL | find /I \"" + exeName + "\" >NUL").Append(nl);
+            sb.Append("if not errorlevel 1 goto wait").Append(nl);
+            sb.Append("echo [%date% %time%] Application closed. >> %LOG%").Append(nl);
+            sb.Append(nl);
+            sb.Append("echo Backing up user configuration...").Append(nl);
+            sb.Append("if not exist \"" + backupDir + "\" mkdir \"" + backupDir + "\"").Append(nl);
+            sb.Append(backupLines).Append(nl);
+            sb.Append("echo [%date% %time%] Config backup done. >> %LOG%").Append(nl);
+            sb.Append(nl);
+            sb.Append("echo Extracting update to temp folder...").Append(nl);
+            sb.Append("if exist \"" + extractDir + "\" rmdir /s /q \"" + extractDir + "\"").Append(nl);
+            sb.Append("mkdir \"" + extractDir + "\"").Append(nl);
+            // PowerShell Expand-Archive — single-quoted paths inside double-quoted PS command string
+            sb.Append("powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -Path '" + zipPath + "' -DestinationPath '" + extractDir + "' -Force\"").Append(nl);
+            sb.Append("if errorlevel 1 (").Append(nl);
+            sb.Append("    echo [%date% %time%] ERROR: Expand-Archive failed. >> %LOG%").Append(nl);
+            sb.Append("    echo Update failed. See \"" + logPath + "\" for details.").Append(nl);
+            sb.Append("    pause").Append(nl);
+            sb.Append("    exit /b 1").Append(nl);
+            sb.Append(")").Append(nl);
+            sb.Append("echo [%date% %time%] Extraction complete. >> %LOG%").Append(nl);
+            sb.Append(nl);
+            // If the ZIP had a single nested folder (e.g. publish\), use that as source
+            sb.Append("set SRC=\"" + extractDir + "\"").Append(nl);
+            sb.Append("for /d %%D in (\"" + extractDir + "\\*\") do set SUBDIR=%%D").Append(nl);
+            sb.Append("if exist \"%SUBDIR%\\" + exeName + "\" set SRC=\"%SUBDIR%\"").Append(nl);
+            sb.Append(nl);
+            sb.Append("echo Copying files to application directory...").Append(nl);
+            sb.Append("robocopy %SRC% \"" + appDir + "\" /E /IS /IT /NFL /NDL /NJH /NJS >> %LOG% 2>&1").Append(nl);
+            sb.Append("if errorlevel 8 (").Append(nl);
+            sb.Append("    echo [%date% %time%] ERROR: robocopy failed. >> %LOG%").Append(nl);
+            sb.Append("    echo Update failed. See \"" + logPath + "\" for details.").Append(nl);
+            sb.Append("    pause").Append(nl);
+            sb.Append("    exit /b 1").Append(nl);
+            sb.Append(")").Append(nl);
+            sb.Append("echo [%date% %time%] Files copied. >> %LOG%").Append(nl);
+            sb.Append(nl);
+            sb.Append("echo Restoring user configuration...").Append(nl);
+            sb.Append(restoreLines).Append(nl);
+            sb.Append("echo [%date% %time%] Config restore done. >> %LOG%").Append(nl);
+            sb.Append(nl);
+            sb.Append("echo Cleaning up...").Append(nl);
+            sb.Append("rmdir /s /q \"" + extractDir + "\" 2>nul").Append(nl);
+            sb.Append("del \"" + zipPath + "\" 2>nul").Append(nl);
+            sb.Append("rmdir /s /q \"" + backupDir + "\" 2>nul").Append(nl);
+            sb.Append(nl);
+            sb.Append("echo [%date% %time%] Update applied successfully. >> %LOG%").Append(nl);
+            sb.Append("echo Update applied. Restarting application...").Append(nl);
+            sb.Append("start \"\" \"" + exePath + "\"").Append(nl);
+            sb.Append("timeout /t 3 /nobreak >nul").Append(nl);
+            sb.Append("endlocal").Append(nl);
+            // Self-delete: (goto) redirects to a non-existent label, closing the script
+            // handle so the file can be deleted by the last command.
+            sb.Append("(goto) 2>nul & del \"" + scriptPath + "\"").Append(nl);
 
-echo Backing up user configuration...
-if not exist ""{backupDir}"" mkdir ""{backupDir}""
-{backupLines}
-
-echo Extracting update...
-powershell -NoProfile -Command ""Expand-Archive -Path '{zipPath}' -DestinationPath '{appDir}' -Force""
-if errorlevel 1 (
-    echo ERROR: Failed to extract update.
-    pause
-    exit /b 1
-)
-
-echo Restoring user configuration...
-{restoreLines}
-
-echo Update applied successfully.
-echo Cleaning up...
-del ""{zipPath}"" 2>nul
-rmdir /s /q ""{backupDir}"" 2>nul
-
-echo Restarting application...
-start """" ""{Path.Combine(appDir, exeName)}""
-echo Done.
-timeout /t 3 /nobreak >nul
-del ""{scriptPath}"" 2>nul
-";
-            File.WriteAllText(scriptPath, script);
+            File.WriteAllText(scriptPath, sb.ToString());
             _logger.LogInformation("Update applier script written to {Path}", scriptPath);
         }
 

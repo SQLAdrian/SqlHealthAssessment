@@ -397,4 +397,6 @@ $null
 BPScripts/Ignore/
 Config/Ignore/
 Ignore/
-_OtherBPs/
+_OtherBPs/research_output/
+CheckValidator/
+CheckMerger/

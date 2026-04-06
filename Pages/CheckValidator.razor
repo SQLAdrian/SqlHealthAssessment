@@ -1,0 +1,572 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/check-validator"
+@using SqlHealthAssessment.Data
+@using SqlHealthAssessment.Data.Models
+@using SqlHealthAssessment.Data.Services
+@using SqlHealthAssessment.Components.Shared
+@using Microsoft.Data.SqlClient
+@using System.Data
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject AlertDefinitionService AlertDefs
+@inject ServerConnectionManager ConnectionManager
+@inject UserSettingsService UserSettings
+@inject LocalLogService Log
+@inject ToastService Toast
+
+<style>
+    /* ── Check Validator scoped styles ── */
+    .cv-page { padding: 20px; max-width: 1400px; }
+
+    .cv-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .cv-header-title { flex: 1; min-width: 260px; }
+    .cv-header-title h1 {
+        font-size: 18px; font-weight: 700; margin: 0 0 4px;
+        color: var(--text-primary); display: flex; align-items: center; gap: 8px;
+    }
+    .cv-header-title p { font-size: 12px; color: var(--text-secondary); margin: 0; }
+    .cv-nopants-badge {
+        font-size: 10px; font-weight: 600; letter-spacing: .5px;
+        color: #ef4444; background: rgba(239,68,68,.12);
+        border: 1px solid #ef4444; border-radius: 4px;
+        padding: 2px 7px; vertical-align: middle;
+    }
+    .cv-controls {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 12px 16px; background: var(--bg-panel);
+        border: 1px solid var(--border); border-radius: 6px;
+    }
+    .cv-server-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+    .cv-server-select {
+        background: var(--bg-primary); border: 1px solid var(--border);
+        color: var(--text-primary); padding: 5px 10px;
+        border-radius: 4px; font-size: 12px; min-width: 200px;
+    }
+
+    /* Tabs */
+    .cv-tabs {
+        display: flex; gap: 2px;
+        border-bottom: 2px solid var(--border);
+        margin-bottom: 16px;
+    }
+    .cv-tab {
+        padding: 8px 18px; font-size: 13px; font-weight: 500;
+        background: none; border: none; border-bottom: 2px solid transparent;
+        cursor: pointer; color: var(--text-secondary);
+        margin-bottom: -2px; transition: color .15s, border-color .15s;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .cv-tab:hover { color: var(--text-primary); }
+    .cv-tab.active {
+        color: var(--accent); border-bottom-color: var(--accent);
+    }
+    .cv-tab-count {
+        background: var(--bg-primary); color: var(--text-secondary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 10px; padding: 1px 6px; font-weight: 600;
+    }
+    .cv-tab.active .cv-tab-count {
+        background: rgba(99,102,241,.15); color: var(--accent);
+        border-color: rgba(99,102,241,.3);
+    }
+
+    /* Progress */
+    .cv-progress {
+        margin-top: 12px; padding: 10px 14px;
+        background: var(--bg-panel); border: 1px solid var(--border);
+        border-radius: 6px; font-size: 12px; color: var(--text-secondary);
+    }
+    .cv-progress-bar {
+        height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px;
+    }
+    .cv-progress-fill {
+        height: 4px; background: var(--accent); border-radius: 2px; transition: width .2s;
+    }
+
+    /* Result badges */
+    .cv-result-badge {
+        display: inline-block; font-size: 10px; font-weight: 600;
+        padding: 2px 8px; border-radius: 3px;
+    }
+    .cv-result-pass   { background: rgba(16,185,129,.18); color: #6ee7b7; }
+    .cv-result-error  { background: rgba(239,68,68,.18);  color: #fca5a5; }
+    .cv-result-blocked{ background: rgba(245,158,11,.18); color: #fcd34d; }
+    .cv-result-skip   { background: var(--bg-primary);    color: var(--text-secondary); border: 1px solid var(--border); }
+
+    /* Modal */
+    .cv-modal {
+        background: var(--bg-panel); border-radius: 8px;
+        width: min(780px, 95vw); max-height: 90vh;
+        display: flex; flex-direction: column;
+        box-shadow: 0 8px 40px rgba(0,0,0,.6);
+        border: 1px solid var(--border);
+    }
+    .cv-query-area {
+        width: 100%; background: var(--bg-primary); border: 1px solid var(--border);
+        color: var(--text-primary); padding: 8px 10px; border-radius: 4px;
+        font-family: 'Cascadia Code','Consolas',monospace; font-size: 12px;
+        resize: vertical;
+    }
+    .cv-query-area:focus { outline: none; border-color: var(--accent); }
+    .cv-danger-warn {
+        font-size: 11px; color: #ef4444; margin-top: 4px;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .cv-result-meta {
+        padding: 6px 12px; background: var(--bg-primary);
+        border-bottom: 1px solid var(--border);
+        font-size: 11px; color: var(--text-secondary);
+        display: flex; gap: 16px;
+    }
+    .cv-result-meta strong { color: var(--text-primary); }
+    .cv-result-table-wrap { overflow: auto; max-height: 260px; }
+    .cv-modal-error {
+        margin-top: 8px; padding: 10px 12px;
+        background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+        border-radius: 4px; font-size: 12px; font-family: monospace; color: #fca5a5;
+    }
+</style>
+
+<div class="cv-page">
+
+    <!-- ── Header ─────────────────────────────────────────────────────── -->
+    <div class="cv-header">
+        <div class="cv-header-title">
+            <h1>
+                <i class="fa-solid fa-vial" style="color:#ef4444;"></i>
+                Check Validator
+                <span class="cv-nopants-badge">NO PANTS</span>
+            </h1>
+            <p>Test and validate SQL checks from configuration files against live server instances.</p>
+        </div>
+        <div class="cv-controls">
+            <span class="cv-server-label"><i class="fa-solid fa-server"></i> Server:</span>
+            <select class="cv-server-select" @bind="_selectedServer">
+                <option value="">— select server —</option>
+                @foreach (var s in _servers)
+                {
+                    <option value="@s">@s</option>
+                }
+            </select>
+            <button class="btn btn-secondary btn-sm" @onclick="RunAllVisible"
+                    disabled="@(_running || string.IsNullOrEmpty(_selectedServer))"
+                    style="white-space:nowrap;">
+                @if (_running)
+                {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                }
+                else
+                {
+                    <i class="fa-solid fa-play"></i>
+                }
+                &nbsp;Run All
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_globalError))
+    {
+        <div style="padding:10px 14px; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); border-radius:6px; color:#fca5a5; font-size:13px; margin-bottom:16px;">
+            <i class="fa-solid fa-circle-exclamation"></i> @_globalError
+        </div>
+    }
+
+    <!-- ── Tabs ───────────────────────────────────────────────────────── -->
+    <div class="cv-tabs">
+        <button class="cv-tab @(_activeTab == "Alerts" ? "active" : "")" @onclick='() => SwitchTab("Alerts")'>
+            <i class="fa-solid fa-bell"></i>
+            Alerts
+            <span class="cv-tab-count">@_alertRows.Count</span>
+        </button>
+        <button class="cv-tab @(_activeTab == "SQL Checks" ? "active" : "")" @onclick='() => SwitchTab("SQL Checks")'>
+            <i class="fa-solid fa-list-check"></i>
+            SQL Checks
+            <span class="cv-tab-count">@_sqlCheckRows.Count</span>
+        </button>
+    </div>
+
+    <!-- ── Table ──────────────────────────────────────────────────────── -->
+    @if (_activeTab == "Alerts")
+    {
+        <CheckValidatorTable Rows="_alertRows" OnTest="TestAlertRow" OnEdit="EditAlertRow" />
+    }
+    else
+    {
+        <CheckValidatorTable Rows="_sqlCheckRows" OnTest="TestSqlCheckRow" OnEdit="EditSqlCheckRow" />
+    }
+
+    @if (_running)
+    {
+        <div class="cv-progress">
+            Testing @_progressCurrent / @_progressTotal…
+            <div class="cv-progress-bar">
+                <div class="cv-progress-fill" style="width:@(ProgressPct.ToString("F0"))%;"></div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- ── Modal ──────────────────────────────────────────────────────────── -->
+@if (_modalOpen)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="cv-modal" @onclick:stopPropagation="true">
+
+            <div class="modal-header">
+                <div>
+                    <div style="font-size:14px; font-weight:600; color:var(--text-primary);">@_modalTitle</div>
+                    @if (!string.IsNullOrEmpty(_selectedServer))
+                    {
+                        <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">
+                            <i class="fa-solid fa-server" style="font-size:10px;"></i> @_selectedServer
+                        </div>
+                    }
+                </div>
+                <button class="btn-icon" @onclick="CloseModal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+
+                <div>
+                    <label style="display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:5px; text-transform:uppercase; letter-spacing:.5px;">Query</label>
+                    <textarea class="cv-query-area" rows="7"
+                              @bind="_modalQuery" @bind:event="oninput" />
+                    @if (IsDangerous(_modalQuery))
+                    {
+                        <div class="cv-danger-warn">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            Blocked — contains dangerous keywords (INSERT / UPDATE / DELETE / DROP / TRUNCATE / EXEC).
+                        </div>
+                    }
+                </div>
+
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <button class="btn btn-primary btn-sm" @onclick="RunModalTest"
+                            disabled="@(_modalRunning || IsDangerous(_modalQuery) || string.IsNullOrEmpty(_selectedServer))">
+                        @if (_modalRunning)
+                        {
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-play"></i>
+                        }
+                        &nbsp;Test
+                    </button>
+                    @if (_canSaveModal)
+                    {
+                        <button class="btn btn-secondary btn-sm" @onclick="SaveModalEdit">
+                            <i class="fa-solid fa-floppy-disk"></i> Save to Config
+                        </button>
+                    }
+                    @if (string.IsNullOrEmpty(_selectedServer))
+                    {
+                        <span style="font-size:11px; color:#fcd34d;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Select a server above to test.
+                        </span>
+                    }
+                </div>
+
+                @if (_modalResult != null)
+                {
+                    <div style="border:1px solid var(--border); border-radius:6px; overflow:hidden;">
+                        <div class="cv-result-meta">
+                            <span><strong>@_modalResult.Rows.Count</strong> rows</span>
+                            <span><strong>@_modalResult.Columns.Count</strong> cols</span>
+                            @if (_modalDuration.HasValue)
+                            {
+                                <span><strong>@_modalDuration.Value.TotalMilliseconds.ToString("F0") ms</strong></span>
+                            }
+                        </div>
+                        @if (_modalResult.Rows.Count > 0)
+                        {
+                            <div class="cv-result-table-wrap">
+                                <table class="results-table" style="font-size:11px;">
+                                    <thead>
+                                        <tr>
+                                            @foreach (DataColumn col in _modalResult.Columns)
+                                            {
+                                                <th>@col.ColumnName</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (DataRow row in _modalResult.Rows)
+                                        {
+                                            <tr>
+                                                @foreach (DataColumn col in _modalResult.Columns)
+                                                {
+                                                    <td>@row[col]?.ToString()</td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="padding:14px; font-size:12px; color:var(--text-secondary); text-align:center;">
+                                <i class="fa-solid fa-inbox"></i> No rows returned.
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(_modalError))
+                {
+                    <div class="cv-modal-error">@_modalError</div>
+                }
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _activeTab = "Alerts";
+    private List<string> _servers = new();
+    private string _selectedServer = "";
+    private List<CheckValidatorTable.CheckRow> _alertRows = new();
+    private List<CheckValidatorTable.CheckRow> _sqlCheckRows = new();
+    private bool _running;
+    private int _progressCurrent, _progressTotal;
+    private string _globalError = "";
+
+    // Modal
+    private bool _modalOpen;
+    private string _modalTitle = "";
+    private string _modalQuery = "";
+    private bool _modalRunning;
+    private DataTable? _modalResult;
+    private TimeSpan? _modalDuration;
+    private string _modalError = "";
+    private bool _canSaveModal;
+    private Action? _modalSaveAction;
+
+    private double ProgressPct => _progressTotal == 0 ? 0 : _progressCurrent * 100.0 / _progressTotal;
+
+    protected override void OnInitialized()
+    {
+        LoadServerList();
+        LoadAlertRows();
+        LoadSqlCheckRows();
+    }
+
+    private void LoadServerList()
+    {
+        _servers = ConnectionManager.GetConnections()
+            .SelectMany(c => c.GetServerList())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
+        if (_servers.Count == 1) _selectedServer = _servers[0];
+    }
+
+    private void LoadAlertRows()
+    {
+        _alertRows = AlertDefs.GetAllAlerts()
+            .Select(a => new CheckValidatorTable.CheckRow
+            {
+                Id = a.Id,
+                Name = a.Name,
+                Category = a.Category,
+                Enabled = a.Enabled,
+                Query = a.Query,
+                AlertDef = a
+            })
+            .OrderBy(r => r.Category).ThenBy(r => r.Name)
+            .ToList();
+    }
+
+    private void LoadSqlCheckRows()
+    {
+        try
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var path = Path.Combine(baseDir, "config", "sql-checks.json");
+            if (!File.Exists(path)) path = Path.Combine(baseDir, "Config", "sql-checks.json");
+            if (!File.Exists(path)) return;
+
+            var json = File.ReadAllText(path);
+            var opts = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            };
+            var checks = JsonSerializer.Deserialize<List<SqlCheckEntry>>(json, opts) ?? new();
+            _sqlCheckRows = checks
+                .Select(c => new CheckValidatorTable.CheckRow
+                {
+                    Id = c.Id ?? "",
+                    Name = c.Name ?? "",
+                    Category = c.Category ?? "",
+                    Enabled = c.Enabled,
+                    Query = c.SqlQuery ?? ""
+                })
+                .OrderBy(r => r.Category).ThenBy(r => r.Name)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _globalError = $"Failed to load sql-checks.json: {ex.Message}";
+            Log.LogError("CheckValidator: failed to load sql-checks.json", ex);
+        }
+    }
+
+    private void SwitchTab(string tab) { _activeTab = tab; _globalError = ""; }
+
+    private async Task RunAllVisible()
+    {
+        if (string.IsNullOrEmpty(_selectedServer)) return;
+        var rows = _activeTab == "Alerts" ? _alertRows : _sqlCheckRows;
+        _running = true;
+        _progressCurrent = 0;
+        _progressTotal = rows.Count;
+        StateHasChanged();
+
+        await Parallel.ForEachAsync(rows,
+            new ParallelOptions { MaxDegreeOfParallelism = 4 },
+            async (row, _) =>
+            {
+                await TestRowAsync(row);
+                Interlocked.Increment(ref _progressCurrent);
+                await InvokeAsync(StateHasChanged);
+            });
+
+        _running = false;
+        StateHasChanged();
+        var passed = rows.Count(r => r.TestResult.StartsWith("Pass"));
+        var failed = rows.Count(r => r.TestResult == "Error");
+        Toast.ShowInfo($"Done — {passed} passed, {failed} errors.");
+        Log.LogInfo($"CheckValidator bulk test: tab='{_activeTab}' server='{_selectedServer}' passed={passed} errors={failed}");
+    }
+
+    private async Task TestRowAsync(CheckValidatorTable.CheckRow row)
+    {
+        if (IsDangerous(row.Query))
+        {
+            row.TestResult = "Blocked"; row.Tested = true; return;
+        }
+        if (string.IsNullOrWhiteSpace(row.Query))
+        {
+            row.TestResult = "Skipped"; row.Tested = true; return;
+        }
+        try
+        {
+            using var conn = new SqlConnection(GetConnectionString(_selectedServer));
+            await conn.OpenAsync();
+            using var cmd = new SqlCommand(row.Query, conn) { CommandTimeout = 30 };
+            using var reader = await cmd.ExecuteReaderAsync();
+            var dt = new DataTable();
+            dt.Load(reader);
+            row.TestResult = dt.Rows.Count > 0 ? "Pass" : "Pass (no rows)";
+            row.ErrorText = null;
+        }
+        catch (Exception ex)
+        {
+            row.TestResult = "Error";
+            row.ErrorText = ex.Message;
+        }
+        row.Tested = true;
+    }
+
+    private async Task TestAlertRow(CheckValidatorTable.CheckRow row)
+    {
+        if (string.IsNullOrEmpty(_selectedServer)) { Toast.ShowWarning("Select a server first."); return; }
+        await TestRowAsync(row); StateHasChanged();
+    }
+
+    private async Task TestSqlCheckRow(CheckValidatorTable.CheckRow row)
+    {
+        if (string.IsNullOrEmpty(_selectedServer)) { Toast.ShowWarning("Select a server first."); return; }
+        await TestRowAsync(row); StateHasChanged();
+    }
+
+    private void EditAlertRow(CheckValidatorTable.CheckRow row)
+    {
+        _modalTitle = $"{row.Name}";
+        _modalQuery = row.Query;
+        _modalResult = null; _modalError = ""; _modalDuration = null;
+        _canSaveModal = true;
+        _modalSaveAction = () =>
+        {
+            if (row.AlertDef != null)
+            {
+                row.AlertDef.Query = _modalQuery;
+                AlertDefs.UpdateAlert(row.AlertDef);
+                row.Query = _modalQuery;
+                Toast.ShowSuccess($"Saved query for '{row.Name}'");
+                Log.LogInfo($"CheckValidator: saved alert query '{row.Id}'");
+            }
+        };
+        _modalOpen = true;
+    }
+
+    private void EditSqlCheckRow(CheckValidatorTable.CheckRow row)
+    {
+        _modalTitle = row.Name;
+        _modalQuery = row.Query;
+        _modalResult = null; _modalError = ""; _modalDuration = null;
+        _canSaveModal = false; _modalSaveAction = null;
+        _modalOpen = true;
+    }
+
+    private async Task RunModalTest()
+    {
+        if (IsDangerous(_modalQuery) || string.IsNullOrEmpty(_selectedServer)) return;
+        _modalRunning = true; _modalResult = null; _modalError = "";
+        StateHasChanged();
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            using var conn = new SqlConnection(GetConnectionString(_selectedServer));
+            await conn.OpenAsync();
+            using var cmd = new SqlCommand(_modalQuery, conn) { CommandTimeout = 30 };
+            using var reader = await cmd.ExecuteReaderAsync();
+            var dt = new DataTable(); dt.Load(reader); sw.Stop();
+            _modalResult = dt; _modalDuration = sw.Elapsed;
+            Log.LogInfo($"CheckValidator modal: {dt.Rows.Count} rows in {sw.ElapsedMilliseconds}ms on '{_selectedServer}'");
+        }
+        catch (Exception ex)
+        {
+            _modalError = ex.Message;
+            Log.LogError($"CheckValidator modal failed on '{_selectedServer}'", ex);
+        }
+        finally { _modalRunning = false; StateHasChanged(); }
+    }
+
+    private void SaveModalEdit() { _modalSaveAction?.Invoke(); CloseModal(); }
+    private void CloseModal() { _modalOpen = false; _modalResult = null; _modalError = ""; }
+
+    private static readonly Regex _dangerousPattern = new(
+        @"\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|EXEC|EXECUTE|xp_|sp_configure|sp_addextendedproc)\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static bool IsDangerous(string? sql) =>
+        !string.IsNullOrEmpty(sql) && _dangerousPattern.IsMatch(sql);
+
+    private string GetConnectionString(string serverName)
+    {
+        var conn = ConnectionManager.GetConnections()
+            .FirstOrDefault(c => c.GetServerList().Contains(serverName, StringComparer.OrdinalIgnoreCase));
+        return conn?.GetConnectionString(serverName, "master")
+            ?? $"Server={serverName};Database=master;Integrated Security=True;TrustServerCertificate=True;";
+    }
+
+    private class SqlCheckEntry
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Category { get; set; }
+        public bool Enabled { get; set; }
+        public string? SqlQuery { get; set; }
+    }
+}

@@ -157,7 +157,23 @@
                     {
                         <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">@UpdateInfo.ReleaseNotes</p>
                     }
-                    <a href="@UpdateInfo.DownloadUrl" target="_blank" class="settings-btn" style="display: inline-block; text-decoration: none;">Download Update</a>
+                    <button class="settings-btn" @onclick="DownloadAndApplyUpdate" disabled="@_downloading">
+                        @if (_downloading)
+                        {
+                            <i class="fa-solid fa-spinner fa-spin" style="margin-right:4px;"></i>
+                            <span>Downloading... @_downloadProgress%</span>
+                        }
+                        else if (UpdateService.HasStagedUpdate)
+                        {
+                            <i class="fa-solid fa-check" style="margin-right:4px;"></i>
+                            <span>Staged — will apply on exit</span>
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-download" style="margin-right:4px;"></i>
+                            <span>Download &amp; Apply on Exit</span>
+                        }
+                    </button>
                 </div>
             }
         }
@@ -612,6 +628,8 @@
     private string? UpdateCheckResult;
     private bool UpdateAvailable;
     private UpdateInfo? UpdateInfo;
+    private bool _downloading;
+    private int _downloadProgress;
     private bool IsFlushingCache;
     private string? FlushCacheResult;
     private bool FlushCacheSuccess;
@@ -960,6 +978,27 @@
 
         IsCheckingUpdates = false;
         StateHasChanged();
+    }
+
+    private async Task DownloadAndApplyUpdate()
+    {
+        if (UpdateInfo == null || string.IsNullOrEmpty(UpdateInfo.DownloadUrl)) return;
+        _downloading = true;
+        _downloadProgress = 0;
+        StateHasChanged();
+        try
+        {
+            var ok = await UpdateService.DownloadUpdateAsync(
+                UpdateInfo.DownloadUrl,
+                new Progress<int>(p => { _downloadProgress = p; _ = InvokeAsync(StateHasChanged); }));
+            if (!ok)
+                UpdateCheckResult = "Download failed — check the log for details.";
+        }
+        finally
+        {
+            _downloading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task FlushCache()

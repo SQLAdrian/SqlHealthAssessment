@@ -138,7 +138,7 @@ namespace SqlHealthAssessment
             }
         }
 
-        private async void TrayToggleServerMode()
+        private async Task TrayToggleServerModeAsync()
         {
             try
             {
@@ -153,23 +153,44 @@ namespace SqlHealthAssessment
                 }
                 else
                 {
-                    serverMode.EnableHttps = false;
                     await serverMode.StartAsync();
-                    _logger?.LogInformation("Server mode started from tray at {Url}", serverMode.Url);
-                    _trayIcon?.ShowBalloonTip(2000, "SQL Health Assessment", $"Server mode started at {serverMode.Url}", System.Windows.Forms.ToolTipIcon.Info);
-
-                    // Open browser automatically
-                    if (serverMode.Url != null)
-                        Process.Start(new ProcessStartInfo(serverMode.Url) { UseShellExecute = true });
+                    _logger?.LogInformation("Server mode started from tray");
+                    _trayIcon?.ShowBalloonTip(2000, "SQL Health Assessment", "Server mode started", System.Windows.Forms.ToolTipIcon.Info);
                 }
-
-                UpdateTrayServerStatus();
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to toggle server mode from tray");
-                _trayIcon?.ShowBalloonTip(3000, "SQL Health Assessment", $"Server mode error: {ex.Message}", System.Windows.Forms.ToolTipIcon.Error);
             }
+        }
+
+        private void TrayToggleServerMode()
+        {
+            _ = TrayToggleServerModeAsync();
+        }
+
+        private async Task AutoStartServerModeAsync()
+        {
+            if (App.Services == null) return;
+            var serverMode = App.Services.GetService<ServerModeService>();
+            if (serverMode == null) return;
+
+            try
+            {
+                await serverMode.StartAsync();
+                _logger?.LogInformation("Server mode started automatically");
+                _trayIcon?.ShowBalloonTip(2000, "SQL Health Assessment", "Server mode started automatically", System.Windows.Forms.ToolTipIcon.Info);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to start server mode automatically");
+                _trayIcon?.ShowBalloonTip(2000, "SQL Health Assessment", "Failed to start server mode", System.Windows.Forms.ToolTipIcon.Error);
+            }
+        }
+
+        private void AutoStartServerMode()
+        {
+            _ = AutoStartServerModeAsync();
         }
 
         private void TrayExit()
@@ -330,75 +351,6 @@ namespace SqlHealthAssessment
             catch { /* non-critical */ }
         }
 
-        private async void AutoStartServerMode()
-        {
-            // Show the overlay immediately with a "starting" message
-            Dispatcher.Invoke(() =>
-            {
-                WebView2ErrorTitle.Text = "Starting Server Mode...";
-                WebView2ErrorTitle.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4488ff"));
-                WebView2ErrorMessage.Text = "WebView2 Runtime is not installed.\n\nStarting Blazor Server so you can access the app in your browser...";
-                WebView2ErrorOverlay.Visibility = Visibility.Visible;
-                // Hide buttons that aren't needed during auto-start
-                InstallWebView2Button.Visibility = Visibility.Collapsed;
-                RetryButton.Visibility = Visibility.Collapsed;
-                ServerModeButton.Visibility = Visibility.Collapsed;
-            });
-
-            try
-            {
-                var serverMode = App.Services?.GetService<ServerModeService>();
-                if (serverMode == null)
-                {
-                    _logger?.LogError("ServerModeService not available");
-                    ShowWebView2Error("Server mode service not available. Please install WebView2 Runtime.");
-                    return;
-                }
-
-                // Disable HTTPS for auto-start — not needed for local/fallback use
-                serverMode.EnableHttps = false;
-                await serverMode.StartAsync();
-
-                _logger?.LogInformation("Server mode auto-started at {Url}", serverMode.Url);
-
-                // Open in default browser
-                if (serverMode.Url != null)
-                {
-                    Process.Start(new ProcessStartInfo(serverMode.Url) { UseShellExecute = true });
-                }
-
-                // Update overlay to show the running URL
-                Dispatcher.Invoke(() =>
-                {
-                    WebView2ErrorTitle.Text = "Server Mode Active";
-                    WebView2ErrorMessage.Text = $"WebView2 Runtime is not installed — running in server mode instead.\n\n" +
-                        $"Access the application in your browser:\n\n" +
-                        $"  {serverMode.Url}\n\n" +
-                        "Share this URL with other users on your network.\n" +
-                        "Keep this window open to maintain the server.";
-                    ServerModeButton.Visibility = Visibility.Visible;
-                    ServerModeButton.Content = $"Running at {serverMode.Url}";
-                    ServerModeButton.IsEnabled = false;
-                    UpdateTrayServerStatus();
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to auto-start server mode");
-                // Fall back to showing the manual options
-                ShowWebView2Error($"Failed to auto-start server mode: {ex.Message}\n\nPlease install WebView2 Runtime.");
-                Dispatcher.Invoke(() =>
-                {
-                    InstallWebView2Button.Visibility = Visibility.Visible;
-                    RetryButton.Visibility = Visibility.Visible;
-                    ServerModeButton.Visibility = Visibility.Visible;
-                    ServerModeButton.IsEnabled = true;
-                    ServerModeButton.Content = "Start Server Mode (no WebView2 needed)";
-                });
-            }
-        }
-
         private void ShowWebView2Error(string? message = null)
         {
             Dispatcher.Invoke(() =>
@@ -411,44 +363,33 @@ namespace SqlHealthAssessment
             });
         }
 
-        private async void OnInstallWebView2Click(object sender, RoutedEventArgs e)
+        private async Task OnInstallWebView2ClickAsync(object sender, RoutedEventArgs e)
         {
+            var btn = sender as System.Windows.Controls.Button;
+            if (btn != null) { btn.IsEnabled = false; btn.Content = "Installing..."; }
             try
             {
-                InstallWebView2Button.IsEnabled = false;
-                InstallWebView2Button.Content = "Installing...";
-
-                _logger?.LogInformation("Starting WebView2 installation...");
-                
-                var helper = App.WebView2Helper ?? new WebView2Helper(null);
+                var helper = new WebView2Helper();
                 var result = await helper.TryInstallWebView2Async();
-
                 if (result.Success)
-                {
-                    _logger?.LogInformation("WebView2 installed successfully. Version: {Version}", result.Version);
-                    MessageBox.Show($"WebView2 Runtime installed successfully!\nVersion: {result.Version}\n\nPlease restart the application.",
-                        "Installation Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                    Application.Current.Shutdown();
-                }
+                    MessageBox.Show("WebView2 installed. Please restart the application.", "Installation Complete", MessageBoxButton.OK, MessageBoxImage.Information);
                 else
-                {
-                    _logger?.LogError("WebView2 installation failed: {Error}", result.ErrorMessage);
-                    MessageBox.Show($"Failed to install WebView2:\n{result.ErrorMessage}\n\n" +
-                        "Please install manually from:\nhttps://developer.microsoft.com/en-us/microsoft-edge/webview2/",
-                        "Installation Failed", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                    MessageBox.Show($"WebView2 installation failed: {result.ErrorMessage}", "Installation Failed", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error during WebView2 installation");
-                MessageBox.Show($"Error during installation:\n{ex.Message}",
-                    "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                _logger?.LogError(ex, "Failed to install WebView2");
+                MessageBox.Show($"An error occurred: {ex.Message}", "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
-                InstallWebView2Button.IsEnabled = true;
-                InstallWebView2Button.Content = "Auto-Install WebView2";
+                if (btn != null) { btn.IsEnabled = true; btn.Content = "Install WebView2"; }
             }
+        }
+
+        private void OnInstallWebView2Click(object sender, RoutedEventArgs e)
+        {
+            _ = OnInstallWebView2ClickAsync(sender, e);
         }
 
         private void OnRetryClick(object sender, RoutedEventArgs e)
@@ -490,13 +431,11 @@ namespace SqlHealthAssessment
 
                 _logger?.LogInformation("Server mode started at {Url}", serverMode.Url);
 
-                // Open in default browser
                 if (serverMode.Url != null)
                 {
                     Process.Start(new ProcessStartInfo(serverMode.Url) { UseShellExecute = true });
                 }
 
-                // Update the error overlay to show success
                 WebView2ErrorTitle.Text = "Server Mode Active";
                 WebView2ErrorTitle.Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4488ff"));
@@ -535,27 +474,19 @@ namespace SqlHealthAssessment
 
         private async void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            // Unsubscribe zoom event to prevent leak
             if (_userSettings != null)
                 _userSettings.OnZoomChanged -= OnZoomChanged;
 
             if (_forceClose)
             {
-                // Tray "Exit" was clicked or second pass — shut down for real
                 _trayIcon?.Dispose();
                 _trayIcon = null;
                 return;
             }
 
-            // Show the closing dialog
             ClosingOverlay.Visibility = Visibility.Visible;
-
-            // Cancel the close to allow overlay to render
             e.Cancel = true;
 
-            // Hard deadline: if we haven't exited within 8 seconds, force-kill.
-            // This catches any scenario where the async shutdown path hangs
-            // (Kestrel stuck, DI dispose deadlock, dispatcher blocked, etc.).
             _ = Task.Run(async () =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(8));
@@ -563,11 +494,8 @@ namespace SqlHealthAssessment
                 Environment.Exit(1);
             });
 
-            // Brief delay so the user sees the closing overlay
             await Task.Delay(800);
 
-            // Stop server mode with a timeout — StopAsync can hang if Kestrel
-            // has active connections, which would prevent the app from ever exiting
             try
             {
                 var serverMode = App.Services?.GetService<ServerModeService>();
@@ -583,7 +511,6 @@ namespace SqlHealthAssessment
                 _logger?.LogWarning(ex, "Error stopping server mode during close");
             }
 
-            // Actually close the window
             _forceClose = true;
             _trayIcon?.Dispose();
             _trayIcon = null;

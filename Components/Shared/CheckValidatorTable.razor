@@ -1,0 +1,99 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+
+<div style="overflow-x:auto; border-radius:6px; border:1px solid var(--border); background:var(--bg-panel);">
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th style="width:160px;">ID</th>
+                <th>Name</th>
+                <th style="width:120px;">Category</th>
+                <th style="width:70px; text-align:center;">On</th>
+                <th style="width:130px; text-align:center;">Result</th>
+                <th style="width:90px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                <tr class="@(row.Tested ? (row.TestResult.StartsWith("Pass") ? "row-passed" : row.TestResult == "Error" ? "row-error" : "") : "")">
+                    <td style="font-family:monospace; font-size:10px; color:var(--text-secondary); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="@row.Id">@row.Id</td>
+                    <td style="font-size:12px;">@row.Name</td>
+                    <td>
+                        <span style="display:inline-block; font-size:10px; font-weight:500; padding:2px 7px; border-radius:3px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-secondary);">
+                            @row.Category
+                        </span>
+                    </td>
+                    <td style="text-align:center;">
+                        @if (row.Enabled)
+                        {
+                            <i class="fa-solid fa-circle-check" style="color:var(--green); font-size:13px;"></i>
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-circle-minus" style="color:var(--text-secondary); font-size:13px;"></i>
+                        }
+                    </td>
+                    <td style="text-align:center;">
+                        @if (row.Tested)
+                        {
+                            <span class="cv-result-badge cv-result-@(GetBadgeKey(row.TestResult))" title="@row.ErrorText">
+                                @row.TestResult
+                            </span>
+                        }
+                        else
+                        {
+                            <span style="color:var(--text-secondary); font-size:11px;">—</span>
+                        }
+                    </td>
+                    <td>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-sm btn-secondary" title="Test"
+                                    @onclick="() => OnTest.InvokeAsync(row)"
+                                    style="padding:3px 9px; font-size:11px;">
+                                <i class="fa-solid fa-play"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary" title="View / edit query"
+                                    @onclick="() => OnEdit.InvokeAsync(row)"
+                                    style="padding:3px 9px; font-size:11px;">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (!Rows.Any())
+    {
+        <div style="padding:32px; text-align:center; color:var(--text-secondary); font-size:13px;">
+            <i class="fa-solid fa-inbox" style="font-size:24px; margin-bottom:8px; display:block;"></i>
+            No checks loaded.
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Row model shared between CheckValidator page and this table component.</summary>
+    public class CheckRow
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Category { get; set; } = "";
+        public bool Enabled { get; set; }
+        public string Query { get; set; } = "";
+        public string TestResult { get; set; } = "—";
+        public bool Tested { get; set; }
+        public string? ErrorText { get; set; }
+        public SqlHealthAssessment.Data.Models.AlertDefinition? AlertDef { get; set; }
+    }
+
+    [Parameter, EditorRequired] public List<CheckRow> Rows { get; set; } = new();
+    [Parameter, EditorRequired] public EventCallback<CheckRow> OnTest { get; set; }
+    [Parameter, EditorRequired] public EventCallback<CheckRow> OnEdit { get; set; }
+
+    private static string GetBadgeKey(string result) =>
+        result.StartsWith("Pass") ? "pass" :
+        result == "Error" ? "error" :
+        result == "Blocked" ? "blocked" :
+        "skip";
+}

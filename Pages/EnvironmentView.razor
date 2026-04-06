@@ -5,6 +5,7 @@
 @using Microsoft.Data.SqlClient
 @using System.Data
 @using System.Linq
+@using System.Threading
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
 @implements IDisposable
@@ -162,6 +163,9 @@
     private string _selectedHostServer = "";
 
     private DotNetObjectReference<EnvironmentView>? _dotNetRef;
+    private bool _disposed = false;
+    private bool _needsTopologyRender = false;
+    private System.Threading.Timer? _progressTimer;
 
     protected override void OnInitialized()
     {
@@ -177,12 +181,25 @@
             await JS.InvokeVoidAsync("environmentView.setHostCallback",
                 DotNetObjectReference.Create(this));
         }
+
+        if (_needsTopologyRender)
+        {
+            _needsTopologyRender = false;
+            await RenderTopology();
+        }
     }
 
     [Microsoft.JSInterop.JSInvokable]
     public void OnHostNodeClicked(string hostname)
     {
-        // Search all server results for this hostname
+        if (_disposed) return;
+        if (string.IsNullOrEmpty(hostname))
+        {
+            _selectedHost = null;
+            _selectedHostServer = "";
+            _ = InvokeAsync(StateHasChanged);
+            return;
+        }
         foreach (var sr in _serverResults)
         {
             var host = sr.Hosts?.FirstOrDefault(
@@ -194,7 +211,7 @@
                 break;
             }
         }
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private async Task ScanEnvironment()
@@ -205,6 +222,7 @@
         _crossLinks.Clear();
         _selectedHost = null;
         _selectedHostServer = "";
+        _needsTopologyRender = false;
         StateHasChanged();
 
         try
@@ -230,13 +248,15 @@
 
             if (targets.Count == 0) { _errorMessage = "No servers selected."; return; }
 
+            // Start progress timer for UI updates
+            _progressTimer = new System.Threading.Timer(_ => InvokeAsync(() => StateHasChanged()), null, 0, 500);
+
             // Scan with progress feedback
             var results = new List<ServerEnvironmentResult>();
             for (int i = 0; i < targets.Count; i++)
             {
                 var t = targets[i];
                 _scanProgress = $"{t.serverName} ({i+1}/{targets.Count})";
-                StateHasChanged();
                 var r = await ScanServerAsync(t.conn, t.serverName);
                 if (r != null) results.Add(r);
             }
@@ -247,11 +267,18 @@
 
             BuildCrossLinks();
 
-            // Render the full topology with all servers
-            await RenderTopology();
+            // Schedule topology render after next render cycle
+            _needsTopologyRender = true;
         }
         catch (Exception ex) { _errorMessage = $"Scan failed: {ex.Message}"; }
-        finally { _isScanning = false; _scanProgress = ""; StateHasChanged(); }
+        finally 
+        { 
+            _progressTimer?.Dispose(); 
+            _progressTimer = null; 
+            _isScanning = false; 
+            _scanProgress = ""; 
+            StateHasChanged(); 
+        }
     }
 
     private async Task RenderTopology()
@@ -388,7 +415,12 @@
 
     public void Dispose()
     {
+        _disposed = true;
+        _progressTimer?.Dispose();
         _dotNetRef?.Dispose();
+        // Best-effort: clear the JS reference so click callbacks don't fire into a disposed component.
+        // Fire-and-forget — Dispose() is synchronous.
+        try { _ = JS.InvokeVoidAsync("environmentView.setHostCallback", (object?)null); } catch { }
     }
 
     // ── SQL query ────────────────────────────────────────────────────────

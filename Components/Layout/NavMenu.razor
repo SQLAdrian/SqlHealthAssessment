@@ -180,6 +180,12 @@
                 <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clock"></i></span> Scheduled Tasks
             </NavLink>
         }
+        @if (_noPantsMode)
+        {
+            <NavLink href="/check-validator" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-vial"></i></span> Check Validator
+            </NavLink>
+        }
         <NavLink href="/service-management" class="nav-link">
             <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-microchip"></i></span> Service & Updates
         </NavLink>
