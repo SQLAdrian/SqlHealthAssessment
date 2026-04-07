@@ -7,7 +7,6 @@
 @inject DashboardConfigService DashboardConfig
 @inject ServerConnectionManager ConnectionManager
 @inject UserSettingsService UserSettings
-@inject SqlHealthAssessment.Data.Services.ThemeService ThemeSvc
 @inject AuditLogService AuditLog
 @inject IJSRuntime JS
 @inject SqlHealthAssessment.Data.Services.ConnectionHealthService ConnectionHealth
@@ -25,176 +24,180 @@
     </div>
     <nav>
         <br />
-        <div class="nav-section-label">Audits</div>
-        <br />
-        <NavLink href="/servers" class="nav-link" title="Ctrl+8">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-server"></i></span> Servers
-        </NavLink>
-<NavLink href="/quickcheck" class="nav-link" title="Ctrl+0">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bolt-lightning"></i></span> Quick Check
-        </NavLink>
-        <NavLink href="/fullaudit" class="nav-link" title="Ctrl+4">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clipboard-check"></i></span> Full Audit
-        </NavLink>
-        <NavLink href="/vulnerabilityassessment" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-shield-halved"></i></span> Vulnerability Assessment
-        </NavLink>
-        @* Config-driven Audits dashboards *@
-        @foreach (var dashboard in DashboardConfig.Config.Dashboards
-            .Where(d => d.Enabled && d.NavCategory == "Audits")
-            .OrderBy(d => d.NavOrder))
-        {
-            <NavLink href="@dashboard.Route" class="nav-link">
-                @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+        <div class="nav-section-label s-audits">Audits</div>
+        <div class="nav-section s-audits">
+            <NavLink href="/servers" class="nav-link" title="Ctrl+8">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-server"></i></span> Servers
             </NavLink>
-        }
-
-        <br />
-        <div class="nav-section-label">Tools</div>
-        <br />
-        @if (_experimentalMode)
-        {
-            <NavLink href="/plan-analysis" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-diagram-project"></i></span> Plan Analyzer
+            <NavLink href="/quickcheck" class="nav-link" title="Ctrl+0">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bolt-lightning"></i></span> Quick Check
             </NavLink>
-        }
-        @if (_experimentalMode)
-        {
-            <NavLink href="/bestpractice" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> BP Scripts
+            <NavLink href="/fullaudit" class="nav-link" title="Ctrl+4">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clipboard-check"></i></span> Full Audit
             </NavLink>
-        }
-        @if (_noPantsMode)
-        {
-            <NavLink href="/dbatools" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-brands fa-windows"></i></span> dbatools
+            <NavLink href="/vulnerabilityassessment" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-shield-halved"></i></span> Vulnerability Assessment
             </NavLink>
-        }
-        <NavLink href="/environment" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-network-wired"></i></span> Environment View
-        </NavLink>
-        @if (_experimentalMode)
-        {
-            <NavLink href="/capacity" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-chart-line"></i></span> Capacity Planning
-            </NavLink>
-        }
-        <NavLink href="/diagnostics-roadmap" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-road"></i></span> Maturity Roadmap
-        </NavLink>
-        @if (ShowToolsSection)
-        {
-            <NavLink href="/xevents" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> XEvent / Profiler
-            </NavLink>
-        }
-
-        <br />
-        <div class="nav-section-label">Live</div>
-        <br />
-
-        @* Dynamic dashboards — master DB, Dashboards category only (excludes Tools, Audits, etc.) *@
-        @foreach (var dashboard in DashboardConfig.Config.Dashboards
-            .Where(d => d.Enabled && d.NavCategory == "Dashboards" && d.DefaultDatabase == "master")
-            .OrderBy(d => d.NavOrder))
-        {
-            <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
-                @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
-            </NavLink>
-        }
-
-
-        <br />
-        <div class="nav-section-label">SQLWATCH</div>
-        <br />
-        @if (_SQLWATCHExists)
-        {
+            @* Config-driven Audits dashboards *@
             @foreach (var dashboard in DashboardConfig.Config.Dashboards
-                .Where(d => d.Enabled && d.DefaultDatabase == "SQLWATCH")
+                .Where(d => d.Enabled && d.NavCategory == "Audits")
+                .OrderBy(d => d.NavOrder))
+            {
+                <NavLink href="@dashboard.Route" class="nav-link">
+                    @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+                </NavLink>
+            }
+        </div>
+
+        <br />
+        <div class="nav-section-label s-tools">Tools</div>
+        <div class="nav-section s-tools">
+            @if (_experimentalMode)
+            {
+                <NavLink href="/plan-analysis" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-diagram-project"></i></span> Plan Analyzer
+                </NavLink>
+            }
+            @if (_experimentalMode)
+            {
+                <NavLink href="/bestpractice" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> BP Scripts
+                </NavLink>
+            }
+            @if (_noPantsMode)
+            {
+                <NavLink href="/dbatools" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-brands fa-windows"></i></span> dbatools
+                </NavLink>
+            }
+            <NavLink href="/environment" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-network-wired"></i></span> Environment View
+            </NavLink>
+            @if (_experimentalMode)
+            {
+                <NavLink href="/capacity" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-chart-line"></i></span> Capacity Planning
+                </NavLink>
+            }
+            <NavLink href="/diagnostics-roadmap" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-road"></i></span> Maturity Roadmap
+            </NavLink>
+            @if (ShowToolsSection)
+            {
+                <NavLink href="/xevents" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-list-check"></i></span> XEvent / Profiler
+                </NavLink>
+            }
+        </div>
+
+        <br />
+        <div class="nav-section-label s-live">Live</div>
+        <div class="nav-section s-live">
+            @* Dynamic dashboards — master DB, Dashboards category only *@
+            @foreach (var dashboard in DashboardConfig.Config.Dashboards
+                .Where(d => d.Enabled && d.NavCategory == "Dashboards" && d.DefaultDatabase == "master")
                 .OrderBy(d => d.NavOrder))
             {
                 <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
                     @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
                 </NavLink>
             }
-        }
-        else
-        {
-            <span class="block px-4 py-1 text-xs text-app-text-muted italic">SQLWATCH database not installed</span>
-        }
+        </div>
 
         <br />
-        <div class="nav-section-label">PerformanceMonitor</div>
-        <br />
-        @if (_performanceMonitorExists)
-        {
-            @foreach (var dashboard in DashboardConfig.Config.Dashboards
-                .Where(d => d.Enabled && d.DefaultDatabase == "PerformanceMonitor")
-                .OrderBy(d => d.NavOrder))
+        <div class="nav-section-label s-sqlwatch">SQLWATCH</div>
+        <div class="nav-section s-sqlwatch">
+            @if (_SQLWATCHExists)
             {
-                <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
-                    @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+                @foreach (var dashboard in DashboardConfig.Config.Dashboards
+                    .Where(d => d.Enabled && d.DefaultDatabase == "SQLWATCH")
+                    .OrderBy(d => d.NavOrder))
+                {
+                    <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
+                        @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+                    </NavLink>
+                }
+            }
+            else
+            {
+                <span class="block px-4 py-1 text-xs text-app-text-muted italic">SQLWATCH database not installed</span>
+            }
+        </div>
+
+        <br />
+        <div class="nav-section-label s-pm">PerformanceMonitor</div>
+        <div class="nav-section s-pm">
+            @if (_performanceMonitorExists)
+            {
+                @foreach (var dashboard in DashboardConfig.Config.Dashboards
+                    .Where(d => d.Enabled && d.DefaultDatabase == "PerformanceMonitor")
+                    .OrderBy(d => d.NavOrder))
+                {
+                    <NavLink href="@($"/dashboard/{dashboard.Id}")" class="nav-link">
+                        @NavIcon(dashboard.NavIcon) @dashboard.NavTitle
+                    </NavLink>
+                }
+            }
+            else
+            {
+                <span class="block px-4 py-1 text-xs text-app-text-muted italic">PerformanceMonitor database not installed</span>
+            }
+        </div>
+
+        <br />
+        <div class="nav-section-label s-deploy">Monitoring new server</div>
+        <div class="nav-section s-deploy">
+            <NavLink href="/deploysqlwatch" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-eye"></i></span> SQLWATCH
+            </NavLink>
+            <NavLink href="/deploydarlingPM" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-chart-simple"></i></span> Darling Perf Monitor
+            </NavLink>
+        </div>
+
+        <br />
+        <div class="nav-section-label s-config">Configure</div>
+        <div class="nav-section s-config">
+            <NavLink href="/settings" class="nav-link" title="Ctrl+6">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-gear"></i></span> Settings
+            </NavLink>
+            @if (_noPantsMode)
+            {
+                <NavLink href="/dashboard-editor" class="nav-link" title="Ctrl+7">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-table-columns"></i></span> Dashboard Editor
                 </NavLink>
             }
-        }
-        else
-        {
-            <span class="block px-4 py-1 text-xs text-app-text-muted italic">PerformanceMonitor database not installed</span>
-        }
-
-        <br />
-        <div class="nav-section-label">Monitoring new server</div>
-        <br />
-        <NavLink href="/deploysqlwatch" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-eye"></i></span> SQLWATCH
-        </NavLink>
-        <NavLink href="/deploydarlingPM" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-chart-simple"></i></span> Darling Perf Monitor
-        </NavLink>
-
-        <br />
-        <div class="nav-section-label">Configure</div>
-        <br />
-
-        <NavLink href="/settings" class="nav-link" title="Ctrl+6">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-gear"></i></span> Settings
-        </NavLink>
-        @if (_noPantsMode)
-        {
-            <NavLink href="/dashboard-editor" class="nav-link" title="Ctrl+7">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-table-columns"></i></span> Dashboard Editor
+            <NavLink href="/alerts" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bell"></i></span> Alerting
             </NavLink>
-        }
-        <NavLink href="/alerts" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-bell"></i></span> Alerting
-        </NavLink>
-        @if (_experimentalMode)
-        {
-            <NavLink href="/alerting-config" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-envelope"></i></span> Notifications
+            @if (_experimentalMode)
+            {
+                <NavLink href="/alerting-config" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-envelope"></i></span> Notifications
+                </NavLink>
+            }
+            @if (_noPantsMode)
+            {
+                <NavLink href="/scheduled-tasks" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clock"></i></span> Scheduled Tasks
+                </NavLink>
+            }
+            @if (_noPantsMode)
+            {
+                <NavLink href="/check-validator" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-vial"></i></span> Check Validator
+                </NavLink>
+            }
+            <NavLink href="/service-management" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-microchip"></i></span> Service & Updates
             </NavLink>
-        }
-        @if (_noPantsMode)
-        {
-            <NavLink href="/scheduled-tasks" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-clock"></i></span> Scheduled Tasks
+            <NavLink href="/guide" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-map"></i></span> Guide
             </NavLink>
-        }
-        @if (_noPantsMode)
-        {
-            <NavLink href="/check-validator" class="nav-link">
-                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-vial"></i></span> Check Validator
+            <NavLink href="/about" class="nav-link">
+                <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-info-circle"></i></span> About
             </NavLink>
-        }
-        <NavLink href="/service-management" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-microchip"></i></span> Service & Updates
-        </NavLink>
-        <NavLink href="/guide" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-map"></i></span> Guide
-        </NavLink>
-        <NavLink href="/about" class="nav-link">
-            <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-info-circle"></i></span> About
-        </NavLink>
+        </div>
     </nav>
     <div style="margin-top:auto; border-top:1px solid var(--border);">
         @* ── Server health strip ── *@
@@ -296,6 +299,11 @@
                     These actions are <em>irreversible</em> once executed. There is no undo button. There is no safety net.
                     Just you, your SQL Servers, and whatever courage (or recklessness) brought you here.
                 </p>
+                <p style="font-size:13px;margin-bottom:12px;padding:10px;border-radius:6px;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);">
+                    <strong style="color:#ef4444;">&#128274; SQL safety checks will be disabled.</strong>
+                    The Check Validator will allow execution of INSERT, UPDATE, DELETE, DROP, TRUNCATE, EXEC, and other
+                    potentially destructive queries against your servers. Use with extreme caution.
+                </p>
                 <p style="font-size:13px;margin-bottom:16px;padding:10px;border-radius:6px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);">
                     I either know what I'm doing, or I'm brave enough to find out. Who even needs pants when you're a DBA?
                     Show me the controls that let me make changes to my servers. I accept full responsibility for any and all
@@ -389,23 +397,10 @@
         UserSettings.SetExperimentalMode(_experimentalMode);
     }
 
-    // ── Radzen theme ──────────────────────────────────────────────────────
-    private string _radzenTheme = "dark";
-
-    private async void OnThemeChanged(ChangeEventArgs e)
-    {
-        _radzenTheme = e.Value?.ToString() ?? "dark";
-        UserSettings.SetRadzenUiTheme(_radzenTheme);
-        ThemeSvc.SetTheme(_radzenTheme);
-        try { await JS.InvokeVoidAsync("radzenTheme.setTheme", _radzenTheme); } catch { }
-    }
-
     protected override async Task OnInitializedAsync()
     {
-        _radzenTheme = UserSettings.GetRadzenUiTheme();
         _noPantsMode      = UserSettings.GetNoPantsMode();
         _experimentalMode = UserSettings.GetExperimentalMode();
-        ThemeSvc.SetTheme(_radzenTheme);
         ConnectionManager.OnConnectionChanged += OnServerChanged;
         ConnectionHealth.OnStatusChanged       += OnHealthChanged;
         await RefreshDbFlags();
@@ -413,15 +408,6 @@
 
     private void OnHealthChanged() => InvokeAsync(StateHasChanged);
 
-    private bool _themeApplied = false;
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && !_themeApplied)
-        {
-            _themeApplied = true;
-            try { await JS.InvokeVoidAsync("radzenTheme.setTheme", _radzenTheme); } catch { }
-        }
-    }
 
     private void OnServerChanged()
     {

@@ -188,16 +188,17 @@
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
-            // Check if SQLWATCH database exists
-            using var cmd = new SqlCommand(
-                "SELECT COUNT(*) FROM sys.databases WHERE name = @dbName", connection);
-            cmd.Parameters.AddWithValue("@dbName", DatabaseName);
-            var count = (int)await cmd.ExecuteScalarAsync();
-            
-            if (count > 0)
-            {
-                ConnectionStatus = $"ℹ️ Database '{DatabaseName}' already exists on {ServerName}";
-            }
+             // Check if SQLWATCH database exists
+             using var cmd = new SqlCommand(
+                 "SELECT COUNT(*) FROM sys.databases WHERE name = @dbName", connection);
+             cmd.Parameters.AddWithValue("@dbName", DatabaseName);
+             var result = await cmd.ExecuteScalarAsync();
+             var count = result != null ? Convert.ToInt32(result) : 0;
+             
+             if (count > 0)
+             {
+                 ConnectionStatus = $"ℹ️ Database '{DatabaseName}' already exists on {ServerName}";
+             }
         }
         catch
         {

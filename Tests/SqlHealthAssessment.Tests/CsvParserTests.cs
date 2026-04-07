@@ -30,7 +30,7 @@ public class CsvParserTests
     {
         var result = CsvParser.ParseLine("a,,c");
         Assert.Equal(3, result.Count);
-        Assert.Equal("",  result[1]);
+        Assert.Equal("", result[1]);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class CsvParserTests
         var result = CsvParser.ParseLine("\"hello, world\",foo");
         Assert.Equal(2, result.Count);
         Assert.Equal("hello, world", result[0]);
-        Assert.Equal("foo",          result[1]);
+        Assert.Equal("foo", result[1]);
     }
 
     [Fact]
@@ -57,14 +57,14 @@ public class CsvParserTests
     {
         var result = CsvParser.ParseLine("\"say \"\"hello\"\"\",next");
         Assert.Equal("say \"hello\"", result[0]);
-        Assert.Equal("next",          result[1]);
+        Assert.Equal("next", result[1]);
     }
 
     [Fact]
     public void ParseLine_MultiLineQuotedField_ParsedCorrectly()
     {
         // Simulates a field value that contains a newline (pre-joined by the reader)
-        var line   = "\"line one\nline two\",end";
+        var line = "\"line one\nline two\",end";
         var result = CsvParser.ParseLine(line);
         Assert.Equal("line one\nline two", result[0]);
         Assert.Equal("end", result[1]);
@@ -88,7 +88,7 @@ public class CsvParserTests
                               "ImplementationType,SqlQuery,ThisServer,ThisDomain,IsSQLAzure,IsSQLMI,UTCDateTime";
         var result = CsvParser.ParseLine(header);
         Assert.Equal(19, result.Count);
-        Assert.Equal("CheckId",     result[0]);
+        Assert.Equal("CheckId", result[0]);
         Assert.Equal("UTCDateTime", result[18]);
     }
 
@@ -99,10 +99,10 @@ public class CsvParserTests
     {
         var result = CsvParser.ParseLine("\"1\"~\"2025-10-28\"~\"cyclone.co.nz\"~\"CYC-SQL1\"", '~');
         Assert.Equal(4, result.Count);
-        Assert.Equal("1",            result[0]);
-        Assert.Equal("2025-10-28",   result[1]);
-        Assert.Equal("cyclone.co.nz",result[2]);
-        Assert.Equal("CYC-SQL1",     result[3]);
+        Assert.Equal("1", result[0]);
+        Assert.Equal("2025-10-28", result[1]);
+        Assert.Equal("cyclone.co.nz", result[2]);
+        Assert.Equal("CYC-SQL1", result[3]);
     }
 
     [Fact]

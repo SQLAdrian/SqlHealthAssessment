@@ -174,6 +174,53 @@ body {
     border-top: 1px solid var(--border);
 }
 
+/* ── Section colour coding (Okabe-Ito colour-blind safe palette) ─────── */
+.nav-section-label { border-left: 3px solid transparent; }
+.nav-section-label.s-audits  { color: #4da6e0; border-left-color: #0072B2; }
+.nav-section-label.s-tools   { color: #3dbf99; border-left-color: #009E73; }
+.nav-section-label.s-live    { color: #e07840; border-left-color: #D55E00; }
+.nav-section-label.s-sqlwatch{ color: #d98fbe; border-left-color: #CC79A7; }
+.nav-section-label.s-pm      { color: #7bcae0; border-left-color: #56B4E9; }
+.nav-section-label.s-deploy  { color: #e0b840; border-left-color: #E69F00; }
+.nav-section-label.s-config  { color: #aaaaaa; border-left-color: #888888; }
+
+/* ── Section link tinting ─────────────────────────────────────────────── */
+.nav-section { --section-tint: transparent; }
+.nav-section.s-audits  { --section-tint: rgba(0,114,178,0.08); --section-icon: #4da6e0; }
+.nav-section.s-tools   { --section-tint: rgba(0,158,115,0.08); --section-icon: #3dbf99; }
+.nav-section.s-live    { --section-tint: rgba(213,94,0,0.08);  --section-icon: #e07840; }
+.nav-section.s-sqlwatch{ --section-tint: rgba(204,121,167,0.08);--section-icon: #d98fbe; }
+.nav-section.s-pm      { --section-tint: rgba(86,180,233,0.08); --section-icon: #7bcae0; }
+.nav-section.s-deploy  { --section-tint: rgba(230,159,0,0.08); --section-icon: #e0b840; }
+.nav-section.s-config  { --section-tint: rgba(136,136,136,0.06);--section-icon: #aaaaaa; }
+
+.nav-section .nav-link {
+    color: var(--text-secondary);
+}
+.nav-section .nav-link i,
+.nav-section .nav-link .nav-icon i {
+    color: var(--section-icon);
+    opacity: 0.75;
+    transition: opacity 0.15s;
+}
+.nav-section .nav-link:hover {
+    background: var(--section-tint);
+    color: var(--text-primary);
+}
+.nav-section .nav-link:hover i,
+.nav-section .nav-link:hover .nav-icon i {
+    opacity: 1;
+}
+.nav-section .nav-link.active {
+    background: var(--section-tint);
+    color: var(--section-icon);
+    border-left-color: var(--section-icon);
+}
+.nav-section .nav-link.active i,
+.nav-section .nav-link.active .nav-icon i {
+    opacity: 1;
+}
+
 .nav-menu.collapsed .nav-section-label {
     border-top: 1px solid var(--border);
     margin: 8px 6px 2px;
@@ -1632,16 +1679,17 @@ body {
 
 .query-plan-modal-body {
     flex: 1;
-    overflow: auto;
-    background: #fff !important;
-    padding: 16px;
+    overflow: hidden;
     background: var(--bg-panel);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .query-plan-sql-box {
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
-    background: #fff;
+    background: var(--bg-secondary);
     padding: 12px 16px;
     max-height: 160px;
     overflow: auto;
@@ -1650,9 +1698,27 @@ body {
 .query-plan-sql-box pre {
     margin: 0;
     font-size: 12px;
-    color: #111;
+    color: var(--text-primary);
     white-space: pre-wrap;
     word-break: break-all;
+}
+
+/* Search bar strip in query plan modal */
+.plan-controls {
+    background: var(--bg-secondary);
+}
+
+.plan-controls input[type="text"] {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 12px;
+}
+
+.plan-controls input[type="text"]::placeholder {
+    color: var(--text-secondary);
 }
 
 /* Ensure qp.css icons resolve correctly relative to our css/ folder */
@@ -1960,6 +2026,7 @@ tr.clickable:hover .datagrid-plan-badge {
     border: none;
     cursor: pointer;
     font-size: 13px;
+    line-height: 1;
     transition: all 0.15s;
 }
 
@@ -3492,18 +3559,19 @@ tr.clickable:hover .datagrid-plan-badge {
 .server-scope-toggle {
     display: flex;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 4px;
     overflow: hidden;
 }
 
 .scope-btn {
-    padding: 6px 14px;
+    padding: 8px 14px;
     background: var(--bg-primary);
     border: none;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
+    line-height: 1;
 }
 
 .scope-btn:first-child {
@@ -6338,11 +6406,13 @@ tr.clickable:hover .datagrid-plan-badge {
 
 /* ── Query Plan V2 renderer ──────────────────────────────────────────────── */
 
-/* Outer container — no scrollbars; pan/zoom handled in JS */
+/* Outer container — fills modal body flex column; pan/zoom handled in JS */
 #qp-container {
+    flex: 1;
     overflow: hidden;
     width: 100%;
-    height: 100%;
+    min-height: 0;
+    position: relative;
 }
 
 /* Pan/zoom viewport */
@@ -6594,6 +6664,46 @@ tr.clickable:hover .datagrid-plan-badge {
     font-size: 9px;
     font-weight: 700;
     line-height: 1.3;
+}
+
+/* #7 Seek/scan predicate inline on node face */
+.qp-v2-pred {
+    font-size: 8px;
+    color: #7ec8e3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.3;
+    cursor: help;
+}
+
+/* #8 Memory Grant Feedback badge */
+.qp-v2-mgf-badge {
+    display: inline-block;
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    background: #6366f1;
+    color: #fff;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-top: 2px;
+    cursor: help;
+}
+
+/* #10 Minimap */
+.qp-v2-minimap {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: rgba(20, 20, 30, 0.85);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 4px;
+    z-index: 50;
+    cursor: crosshair;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 
 /* Statement header (SQL text extracted from plan XML) */

@@ -3,7 +3,6 @@
 @using Microsoft.AspNetCore.Components.Web
 @using SqlHealthAssessment.Components.Shared
 @using Radzen.Blazor
-@inject SqlHealthAssessment.Data.Services.ThemeService ThemeSvc
 @inject SqlHealthAssessment.Data.Services.KeyboardShortcutService ShortcutSvc
 @inject SqlHealthAssessment.Data.UserSettingsService UserSettings
 @inject SqlHealthAssessment.Data.ServerConnectionManager ConnectionManager
@@ -85,8 +84,6 @@
 
     protected override void OnInitialized()
     {
-        ThemeSvc.OnThemeChanged += OnThemeChanged;
-
         // Show onboarding wizard on first run (no servers configured and not dismissed before)
         if (!UserSettings.GetOnboardingComplete() && ConnectionManager.GetConnections().Count == 0)
         {
@@ -141,15 +138,7 @@
         StateHasChanged();
     }
 
-    private void OnThemeChanged()
-    {
-        InvokeAsync(StateHasChanged);
-    }
-
-    public void Dispose()
-    {
-        ThemeSvc.OnThemeChanged -= OnThemeChanged;
-    }
+    public void Dispose() { }
 
     private async void LogErrorToConsole(Exception ex)
     {

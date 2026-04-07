@@ -194,11 +194,11 @@
     <!-- ── Table ──────────────────────────────────────────────────────── -->
     @if (_activeTab == "Alerts")
     {
-        <CheckValidatorTable Rows="_alertRows" OnTest="TestAlertRow" OnEdit="EditAlertRow" />
+        <CheckValidatorTable Rows="_alertRows" OnTest="TestAlertRow" OnEdit="EditAlertRow" ShowAlertColumns="true" />
     }
     else
     {
-        <CheckValidatorTable Rows="_sqlCheckRows" OnTest="TestSqlCheckRow" OnEdit="EditSqlCheckRow" />
+        <CheckValidatorTable Rows="_sqlCheckRows" OnTest="TestSqlCheckRow" OnEdit="EditSqlCheckRow" ShowAlertColumns="false" />
     }
 
     @if (_running)
@@ -242,6 +242,13 @@
                         <div class="cv-danger-warn">
                             <i class="fa-solid fa-triangle-exclamation"></i>
                             Blocked — contains dangerous keywords (INSERT / UPDATE / DELETE / DROP / TRUNCATE / EXEC).
+                        </div>
+                    }
+                    else if (_noPantsMode && !string.IsNullOrEmpty(_modalQuery) && _dangerousPattern.IsMatch(_modalQuery))
+                    {
+                        <div class="cv-danger-warn" style="border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.08);color:#f59e0b;">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            No-Pants Mode — SQL safety bypassed. Query contains potentially destructive keywords.
                         </div>
                     }
                 </div>
@@ -349,11 +356,13 @@
     private string _modalError = "";
     private bool _canSaveModal;
     private Action? _modalSaveAction;
+    private bool _noPantsMode;
 
     private double ProgressPct => _progressTotal == 0 ? 0 : _progressCurrent * 100.0 / _progressTotal;
 
     protected override void OnInitialized()
     {
+        _noPantsMode = UserSettings.GetNoPantsMode();
         LoadServerList();
         LoadAlertRows();
         LoadSqlCheckRows();
@@ -377,12 +386,40 @@
                 Id = a.Id,
                 Name = a.Name,
                 Category = a.Category,
+                Description = a.Description,
+                Severity = a.Severity,
                 Enabled = a.Enabled,
                 Query = a.Query,
-                AlertDef = a
+                AlertDef = a,
+                ThresholdWarning = a.Thresholds?.Warning,
+                ThresholdCritical = a.Thresholds?.Critical,
+                FrequencySeconds = a.FrequencySeconds,
+                QueryMode = a.QueryMode,
+                AlertOperator = a.Operator,
+                ExpectedDisplay = BuildAlertExpectedDisplay(a)
             })
             .OrderBy(r => r.Category).ThenBy(r => r.Name)
             .ToList();
+    }
+
+    private static string BuildAlertExpectedDisplay(SqlHealthAssessment.Data.Models.AlertDefinition a)
+    {
+        var op = a.Operator switch
+        {
+            "greater_than"          => ">",
+            "less_than"             => "<",
+            "greater_than_or_equal" => "≥",
+            "less_than_or_equal"    => "≤",
+            "equals"                => "=",
+            "not_equals"            => "≠",
+            _ => a.Operator ?? ""
+        };
+        var warn = a.Thresholds?.Warning;
+        var crit = a.Thresholds?.Critical;
+        if (crit.HasValue && warn.HasValue) return $"w{op}{warn} c{op}{crit}";
+        if (crit.HasValue) return $"crit {op}{crit}";
+        if (warn.HasValue) return $"warn {op}{warn}";
+        return "";
     }
 
     private void LoadSqlCheckRows()
@@ -408,8 +445,14 @@
                     Id = c.Id ?? "",
                     Name = c.Name ?? "",
                     Category = c.Category ?? "",
+                    Description = c.Description ?? "",
+                    Severity = c.Severity ?? "",
                     Enabled = c.Enabled,
-                    Query = c.SqlQuery ?? ""
+                    Query = c.SqlQuery ?? "",
+                    Priority = c.Priority,
+                    ExpectedValue = c.ExpectedValue,
+                    RowCountCondition = c.RowCountCondition,
+                    ExpectedDisplay = c.ExpectedValue.HasValue ? $"= {c.ExpectedValue}" : ""
                 })
                 .OrderBy(r => r.Category).ThenBy(r => r.Name)
                 .ToList();
@@ -469,11 +512,61 @@
             dt.Load(reader);
             row.TestResult = dt.Rows.Count > 0 ? "Pass" : "Pass (no rows)";
             row.ErrorText = null;
+
+            // Capture the first cell of the first row as the actual value
+            if (dt.Rows.Count > 0 && dt.Columns.Count > 0)
+            {
+                var raw = dt.Rows[0][0];
+                row.ActualValue = raw == DBNull.Value ? "NULL" : raw?.ToString() ?? "NULL";
+
+                // Evaluate against expected
+                if (row.AlertDef != null)
+                {
+                    // Alert: check against warning/critical thresholds
+                    if (double.TryParse(row.ActualValue, out var actualNum))
+                    {
+                        var op = row.AlertDef.Operator ?? "greater_than";
+                        var warn = row.AlertDef.Thresholds?.Warning;
+                        var crit = row.AlertDef.Thresholds?.Critical;
+                        var threshold = crit ?? warn;
+                        if (threshold.HasValue)
+                        {
+                            row.ActualMatchesExpected = op switch
+                            {
+                                "greater_than"          => actualNum <= threshold.Value,
+                                "less_than"             => actualNum >= threshold.Value,
+                                "greater_than_or_equal" => actualNum < threshold.Value,
+                                "less_than_or_equal"    => actualNum > threshold.Value,
+                                "equals"                => actualNum == threshold.Value,
+                                "not_equals"            => actualNum != threshold.Value,
+                                _                       => null
+                            };
+                        }
+                    }
+                }
+                else if (row.ExpectedValue.HasValue)
+                {
+                    // SQL check: compare scalar to ExpectedValue
+                    if (double.TryParse(row.ActualValue, out var actualNum))
+                        row.ActualMatchesExpected = actualNum == row.ExpectedValue.Value;
+                    else
+                        row.ActualMatchesExpected = null;
+                }
+            }
+            else
+            {
+                row.ActualValue = "(no rows)";
+                // No rows = passes for Equals0 / ExpectedValue=0 checks
+                if (row.ExpectedValue == 0 || row.RowCountCondition == "Equals0")
+                    row.ActualMatchesExpected = true;
+            }
         }
         catch (Exception ex)
         {
             row.TestResult = "Error";
             row.ErrorText = ex.Message;
+            row.ActualValue = null;
+            row.ActualMatchesExpected = null;
         }
         row.Tested = true;
     }
@@ -550,8 +643,8 @@
         @"\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|EXEC|EXECUTE|xp_|sp_configure|sp_addextendedproc)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static bool IsDangerous(string? sql) =>
-        !string.IsNullOrEmpty(sql) && _dangerousPattern.IsMatch(sql);
+    private bool IsDangerous(string? sql) =>
+        !_noPantsMode && !string.IsNullOrEmpty(sql) && _dangerousPattern.IsMatch(sql);
 
     private string GetConnectionString(string serverName)
     {
@@ -566,7 +659,12 @@
         public string? Id { get; set; }
         public string? Name { get; set; }
         public string? Category { get; set; }
+        public string? Description { get; set; }
+        public string? Severity { get; set; }
         public bool Enabled { get; set; }
         public string? SqlQuery { get; set; }
+        public int Priority { get; set; }
+        public int? ExpectedValue { get; set; }
+        public string? RowCountCondition { get; set; }
     }
 }

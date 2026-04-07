@@ -98,7 +98,7 @@ public class CredentialProtectorTests
     public void Decrypt_RandomGarbage_DoesNotReturnSensitiveData()
     {
         var garbage = "aes:dGhpcyBpcyBub3QgZW5jcnlwdGVk";
-        var result  = Record.Exception(() => CredentialProtector.Decrypt(garbage));
+        var result = Record.Exception(() => CredentialProtector.Decrypt(garbage));
         if (result == null)
         {
             var decrypted = CredentialProtector.Decrypt(garbage);

@@ -58,8 +58,8 @@ public class AlertDefinitionTests
     [Theory]
     [InlineData("greater_than", 85.0, 80.0, true)]
     [InlineData("greater_than", 79.0, 80.0, false)]
-    [InlineData("less_than",    5.0, 10.0, true)]
-    [InlineData("less_than",    15.0, 10.0, false)]
+    [InlineData("less_than", 5.0, 10.0, true)]
+    [InlineData("less_than", 15.0, 10.0, false)]
     [InlineData("greater_than", 80.0, 80.0, false)] // not strictly greater
     public void ThresholdBreach_OperatorLogic(string op, double value, double threshold, bool expected)
     {

@@ -1,17 +1,75 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/guide"
 @inject NavigationManager Navigation
-@inject IJSRuntime JSRuntime
 
 <div class="guide-container">
     <h1>Component Guide</h1>
     <p>This guide explains the major components of the navigation menu and what you can do in each section.</p>
-    <button class="btn btn-secondary" @onclick="StartGuidedTour" style="margin-bottom: 20px;">
-        <i class="fa-solid fa-play"></i> Start Guided Tour
-    </button>
 
-    <!-- Animated arrows for tour -->
-    <div id="tour-arrow" class="tour-arrow" style="display:none;">
-        <i class="fa-solid fa-arrow-down fa-bounce"></i>
+    <!-- Nav Map: inline replica of the sidebar grouped by section -->
+    <div class="guide-section nav-map-section">
+        <h2><i class="fa-solid fa-map"></i> Navigation Map</h2>
+        <p style="color:var(--text-secondary); margin-bottom: 16px;">
+            Everything available in the sidebar — click any item to go there directly.
+        </p>
+        <div class="nav-map-grid">
+
+            <div class="nav-map-group">
+                <div class="nav-map-label">Audits</div>
+                <a href="/servers" class="nav-map-item"><i class="fa-solid fa-server"></i><span>Servers</span><span class="nav-map-hint">Manage connections</span></a>
+                <a href="/quickcheck" class="nav-map-item"><i class="fa-solid fa-bolt"></i><span>Quick Check</span><span class="nav-map-hint">Instant health scan · Ctrl+Q</span></a>
+                <a href="/fullaudit" class="nav-map-item"><i class="fa-solid fa-clipboard-check"></i><span>Full Audit</span><span class="nav-map-hint">Deep-dive assessment · Ctrl+4</span></a>
+                <a href="/vulnerabilityassessment" class="nav-map-item"><i class="fa-solid fa-shield-halved"></i><span>Vulnerability Assessment</span><span class="nav-map-hint">Security vulnerability scan</span></a>
+                <a href="/environment" class="nav-map-item"><i class="fa-solid fa-diagram-project"></i><span>Environment View</span><span class="nav-map-hint">Network topology graph</span></a>
+                <a href="/diagnostics-roadmap" class="nav-map-item"><i class="fa-solid fa-road"></i><span>Diagnostics Roadmap</span><span class="nav-map-hint">Maturity level analysis</span></a>
+            </div>
+
+            <div class="nav-map-group">
+                <div class="nav-map-label">Tools</div>
+                <a href="/plan-analysis" class="nav-map-item"><i class="fa-solid fa-sitemap"></i><span>Plan Analysis</span><span class="nav-map-hint">Query execution plans</span></a>
+                <a href="/bestpractice" class="nav-map-item"><i class="fa-solid fa-star"></i><span>Best Practice</span><span class="nav-map-hint">SQL Server best practices</span></a>
+                <a href="/dbatools" class="nav-map-item"><i class="fa-solid fa-wrench"></i><span>DBA Tools</span><span class="nav-map-hint">Diagnostic scripts</span></a>
+                <a href="/capacity" class="nav-map-item"><i class="fa-solid fa-chart-line"></i><span>Capacity Planning</span><span class="nav-map-hint">Disk &amp; CPU forecasts</span></a>
+                <a href="/xevents" class="nav-map-item"><i class="fa-solid fa-circle-nodes"></i><span>XEvents</span><span class="nav-map-hint">Extended event sessions</span></a>
+            </div>
+
+            <div class="nav-map-group">
+                <div class="nav-map-label">Live Dashboards</div>
+                <a href="/dashboard/livemonitor" class="nav-map-item"><i class="fa-solid fa-eye"></i><span>Live Monitor</span><span class="nav-map-hint">Sessions, blocks, top queries</span></a>
+                <a href="/dashboard/instanceoverview" class="nav-map-item"><i class="fa-solid fa-chart-area"></i><span>Instance Overview</span><span class="nav-map-hint">CPU, memory, I/O trends</span></a>
+                <a href="/dashboard/waitstats" class="nav-map-item"><i class="fa-solid fa-clock-rotate-left"></i><span>Wait Events</span><span class="nav-map-hint">Wait stat analysis</span></a>
+            </div>
+
+            <div class="nav-map-group">
+                <div class="nav-map-label">SQLWATCH</div>
+                <a href="/dashboard/repository" class="nav-map-item"><i class="fa-solid fa-table-list"></i><span>Repository</span><span class="nav-map-hint">Server health overview</span></a>
+                <a href="/dashboard/resourcehealth" class="nav-map-item"><i class="fa-solid fa-chart-pie"></i><span>Resource Health</span><span class="nav-map-hint">CPU, memory, disk trends</span></a>
+                <a href="/dashboard/security" class="nav-map-item"><i class="fa-solid fa-lock"></i><span>Security</span><span class="nav-map-hint">Logins, permissions, alerts</span></a>
+            </div>
+
+            <div class="nav-map-group">
+                <div class="nav-map-label">Performance Monitor</div>
+                <a href="/dashboard/expensivequeries" class="nav-map-item"><i class="fa-solid fa-sliders"></i><span>Expensive Queries</span><span class="nav-map-hint">CPU, reads, writes analysis</span></a>
+                <a href="/dashboard/indexhealth" class="nav-map-item"><i class="fa-solid fa-list-check"></i><span>Index Health</span><span class="nav-map-hint">Missing, unused, fragmented</span></a>
+                <a href="/dashboard/querystore" class="nav-map-item"><i class="fa-solid fa-layer-group"></i><span>Query Store</span><span class="nav-map-hint">Plan regressions, trends</span></a>
+            </div>
+
+            <div class="nav-map-group">
+                <div class="nav-map-label">Configure</div>
+                <a href="/settings" class="nav-map-item"><i class="fa-solid fa-gear"></i><span>Settings</span><span class="nav-map-hint">App preferences · Ctrl+6</span></a>
+                <a href="/dashboard-editor" class="nav-map-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard Editor</span><span class="nav-map-hint">Custom dashboards · Ctrl+7</span></a>
+                <a href="/alerts" class="nav-map-item"><i class="fa-solid fa-bell"></i><span>Alert Rules</span><span class="nav-map-hint">Thresholds &amp; notifications</span></a>
+                <a href="/alerting-config" class="nav-map-item"><i class="fa-solid fa-sliders"></i><span>Alerting Config</span><span class="nav-map-hint">Alert channel settings</span></a>
+                <a href="/service-management" class="nav-map-item"><i class="fa-solid fa-microchip"></i><span>Service &amp; Updates</span><span class="nav-map-hint">Background service, updates</span></a>
+            </div>
+
+            <div class="nav-map-group">
+                <div class="nav-map-label">Deploy</div>
+                <a href="/deploysqlwatch" class="nav-map-item"><i class="fa-solid fa-cloud-arrow-up"></i><span>Deploy SQLWATCH</span><span class="nav-map-hint">Install monitoring framework</span></a>
+                <a href="/deploydarlingPM" class="nav-map-item"><i class="fa-solid fa-chart-simple"></i><span>Deploy Perf Monitor</span><span class="nav-map-hint">Install Darling tools</span></a>
+            </div>
+
+        </div>
     </div>
 
     <div class="guide-section">
@@ -153,7 +211,7 @@
         <div class="guide-cards">
             <div class="guide-card">
                 <h3><i class="fa-solid fa-gear"></i> Settings</h3>
-                <p>Configure application-wide settings including refresh intervals, theme preferences, and advanced options (Ctrl+6).</p>
+                <p>Configure application-wide settings including refresh intervals, notifications, and advanced options (Ctrl+6).</p>
                 <button class="btn btn-primary" @onclick="GoToSettings">
                     Open Settings
                 </button>
@@ -205,36 +263,82 @@
 </div>
 
 <style>
-    .tour-arrow {
-        position: absolute;
-        color: #ff6b35;
-        font-size: 2rem;
-        z-index: 1000;
-        animation: bounce 1s infinite;
+    .nav-map-section { margin-bottom: 35px; }
+
+    .nav-map-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 8px;
     }
-    @@keyframes bounce {
-        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-        40% { transform: translateY(-10px); }
-        60% { transform: translateY(-5px); }
+
+    .nav-map-group {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
     }
-    .tour-highlight {
-        box-shadow: 0 0 20px rgba(255, 107, 53, 0.8);
-        border: 2px solid #ff6b35;
-        animation: pulse 1s infinite;
+
+    .nav-map-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        padding: 0 4px 6px;
+        border-bottom: 1px solid var(--border-light);
+        margin-bottom: 4px;
     }
-    @@keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
+
+    .nav-map-item {
+        display: grid;
+        grid-template-columns: 20px 1fr;
+        grid-template-rows: auto auto;
+        column-gap: 8px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-secondary);
+        transition: background 0.15s, color 0.15s;
+        align-items: start;
+    }
+
+    .nav-map-item:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+        text-decoration: none;
+    }
+
+    .nav-map-item i {
+        font-size: 13px;
+        color: var(--accent);
+        grid-row: 1 / 3;
+        padding-top: 2px;
+        justify-self: center;
+    }
+
+    .nav-map-item > span:first-of-type {
+        font-size: 13px;
+        font-weight: 500;
+        color: inherit;
+        line-height: 1.3;
+    }
+
+    .nav-map-hint {
+        font-size: 11px;
+        color: var(--text-muted);
+        line-height: 1.2;
+    }
+
+    @@media (max-width: 768px) {
+        .nav-map-grid { grid-template-columns: 1fr; }
     }
 </style>
 
 @code {
-    private async Task StartGuidedTour()
-    {
-        await JSRuntime.InvokeVoidAsync("startGuidedTour");
-    }
-
     private void GoToLiveMonitor() => Navigation.NavigateTo("/dashboard/livemonitor");
     private void GoToInstanceOverview() => Navigation.NavigateTo("/dashboard/instanceoverview");
     private void GoToWaitEvents() => Navigation.NavigateTo("/dashboard/waitstats");
