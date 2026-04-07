@@ -1,16 +1,16 @@
 {
-    "version":  "0.84.0",
-    "buildNumber":  929,
-    "buildDate":  "2026-04-07",
+    "version":  "0.85.0",
+    "buildNumber":  935,
+    "buildDate":  "2026-04-08",
     "releaseType":  "Production",
     "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SqlHealthAssessment/releases/latest",
     "whatsnew":  [
-                     "Keyboard shortcuts: Ctrl+R to run, Ctrl+P for PDF export, Ctrl+E for CSV export — press ? to see all shortcuts",
-                     "No-Pants and Experimental mode toggles are now configurable in Settings",
-                     "First-run onboarding wizard guides new users through server setup",
-                     "Show VA Queries toggle — see the SQL code behind each Vulnerability Assessment check",
-                     "Connection health monitor — live server up/down indicator in the nav sidebar",
-                     "Unit tests: 32 tests covering CredentialProtector and CSV parser",
-                     "PDF export timeout (30 s) prevents WebView2 hang"
+                     "New dashboards: Query Store Health, Database Health, and enhanced Backup Health with checksum and restore tracking",
+                     "Live Stats: Top 10 wait types by average and total wait time, with colour-coded severity gradients",
+                     "Nav sidebar: colour-coded sections (Audits, Tools, Live, SQLWATCH, PM) with per-section icon tints",
+                     "Check Validator: Severity badge, Thresholds, Frequency, Query preview, and filter bar across all checks",
+                     "Check Validator: inline actual vs expected value after each test with green/red match indicator",
+                     "DataGrid: new text-match column colour mode for string-based cell highlighting",
+                     "Dashboard fixes: audit_status, iqp_configs, and io_latency queries corrected for SQL Server 2016+"
                  ]
 }
