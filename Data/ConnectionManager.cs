@@ -100,7 +100,7 @@ namespace SqlHealthAssessment.Data
                 {
                     throw new ArgumentException($"Invalid connection name: {connection.Id}");
                 }
-                
+
                 _connections.Add(connection);
                 InvalidateDiscoveryCache();
                 SaveConnections();
@@ -116,7 +116,7 @@ namespace SqlHealthAssessment.Data
                 {
                     throw new ArgumentException($"Invalid connection name: {connection.Id}");
                 }
-                
+
                 var index = _connections.FindIndex(c => c.Id == connection.Id);
                 if (index >= 0)
                 {
@@ -220,7 +220,7 @@ namespace SqlHealthAssessment.Data
                 {
                     var json = File.ReadAllText(_connectionsFilePath);
                     _connections = JsonSerializer.Deserialize<List<ServerConnection>>(json, DeserializeOptions) ?? new();
-                    
+
                     // Migrate and encrypt legacy passwords on load
                     foreach (var conn in _connections.Where(c => !string.IsNullOrEmpty(c.Password)))
                     {
@@ -266,18 +266,18 @@ namespace SqlHealthAssessment.Data
         private bool IsValidConnectionName(string name)
         {
             if (string.IsNullOrEmpty(name)) return false;
-            
+
             // Reject paths, special characters that could be used for injection
             if (name.Contains("\\") || name.Contains("/") || name.Contains("..")) return false;
-            if (name.Contains("<") || name.Contains(">") || name.Contains("&") || 
+            if (name.Contains("<") || name.Contains(">") || name.Contains("&") ||
                 name.Contains("'") || name.Contains("\"") || name.Contains(";")) return false;
-            
+
             // Only allow alphanumeric, underscore, hyphen, dot
             foreach (char c in name)
             {
                 if (!char.IsLetterOrDigit(c) && c != '_' && c != '-' && c != '.') return false;
             }
-            
+
             return true;
         }
 
@@ -287,17 +287,17 @@ namespace SqlHealthAssessment.Data
         private bool IsValidPassword(string password)
         {
             if (string.IsNullOrEmpty(password)) return false;
-            
+
             // Password must be at least 8 characters for security
             if (password.Length < 8) return false;
-            
+
             // Reject passwords with only printable ASCII (common in config files)
             foreach (char c in password)
             {
                 if (!char.IsControl(c) && !char.IsPunctuation(c) && !char.IsLetterOrDigit(c))
                     return true; // Contains special chars - valid
             }
-            
+
             return password.Length >= 8;
         }
     }

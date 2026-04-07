@@ -85,9 +85,9 @@ namespace SqlHealthAssessment.Data.Models
     /// <summary>Describes one available column/field on a report page.</summary>
     public class ReportFieldInfo
     {
-        public string Name        { get; init; } = "";
-        public string Type        { get; init; } = "";
+        public string Name { get; init; } = "";
+        public string Type { get; init; } = "";
         public string Description { get; init; } = "";
-        public bool   IsKey       { get; init; }
+        public bool IsKey { get; init; }
     }
 }

@@ -18,9 +18,9 @@ namespace SqlHealthAssessment.Data
             _logger = logger;
         }
 
-        public void LogInfo(string message)    => _logger.LogInformation("{Message}", message);
+        public void LogInfo(string message) => _logger.LogInformation("{Message}", message);
         public void LogWarning(string message) => _logger.LogWarning("{Message}", message);
-        public void LogDebug(string message)   => _logger.LogDebug("{Message}", message);
+        public void LogDebug(string message) => _logger.LogDebug("{Message}", message);
         public void LogError(string message, Exception? ex = null)
         {
             if (ex != null)

@@ -15,37 +15,37 @@ namespace SqlHealthAssessment.Data
     public class RateLimiter
     {
         private readonly IConfiguration _configuration;
-        
+
         /// <summary>
         /// Maximum queries per minute (default 50)
         /// </summary>
         public int MaxQueriesPerMinute { get; private set; } = 50;
-        
+
         /// <summary>
         /// Maximum connection attempts per minute (default 10)
         /// </summary>
         public int MaxConnectionAttemptsPerMinute { get; private set; } = 10;
-        
+
         /// <summary>
         /// Current query count in the sliding window
         /// </summary>
         public int CurrentQueryCount { get; private set; }
-        
+
         /// <summary>
         /// Current connection attempt count in the sliding window
         /// </summary>
         public int CurrentConnectionAttemptCount { get; private set; }
-        
+
         /// <summary>
         /// Whether the rate limit has been exceeded
         /// </summary>
         public bool IsRateLimited => CurrentQueryCount >= MaxQueriesPerMinute;
-        
+
         /// <summary>
         /// Whether the connection attempt rate limit has been exceeded
         /// </summary>
         public bool IsConnectionRateLimited => CurrentConnectionAttemptCount >= MaxConnectionAttemptsPerMinute;
-        
+
         /// <summary>
         /// Event raised when rate limit is exceeded
         /// </summary>
@@ -60,12 +60,12 @@ namespace SqlHealthAssessment.Data
         /// Queue of query timestamps for sliding window
         /// </summary>
         private readonly ConcurrentQueue<DateTime> _queryTimestamps = new();
-        
+
         /// <summary>
         /// Queue of connection attempt timestamps for sliding window
         /// </summary>
         private readonly ConcurrentQueue<DateTime> _connectionTimestamps = new();
-        
+
         /// <summary>
         /// Lock for thread safety
         /// </summary>
@@ -75,7 +75,7 @@ namespace SqlHealthAssessment.Data
         {
             _configuration = configuration;
             LoadConfiguration();
-            
+
             // Start cleanup timer
             var timer = new Timer(CleanupOldTimestamps, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
         }
@@ -92,7 +92,7 @@ namespace SqlHealthAssessment.Data
         public bool TryAcquire()
         {
             CleanupOldTimestamps(null);
-            
+
             lock (_lock)
             {
                 if (CurrentQueryCount >= MaxQueriesPerMinute)
@@ -106,7 +106,7 @@ namespace SqlHealthAssessment.Data
                     });
                     return false;
                 }
-                
+
                 // Record this query
                 _queryTimestamps.Enqueue(DateTime.UtcNow);
                 CurrentQueryCount = _queryTimestamps.Count;
@@ -129,7 +129,7 @@ namespace SqlHealthAssessment.Data
         public bool TryAcquireForConnection()
         {
             CleanupOldConnectionTimestamps(null);
-            
+
             lock (_lock)
             {
                 if (CurrentConnectionAttemptCount >= MaxConnectionAttemptsPerMinute)
@@ -143,7 +143,7 @@ namespace SqlHealthAssessment.Data
                     });
                     return false;
                 }
-                
+
                 // Record this connection attempt
                 _connectionTimestamps.Enqueue(DateTime.UtcNow);
                 CurrentConnectionAttemptCount = _connectionTimestamps.Count;
@@ -167,14 +167,14 @@ namespace SqlHealthAssessment.Data
         {
             if (_connectionTimestamps.IsEmpty)
                 return TimeSpan.Zero;
-            
+
             if (_connectionTimestamps.TryPeek(out var oldest))
             {
                 var expires = oldest.AddMinutes(1);
                 var remaining = expires - DateTime.UtcNow;
                 return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
             }
-            
+
             return TimeSpan.Zero;
         }
 
@@ -185,14 +185,14 @@ namespace SqlHealthAssessment.Data
         {
             if (_queryTimestamps.IsEmpty)
                 return TimeSpan.Zero;
-            
+
             if (_queryTimestamps.TryPeek(out var oldest))
             {
                 var expires = oldest.AddMinutes(1);
                 var remaining = expires - DateTime.UtcNow;
                 return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
             }
-            
+
             return TimeSpan.Zero;
         }
 
@@ -202,7 +202,7 @@ namespace SqlHealthAssessment.Data
         private void CleanupOldTimestamps(object? state)
         {
             var cutoff = DateTime.UtcNow.AddMinutes(-1);
-            
+
             while (_queryTimestamps.TryPeek(out var timestamp))
             {
                 if (timestamp < cutoff)
@@ -214,7 +214,7 @@ namespace SqlHealthAssessment.Data
                     break;
                 }
             }
-            
+
             CurrentQueryCount = _queryTimestamps.Count;
         }
 
@@ -224,7 +224,7 @@ namespace SqlHealthAssessment.Data
         private void CleanupOldConnectionTimestamps(object? state)
         {
             var cutoff = DateTime.UtcNow.AddMinutes(-1);
-            
+
             while (_connectionTimestamps.TryPeek(out var timestamp))
             {
                 if (timestamp < cutoff)
@@ -236,7 +236,7 @@ namespace SqlHealthAssessment.Data
                     break;
                 }
             }
-            
+
             CurrentConnectionAttemptCount = _connectionTimestamps.Count;
         }
 

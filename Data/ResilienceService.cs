@@ -17,7 +17,7 @@ public class ResilienceService
                 MaxRetryAttempts = 3,
                 Delay = TimeSpan.FromSeconds(1),
                 BackoffType = DelayBackoffType.Exponential,
-                ShouldHandle = new PredicateBuilder().Handle<SqlException>(ex => 
+                ShouldHandle = new PredicateBuilder().Handle<SqlException>(ex =>
                     ex.Number is -2 or 1205 or 64 or 233 or 10053 or 10054 or 10060)
             })
             .AddTimeout(TimeSpan.FromSeconds(30))

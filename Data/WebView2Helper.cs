@@ -15,10 +15,10 @@ namespace SqlHealthAssessment.Data
     public class WebView2Helper
     {
         private readonly ILogger<WebView2Helper>? _logger;
-        
+
         // WebView2 Evergreen runtime download URL (latest stable)
         private const string WebView2DownloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
-        
+
         // Minimum required version for Windows Server 2016 compatibility
         private const string MinVersion = "86.0.664.57";
 
@@ -38,7 +38,7 @@ namespace SqlHealthAssessment.Data
 
                 // Try to create a WebView2 environment - this will fail if runtime is not installed
                 var env = await CoreWebView2Environment.CreateAsync();
-                
+
                 if (env == null)
                 {
                     return new WebView2Status
@@ -90,7 +90,7 @@ namespace SqlHealthAssessment.Data
             {
                 // This is the specific error from the stack trace
                 _logger?.LogWarning(ex, "WebView2 runtime not found. FileNotFoundException (0x80070002)");
-                
+
                 return new WebView2Status
                 {
                     IsInstalled = false,
@@ -103,7 +103,7 @@ namespace SqlHealthAssessment.Data
             catch (WebView2RuntimeNotFoundException ex)
             {
                 _logger?.LogWarning(ex, "WebView2 runtime not found - WebView2RuntimeNotFoundException");
-                
+
                 return new WebView2Status
                 {
                     IsInstalled = false,
@@ -116,7 +116,7 @@ namespace SqlHealthAssessment.Data
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Unexpected error checking WebView2 status");
-                
+
                 return new WebView2Status
                 {
                     IsInstalled = false,
@@ -137,32 +137,32 @@ namespace SqlHealthAssessment.Data
                 _logger?.LogInformation("Attempting to install WebView2 runtime...");
 
                 var tempPath = Path.Combine(Path.GetTempPath(), $"WebView2Installer_{Guid.NewGuid()}.exe");
-                
+
                 progress?.Report(10);
 
                 // Download the installer
                 using var client = new System.Net.Http.HttpClient();
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("SqlHealthAssessment/1.0");
-                
+
                 var response = await client.GetAsync(WebView2DownloadUrl, System.Net.Http.HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
-                
+
                 var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-                
+
                 progress?.Report(30);
 
                 await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
                 await using var stream = await response.Content.ReadAsStreamAsync();
-                
+
                 var buffer = new byte[8192];
                 var totalRead = 0L;
                 int bytesRead;
-                
+
                 while ((bytesRead = await stream.ReadAsync(buffer)) > 0)
                 {
                     await fs.WriteAsync(buffer.AsMemory(0, bytesRead));
                     totalRead += bytesRead;
-                    
+
                     if (totalBytes > 0)
                     {
                         var percent = (int)(30 + (totalRead * 40 / totalBytes));
@@ -195,7 +195,7 @@ namespace SqlHealthAssessment.Data
                 }
 
                 await process.WaitForExitAsync();
-                
+
                 progress?.Report(100);
 
                 // Clean up installer
@@ -207,7 +207,7 @@ namespace SqlHealthAssessment.Data
                 {
                     // Wait a moment for the installation to complete
                     await Task.Delay(2000);
-                    
+
                     // Verify installation
                     var status = await CheckWebView2StatusAsync();
                     return new InstallResult
@@ -243,7 +243,7 @@ namespace SqlHealthAssessment.Data
         public string? GetBundledInstallerPath()
         {
             var baseDir = AppContext.BaseDirectory;
-            
+
             // Check for bundled installer in various common locations
             var possiblePaths = new[]
             {

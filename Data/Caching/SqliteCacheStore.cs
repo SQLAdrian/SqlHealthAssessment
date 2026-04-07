@@ -863,18 +863,18 @@ namespace SqlHealthAssessment.Data.Caching
                     {
                         switch (val)
                         {
-                            case string s:         writer.WriteStringValue(s); break;
-                            case int iv:           writer.WriteNumberValue(iv); break;
-                            case long lv:          writer.WriteNumberValue(lv); break;
-                            case double dv:        writer.WriteNumberValue(dv); break;
-                            case float fv:         writer.WriteNumberValue(fv); break;
-                            case decimal decv:     writer.WriteNumberValue(decv); break;
-                            case bool bv:          writer.WriteBooleanValue(bv); break;
-                            case DateTime dtv:     writer.WriteStringValue(dtv.ToString("o")); break;
+                            case string s: writer.WriteStringValue(s); break;
+                            case int iv: writer.WriteNumberValue(iv); break;
+                            case long lv: writer.WriteNumberValue(lv); break;
+                            case double dv: writer.WriteNumberValue(dv); break;
+                            case float fv: writer.WriteNumberValue(fv); break;
+                            case decimal decv: writer.WriteNumberValue(decv); break;
+                            case bool bv: writer.WriteBooleanValue(bv); break;
+                            case DateTime dtv: writer.WriteStringValue(dtv.ToString("o")); break;
                             case DateTimeOffset dto: writer.WriteStringValue(dto.ToString("o")); break;
-                            case Guid gv:          writer.WriteStringValue(gv.ToString()); break;
-                            case byte[] bytes:     writer.WriteBase64StringValue(bytes); break;
-                            default:               writer.WriteStringValue(val.ToString()); break;
+                            case Guid gv: writer.WriteStringValue(gv.ToString()); break;
+                            case byte[] bytes: writer.WriteBase64StringValue(bytes); break;
+                            default: writer.WriteStringValue(val.ToString()); break;
                         }
                     }
                 }

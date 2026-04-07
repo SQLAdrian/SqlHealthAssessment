@@ -341,7 +341,7 @@ namespace SqlHealthAssessment.Data
         /// Test a SQL Server query and return information about the result set.
         /// </summary>
         public async Task<(bool Success, string Message, List<ColumnInfo>? Columns)> TestSqlServerQueryAsync(
-            IDbConnectionFactory connectionFactory, 
+            IDbConnectionFactory connectionFactory,
             string query)
         {
             if (string.IsNullOrWhiteSpace(query))
@@ -352,7 +352,7 @@ namespace SqlHealthAssessment.Data
             try
             {
                 using var connection = await connectionFactory.CreateConnectionAsync();
-                
+
                 DbCommand? cmd = null;
                 if (connectionFactory.DataSourceType == "SqlServer")
                 {
@@ -362,13 +362,13 @@ namespace SqlHealthAssessment.Data
                 {
                     cmd = (SqliteCommand)connection.CreateCommand();
                 }
-                
+
                 cmd.CommandText = query;
                 cmd.CommandTimeout = 30;
 
                 // Get schema information without executing the full query
                 using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SchemaOnly);
-                
+
                 var columns = new List<ColumnInfo>();
                 var schemaTable = reader.GetColumnSchema();
 
@@ -413,7 +413,7 @@ namespace SqlHealthAssessment.Data
             {
                 // First, test the SQL Server query to get the schema
                 var (success, message, columns) = await TestSqlServerQueryAsync(sqlServerConnectionFactory, sqlServerQuery);
-                
+
                 if (!success || columns == null || columns.Count == 0)
                 {
                     return (false, $"SQL Server query failed: {message}");
@@ -487,12 +487,12 @@ namespace SqlHealthAssessment.Data
             {
                 // Table exists - add missing columns
                 var alterStatements = new List<string>();
-                
+
                 // Get existing columns
                 var pragmaCmd = SqliteConnection.CreateCommand();
                 pragmaCmd.CommandText = $"PRAGMA table_info({tableName})";
                 using var pragmaReader = await pragmaCmd.ExecuteReaderAsync();
-                
+
                 var existingColumns = new HashSet<string>();
                 while (await pragmaReader.ReadAsync())
                 {
@@ -588,7 +588,7 @@ namespace SqlHealthAssessment.Data
                 values.Add($"'{DateTime.Now:yyyy-MM-dd HH:mm:ss}'"); // collection_time
 
                 var insertSql = $"INSERT INTO {tableName} ({string.Join(",", columnNames)}) VALUES ({string.Join(",", values)})";
-                
+
                 using var insertCmd = SqliteConnection.CreateCommand();
                 insertCmd.CommandText = insertSql;
                 await insertCmd.ExecuteNonQueryAsync();
@@ -610,7 +610,7 @@ namespace SqlHealthAssessment.Data
                 return "TEXT";
             if (dt.Contains("binary") || dt.Contains("image"))
                 return "BLOB";
-            
+
             // Default to TEXT for strings
             return "TEXT";
         }

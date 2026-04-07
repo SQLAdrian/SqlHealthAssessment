@@ -361,7 +361,8 @@ namespace SqlHealthAssessment.Data.Services
                 await sqlConn.OpenAsync();
                 using var cmd = new SqlCommand(
                     "SELECT COUNT(*) FROM sys.dm_io_virtual_file_stats(NULL, NULL) WHERE io_stall_read_ms > 5000 OR io_stall_write_ms > 5000",
-                    sqlConn) { CommandTimeout = 10 };
+                    sqlConn)
+                { CommandTimeout = 10 };
                 var result = await cmd.ExecuteScalarAsync();
                 return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
             }

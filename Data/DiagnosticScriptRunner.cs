@@ -106,10 +106,10 @@ namespace SqlHealthAssessment.Data
                         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                     });
                     File.WriteAllText(configPath, json);
-                    
+
                     // Update cached version
                     _scriptConfigurations = configurations.OrderBy(s => s.ExecutionOrder).ToList();
-                    
+
                     _logger.LogInformation("Saved {Count} script configurations", configurations.Count);
                 }
                 catch (Exception ex)
@@ -168,13 +168,13 @@ namespace SqlHealthAssessment.Data
 
                 // Load and validate the script file
                 var scriptPath = Path.Combine("scripts", config.ScriptPath);
-                
+
                 // Validate script path to prevent path traversal attacks
                 if (!IsValidScriptPath(config.ScriptPath))
                 {
                     throw new InvalidOperationException($"Invalid script path detected: {config.ScriptPath}");
                 }
-                
+
                 if (!File.Exists(scriptPath))
                     throw new FileNotFoundException($"Script not found: {scriptPath}");
 
@@ -445,10 +445,10 @@ namespace SqlHealthAssessment.Data
             // Sanitize file name to prevent path traversal and invalid characters
             var sanitizedServerName = SanitizeFileName(result.ServerName);
             var sanitizedScriptName = SanitizeFileName(result.ScriptName);
-            
+
             var csvFileName = Path.Combine(outputFolder,
                 $"{sanitizedServerName}_{sanitizedScriptName}_{FiletimeStamp}.csv");
-            
+
             var jsonFileName = Path.Combine(outputFolder,
                 $"{sanitizedServerName}_{sanitizedScriptName}_{FiletimeStamp}.json");
 

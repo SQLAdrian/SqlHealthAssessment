@@ -121,20 +121,20 @@ namespace SqlHealthAssessment.Data.Models
         {
             if (string.IsNullOrWhiteSpace(serverName))
                 return string.Empty;
-            
+
             // Limit length
             if (serverName.Length > 100)
                 serverName = serverName.Substring(0, 100);
-            
+
             // Remove potentially dangerous characters and patterns
             var dangerousPatterns = new[] { ";", "'", "\"", "--", "/*", "*/", "xp_", "sp_", "@@", "../", "..\\" };
             var sanitized = serverName;
-            
+
             foreach (var pattern in dangerousPatterns)
             {
                 sanitized = sanitized.Replace(pattern, string.Empty);
             }
-            
+
             return sanitized.Trim();
         }
 

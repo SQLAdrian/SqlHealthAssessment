@@ -21,7 +21,7 @@ namespace SqlHealthAssessment.Data.Models
         public string? Tags { get; set; }
         public string CheckCategory { get; set; } = "Custom";
         public string? SqlQuery { get; set; }
-        
+
         // For UI selection
         public bool IsSelected { get; set; }
     }

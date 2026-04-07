@@ -218,7 +218,7 @@ namespace SqlHealthAssessment.Data
                     if (config != null)
                     {
                         _logger.LogDebug("Deserialized config with {Count} dashboards", config.Dashboards?.Count ?? 0);
-                        
+
                         _config = config;
                         if (PatchMissingDashboards(config))
                         {
@@ -301,20 +301,20 @@ namespace SqlHealthAssessment.Data
                 foreach (var panel in dashboard.Panels)
                 {
                     if (!string.IsNullOrEmpty(panel.Id))
-                    {
-                        cache[panel.Id] = panel.Query;
-                        typeCache[panel.Id] = panel.PanelType;
-                        WarnIfUnsafe(panel.Id, panel.Query?.SqlServer);
-                    }
+                     {
+                         cache[panel.Id] = panel.Query!;
+                         typeCache[panel.Id] = panel.PanelType!;
+                         WarnIfUnsafe(panel.Id, panel.Query?.SqlServer);
+                     }
                 }
             }
 
-            // Index all support queries (support queries override panels if there's a collision)
-            foreach (var kvp in config.SupportQueries)
-            {
-                cache[kvp.Key] = kvp.Value;
-                WarnIfUnsafe(kvp.Key, kvp.Value?.SqlServer);
-            }
+             // Index all support queries (support queries override panels if there's a collision)
+             foreach (var kvp in config.SupportQueries)
+             {
+                 cache[kvp.Key] = kvp.Value!;
+                 WarnIfUnsafe(kvp.Key, kvp.Value?.SqlServer);
+             }
 
             _queryCache = cache;
             _panelTypeCache = typeCache;

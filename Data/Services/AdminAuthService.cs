@@ -54,8 +54,8 @@ public class AdminAuthService
             return false;
         }
 
-        var hash    = _config["AdminAuth:Hash"]!;
-        var salt    = _config["AdminAuth:Salt"]!;
+        var hash = _config["AdminAuth:Hash"]!;
+        var salt = _config["AdminAuth:Salt"]!;
         var computed = ComputeHash(password, Convert.FromBase64String(salt));
         _sessionUnlocked = CryptographicOperations.FixedTimeEquals(
             Convert.FromBase64String(hash),

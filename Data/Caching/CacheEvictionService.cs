@@ -33,13 +33,13 @@ namespace SqlHealthAssessment.Data.Caching
             if (int.TryParse(config["CacheEvictionHours"], out var h) && h > 0)
                 hours = h;
             _evictionThreshold = TimeSpan.FromHours(hours);
-            
+
             // Default max cache size: 500MB (config value is in MB)
             _maxCacheSizeBytes = config.GetValue<long>("MaxCacheSizeMB", 500) * 1024 * 1024;
 
             // Run eviction every 5 minutes
             _interval = TimeSpan.FromMinutes(5);
-            
+
             if (_memoryMonitor != null)
             {
                 _memoryMonitor.MemoryPressureChanged += OnMemoryPressureChanged;

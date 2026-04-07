@@ -19,7 +19,9 @@ namespace SqlHealthAssessment.Data
 
         public UserSettingsService()
         {
-            _settingsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "user-settings.json");
+            var appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SqlHealthAssessment");
+            Directory.CreateDirectory(appDataDir);
+            _settingsFilePath = Path.Combine(appDataDir, "user-settings.json");
             _settings = LoadSettings();
         }
 
@@ -83,12 +85,12 @@ namespace SqlHealthAssessment.Data
             public bool ExperimentalMode { get; set; } = false;
 
             // ── Vulnerability Assessment Scheduled PDF ──
-            public bool     VaScheduledPdfEnabled    { get; set; } = false;
-            public string   VaScheduledPdfType       { get; set; } = "Weekly";
-            public string   VaScheduledPdfTime       { get; set; } = "07:30";
-            public int      VaScheduledPdfDayOfWeek  { get; set; } = 1;
-            public int      VaScheduledPdfDayOfMonth { get; set; } = 1;
-            public DateTime VaScheduledPdfLastRun    { get; set; } = DateTime.MinValue;
+            public bool VaScheduledPdfEnabled { get; set; } = false;
+            public string VaScheduledPdfType { get; set; } = "Weekly";
+            public string VaScheduledPdfTime { get; set; } = "07:30";
+            public int VaScheduledPdfDayOfWeek { get; set; } = 1;
+            public int VaScheduledPdfDayOfMonth { get; set; } = 1;
+            public DateTime VaScheduledPdfLastRun { get; set; } = DateTime.MinValue;
 
             // ── Roadmap Scheduled PDF ──
             /// <summary>When true, the Diagnostics Roadmap page auto-exports a PDF on the configured schedule.</summary>
@@ -108,11 +110,11 @@ namespace SqlHealthAssessment.Data
 
             /// <summary>Immutable snapshot of VA schedule settings for thread-safe reads.</summary>
             public record VaScheduleSnapshot(
-                bool     Enabled,
-                string   Type,
-                string   Time,
-                int      DayOfWeek,
-                int      DayOfMonth,
+                bool Enabled,
+                string Type,
+                string Time,
+                int DayOfWeek,
+                int DayOfMonth,
                 DateTime LastRun)
             {
                 public VaScheduleSnapshot(UserSettings s) : this(
@@ -121,17 +123,18 @@ namespace SqlHealthAssessment.Data
                     s.VaScheduledPdfTime,
                     s.VaScheduledPdfDayOfWeek,
                     s.VaScheduledPdfDayOfMonth,
-                    s.VaScheduledPdfLastRun) { }
+                    s.VaScheduledPdfLastRun)
+                { }
             }
 
             /// <summary>Immutable snapshot of roadmap schedule settings for thread-safe reads.</summary>
             public record RoadmapScheduleSnapshot(
-                bool    Enabled,
-                string  Type,
-                string  Time,
-                int     DayOfWeek,
-                int     DayOfMonth,
-                bool    SplitByDomain,
+                bool Enabled,
+                string Type,
+                string Time,
+                int DayOfWeek,
+                int DayOfMonth,
+                bool SplitByDomain,
                 DateTime LastRun)
             {
                 public RoadmapScheduleSnapshot(UserSettings s) : this(
@@ -141,7 +144,8 @@ namespace SqlHealthAssessment.Data
                     s.RoadmapScheduledPdfDayOfWeek,
                     s.RoadmapScheduledPdfDayOfMonth,
                     s.RoadmapScheduledPdfSplitByDomain,
-                    s.RoadmapScheduledPdfLastRun) { }
+                    s.RoadmapScheduledPdfLastRun)
+                { }
             }
         }
 
@@ -350,10 +354,10 @@ namespace SqlHealthAssessment.Data
         {
             lock (_lock)
             {
-                _settings.VaScheduledPdfEnabled    = enabled;
-                _settings.VaScheduledPdfType       = type;
-                _settings.VaScheduledPdfTime       = time;
-                _settings.VaScheduledPdfDayOfWeek  = dayOfWeek;
+                _settings.VaScheduledPdfEnabled = enabled;
+                _settings.VaScheduledPdfType = type;
+                _settings.VaScheduledPdfTime = time;
+                _settings.VaScheduledPdfDayOfWeek = dayOfWeek;
                 _settings.VaScheduledPdfDayOfMonth = dayOfMonth;
             }
             SaveSettings();
@@ -375,11 +379,11 @@ namespace SqlHealthAssessment.Data
         {
             lock (_lock)
             {
-                _settings.RoadmapScheduledPdfEnabled     = enabled;
-                _settings.RoadmapScheduledPdfType        = type;
-                _settings.RoadmapScheduledPdfTime        = time;
-                _settings.RoadmapScheduledPdfDayOfWeek   = dayOfWeek;
-                _settings.RoadmapScheduledPdfDayOfMonth  = dayOfMonth;
+                _settings.RoadmapScheduledPdfEnabled = enabled;
+                _settings.RoadmapScheduledPdfType = type;
+                _settings.RoadmapScheduledPdfTime = time;
+                _settings.RoadmapScheduledPdfDayOfWeek = dayOfWeek;
+                _settings.RoadmapScheduledPdfDayOfMonth = dayOfMonth;
                 _settings.RoadmapScheduledPdfSplitByDomain = splitByDomain;
             }
             SaveSettings();

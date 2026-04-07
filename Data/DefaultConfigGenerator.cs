@@ -1015,17 +1015,17 @@ ORDER BY d.snapshot_time DESC"
         {
             return new DashboardDefinition
             {
-                Id          = "bpcheck",
-                Title       = "Best Practices Check",
-                NavTitle    = "BPCheck",
-                NavIcon     = "\u2705",
+                Id = "bpcheck",
+                Title = "Best Practices Check",
+                NavTitle = "BPCheck",
+                NavIcon = "\u2705",
                 NavCategory = "Audits",
-                NavOrder    = 10,
-                Route       = "/bpcheck",
+                NavOrder = 10,
+                Route = "/bpcheck",
                 Description = "Live DMV-based best-practice health checks, adapted from tigertoolbox BPCheck.",
-                Source      = "sqlwatch",
+                Source = "sqlwatch",
                 DefaultDatabase = "master",
-                ShowAllOption   = false,
+                ShowAllOption = false,
                 Panels = new List<PanelDefinition>
                 {
                     // ── StatCard summary row ──────────────────────────────

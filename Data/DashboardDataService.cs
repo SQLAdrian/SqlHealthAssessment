@@ -53,7 +53,7 @@ namespace SqlHealthAssessment.Data
                 .ToArray();
         }
 
-    
+
 
 
         /// <summary>

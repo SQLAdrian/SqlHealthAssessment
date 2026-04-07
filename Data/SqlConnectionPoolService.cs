@@ -36,7 +36,7 @@ namespace SqlHealthAssessment.Data
             _idleTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("ConnectionPool:IdleTimeoutMinutes", 5));
 
             // Cleanup timer runs every 2 minutes
-            _cleanupTimer = new Timer(CleanupIdleConnections, null, 
+            _cleanupTimer = new Timer(CleanupIdleConnections, null,
                 TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2));
         }
 
@@ -52,7 +52,7 @@ namespace SqlHealthAssessment.Data
             // Try to get from pool first
             while (_availableConnections.TryDequeue(out var pooled))
             {
-                if (pooled.ConnectionString == connectionString && 
+                if (pooled.ConnectionString == connectionString &&
                     pooled.Connection.State == ConnectionState.Open &&
                     DateTime.UtcNow - pooled.LastUsed < _idleTimeout)
                 {
@@ -73,7 +73,7 @@ namespace SqlHealthAssessment.Data
             {
                 var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync(cancellationToken);
-                
+
                 _connectionCounts.AddOrUpdate(connectionKey, 1, (k, v) => v + 1);
                 return connection;
             }
@@ -148,12 +148,12 @@ namespace SqlHealthAssessment.Data
             // Dispose idle connections
             foreach (var connection in connectionsToDispose)
             {
-                try 
-                { 
+                try
+                {
                     connection.Connection.Dispose();
                     var key = GetConnectionKey(connection.ConnectionString);
                     _connectionCounts.AddOrUpdate(key, 0, (k, v) => Math.Max(0, v - 1));
-                } 
+                }
                 catch (Exception ex) { _logger.LogDebug(ex, "[ConnPool] Dispose during cleanup failed"); }
             }
 

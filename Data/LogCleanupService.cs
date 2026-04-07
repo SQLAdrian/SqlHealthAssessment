@@ -35,7 +35,7 @@ namespace SqlHealthAssessment.Data
         private void Cleanup()
         {
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var cutoff  = DateTime.Now.AddDays(-RetentionDays);
+            var cutoff = DateTime.Now.AddDays(-RetentionDays);
             var deleted = 0;
 
             foreach (var dirName in _directories)

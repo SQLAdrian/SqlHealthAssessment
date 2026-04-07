@@ -80,23 +80,23 @@ namespace SqlHealthAssessment.Data
             {
                 sessions.Add(new SessionInfo
                 {
-                    SPID                 = reader.GetInt16(reader.GetOrdinal("SPID")),
-                    LoginName            = reader.GetString(reader.GetOrdinal("LoginName")),
-                    HostName             = reader.GetString(reader.GetOrdinal("HostName")),
-                    DatabaseName         = reader.GetString(reader.GetOrdinal("DatabaseName")),
-                    SessionStatus        = reader.GetString(reader.GetOrdinal("SessionStatus")),
-                    CpuTime              = reader.GetInt32(reader.GetOrdinal("CpuTime")),
-                    LogicalReads         = reader.GetInt64(reader.GetOrdinal("LogicalReads")),
-                    Writes               = reader.GetInt64(reader.GetOrdinal("Writes")),
+                    SPID = reader.GetInt16(reader.GetOrdinal("SPID")),
+                    LoginName = reader.GetString(reader.GetOrdinal("LoginName")),
+                    HostName = reader.GetString(reader.GetOrdinal("HostName")),
+                    DatabaseName = reader.GetString(reader.GetOrdinal("DatabaseName")),
+                    SessionStatus = reader.GetString(reader.GetOrdinal("SessionStatus")),
+                    CpuTime = reader.GetInt32(reader.GetOrdinal("CpuTime")),
+                    LogicalReads = reader.GetInt64(reader.GetOrdinal("LogicalReads")),
+                    Writes = reader.GetInt64(reader.GetOrdinal("Writes")),
                     OpenTransactionCount = reader.GetInt32(reader.GetOrdinal("OpenTransactionCount")),
-                    RequestStatus        = reader.IsDBNull(reader.GetOrdinal("RequestStatus")) ? null : reader.GetString(reader.GetOrdinal("RequestStatus")),
-                    Command              = reader.IsDBNull(reader.GetOrdinal("Command"))        ? null : reader.GetString(reader.GetOrdinal("Command")),
-                    WaitType             = reader.IsDBNull(reader.GetOrdinal("WaitType"))       ? null : reader.GetString(reader.GetOrdinal("WaitType")),
-                    WaitTime             = reader.GetInt32(reader.GetOrdinal("WaitTime")),
-                    BlockingSessionId    = reader.GetInt16(reader.GetOrdinal("BlockingSessionId")),
-                    TotalElapsedTime     = reader.GetInt32(reader.GetOrdinal("TotalElapsedTime")),
-                    ProgramName          = reader.GetString(reader.GetOrdinal("ProgramName")),
-                    QueryText            = reader.IsDBNull(reader.GetOrdinal("QueryText")) ? null : reader.GetString(reader.GetOrdinal("QueryText"))
+                    RequestStatus = reader.IsDBNull(reader.GetOrdinal("RequestStatus")) ? null : reader.GetString(reader.GetOrdinal("RequestStatus")),
+                    Command = reader.IsDBNull(reader.GetOrdinal("Command")) ? null : reader.GetString(reader.GetOrdinal("Command")),
+                    WaitType = reader.IsDBNull(reader.GetOrdinal("WaitType")) ? null : reader.GetString(reader.GetOrdinal("WaitType")),
+                    WaitTime = reader.GetInt32(reader.GetOrdinal("WaitTime")),
+                    BlockingSessionId = reader.GetInt16(reader.GetOrdinal("BlockingSessionId")),
+                    TotalElapsedTime = reader.GetInt32(reader.GetOrdinal("TotalElapsedTime")),
+                    ProgramName = reader.GetString(reader.GetOrdinal("ProgramName")),
+                    QueryText = reader.IsDBNull(reader.GetOrdinal("QueryText")) ? null : reader.GetString(reader.GetOrdinal("QueryText"))
                 });
             }
 

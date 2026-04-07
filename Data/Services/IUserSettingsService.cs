@@ -13,27 +13,27 @@ namespace SqlHealthAssessment.Data.Services
         UserSettingsService.UserSettings GetSettings();
 
         string GetSelectedTheme();
-        void   SetSelectedTheme(string theme);
+        void SetSelectedTheme(string theme);
 
-        int  GetRefreshInterval();
+        int GetRefreshInterval();
         void SetRefreshInterval(int seconds);
 
         bool GetAutoRefresh();
         void SetAutoRefresh(bool enabled);
 
-        int  GetDefaultTimeRange();
+        int GetDefaultTimeRange();
         void SetDefaultTimeRange(int minutes);
 
-        bool   GetShowDiagnosticPane();
-        void   SetShowDiagnosticPane(bool enabled);
+        bool GetShowDiagnosticPane();
+        void SetShowDiagnosticPane(bool enabled);
 
         string GetDefaultDashboardId();
-        void   SetDefaultDashboardId(string dashboardId);
+        void SetDefaultDashboardId(string dashboardId);
 
         string GetDataSource();
-        void   SetDataSource(string source);
+        void SetDataSource(string source);
 
-        int  GetZoomLevel();
+        int GetZoomLevel();
         void SetZoomLevel(int zoomPercent);
 
         bool GetDebugLogging();
@@ -68,7 +68,7 @@ namespace SqlHealthAssessment.Data.Services
             bool quickCheckCsv, bool quickCheckPdf,
             bool vaCsv, bool vaPdf);
 
-        UserSettingsService.UserSettings.VaScheduleSnapshot      GetVaSchedule();
+        UserSettingsService.UserSettings.VaScheduleSnapshot GetVaSchedule();
         void SaveVaSchedule(bool enabled, string type, string time, int dayOfWeek, int dayOfMonth);
         void UpdateVaScheduleLastRun(DateTime utcNow);
 
@@ -76,7 +76,7 @@ namespace SqlHealthAssessment.Data.Services
         void SaveRoadmapSchedule(bool enabled, string type, string time, int dayOfWeek, int dayOfMonth, bool splitByDomain);
         void UpdateRoadmapScheduleLastRun(DateTime utcNow);
 
-        event Action<int>?  OnZoomChanged;
+        event Action<int>? OnZoomChanged;
         event Action<bool>? OnDebugLoggingChanged;
         event Action<bool>? OnNoPantsModeChanged;
         event Action<bool>? OnExperimentalModeChanged;

@@ -62,7 +62,7 @@ namespace SqlHealthAssessment.Data.Caching
 
             var hours = configuration.GetValue<int>("CacheEvictionHours", 24);
             _evictionThreshold = TimeSpan.FromHours(hours);
-            
+
             // Memory threshold: default 10% of MaxCacheSizeMB, or 50MB minimum
             var maxCacheBytes = configuration.GetValue<long>("MaxCacheSizeMB", 100) * 1024 * 1024;
             _memoryThresholdBytes = Math.Max(maxCacheBytes / 10, 50 * 1024 * 1024); // 10% or 50MB
@@ -97,7 +97,7 @@ namespace SqlHealthAssessment.Data.Caching
             {
                 // Check memory pressure before refresh cycle
                 await CheckMemoryPressureAsync();
-                
+
                 if (_stateTracker.RequiresFullReload(dashboardId, timeRangeMinutes, selectedInstance, timezoneOffsetHours))
                 {
                     await _cache.InvalidateAllAsync();

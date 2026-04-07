@@ -85,7 +85,7 @@ namespace SqlHealthAssessment.Data
             CancellationToken cancellationToken = default)
         {
             var cacheKey = $"{serverName}:{databaseName}";
-            
+
             lock (_lock)
             {
                 if (_serverCache.TryGetValue(serverName, out var serverDbs) &&

@@ -21,21 +21,21 @@ namespace SqlHealthAssessment.Data.Services
 
         public record HealthEntry(ServerStatus Status, DateTime LastChecked, string? Error);
 
-        private readonly ServerConnectionManager            _connections;
-        private readonly ILogger<ConnectionHealthService>   _logger;
+        private readonly ServerConnectionManager _connections;
+        private readonly ILogger<ConnectionHealthService> _logger;
         private readonly ConcurrentDictionary<string, HealthEntry> _status = new(StringComparer.OrdinalIgnoreCase);
-        private readonly System.Timers.Timer                _timer;
-        private          bool                               _disposed;
+        private readonly System.Timers.Timer _timer;
+        private bool _disposed;
 
         public event Action? OnStatusChanged;
 
         public ConnectionHealthService(ServerConnectionManager connections, ILogger<ConnectionHealthService> logger)
         {
             _connections = connections;
-            _logger      = logger;
+            _logger = logger;
 
-            _timer           = new System.Timers.Timer(30_000);
-            _timer.Elapsed  += async (_, _) => await CheckAllAsync();
+            _timer = new System.Timers.Timer(30_000);
+            _timer.Elapsed += async (_, _) => await CheckAllAsync();
             _timer.AutoReset = true;
         }
 
@@ -69,7 +69,7 @@ namespace SqlHealthAssessment.Data.Services
         private async Task CheckAllAsync()
         {
             var enabled = _connections.GetEnabledConnections();
-            var tasks   = new List<Task>();
+            var tasks = new List<Task>();
 
             foreach (var conn in enabled)
             {

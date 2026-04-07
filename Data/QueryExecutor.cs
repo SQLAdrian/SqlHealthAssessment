@@ -37,7 +37,7 @@ namespace SqlHealthAssessment.Data
             _resilience = resilience ?? throw new ArgumentNullException(nameof(resilience));
             _connectionPool = connectionPool;
             _auditLog = auditLog;
-            
+
             _commandTimeout = configuration.GetValue<int>("QueryTimeoutSeconds", 60);
             _maxRows = configuration.GetValue<int>("MaxQueryRows", 10000);
         }
@@ -54,18 +54,18 @@ namespace SqlHealthAssessment.Data
         {
             var sql = _configService.GetQuery(queryId, _connectionFactory.DataSourceType);
             var defaultDatabase = _configService.GetEffectiveDefaultDatabase(queryId);
-            
+
             // Override with CurrentServer.Database if set (for Query Store database selection)
             var currentDb = _connectionManager.CurrentServer?.Database;
             if (!string.IsNullOrEmpty(currentDb) && currentDb != "master")
                 defaultDatabase = currentDb;
-            
+
             var dt = new DataTable();
             var startTime = DateTime.UtcNow;
 
             return await _resilience.SqlPipeline.ExecuteAsync(async ct =>
             {
-                using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory 
+                using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
                     ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
                     : (SqlConnection)_connectionFactory.CreateConnection();
                 await conn.OpenAsync(ct);
@@ -145,15 +145,15 @@ namespace SqlHealthAssessment.Data
         {
             var sql = _configService.GetQuery(queryId, _connectionFactory.DataSourceType);
             var defaultDatabase = _configService.GetEffectiveDefaultDatabase(queryId);
-            
+
             // Override with CurrentServer.Database if set (for Query Store database selection)
             var currentDb = _connectionManager.CurrentServer?.Database;
             if (!string.IsNullOrEmpty(currentDb) && currentDb != "master")
                 defaultDatabase = currentDb;
-            
+
             var results = new List<T>();
 
-            using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory 
+            using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
                 ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
                 : (SqlConnection)_connectionFactory.CreateConnection();
             await conn.OpenAsync(cancellationToken);
@@ -193,13 +193,13 @@ namespace SqlHealthAssessment.Data
         {
             var sql = _configService.GetQuery(queryId, _connectionFactory.DataSourceType);
             var defaultDatabase = _configService.GetEffectiveDefaultDatabase(queryId);
-            
+
             // Override with CurrentServer.Database if set (for Query Store database selection)
             var currentDb = _connectionManager.CurrentServer?.Database;
             if (!string.IsNullOrEmpty(currentDb) && currentDb != "master")
                 defaultDatabase = currentDb;
 
-            using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory 
+            using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
                 ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
                 : (SqlConnection)_connectionFactory.CreateConnection();
             await conn.OpenAsync(cancellationToken);
@@ -272,7 +272,7 @@ namespace SqlHealthAssessment.Data
             AddParameter(cmd, "@SqlInstance", joined);
 
             AddParameter(cmd, "@AggMin", filter.AggregationMinutes);
-            
+
             // Add @TopRows parameter for queries that limit results
             AddParameter(cmd, "@TopRows", _maxRows);
         }

@@ -355,7 +355,7 @@ namespace SqlHealthAssessment.Data
             {
                 var cutoffDate = DateTime.Now.AddDays(-RetentionDays);
                 var logFiles = Directory.GetFiles(_logDirectory, "audit-*.jsonl");
-                
+
                 foreach (var file in logFiles)
                 {
                     var fileInfo = new FileInfo(file);

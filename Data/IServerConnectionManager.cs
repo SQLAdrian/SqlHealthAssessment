@@ -13,12 +13,12 @@ namespace SqlHealthAssessment.Data
     {
         event Action? OnConnectionChanged;
 
-        List<ServerConnection>  GetConnections();
-        List<ServerConnection>  GetEnabledConnections();
-        string[]                GetEnabledServerNames();
-        ServerConnection?       GetConnection(string id);
-        ServerConnection?       GetDefaultConnection();
-        ServerConnection?       CurrentServer { get; }
+        List<ServerConnection> GetConnections();
+        List<ServerConnection> GetEnabledConnections();
+        string[] GetEnabledServerNames();
+        ServerConnection? GetConnection(string id);
+        ServerConnection? GetDefaultConnection();
+        ServerConnection? CurrentServer { get; }
 
         void AddConnection(ServerConnection connection);
         void UpdateConnection(ServerConnection connection);

@@ -1,7 +1,58 @@
-# UI Modernization & Enhancement Plan
+# SQL Health Assessment - Features & Roadmap
 
 ## Overview
-This document outlines the plan to modernize the SQL Health Assessment application UI using Tailwind CSS, animations, and UX improvements while maintaining all existing functionality.
+This document tracks completed features, current capabilities, and future UI/UX enhancements for the SQL Health Assessment application. The app now includes advanced monitoring, alerting, query analysis, and automated updates.
+
+## Completed Features (2026 Q1)
+
+### 1. Enhanced Alert System
+- **69 Custom Alerts**: Performance, memory, storage, HA, security monitoring.
+- **Real-Time Evaluation**: Threshold-based alerts with cooldowns and notifications.
+- **Extended Events Integration**: Deadlock and error monitoring via XE.
+- **No-Pants Mode**: Safe mode for destructive actions (e.g., kill sessions).
+
+### 2. Advanced Query Plan Viewer
+- **V2 Renderer**: Interactive graphical plans with search, export, and tips.
+- **Optimization Enhancements**: Badges for high-cost operators, row mismatch warnings.
+- **Plan Comparison**: Save and compare execution plans.
+- **Concise Details**: SSMS-style subtext with cost %, rows, I/O.
+
+### 3. Automated Updates
+- **Squirrel.Windows Integration**: Silent, delta-based updates from GitHub releases.
+- **GitHub Actions CI/CD**: Automated build, test, and release on tags.
+- **Self-Updating App**: No manual downloads; app restarts seamlessly.
+
+### 4. Dynamic Dashboard Framework
+- **JSON-Driven Panels**: Stat cards, charts, grids from config files.
+- **Lazy Loading & Caching**: Progressive panel loading, query result caching.
+- **Parallel Loading**: Optimized for large dashboards (100+ panels).
+- **Real-Time Data**: Live updates with SignalR integration.
+
+### 5. Predictive Analytics (Skeleton)
+- **Failure Likelihood Models**: ML-based prediction for server issues.
+- **Correlation Analysis**: Heatmaps for failure relationships.
+- **Dataset Creation**: Automated from historical alerts/audits.
+
+### 6. Session Management Enhancements
+- **Performance Charts**: CPU/memory usage graphs in sessions dashboard.
+- **Kill Session Integration**: Confirmation dialogs with No-Pants safety.
+- **Advanced Filtering**: By status, user, database.
+
+### 7. Guided User Experience
+- **Animated Tours**: Step-by-step guides for dashboards and alerts.
+- **Tooltips & Tips**: Context-sensitive help throughout the app.
+
+### 8. Backend Optimizations
+- **Caching Layers**: Multi-level caching for queries and configs.
+- **Parallel Processing**: Concurrent alert evaluation and data fetching.
+- **Memory Management**: Weak references and disposal for large datasets.
+
+## Goals
+- Modernize the visual appearance
+- Add smooth animations and transitions
+- Improve user experience and interactivity
+- Maintain backward compatibility
+- Incrementally migrate existing CSS
 
 ## Goals
 - Modernize the visual appearance
@@ -12,7 +63,9 @@ This document outlines the plan to modernize the SQL Health Assessment applicati
 
 ---
 
-## 1. Animations & Transitions
+## Future UI/UX Enhancements (2026 Q2)
+
+### 1. Animations & Transitions
 
 ### 1.1 Page Transitions
 - **Current**: Instant navigation between pages

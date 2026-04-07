@@ -22,7 +22,7 @@ namespace SqlHealthAssessment.Data
 
         /// <summary>Maximum results retained. Oldest entries are evicted when exceeded.</summary>
         private const int MaxResults = 500;
-        
+
         // Progress tracking state
         private int _totalServers;
         private int _currentServerIndex;
@@ -224,8 +224,8 @@ namespace SqlHealthAssessment.Data
             _lastClearTime = DateTime.Now;
         }
 
-        public TimeSpan ElapsedTime => _executionStartTime != DateTime.MinValue 
-            ? DateTime.Now - _executionStartTime 
+        public TimeSpan ElapsedTime => _executionStartTime != DateTime.MinValue
+            ? DateTime.Now - _executionStartTime
             : TimeSpan.Zero;
     }
 }

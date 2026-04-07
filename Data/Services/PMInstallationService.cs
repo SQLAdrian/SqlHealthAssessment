@@ -91,9 +91,9 @@ namespace SqlHealthAssessment.Data.Services
 
             builder.Encrypt = encryption switch
             {
-                "Strict"    => SqlConnectionEncryptOption.Strict,
-                "Optional"  => SqlConnectionEncryptOption.Optional,
-                _           => SqlConnectionEncryptOption.Mandatory
+                "Strict" => SqlConnectionEncryptOption.Strict,
+                "Optional" => SqlConnectionEncryptOption.Optional,
+                _ => SqlConnectionEncryptOption.Mandatory
             };
 
             if (!useWindowsAuth)
@@ -123,13 +123,13 @@ namespace SqlHealthAssessment.Data.Services
                 {
                     info.SqlServerVersion = reader.GetString(0);
                     info.SqlServerEdition = reader.GetString(1);
-                    info.ServerName       = reader.GetString(2);
+                    info.ServerName = reader.GetString(2);
                 }
             }
             catch (Exception ex)
             {
-                info.IsConnected   = false;
-                info.ErrorMessage  = ex.Message;
+                info.IsConnected = false;
+                info.ErrorMessage = ex.Message;
                 if (ex.InnerException != null)
                     info.ErrorMessage += $"\n{ex.InnerException.Message}";
             }
@@ -219,7 +219,7 @@ namespace SqlHealthAssessment.Data.Services
             if (!Directory.Exists(upgradesDir)) return upgrades;
 
             if (!Version.TryParse(currentVersion, out var curRaw)) return upgrades;
-            if (!Version.TryParse(targetVersion,  out var tgtRaw)) return upgrades;
+            if (!Version.TryParse(targetVersion, out var tgtRaw)) return upgrades;
 
             var cur = new Version(curRaw.Major, curRaw.Minor, Math.Max(0, curRaw.Build));
             var tgt = new Version(tgtRaw.Major, tgtRaw.Minor, Math.Max(0, tgtRaw.Build));
@@ -231,7 +231,7 @@ namespace SqlHealthAssessment.Data.Services
                 {
                     var parts = x.FolderName.Split("-to-");
                     x.FromVersion = Version.TryParse(parts[0], out var f) ? f : null;
-                    x.ToVersion   = parts.Length > 1 && Version.TryParse(parts[1], out var t) ? t : null;
+                    x.ToVersion = parts.Length > 1 && Version.TryParse(parts[1], out var t) ? t : null;
                     return x;
                 })
                 .Where(x => x.FromVersion != null && x.ToVersion != null)
@@ -256,7 +256,7 @@ namespace SqlHealthAssessment.Data.Services
             {
                 using var traceCmd = new SqlCommand(
                     "EXECUTE PerformanceMonitor.collect.trace_management_collector @action = 'STOP';", conn)
-                    { CommandTimeout = 60 };
+                { CommandTimeout = 60 };
                 await traceCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 progress?.Report(new PMInstallationProgress { Message = "Stopped existing traces", Status = "Success" });
             }
@@ -416,7 +416,7 @@ END;";
                         fileName.StartsWith("03_", StringComparison.Ordinal))
                     {
                         progress?.Report(new PMInstallationProgress
-                            { Message = "Critical file failed — aborting.", Status = "Error" });
+                        { Message = "Critical file failed — aborting.", Status = "Error" });
                         break;
                     }
                 }
@@ -510,7 +510,7 @@ END;";
 
             using (var cmd = new SqlCommand(
                 "EXECUTE PerformanceMonitor.collect.scheduled_master_collector @force_run_all = 1, @debug = 0;", conn)
-                { CommandTimeout = 300 })
+            { CommandTimeout = 300 })
                 await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             progress?.Report(new PMInstallationProgress { Message = "Master collector completed", Status = "Success" });
@@ -526,14 +526,14 @@ END;";
                 if (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     succeeded = r.IsDBNull(0) ? 0 : (int)r.GetInt64(0);
-                    failed    = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                    failed = r.IsDBNull(1) ? 0 : r.GetInt32(1);
                 }
             }
 
             progress?.Report(new PMInstallationProgress
             {
                 Message = $"Validation: {succeeded} collectors OK, {failed} failed",
-                Status  = failed == 0 ? "Success" : "Warning"
+                Status = failed == 0 ? "Success" : "Warning"
             });
 
             if (failed > 0)
@@ -578,7 +578,7 @@ END;";
                 if (!File.Exists(scriptPath))
                 {
                     progress?.Report(new PMInstallationProgress
-                        { Message = "Troubleshooting script not found.", Status = "Error" });
+                    { Message = "Troubleshooting script not found.", Status = "Error" });
                     return false;
                 }
 
@@ -592,8 +592,8 @@ END;";
                 {
                     string msg = e.Message;
                     string status = msg.Contains("[ERROR]", StringComparison.OrdinalIgnoreCase) ? "Error"
-                                  : msg.Contains("[WARN]",  StringComparison.OrdinalIgnoreCase) ? "Warning"
-                                  : msg.Contains("[OK]",    StringComparison.OrdinalIgnoreCase) ? "Success"
+                                  : msg.Contains("[WARN]", StringComparison.OrdinalIgnoreCase) ? "Warning"
+                                  : msg.Contains("[OK]", StringComparison.OrdinalIgnoreCase) ? "Success"
                                   : "Info";
                     if (status == "Error") hasErrors = true;
                     progress?.Report(new PMInstallationProgress { Message = msg, Status = status });
@@ -655,7 +655,7 @@ END;";
             }
 
             progress?.Report(new PMInstallationProgress
-                { Message = $"Found {folders.Count} upgrade folder(s) to apply", Status = "Info" });
+            { Message = $"Found {folders.Count} upgrade folder(s) to apply", Status = "Info" });
 
             int totalSuccess = 0, totalFailed = 0;
             foreach (var folder in folders)
@@ -664,7 +664,7 @@ END;";
                 var (s, f) = await ExecuteUpgradeFolderAsync(folder, connectionString, progress, cancellationToken)
                     .ConfigureAwait(false);
                 totalSuccess += s;
-                totalFailed  += f;
+                totalFailed += f;
             }
 
             return (totalSuccess, totalFailed, folders.Count);
@@ -686,12 +686,12 @@ END;";
             if (sqlFiles.Count == 0)
             {
                 progress?.Report(new PMInstallationProgress
-                    { Message = $"  {upgradeName}: no SQL files — skipped", Status = "Warning" });
+                { Message = $"  {upgradeName}: no SQL files — skipped", Status = "Warning" });
                 return (0, 0);
             }
 
             progress?.Report(new PMInstallationProgress
-                { Message = $"Applying upgrade: {upgradeName} ({sqlFiles.Count} script(s))", Status = "Info" });
+            { Message = $"Applying upgrade: {upgradeName} ({sqlFiles.Count} script(s))", Status = "Info" });
 
             using var conn = new SqlConnection(connectionString);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -728,7 +728,7 @@ END;";
                 catch (Exception ex)
                 {
                     progress?.Report(new PMInstallationProgress
-                        { Message = $"  {fileName} - FAILED: {ex.Message}", Status = "Error" });
+                    { Message = $"  {fileName} - FAILED: {ex.Message}", Status = "Error" });
                     failed++;
                 }
             }
@@ -736,7 +736,7 @@ END;";
             progress?.Report(new PMInstallationProgress
             {
                 Message = $"Upgrade {upgradeName}: {success} OK, {failed} failed",
-                Status  = failed == 0 ? "Success" : "Warning"
+                Status = failed == 0 ? "Success" : "Warning"
             });
 
             return (success, failed);
@@ -755,7 +755,7 @@ END;";
             if (upgrades.Count == 0) return (0, 0, 0);
 
             progress?.Report(new PMInstallationProgress
-                { Message = $"Found {upgrades.Count} upgrade(s) to apply", Status = "Info" });
+            { Message = $"Found {upgrades.Count} upgrade(s) to apply", Status = "Info" });
 
             foreach (var upgrade in upgrades)
             {
@@ -763,7 +763,7 @@ END;";
                 var (s, f) = await ExecuteUpgradeFolderAsync(upgrade.Path, connectionString, progress, cancellationToken)
                     .ConfigureAwait(false);
                 totalSuccess += s;
-                totalFailed  += f;
+                totalFailed += f;
             }
 
             return (totalSuccess, totalFailed, upgrades.Count);
@@ -832,9 +832,9 @@ END;";
                     string prefix = status switch
                     {
                         "Success" => "[OK] ",
-                        "Error"   => "[ERROR] ",
+                        "Error" => "[ERROR] ",
                         "Warning" => "[WARN] ",
-                        _         => ""
+                        _ => ""
                     };
                     sb.AppendLine($"{prefix}{message}");
                 }
@@ -861,7 +861,7 @@ END;";
                 {
                     int delaySec = (int)Math.Pow(2, attempt);
                     progress?.Report(new PMInstallationProgress
-                        { Message = $"Retrying in {delaySec}s ({attempt}/{maxRetries})...", Status = "Warning" });
+                    { Message = $"Retrying in {delaySec}s ({attempt}/{maxRetries})...", Status = "Warning" });
                     await Task.Delay(delaySec * 1000, cancellationToken).ConfigureAwait(false);
                 }
             }

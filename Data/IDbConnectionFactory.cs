@@ -9,7 +9,7 @@ namespace SqlHealthAssessment.Data
     {
         IDbConnection CreateConnection();
         string DataSourceType { get; } // "SqlServer" or "liveQueries"
-        
+
         /// <summary>
         /// Creates and opens a new connection asynchronously.
         /// </summary>

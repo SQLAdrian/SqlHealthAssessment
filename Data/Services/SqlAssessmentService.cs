@@ -40,7 +40,7 @@ public class SqlAssessmentService
 
         // Find the ruleset.json path
         _rulesetPath = FindRulesetPath();
-        
+
         // Load check definitions from ruleset.json or fallback
         _checkDefinitions = LoadCheckDefinitions();
         _checkDefById = _checkDefinitions
@@ -62,7 +62,7 @@ public class SqlAssessmentService
             Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..")),
             Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."))
         };
-        
+
         var fileNames = new[] { "config/ruleset.json", "Config/ruleset.json", "ruleset.json" };
 
         foreach (var baseDir in baseDirs)
@@ -109,11 +109,11 @@ public class SqlAssessmentService
                             if (!probeItem.TryGetProperty("implementation", out var implEl)) continue;
                             var impl = new ImplementationDefinition
                             {
-                                Query      = implEl.TryGetProperty("query",      out var q)  ? GetStringOrJoinArray(q)  : null,
-                                Sql        = implEl.TryGetProperty("sql",        out var s)  ? GetStringOrJoinArray(s)  : null,
+                                Query = implEl.TryGetProperty("query", out var q) ? GetStringOrJoinArray(q) : null,
+                                Sql = implEl.TryGetProperty("sql", out var s) ? GetStringOrJoinArray(s) : null,
                                 PowerShell = implEl.TryGetProperty("powerShell", out var ps) ? GetStringOrJoinArray(ps) : null,
-                                Wmi        = implEl.TryGetProperty("wmi",        out var w)  ? GetStringOrJoinArray(w)  : null,
-                                Registry   = implEl.TryGetProperty("registry",   out var r)  ? GetStringOrJoinArray(r)  : null,
+                                Wmi = implEl.TryGetProperty("wmi", out var w) ? GetStringOrJoinArray(w) : null,
+                                Registry = implEl.TryGetProperty("registry", out var r) ? GetStringOrJoinArray(r) : null,
                             };
                             if (impl.Query != null || impl.Sql != null || impl.PowerShell != null ||
                                 impl.Wmi != null || impl.Registry != null)
@@ -149,11 +149,11 @@ public class SqlAssessmentService
                                 : idEl.GetString() ?? "";
 
                         var displayName = ruleEl.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? "" : "";
-                        var description = ruleEl.TryGetProperty("description",  out var ds) ? ds.GetString() ?? "" : "";
-                        var helpLink    = ruleEl.TryGetProperty("helpLink",      out var hl) ? hl.GetString() ?? "" : "";
-                        var level       = ruleEl.TryGetProperty("level",         out var lv) ? lv.GetString()       : null;
-                        var targetType  = ruleEl.TryGetProperty("target",        out var tg) &&
-                                          tg.TryGetProperty("type",              out var tt) ? tt.GetString() ?? "Server" : "Server";
+                        var description = ruleEl.TryGetProperty("description", out var ds) ? ds.GetString() ?? "" : "";
+                        var helpLink = ruleEl.TryGetProperty("helpLink", out var hl) ? hl.GetString() ?? "" : "";
+                        var level = ruleEl.TryGetProperty("level", out var lv) ? lv.GetString() : null;
+                        var targetType = ruleEl.TryGetProperty("target", out var tg) &&
+                                          tg.TryGetProperty("type", out var tt) ? tt.GetString() ?? "Server" : "Server";
 
                         var tags = new List<string>();
                         if (ruleEl.TryGetProperty("tags", out var tagsEl))
@@ -162,13 +162,13 @@ public class SqlAssessmentService
 
                         var checkDef = new AssessmentCheckDefinition
                         {
-                            CheckId            = string.IsNullOrEmpty(checkId) ? displayName : checkId,
-                            DisplayName        = displayName,
-                            Description        = description,
-                            Category           = GetCategoryFromTags(tags),
-                            Severity           = MapSeverityFromLevel(level) ?? MapSeverityFromString(tags),
-                            HelpLink           = helpLink,
-                            TargetType         = targetType,
+                            CheckId = string.IsNullOrEmpty(checkId) ? displayName : checkId,
+                            DisplayName = displayName,
+                            Description = description,
+                            Category = GetCategoryFromTags(tags),
+                            Severity = MapSeverityFromLevel(level) ?? MapSeverityFromString(tags),
+                            HelpLink = helpLink,
+                            TargetType = targetType,
                             ImplementationType = "Info"
                         };
 
@@ -185,10 +185,10 @@ public class SqlAssessmentService
                                 if (!string.IsNullOrEmpty(probeName) && probeMap.TryGetValue(probeName, out var impl))
                                 {
                                     var sql = impl.Sql ?? impl.Query;
-                                    if (sql != null)                   { checkDef.Sql        = sql;              checkDef.ImplementationType = "Sql";        break; }
-                                    if (impl.PowerShell != null)       { checkDef.PowerShell = impl.PowerShell;  checkDef.ImplementationType = "PowerShell"; break; }
-                                    if (impl.Wmi        != null)       { checkDef.Wmi        = impl.Wmi;         checkDef.ImplementationType = "Wmi";        break; }
-                                    if (impl.Registry   != null)       { checkDef.Registry   = impl.Registry;    checkDef.ImplementationType = "Registry";   break; }
+                                    if (sql != null) { checkDef.Sql = sql; checkDef.ImplementationType = "Sql"; break; }
+                                    if (impl.PowerShell != null) { checkDef.PowerShell = impl.PowerShell; checkDef.ImplementationType = "PowerShell"; break; }
+                                    if (impl.Wmi != null) { checkDef.Wmi = impl.Wmi; checkDef.ImplementationType = "Wmi"; break; }
+                                    if (impl.Registry != null) { checkDef.Registry = impl.Registry; checkDef.ImplementationType = "Registry"; break; }
                                 }
                             }
                         }
@@ -198,16 +198,16 @@ public class SqlAssessmentService
 
                     _logger.LogInformation("Found {RuleCount} definition rules in ruleset.json", ruleCount);
                 }
-                
+
                 var sqlCount = checks.Count(c => c.ImplementationType == "Sql");
                 var psCount = checks.Count(c => c.ImplementationType == "PowerShell");
                 var wmiCount = checks.Count(c => c.ImplementationType == "Wmi");
                 var regCount = checks.Count(c => c.ImplementationType == "Registry");
-                
+
                 _logger.LogWarning("RULESET PARSING: Loaded {TotalChecks} checks (SQL: {SqlCount}, PS: {PsCount}, WMI: {WmiCount}, Reg: {RegCount})",
                     checks.Count, sqlCount, psCount, wmiCount, regCount);
-                
-                _logger.LogInformation("Loaded {Count} check definitions from ruleset.json (SQL: {SqlCount}, PowerShell: {PsCount}, WMI: {WmiCount}, Registry: {RegCount})", 
+
+                _logger.LogInformation("Loaded {Count} check definitions from ruleset.json (SQL: {SqlCount}, PowerShell: {PsCount}, WMI: {WmiCount}, Registry: {RegCount})",
                     checks.Count, sqlCount, psCount, wmiCount, regCount);
             }
             else
@@ -221,7 +221,7 @@ public class SqlAssessmentService
             _logger.LogError(ex, "Error loading check definitions, using fallback");
             checks = GetComprehensiveChecks();
         }
-        
+
         return checks;
     }
 
@@ -232,9 +232,9 @@ public class SqlAssessmentService
 
     private static string? MapSeverityFromLevel(string? level) => level?.ToLowerInvariant() switch
     {
-        "critical" or "high"   => "Error",
-        "medium"   or "warning" => "Warning",
-        "low"      or "information" or "info" => "Information",
+        "critical" or "high" => "Error",
+        "medium" or "warning" => "Warning",
+        "low" or "information" or "info" => "Information",
         _ => null
     };
 
@@ -327,7 +327,7 @@ public class SqlAssessmentService
             try
             {
                 var serverConn = new Microsoft.SqlServer.Management.Common.ServerConnection(connection);
-                var smoServer  = new Microsoft.SqlServer.Management.Smo.Server(serverConn);
+                var smoServer = new Microsoft.SqlServer.Management.Smo.Server(serverConn);
 
                 // GetAssessmentResults is an extension method on SqlSmoObject.
                 // Run server-level checks first, then database-level checks in parallel batches.
@@ -361,8 +361,8 @@ public class SqlAssessmentService
                             using var dbConn = new SqlConnection(connectionString);
                             dbConn.Open();
                             var dbSvrConn = new Microsoft.SqlServer.Management.Common.ServerConnection(dbConn);
-                            var dbSmo     = new Microsoft.SqlServer.Management.Smo.Server(dbSvrConn);
-                            var database  = dbSmo.Databases[dbName];
+                            var dbSmo = new Microsoft.SqlServer.Management.Smo.Server(dbSvrConn);
+                            var database = dbSmo.Databases[dbName];
                             if (database == null) return (dbName, Enumerable.Empty<IAssessmentResult>().ToList());
                             return (dbName, database.GetAssessmentResults().ToList());
                         });
@@ -391,23 +391,23 @@ public class SqlAssessmentService
                 {
                     TotalChecksRun++;
                     // r.Check is IAssessmentItem — use reflection to get Id since the interface isn't directly typed
-                    var check       = r.Check;
-                    var checkId     = check.GetType().GetProperty("Id")?.GetValue(check)?.ToString()
+                    var check = r.Check;
+                    var checkId = check.GetType().GetProperty("Id")?.GetValue(check)?.ToString()
                                    ?? check.ToString() ?? "";
                     var displayName = check.GetType().GetProperty("DisplayName")?.GetValue(check)?.ToString()
                                    ?? check.GetType().GetProperty("Name")?.GetValue(check)?.ToString()
                                    ?? checkId;
-                    var description  = check.GetType().GetProperty("Description")?.GetValue(check)?.ToString() ?? "";
-                    var remediation  = check.GetType().GetProperty("Remediation")?.GetValue(check)?.ToString()
+                    var description = check.GetType().GetProperty("Description")?.GetValue(check)?.ToString() ?? "";
+                    var remediation = check.GetType().GetProperty("Remediation")?.GetValue(check)?.ToString()
                                     ?? check.GetType().GetProperty("FixScript")?.GetValue(check)?.ToString()
                                     ?? check.GetType().GetProperty("RemediationScript")?.GetValue(check)?.ToString()
                                     ?? "";
-                    var tags        = check.GetType().GetProperty("Tags")?.GetValue(check);
-                    var category    = tags is System.Collections.IEnumerable tagEnum
+                    var tags = check.GetType().GetProperty("Tags")?.GetValue(check);
+                    var category = tags is System.Collections.IEnumerable tagEnum
                                         ? string.Join(", ", tagEnum.Cast<object>().Take(3).Select(t => t.ToString()))
                                         : "";
 
-                    var rType       = r.GetType();
+                    var rType = r.GetType();
                     // "Kind" is the IAssessmentResult interface property (AssessmentResultType enum).
                     // "Severity" may also exist on the concrete type. Use Enum.GetName to get the
                     // named value rather than a numeric string if it hasn't been resolved yet.
@@ -417,8 +417,8 @@ public class SqlAssessmentService
                                     : severityVal.GetType().IsEnum
                                         ? (Enum.GetName(severityVal.GetType(), severityVal) ?? severityVal.ToString() ?? "Information")
                                         : (severityVal.ToString() ?? "Information");
-                    var helpLink    = rType.GetProperty("HelpLink")?.GetValue(r)?.ToString() ?? "";
-                    bool passed     = severityStr is "Ok" or "Pass" or "Note" or "Information";
+                    var helpLink = rType.GetProperty("HelpLink")?.GetValue(r)?.ToString() ?? "";
+                    bool passed = severityStr is "Ok" or "Pass" or "Note" or "Information";
 
                     _logger.LogDebug("Result [{CheckId}] raw severity type={Type} value={Value} → mapped={Mapped}",
                         checkId, severityVal?.GetType()?.Name ?? "null", severityStr, MapEngineSeverity(severityStr));
@@ -430,19 +430,19 @@ public class SqlAssessmentService
 
                     var result = new AssessmentResult
                     {
-                        CheckId            = checkId,
-                        DisplayName        = displayName,
-                        Message            = r.Message,
-                        Severity           = MapEngineSeverity(severityStr),
-                        TargetName         = r.TargetPath,
-                        TargetType         = r.TargetType.ToString(),
-                        Category           = category,
-                        Description        = description,
-                        Remediation        = remediation,
-                        HelpLink           = helpLink,
-                        Status             = passed ? "Passed" : "Failed",
-                        RawSeverity        = severityStr,
-                        SqlQuery           = defForResult?.Sql ?? "",
+                        CheckId = checkId,
+                        DisplayName = displayName,
+                        Message = r.Message,
+                        Severity = MapEngineSeverity(severityStr),
+                        TargetName = r.TargetPath,
+                        TargetType = r.TargetType.ToString(),
+                        Category = category,
+                        Description = description,
+                        Remediation = remediation,
+                        HelpLink = helpLink,
+                        Status = passed ? "Passed" : "Failed",
+                        RawSeverity = severityStr,
+                        SqlQuery = defForResult?.Sql ?? "",
                         ImplementationType = defForResult?.ImplementationType ?? ""
                     };
 
@@ -512,7 +512,7 @@ public class SqlAssessmentService
                 }
             }
 
-            summary.TotalChecks  = TotalChecksRun;
+            summary.TotalChecks = TotalChecksRun;
             summary.PassedChecks = TotalChecksPassed;
             summary.FailedChecks = TotalChecksFailed;
 
@@ -522,10 +522,10 @@ public class SqlAssessmentService
             // Stamp every result with the server identity gathered at the start
             foreach (var r in summary.Results)
             {
-                r.ThisServer  = serverInfo.ThisServer;
-                r.ThisDomain  = serverInfo.ThisDomain;
-                r.IsSQLAzure  = serverInfo.IsSQLAzure;
-                r.IsSQLMI     = serverInfo.IsSQLMI;
+                r.ThisServer = serverInfo.ThisServer;
+                r.ThisDomain = serverInfo.ThisDomain;
+                r.IsSQLAzure = serverInfo.IsSQLAzure;
+                r.IsSQLMI = serverInfo.IsSQLMI;
                 r.UTCDateTime = serverInfo.UTCDateTime;
             }
 
@@ -546,17 +546,17 @@ public class SqlAssessmentService
     private static string MapEngineSeverity(string status) => status switch
     {
         // Microsoft SQL Assessment API risk levels
-        "High"        => "Error",
-        "Medium"      => "Warning",
-        "Low"         => "Information",
+        "High" => "Error",
+        "Medium" => "Warning",
+        "Low" => "Information",
         "Information" => "Pass",
         // Legacy / fallback values
-        "Critical"    => "Error",
-        "Error"       => "Error",
-        "Warning"     => "Warning",
-        "Ok"          => "Pass",
-        "Note"        => "Information",
-        _             => "Information"
+        "Critical" => "Error",
+        "Error" => "Error",
+        "Warning" => "Warning",
+        "Ok" => "Pass",
+        "Note" => "Information",
+        _ => "Information"
     };
 
     /// <summary>
@@ -592,13 +592,13 @@ ORDER BY gs.avg_user_impact DESC;";
 
             while (await reader.ReadAsync())
             {
-                var db        = reader["DatabaseName"]?.ToString() ?? "";
-                var table     = reader["TableName"]?.ToString() ?? db;
-                var eq        = reader["equality_columns"]?.ToString() ?? "";
-                var ineq      = reader["inequality_columns"]?.ToString() ?? "";
-                var inc       = reader["included_columns"]?.ToString() ?? "";
-                var impact    = Convert.ToDouble(reader["AvgImpact"]);
-                var usage     = Convert.ToInt64(reader["UsageCount"]);
+                var db = reader["DatabaseName"]?.ToString() ?? "";
+                var table = reader["TableName"]?.ToString() ?? db;
+                var eq = reader["equality_columns"]?.ToString() ?? "";
+                var ineq = reader["inequality_columns"]?.ToString() ?? "";
+                var inc = reader["included_columns"]?.ToString() ?? "";
+                var impact = Convert.ToDouble(reader["AvgImpact"]);
+                var usage = Convert.ToInt64(reader["UsageCount"]);
 
                 // Build CREATE INDEX DDL
                 var keyColumns = string.Join(", ",
@@ -610,16 +610,16 @@ ORDER BY gs.avg_user_impact DESC;";
 
                 var result = new AssessmentResult
                 {
-                    CheckId     = "MissingIndex",
+                    CheckId = "MissingIndex",
                     DisplayName = $"Missing Index on {db}.{table}",
-                    Message     = $"Missing index on {db}.{table} (Impact: {impact:F4}%, Usage: {usage:N0})",
-                    Severity    = impact >= 80 ? "Error" : impact >= 40 ? "Warning" : "Information",
-                    TargetName  = $"Database[@Name='{db}']/Table[@Name='{table}']",
-                    TargetType  = "Table",
-                    Category    = "Performance, Indexes",
+                    Message = $"Missing index on {db}.{table} (Impact: {impact:F4}%, Usage: {usage:N0})",
+                    Severity = impact >= 80 ? "Error" : impact >= 40 ? "Warning" : "Information",
+                    TargetName = $"Database[@Name='{db}']/Table[@Name='{table}']",
+                    TargetType = "Table",
+                    Category = "Performance, Indexes",
                     Description = $"SQL Server identified a missing index on {db}.{table} with average query impact {impact:F2}%. Equality: {eq}. Inequality: {ineq}. Includes: {inc}.",
                     Remediation = ddl,
-                    Status      = "Failed",
+                    Status = "Failed",
                     RawSeverity = impact >= 80 ? "High" : impact >= 40 ? "Medium" : "Low"
                 };
 
@@ -634,53 +634,53 @@ ORDER BY gs.avg_user_impact DESC;";
         }
     }
 
-    private async Task<bool> ExecuteSqlCheckAsync(SqlConnection connection, AssessmentCheckDefinition check, 
+    private async Task<bool> ExecuteSqlCheckAsync(SqlConnection connection, AssessmentCheckDefinition check,
         string serverName, AssessmentSummary summary)
     {
         using var cmd = new SqlCommand(check.Sql, connection);
         cmd.CommandTimeout = 30;
-        
+
         using var reader = await cmd.ExecuteReaderAsync();
-        
+
         bool hasResults = false;
         while (await reader.ReadAsync())
         {
             hasResults = true;
             var checkResult = new AssessmentResult
             {
-                CheckId            = check.CheckId,
-                Message            = reader.IsDBNull(0) ? check.DisplayName : reader.GetString(0),
-                Severity           = check.Severity,
-                TargetName         = reader.IsDBNull(1) ? serverName : reader.GetString(1),
-                TargetType         = check.TargetType,
-                Category           = check.Category,
-                Description        = check.Description,
-                HelpLink           = check.HelpLink,
-                Status             = "Failed",
-                SqlQuery           = check.Sql,
+                CheckId = check.CheckId,
+                Message = reader.IsDBNull(0) ? check.DisplayName : reader.GetString(0),
+                Severity = check.Severity,
+                TargetName = reader.IsDBNull(1) ? serverName : reader.GetString(1),
+                TargetType = check.TargetType,
+                Category = check.Category,
+                Description = check.Description,
+                HelpLink = check.HelpLink,
+                Status = "Failed",
+                SqlQuery = check.Sql,
                 ImplementationType = "Sql"
             };
-            
+
             summary.Results.Add(checkResult);
             TotalChecksFailed++;
         }
         reader.Close();
-        
+
         // If no results, the check passed
         if (!hasResults)
         {
             AddPassedResult(check, serverName, summary);
         }
-        
+
         return true;
     }
 
-    private async Task<bool> ExecutePowerShellCheckAsync(AssessmentCheckDefinition check, 
+    private async Task<bool> ExecutePowerShellCheckAsync(AssessmentCheckDefinition check,
         string targetName, AssessmentSummary summary)
     {
         if (string.IsNullOrEmpty(check.PowerShell))
             return false;
-            
+
         try
         {
             var startInfo = new ProcessStartInfo
@@ -692,19 +692,19 @@ ORDER BY gs.avg_user_impact DESC;";
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            
+
             using var process = Process.Start(startInfo);
             if (process == null) return false;
-            
+
             var output = await process.StandardOutput.ReadToEndAsync();
             var error = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
-            
+
             if (!string.IsNullOrEmpty(error))
             {
                 _logger.LogWarning("PowerShell check {CheckId} had errors: {Error}", check.CheckId, error);
             }
-            
+
             // If there's output, it means the check found an issue
             if (!string.IsNullOrWhiteSpace(output))
             {
@@ -717,8 +717,8 @@ ORDER BY gs.avg_user_impact DESC;";
                     TargetType = "LocalMachine",
                     Category = check.Category,
                     Description = check.Description,
-                    HelpLink           = check.HelpLink,
-                    SqlQuery           = check.Sql,
+                    HelpLink = check.HelpLink,
+                    SqlQuery = check.Sql,
                     ImplementationType = check.ImplementationType,
                     Status = "Failed"
                 };
@@ -729,7 +729,7 @@ ORDER BY gs.avg_user_impact DESC;";
             {
                 AddPassedResult(check, targetName, summary);
             }
-            
+
             return true;
         }
         catch (Exception ex)
@@ -739,24 +739,24 @@ ORDER BY gs.avg_user_impact DESC;";
         }
     }
 
-    private async Task<bool> ExecuteWmiCheckAsync(AssessmentCheckDefinition check, 
+    private async Task<bool> ExecuteWmiCheckAsync(AssessmentCheckDefinition check,
         string targetName, AssessmentSummary summary)
     {
         if (string.IsNullOrEmpty(check.Wmi))
             return false;
-            
+
         try
         {
             using var searcher = new ManagementObjectSearcher(check.Wmi);
             var results = await Task.Run(() => searcher.Get());
-            
+
             // If there are results, the check found an issue
             if (results.Count > 0)
             {
-                var output = string.Join(Environment.NewLine, 
-                    results.Cast<ManagementObject>().Take(10).Select(m => 
+                var output = string.Join(Environment.NewLine,
+                    results.Cast<ManagementObject>().Take(10).Select(m =>
                         string.Join(", ", m.Properties.Cast<PropertyData>().Select(p => $"{p.Name}={p.Value}"))));
-                
+
                 var checkResult = new AssessmentResult
                 {
                     CheckId = check.CheckId,
@@ -766,8 +766,8 @@ ORDER BY gs.avg_user_impact DESC;";
                     TargetType = "LocalMachine",
                     Category = check.Category,
                     Description = check.Description,
-                    HelpLink           = check.HelpLink,
-                    SqlQuery           = check.Sql,
+                    HelpLink = check.HelpLink,
+                    SqlQuery = check.Sql,
                     ImplementationType = check.ImplementationType,
                     Status = "Failed"
                 };
@@ -778,7 +778,7 @@ ORDER BY gs.avg_user_impact DESC;";
             {
                 AddPassedResult(check, targetName, summary);
             }
-            
+
             return true;
         }
         catch (Exception ex)
@@ -788,24 +788,24 @@ ORDER BY gs.avg_user_impact DESC;";
         }
     }
 
-    private bool ExecuteRegistryCheck(AssessmentCheckDefinition check, 
+    private bool ExecuteRegistryCheck(AssessmentCheckDefinition check,
         string targetName, AssessmentSummary summary)
     {
         if (string.IsNullOrEmpty(check.Registry))
             return false;
-            
+
         try
         {
             // Registry format: HKEY_LOCAL_MACHINE\path\to\key or similar
             var parts = check.Registry.Split(new[] { '\\' }, 2);
             if (parts.Length < 2) return false;
-            
+
             var hiveName = parts[0].Replace("HKEY_LOCAL_MACHINE", "HKLM")
                                        .Replace("HKEY_CURRENT_USER", "HKCU");
             var subKeyPath = parts[1];
-            
+
             using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(subKeyPath);
-            
+
             if (key != null)
             {
                 // Key exists - check passes (or fail depending on what we're checking)
@@ -822,15 +822,15 @@ ORDER BY gs.avg_user_impact DESC;";
                     TargetType = "LocalMachine",
                     Category = check.Category,
                     Description = check.Description,
-                    HelpLink           = check.HelpLink,
-                    SqlQuery           = check.Sql,
+                    HelpLink = check.HelpLink,
+                    SqlQuery = check.Sql,
                     ImplementationType = check.ImplementationType,
                     Status = "Failed"
                 };
                 summary.Results.Add(checkResult);
                 TotalChecksFailed++;
             }
-            
+
             return true;
         }
         catch (Exception ex)
@@ -844,15 +844,15 @@ ORDER BY gs.avg_user_impact DESC;";
     {
         summary.Results.Add(new AssessmentResult
         {
-            CheckId     = check.CheckId,
-            Message     = "Assessed via Microsoft SQL Assessment API (composite rule)",
-            Severity    = "Information",
-            TargetName  = targetName,
-            TargetType  = check.TargetType,
-            Category    = check.Category,
+            CheckId = check.CheckId,
+            Message = "Assessed via Microsoft SQL Assessment API (composite rule)",
+            Severity = "Information",
+            TargetName = targetName,
+            TargetType = check.TargetType,
+            Category = check.Category,
             Description = check.Description,
-            HelpLink    = check.HelpLink,
-            Status      = "Passed"
+            HelpLink = check.HelpLink,
+            Status = "Passed"
         });
         TotalChecksPassed++;
     }
@@ -871,7 +871,7 @@ ORDER BY gs.avg_user_impact DESC;";
             HelpLink = check.HelpLink,
             Status = "Passed"
         };
-        
+
         summary.Results.Add(passedResult);
         TotalChecksPassed++;
     }
@@ -890,7 +890,7 @@ ORDER BY gs.avg_user_impact DESC;";
             HelpLink = check.HelpLink,
             Status = "Skipped"
         };
-        
+
         summary.Results.Add(skippedResult);
     }
 
@@ -908,7 +908,7 @@ ORDER BY gs.avg_user_impact DESC;";
             HelpLink = check.HelpLink,
             Status = "Error"
         };
-        
+
         summary.Results.Add(errorResult);
         TotalChecksFailed++;
     }
@@ -927,7 +927,7 @@ ORDER BY gs.avg_user_impact DESC;";
             HelpLink = check.HelpLink,
             Status = "Error"
         };
-        
+
         summary.Results.Add(errorResult);
     }
 
@@ -996,7 +996,7 @@ SELECT @ThisDomain   [ThisDomain],
 
         try
         {
-            using var cmd    = new SqlCommand(sql, connection) { CommandTimeout = 30 };
+            using var cmd = new SqlCommand(sql, connection) { CommandTimeout = 30 };
             using var reader = await cmd.ExecuteReaderAsync();
             if (await reader.ReadAsync())
             {
@@ -1022,7 +1022,7 @@ SELECT @ThisDomain   [ThisDomain],
     public string GenerateRemediationScript(AssessmentSummary summary)
     {
         var sb = new System.Text.StringBuilder();
-        
+
         sb.AppendLine("-- SQL Vulnerability Assessment - Remediation Script");
         sb.AppendLine($"-- Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine($"-- Total Checks: {summary.TotalChecks}");
@@ -1031,7 +1031,7 @@ SELECT @ThisDomain   [ThisDomain],
         sb.AppendLine();
 
         var failedResults = summary.Results.Where(r => r.Status == "Failed").ToList();
-        
+
         var criticalResults = failedResults.Where(r => r.Severity == "Error").ToList();
         var warningResults = failedResults.Where(r => r.Severity == "Warning").ToList();
         var infoResults = failedResults.Where(r => r.Severity == "Information").ToList();
@@ -1064,9 +1064,9 @@ SELECT @ThisDomain   [ThisDomain],
             }
         }
 
-        WriteSection("HIGH SEVERITY — REQUIRED FIXES",     criticalResults);
+        WriteSection("HIGH SEVERITY — REQUIRED FIXES", criticalResults);
         WriteSection("MEDIUM SEVERITY — RECOMMENDED FIXES", warningResults);
-        WriteSection("LOW SEVERITY — INFORMATIONAL",        infoResults);
+        WriteSection("LOW SEVERITY — INFORMATIONAL", infoResults);
 
         return sb.ToString();
     }
@@ -1120,7 +1120,7 @@ SELECT @ThisDomain   [ThisDomain],
         {
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
             var outputDir = Path.Combine(baseDir, "output");
-            
+
             // Ensure the output directory exists
             if (!Directory.Exists(outputDir))
             {
@@ -1128,7 +1128,7 @@ SELECT @ThisDomain   [ThisDomain],
                 // Brief delay to allow filesystem to settle
                 await Task.Delay(100);
             }
-            
+
             // Final verification before writing
             if (!Directory.Exists(outputDir))
             {
@@ -1162,7 +1162,7 @@ SELECT @ThisDomain   [ThisDomain],
             _logger.LogError(ex, "Failed to auto-export CSV to output folder");
         }
     }
-    
+
     /// <summary>
     /// Sanitize a string for use as a file name by removing invalid characters
     /// </summary>
@@ -1197,9 +1197,9 @@ SELECT @ThisDomain   [ThisDomain],
         IProgress<(int Completed, int Total, string CurrentServer)>? progress = null)
     {
         var allSummaries = new List<AssessmentSummary>(targets.Count);
-        var semaphore    = new SemaphoreSlim(parallelism);
-        var lockObj      = new object();
-        int completed    = 0;
+        var semaphore = new SemaphoreSlim(parallelism);
+        var lockObj = new object();
+        int completed = 0;
 
         var tasks = targets.Select(async target =>
         {
@@ -1344,25 +1344,25 @@ SELECT @ThisDomain   [ThisDomain],
         {
             var r = new AssessmentResult
             {
-                CheckId            = _prototype.CheckId,
-                DisplayName        = _prototype.DisplayName,
-                Message            = _prototype.Message,
-                Severity           = _prototype.Severity,
-                RawSeverity        = _prototype.RawSeverity,
-                TargetType         = _prototype.TargetType,
-                Category           = _prototype.Category,
-                Description        = _prototype.Description,
-                Remediation        = _prototype.Remediation,
-                HelpLink           = _prototype.HelpLink,
-                Status             = _prototype.Status,
-                TargetName         = BuildTargetName(),
+                CheckId = _prototype.CheckId,
+                DisplayName = _prototype.DisplayName,
+                Message = _prototype.Message,
+                Severity = _prototype.Severity,
+                RawSeverity = _prototype.RawSeverity,
+                TargetType = _prototype.TargetType,
+                Category = _prototype.Category,
+                Description = _prototype.Description,
+                Remediation = _prototype.Remediation,
+                HelpLink = _prototype.HelpLink,
+                Status = _prototype.Status,
+                TargetName = BuildTargetName(),
                 ImplementationType = _prototype.ImplementationType,
-                SqlQuery           = _prototype.SqlQuery,
+                SqlQuery = _prototype.SqlQuery,
                 // ThisServer is intentionally null for multi-server merged results
-                ThisDomain         = _prototype.ThisDomain,
-                IsSQLAzure         = _prototype.IsSQLAzure,
-                IsSQLMI            = _prototype.IsSQLMI,
-                UTCDateTime        = _prototype.UTCDateTime,
+                ThisDomain = _prototype.ThisDomain,
+                IsSQLAzure = _prototype.IsSQLAzure,
+                IsSQLMI = _prototype.IsSQLMI,
+                UTCDateTime = _prototype.UTCDateTime,
             };
             return r;
         }
@@ -1408,7 +1408,7 @@ SELECT @ThisDomain   [ThisDomain],
         private static void ParseTarget(string target, out string? serverName, out string? dbName)
         {
             serverName = null;
-            dbName     = null;
+            dbName = null;
 
             // Extract Server name
             var sStart = target.IndexOf("Server[@Name='", StringComparison.Ordinal);
@@ -1461,26 +1461,26 @@ internal class AssessmentCheckDefinition
 
 public class AssessmentResult
 {
-    public string CheckId            { get; set; } = "";
-    public string DisplayName        { get; set; } = "";
-    public string Message            { get; set; } = "";
-    public string Severity           { get; set; } = "";
-    public string TargetName         { get; set; } = "";
-    public string TargetType         { get; set; } = "";
-    public string Category           { get; set; } = "";
-    public string Description        { get; set; } = "";
-    public string HelpLink           { get; set; } = "";
-    public string Remediation        { get; set; } = "";
-    public string Status             { get; set; } = "";
-    public string RawSeverity        { get; set; } = "";
-    public string SqlQuery           { get; set; } = "";
+    public string CheckId { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Message { get; set; } = "";
+    public string Severity { get; set; } = "";
+    public string TargetName { get; set; } = "";
+    public string TargetType { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string HelpLink { get; set; } = "";
+    public string Remediation { get; set; } = "";
+    public string Status { get; set; } = "";
+    public string RawSeverity { get; set; } = "";
+    public string SqlQuery { get; set; } = "";
     public string ImplementationType { get; set; } = "";
     // Server identity — populated per-server; NULL in consolidated multi-server exports
-    public string? ThisServer        { get; set; }
-    public string? ThisDomain        { get; set; }
-    public bool?   IsSQLAzure        { get; set; }
-    public bool?   IsSQLMI           { get; set; }
-    public string? UTCDateTime       { get; set; }
+    public string? ThisServer { get; set; }
+    public string? ThisDomain { get; set; }
+    public bool? IsSQLAzure { get; set; }
+    public bool? IsSQLMI { get; set; }
+    public string? UTCDateTime { get; set; }
 }
 
 public class AssessmentSummary

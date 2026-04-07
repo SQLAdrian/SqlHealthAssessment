@@ -223,7 +223,7 @@ public class XEventService
             await connection.OpenAsync();
 
             var predicateClause = string.IsNullOrEmpty(predicate) ? "" : $"WHERE {predicate}";
-            
+
             var sql = $@"
                 CREATE EVENT SESSION [{sessionName}] ON SERVER
                 ADD EVENT sqlserver.{eventName}

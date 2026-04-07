@@ -20,29 +20,29 @@ namespace SqlHealthAssessment.Data
         private const int MaxDiagLogEntries = 2000;
 
         // ── Run state ────────────────────────────────────────────────────────
-        public List<CheckResult>          Results        { get; set; } = new();
+        public List<CheckResult> Results { get; set; } = new();
         public List<CheckExecutionSummary> ServerSummaries { get; set; } = new();
-        public List<string>               Categories     { get; set; } = new();
-        public List<DiagLogEntry>         DiagLog        { get; set; } = new();
+        public List<string> Categories { get; set; } = new();
+        public List<DiagLogEntry> DiagLog { get; set; } = new();
 
-        public bool     IsRunning       { get; set; }
-        public bool     IsImporting     { get; set; }
-        public bool     HasRun          { get; set; }
-        public int      Progress        { get; set; }
-        public string   ProgressMessage { get; set; } = string.Empty;
-        public string   StatusMessage   { get; set; } = string.Empty;
-        public string   StatusClass     { get; set; } = string.Empty;
-        public DateTime ExecutionTime   { get; set; }
-        public string   ExecutionDuration { get; set; } = string.Empty;
-        public int      ServersTested   { get; set; }
+        public bool IsRunning { get; set; }
+        public bool IsImporting { get; set; }
+        public bool HasRun { get; set; }
+        public int Progress { get; set; }
+        public string ProgressMessage { get; set; } = string.Empty;
+        public string StatusMessage { get; set; } = string.Empty;
+        public string StatusClass { get; set; } = string.Empty;
+        public DateTime ExecutionTime { get; set; }
+        public string ExecutionDuration { get; set; } = string.Empty;
+        public int ServersTested { get; set; }
 
         // ── UI preference state (survives navigation) ─────────────────────
-        public bool   RunAllServers       { get; set; } = true;
+        public bool RunAllServers { get; set; } = true;
         public string SelectedConnectionId { get; set; } = string.Empty;
-        public string SelectedFilter       { get; set; } = "all";
-        public string SelectedCategory     { get; set; } = string.Empty;
-        public string SelectedServer       { get; set; } = string.Empty;
-        public string SelectedSeverity     { get; set; } = string.Empty;
+        public string SelectedFilter { get; set; } = "all";
+        public string SelectedCategory { get; set; } = string.Empty;
+        public string SelectedServer { get; set; } = string.Empty;
+        public string SelectedSeverity { get; set; } = string.Empty;
 
         // ── Change notification ───────────────────────────────────────────
         public event Action? StateChanged;
@@ -96,11 +96,11 @@ namespace SqlHealthAssessment.Data
             _checkExecutor.ClearAllResults();
             Results.Clear();
             ServerSummaries.Clear();
-            HasRun          = false;
-            StatusMessage   = string.Empty;
-            SelectedFilter  = "all";
+            HasRun = false;
+            StatusMessage = string.Empty;
+            SelectedFilter = "all";
             SelectedCategory = string.Empty;
-            SelectedServer  = string.Empty;
+            SelectedServer = string.Empty;
             SelectedSeverity = string.Empty;
             NotifyStateChanged();
         }
@@ -110,8 +110,8 @@ namespace SqlHealthAssessment.Data
         public class DiagLogEntry
         {
             public DateTime Timestamp { get; set; }
-            public string   Message   { get; set; } = string.Empty;
-            public string   Level     { get; set; } = "info";
+            public string Message { get; set; } = string.Empty;
+            public string Level { get; set; } = "info";
         }
     }
 }

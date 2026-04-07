@@ -5,7 +5,7 @@
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078d4.svg)](https://github.com/SQLAdrian/SqlHealthAssessment/releases)
 [![SQL Server 2016+](https://img.shields.io/badge/SQL%20Server-2016%2B-red.svg)](https://www.microsoft.com/en-us/sql-server)
 
-> Free, open-source SQL Server audit, health assessment, and performance analysis tool for Windows DBAs. v0.82.0
+> Free, open-source SQL Server audit, health assessment, and performance analysis tool for Windows DBAs. v1.0.0 (2026)
 > A lightweight alternative to expensive commercial SQL monitoring tools like SolarWinds DPA, Redgate SQL Monitor, SentryOne, and Idera SQL Diagnostic Manager.
 
 **SQL Health Assessment** is a self-contained Windows desktop application that monitors multiple SQL Server instances in real time. It provides live dashboards, health checks, blocking chain analysis, interactive query execution plan viewing, wait-event statistics, vulnerability assessments, and comprehensive audit reports — all from a single executable with no agent installation required on your SQL Servers.
@@ -51,10 +51,13 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 - **Wait Statistics** — categorised wait event history and trends, including locking-waits %
 
 ### Alerting & Notifications
+- **69 Custom Alerts** — Performance, memory, storage, HA, security with SQL 2016+ compatibility
+- **Extended Events Integration** — Real-time deadlock/error monitoring via XE sessions
 - **Timer-based evaluation** — 30-second alert cycle with configurable severity thresholds and cooldowns
 - **7 notification channels** — Email (SMTP), Microsoft Teams, Slack, generic Webhooks, PagerDuty, ServiceNow, WhatsApp
 - **Alert history** — SQLite-backed alert log with acknowledgement and auto-resolution
 - **Scheduled tasks** — automated task engine with CSV export, Azure Blob upload, and email delivery
+- **No-Pants Mode** — Safety toggle for destructive actions (e.g., kill sessions)
 
 ### Performance & Reliability
 - **SQLite WAL-mode cache** — panels serve cached data when SQL Server is temporarily unreachable
@@ -64,6 +67,10 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 - **Cancellable dashboard loads** — switch servers or hit Cancel to abort in-flight queries instantly
 - **Memory pressure monitoring** — background service alerts and evicts cache under high memory load
 - **Server GC + concurrent GC** — tuned for optimal throughput in `runtimeconfig`
+
+### Updates & Maintenance
+- **Squirrel.Windows Auto-Updates** — Silent, delta-based updates from GitHub releases
+- **GitHub Actions CI/CD** — Automated build, test, and release on version tags
 
 ### Data Export
 - **Azure Blob Storage integration** — auto-upload audit CSVs with dual-path upload (Azure SDK + AzCopy fallback)
@@ -89,7 +96,6 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 
 ### Developer Experience
 - **JSON-based dashboard editor** — add, reorder, drag-and-drop panels without code changes
-- **10 UI themes** — dark and light options, switchable at runtime
 - **Keyboard shortcuts** — full keyboard navigation (`Ctrl+1–9`, `?` to show help)
 - **Serilog structured logging** — 30-day rolling logs with configurable verbosity
 

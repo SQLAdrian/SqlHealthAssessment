@@ -278,7 +278,7 @@ namespace SqlHealthAssessment.Data
                     result.ActualValue = scalar != null && scalar != DBNull.Value
                         ? Convert.ToInt32(scalar)
                         : 0;
-                    
+
                     // Info severity always passes
                     if (check.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase))
                     {

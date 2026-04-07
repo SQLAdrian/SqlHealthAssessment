@@ -16,32 +16,32 @@ namespace SqlHealthAssessment.Data
         private readonly IConfiguration _configuration;
         private DateTime _lastActivity = DateTime.UtcNow;
         private readonly object _lock = new();
-        
+
         /// <summary>
         /// Idle timeout in minutes (default 60 minutes)
         /// </summary>
         public int IdleTimeoutMinutes { get; private set; } = 60;
-        
+
         /// <summary>
         /// Refresh rate when idle (default 30 minutes)
         /// </summary>
         public int IdleRefreshRateMinutes { get; private set; } = 30;
-        
+
         /// <summary>
         /// Normal refresh rate (restored after idle)
         /// </summary>
         public int NormalRefreshRateMinutes { get; private set; } = 5;
-        
+
         /// <summary>
         /// Current refresh rate
         /// </summary>
         public int CurrentRefreshRateMinutes { get; private set; } = 5;
-        
+
         /// <summary>
         /// Whether the session is currently in idle mode
         /// </summary>
         public bool IsIdle { get; private set; }
-        
+
         /// <summary>
         /// Event raised when session becomes idle or active
         /// </summary>
@@ -70,13 +70,13 @@ namespace SqlHealthAssessment.Data
             {
                 var wasIdle = IsIdle;
                 _lastActivity = DateTime.UtcNow;
-                
+
                 if (IsIdle)
                 {
                     // Restore normal refresh rate when becoming active
                     IsIdle = false;
                     CurrentRefreshRateMinutes = NormalRefreshRateMinutes;
-                    
+
                     if (wasIdle)
                     {
                         SessionStateChanged?.Invoke(this, new SessionStateChangedEventArgs
@@ -98,13 +98,13 @@ namespace SqlHealthAssessment.Data
             {
                 var idleTime = DateTime.UtcNow - _lastActivity;
                 var shouldBeIdle = idleTime.TotalMinutes >= IdleTimeoutMinutes;
-                
+
                 if (shouldBeIdle && !IsIdle)
                 {
                     // Enter idle mode
                     IsIdle = true;
                     CurrentRefreshRateMinutes = IdleRefreshRateMinutes;
-                    
+
                     SessionStateChanged?.Invoke(this, new SessionStateChangedEventArgs
                     {
                         IsIdle = true,

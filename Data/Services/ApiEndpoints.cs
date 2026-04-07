@@ -293,8 +293,14 @@ namespace SqlHealthAssessment.Data.Services
             {
                 return Results.Ok(rbac.GetUsers().Select(u => new
                 {
-                    u.Id, u.Email, u.DisplayName, u.Provider, u.Role,
-                    u.Enabled, u.CreatedAt, u.LastLogin
+                    u.Id,
+                    u.Email,
+                    u.DisplayName,
+                    u.Provider,
+                    u.Role,
+                    u.Enabled,
+                    u.CreatedAt,
+                    u.LastLogin
                 }));
             });
 

@@ -70,16 +70,16 @@ namespace SqlHealthAssessment.Data.Services
                 try
                 {
                     var settings = _webView.Environment.CreatePrintSettings();
-                    settings.Orientation            = orientation;
+                    settings.Orientation = orientation;
                     settings.ShouldPrintBackgrounds = printBackgrounds;
                     settings.ShouldPrintHeaderAndFooter = headerTitle != null || footerUri != null;
                     if (headerTitle != null) settings.HeaderTitle = headerTitle;
-                    if (footerUri  != null) settings.FooterUri   = footerUri;
+                    if (footerUri != null) settings.FooterUri = footerUri;
                     // 5 mm margins all round (~0.2 in); bottom slightly taller for DOM footer bar
-                    settings.MarginTop    = 0.2;
+                    settings.MarginTop = 0.2;
                     settings.MarginBottom = 0.25;
-                    settings.MarginLeft   = 0.2;
-                    settings.MarginRight  = 0.2;
+                    settings.MarginLeft = 0.2;
+                    settings.MarginRight = 0.2;
 
                     await _webView.PrintToPdfAsync(filePath, settings);
                     tcs.TrySetResult(true);
@@ -94,7 +94,7 @@ namespace SqlHealthAssessment.Data.Services
             {
                 using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
                 var timeoutTask = Task.Delay(Timeout.Infinite, cts.Token);
-                var completed   = await Task.WhenAny(tcs.Task, timeoutTask);
+                var completed = await Task.WhenAny(tcs.Task, timeoutTask);
 
                 if (completed == timeoutTask)
                 {

@@ -60,7 +60,7 @@ namespace SqlHealthAssessment.Data.Caching
         public void Start()
         {
             // First run after one interval; then repeat at the configured interval
-            _timer = new Timer(OnTimerTick, null, _interval, _interval);
+            _timer = new Timer(_ => OnTimerTickAsync(), null, _interval, _interval);
         }
 
         /// <summary>
@@ -76,31 +76,36 @@ namespace SqlHealthAssessment.Data.Caching
         {
             try
             {
-                _runCount++;
-                var includeIntegrity = (_runCount % _integrityCheckEveryNRuns) == 0;
-
-                // 1. Purge data beyond the retention period (default 30 days)
-                var rowsPurged = await _cache.PurgeOlderThanAsync(_retentionPeriod);
-
-                // 2. Run optimize + vacuum (+ optional integrity check)
-                var result = await _cache.RunMaintenanceAsync(includeIntegrity);
-                result.RowsPurged = rowsPurged;
-                LastResult = result;
-
-                _logger.LogInformation(
-                    "Maintenance completed in {DurationSeconds}s (purged={RowsPurged}, optimize={OptimizeCompleted}, vacuum={VacuumCompleted}, integrity={IntegrityCheckResult})",
-                    result.Duration.TotalSeconds.ToString("F1"),
-                    rowsPurged,
-                    result.OptimizeCompleted,
-                    result.VacuumCompleted,
-                    includeIntegrity ? result.IntegrityCheckResult : "skipped");
-
-                OnMaintenanceCompleted?.Invoke(result);
+                await OnTimerTickAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Maintenance cycle failed");
+                _logger.LogError(ex, "Timer tick failed");
             }
+        }
+
+        private async Task OnTimerTickAsync()
+        {
+            _runCount++;
+            var includeIntegrity = (_runCount % _integrityCheckEveryNRuns) == 0;
+
+            // 1. Purge data beyond the retention period (default 30 days)
+            var rowsPurged = await _cache.PurgeOlderThanAsync(_retentionPeriod);
+
+            // 2. Run optimize + vacuum (+ optional integrity check)
+            var result = await _cache.RunMaintenanceAsync(includeIntegrity);
+            result.RowsPurged = rowsPurged;
+            LastResult = result;
+
+            _logger.LogInformation(
+                "Maintenance completed in {DurationSeconds}s (purged={RowsPurged}, optimize={OptimizeCompleted}, vacuum={VacuumCompleted}, integrity={IntegrityCheckResult})",
+                result.Duration.TotalSeconds.ToString("F1"),
+                rowsPurged,
+                result.OptimizeCompleted,
+                result.VacuumCompleted,
+                includeIntegrity ? result.IntegrityCheckResult : "skipped");
+
+            OnMaintenanceCompleted?.Invoke(result);
         }
 
         public void Dispose()
