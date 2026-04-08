@@ -320,8 +320,9 @@ namespace SqlHealthAssessment.Data.Services
                 await cmd.ExecuteScalarAsync();
                 return 0; // 0 = reachable (below threshold of 1 = unreachable)
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogDebug(ex, "Connectivity check failed for {Server} — treating as unreachable", LogAnon.S(serverName));
                 return 1; // 1 = unreachable
             }
         }
@@ -349,7 +350,11 @@ namespace SqlHealthAssessment.Data.Services
                 var result = await cmd.ExecuteScalarAsync();
                 return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error log scan failed for alert {AlertId} on {Server}", alert.Id, LogAnon.S(serverName));
+                return null;
+            }
         }
 
         private async Task<double?> CheckIoErrorsAsync(ServerConnection connection, string serverName)
@@ -366,7 +371,11 @@ namespace SqlHealthAssessment.Data.Services
                 var result = await cmd.ExecuteScalarAsync();
                 return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "I/O error check failed on {Server}", LogAnon.S(serverName));
+                return null;
+            }
         }
 
         private async Task EvaluateAlertOnServerAsync(

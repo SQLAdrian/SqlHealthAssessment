@@ -57,7 +57,7 @@ namespace SqlHealthAssessment.Data
         };
 
         // Optimization: Use streams for large JSON parsing
-        private async Task<DashboardConfigRoot> LoadConfigFromStreamAsync()
+        private DashboardConfigRoot LoadConfigFromDisk()
         {
             var configPath = _configPath;
             if (!File.Exists(configPath))
@@ -68,13 +68,13 @@ namespace SqlHealthAssessment.Data
 
             try
             {
-                await using var stream = File.OpenRead(configPath);
-                return await JsonSerializer.DeserializeAsync<DashboardConfigRoot>(stream, SerializerOptions)
+                using var stream = File.OpenRead(configPath);
+                return JsonSerializer.Deserialize<DashboardConfigRoot>(stream, SerializerOptions)
                        ?? DefaultConfigGenerator.Generate();
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to load config from stream, using defaults");
+                _logger.LogWarning(ex, "Failed to load config from disk, using defaults");
                 return DefaultConfigGenerator.Generate();
             }
         }
@@ -213,8 +213,7 @@ namespace SqlHealthAssessment.Data
             {
                 try
                 {
-                    // Optimization: Use stream for large configs
-                    var config = LoadConfigFromStreamAsync().GetAwaiter().GetResult();
+                    var config = LoadConfigFromDisk();
                     if (config != null)
                     {
                         _logger.LogDebug("Deserialized config with {Count} dashboards", config.Dashboards?.Count ?? 0);

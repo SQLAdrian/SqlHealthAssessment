@@ -980,6 +980,8 @@ window.queryPlanInteropV2 = (function () {
         const pane = createPane(container);
 
         // ── Node divs ─────────────────────────────────────────────────────────
+        // nodeElements map: nodeId → div element (for search highlight)
+        const nodeElements = {};
         graph.nodes.forEach(node => {
             const pos    = positions[node.id];
             if (!pos) return;
@@ -1194,9 +1196,7 @@ window.queryPlanInteropV2 = (function () {
 
         // ── #6 Search highlight ───────────────────────────────────────────────
         // nodeElements map: nodeId → div element (for highlight)
-        const nodeElements = {};
-        // (populated after node divs are built; we store by wrapping each node creation
-        //  in a post-build step — see below after node loop)
+        // (declared above before node loop; populated during node div build)
 
         // ── #10 Minimap ───────────────────────────────────────────────────────
         // Only show minimap when there are enough nodes to warrant it (>= 8)

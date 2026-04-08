@@ -4,20 +4,28 @@
 @if (Session != null)
 {
     <div class="session-detail-panel">
-        <div class="session-detail-header">
-            <h3>Session @Session.SPID</h3>
-            <div style="display:flex;gap:6px;align-items:center;">
-                @if (Session.IsActive && OnViewPlanRequested.HasDelegate)
-                {
-                    <button class="toolbar-btn" style="font-size:11px;padding:3px 8px;"
-                            @onclick="() => OnViewPlanRequested.InvokeAsync(Session.SPID)"
-                            title="Fetch and display the current query execution plan">
-                        <i class="fa-solid fa-magnifying-glass"></i> View Plan
-                    </button>
-                }
-                <button class="close-btn" @onclick="OnClose" title="Close">✕</button>
-            </div>
-        </div>
+         <div class="session-detail-header">
+             <h3>Session @Session.SPID</h3>
+             <div style="display:flex;gap:6px;align-items:center;">
+                 @if (Session.IsActive && OnViewPlanRequested.HasDelegate)
+                 {
+                     <button class="toolbar-btn" style="font-size:11px;padding:3px 8px;"
+                             @onclick="() => OnViewPlanRequested.InvokeAsync(Session.SPID)"
+                             title="Fetch and display the current query execution plan">
+                         <i class="fa-solid fa-magnifying-glass"></i> View Plan
+                     </button>
+                 }
+                  @if (Session.IsActive || Session.IsBlocked)
+                  {
+                      <button class="toolbar-btn" style="font-size:11px;padding:3px 8px;background:var(--red);color:white;"
+                              @onclick="async e => await OnKillSession.InvokeAsync(Session.SPID)"
+                              title="Terminate this session (requires sysadmin privileges)">
+                          <i class="fa-solid fa-skull"></i> Kill
+                      </button>
+                  }
+                 <button class="close-btn" @onclick="OnClose" title="Close">✕</button>
+             </div>
+         </div>
 
         <div class="session-detail-body">
             <div class="session-detail-grid">
@@ -90,20 +98,28 @@
                     <span class="detail-label">Logical Reads</span>
                     <span class="detail-value">@Session.LogicalReads.ToString("N0")</span>
                 </div>
-                <div class="detail-row">
-                    <span class="detail-label">Writes</span>
-                    <span class="detail-value">@Session.Writes.ToString("N0")</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Open Transactions</span>
-                    <span class="detail-value" style="color: @(Session.OpenTransactionCount > 0 ? "var(--yellow)" : "inherit")">
-                        @Session.OpenTransactionCount
-                        @if (Session.IsIdleInTransaction)
-                        {
-                            <span style="color: var(--red); font-weight: 600;"> (IDLE IN TXN!)</span>
-                        }
-                    </span>
-                </div>
+                 <div class="detail-row">
+                     <span class="detail-label">Writes</span>
+                     <span class="detail-value">@Session.Writes.ToString("N0")</span>
+                 </div>
+                 <div class="detail-row">
+                     <span class="detail-label">Memory Usage</span>
+                     <span class="detail-value">@(Session.MemoryUsageKB.ToString("N0")) KB</span>
+                 </div>
+                 <div class="detail-row">
+                     <span class="detail-label">Row Count</span>
+                     <span class="detail-value">@(Session.RowCount?.ToString("N0") ?? "N/A")</span>
+                 </div>
+                 <div class="detail-row">
+                     <span class="detail-label">Open Transactions</span>
+                     <span class="detail-value" style="color: @(Session.OpenTransactionCount > 0 ? "var(--yellow)" : "inherit")">
+                         @Session.OpenTransactionCount
+                         @if (Session.IsIdleInTransaction)
+                         {
+                             <span style="color: var(--red); font-weight: 600;"> (IDLE IN TXN!)</span>
+                         }
+                     </span>
+                 </div>
 
                 @if (Session.TotalElapsedTime > 0)
                 {
@@ -129,6 +145,7 @@
     [Parameter] public SessionInfo? Session { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<int> OnViewPlanRequested { get; set; }
+    [Parameter] public EventCallback<int> OnKillSession { get; set; } // ENHANCEMENT: add kill callback
 
     private string GetStatusColor()
     {

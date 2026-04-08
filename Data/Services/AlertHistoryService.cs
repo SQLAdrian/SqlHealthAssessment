@@ -286,7 +286,11 @@ namespace SqlHealthAssessment.Data.Services
                 cmd.CommandText = "SELECT COUNT(*) FROM alert_history WHERE status = 'Active'";
                 return Convert.ToInt32(cmd.ExecuteScalar());
             }
-            catch { return 0; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to query active alert count from history database");
+                return 0;
+            }
         }
 
         private List<AlertHistoryRecord> QueryRecords(string whereClause, params (string name, string value)[] parameters)

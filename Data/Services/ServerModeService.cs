@@ -15,6 +15,7 @@ using Radzen;
 using Serilog;
 using SqlHealthAssessment.Data.Caching;
 using SqlHealthAssessment.Data.Models;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -137,20 +138,23 @@ namespace SqlHealthAssessment.Data.Services
                 // Show detailed errors in dev
                 app.UseDeveloperExceptionPage();
 
-                // Diagnostic: log every incoming request
+                // Diagnostic: log every incoming request with duration
                 app.Use(async (context, next) =>
                 {
+                    var stopwatch = Stopwatch.StartNew();
                     _logger.LogInformation("Server mode request: {Method} {Path} {Query}",
                         context.Request.Method, context.Request.Path, context.Request.QueryString);
                     try
                     {
                         await next();
-                        _logger.LogInformation("Server mode response: {StatusCode} for {Path}",
-                            context.Response.StatusCode, context.Request.Path);
+                        stopwatch.Stop();
+                        _logger.LogInformation("Server mode response: {StatusCode} for {Path} in {ElapsedMs}ms",
+                            context.Response.StatusCode, context.Request.Path, stopwatch.ElapsedMilliseconds);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Server mode error processing {Path}", context.Request.Path);
+                        stopwatch.Stop();
+                        _logger.LogError(ex, "Server mode error processing {Path} after {ElapsedMs}ms", context.Request.Path, stopwatch.ElapsedMilliseconds);
                         throw;
                     }
                 });
@@ -273,6 +277,8 @@ namespace SqlHealthAssessment.Data.Services
             TryAdd<WebView2Helper>(services, wpf);
             TryAdd<AutoUpdateService>(services, wpf);
             TryAdd<UserSettingsService>(services, wpf);
+            TryAdd<KeyboardShortcutService>(services, wpf);
+            TryAdd<ConnectionHealthService>(services, wpf);
             TryAdd<AlertingService>(services, wpf);
             TryAdd<AlertDefinitionService>(services, wpf);
             TryAdd<AlertHistoryService>(services, wpf);
@@ -321,6 +327,7 @@ namespace SqlHealthAssessment.Data.Services
             TryAdd<SessionDataService>(services, wpf);
             TryAdd<SessionManager>(services, wpf);
             TryAdd<LocalLogService>(services, wpf);
+            TryAdd<PowerShellService>(services, wpf);
             TryAdd<Caching.liveQueriesCacheStore>(services, wpf);
             TryAdd<Caching.CacheStateTracker>(services, wpf);
             TryAdd<Caching.CachingQueryExecutor>(services, wpf);

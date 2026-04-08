@@ -401,3 +401,4 @@ _OtherBPs/research_output/
 CheckValidator/
 CheckMerger/
 research_output/
+sql_check_runner.py

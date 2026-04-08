@@ -270,6 +270,16 @@ namespace SqlHealthAssessment
             Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
             Top = (SystemParameters.PrimaryScreenHeight - Height) / 2;
 
+            // Show the overlay so the user sees something while the server starts
+            WebView2ErrorTitle.Text = "Starting Server Mode…";
+            WebView2ErrorTitle.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4488ff"));
+            WebView2ErrorMessage.Text = "WebView2 is not available on this machine.\n\n" +
+                "Starting the built-in web server — you will be able to access the\n" +
+                "application in any browser once it is ready.\n\n" +
+                "Click 'Start Server Mode' below if it does not start automatically.";
+            WebView2ErrorOverlay.Visibility = Visibility.Visible;
+
             AutoStartServerMode();
         }
 
@@ -487,23 +497,22 @@ namespace SqlHealthAssessment
             ClosingOverlay.Visibility = Visibility.Visible;
             e.Cancel = true;
 
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(8));
-                _logger?.LogWarning("Shutdown watchdog: force-killing process after 8 second timeout");
-                Environment.Exit(1);
-            });
-
-            await Task.Delay(800);
-
             try
             {
                 var serverMode = App.Services?.GetService<ServerModeService>();
                 if (serverMode?.IsRunning == true)
                 {
-                    var stopTask = serverMode.StopAsync();
-                    if (!stopTask.Wait(TimeSpan.FromSeconds(3)))
-                        _logger?.LogWarning("Server mode stop timed out after 3 seconds");
+                    _logger?.LogInformation("Stopping server mode during window close...");
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                    try
+                    {
+                        await serverMode.StopAsync().WaitAsync(cts.Token);
+                        _logger?.LogInformation("Server mode stopped successfully");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger?.LogWarning("Server mode stop timed out after 8 seconds");
+                    }
                 }
             }
             catch (Exception ex)
@@ -514,6 +523,8 @@ namespace SqlHealthAssessment
             _forceClose = true;
             _trayIcon?.Dispose();
             _trayIcon = null;
+
+            // Let WPF shut down naturally
             Application.Current.Shutdown();
         }
     }

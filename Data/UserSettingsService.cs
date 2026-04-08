@@ -101,6 +101,8 @@ namespace SqlHealthAssessment.Data
             // ── Experimental Mode ──
             /// <summary>When true, shows experimental/preview features that are not yet production-ready.</summary>
             public bool ExperimentalMode { get; set; } = false;
+            /// <summary>When true, shows the Maturity Roadmap page in the nav. Requires No-Pants + Experimental. Off by default.</summary>
+            public bool ShowMaturityRoadmap { get; set; } = false;
 
             // ── Vulnerability Assessment Scheduled PDF ──
             public bool VaScheduledPdfEnabled { get; set; } = false;
@@ -332,6 +334,10 @@ namespace SqlHealthAssessment.Data
 
         /// <summary>Fired when experimental mode is toggled.</summary>
         public event Action<bool>? OnExperimentalModeChanged;
+
+        // ── Maturity Roadmap ──
+        public bool GetShowMaturityRoadmap() { lock (_lock) return _settings.ShowMaturityRoadmap; }
+        public void SetShowMaturityRoadmap(bool enabled) { lock (_lock) _settings.ShowMaturityRoadmap = enabled; SaveSettings(); }
 
         // ── Onboarding ──
         public bool GetOnboardingComplete() { lock (_lock) return _settings.OnboardingComplete; }

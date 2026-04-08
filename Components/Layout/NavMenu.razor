@@ -79,7 +79,12 @@
                     <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-chart-line"></i></span> Capacity Planning
                 </NavLink>
             }
-            @* Maturity Roadmap hidden — pending next phase *@
+            @if (_noPantsMode && _experimentalMode && _showMaturityRoadmap)
+            {
+                <NavLink href="/diagnostics-roadmap" class="nav-link">
+                    <span class="w-4 inline-flex items-center justify-center text-sm"><i class="fa-solid fa-road"></i></span> Maturity Roadmap
+                </NavLink>
+            }
             @if (ShowToolsSection)
             {
                 <NavLink href="/xevents" class="nav-link">
@@ -388,6 +393,7 @@
 
     // ── Experimental Mode ─────────────────────────────────────────────────
     private bool _experimentalMode = false;
+    private bool _showMaturityRoadmap = false;
 
     private void ToggleExperimentalMode()
     {
@@ -397,8 +403,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _noPantsMode      = UserSettings.GetNoPantsMode();
-        _experimentalMode = UserSettings.GetExperimentalMode();
+        _noPantsMode         = UserSettings.GetNoPantsMode();
+        _experimentalMode    = UserSettings.GetExperimentalMode();
+        _showMaturityRoadmap = UserSettings.GetShowMaturityRoadmap();
         ConnectionManager.OnConnectionChanged += OnServerChanged;
         ConnectionHealth.OnStatusChanged       += OnHealthChanged;
         await RefreshDbFlags();

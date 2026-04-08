@@ -1,12 +1,12 @@
 {
     "version":  "0.85.1",
-    "buildNumber":  970,
-    "buildDate":  "2026-04-08",
+    "buildNumber":  980,
+    "buildDate":  "2026-04-09",
     "releaseType":  "Production",
     "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SqlHealthAssessment/releases/latest",
     "whatsnew":  [
-                     "Auto-export reports now default to OFF — enable per-format in Settings > Auto-Export Reports",
-                     "What's New popup: 'Don't show this again' checkbox; toggle also available in Settings > Notifications",
+                     "Auto-export reports now default to OFF — enable per-format in Settings \u003e Auto-Export Reports",
+                     "What\u0027s New popup: \u0027Don\u0027t show this again\u0027 checkbox; toggle also available in Settings \u003e Notifications",
                      "Server Mode startup: overlay now shows informational message instead of blank screen",
                      "Maturity Roadmap hidden from navigation — page pending next-phase redesign",
                      "New dashboards: Query Store Health, Database Health, and enhanced Backup Health with checksum and restore tracking",

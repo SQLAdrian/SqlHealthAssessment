@@ -22,12 +22,17 @@
    -----------------------------------------------------------------------------
    
    CONFIGURATION FLAGS (set before running):
-   - @UpdateOla         : Update Ola job schedules (default: 0)
-   - @AddMappedDrive   : Create backup mapped drive (default: 0)
-   - @NeedEmptyFile    : Create emergency empty file (default: 0)
-   - @DoDeadlocks      : Enable deadlock XEvent capture (default: 0)
-   - @EnableRCSI       : Enable RCSI per database (default: 0)
-   - @UpgradeCompatLevel: Upgrade database compat levels (default: 0)
+   - @UpdateOla          : Update Ola job schedules (default: 0)
+   - @AddMappedDrive     : Create backup mapped drive (default: 0)
+   - @NeedEmptyFile      : Create emergency empty file (default: 0)
+   - @DoDeadlocks        : Enable deadlock XEvent capture (default: 0)
+   - @ApplyMaxMemory     : Apply calculated max server memory (default: 0)
+   - @ApplyTrustworthy   : Set TRUSTWORTHY OFF on user databases (default: 0)
+   - @ApplyChaining      : Set DB_CHAINING OFF on user databases (default: 0)
+   - @EnableRCSI         : Enable RCSI per database (default: 0)
+   - @UpgradeCompatLevel : Upgrade database compat levels (default: 0)
+   - @ApplyTraceFlags    : Write trace flags to registry startup params (default: 0)
+   - @EnableAudit        : Create/enable SQL Server Audit (default: 0)
    
    DEPENDENCIES:
    - Requires sysadmin or server-level permissions
@@ -40,15 +45,42 @@
 USE [master]
 GO
 
-DECLARE @UpdateOla BIT
-DECLARE @AddMappedDrive BIT
-DECLARE @NeedEmptyFile BIT
-DECLARE @DoDeadlocks BIT
+-- ============================================================
+-- CONFIGURATION BLOCK — set all flags here before running
+-- ============================================================
+DECLARE @UpdateOla          BIT = 0   -- Update Ola job schedules
+DECLARE @AddMappedDrive     BIT = 0   -- Create backup mapped drive (requires @MappedDriveDomainPassword below)
+DECLARE @NeedEmptyFile      BIT = 0   -- Create emergency empty file
+DECLARE @DoDeadlocks        BIT = 0   -- Enable deadlock XEvent capture
+DECLARE @ApplyMaxMemory     BIT = 0   -- Apply calculated max server memory (SET TO 1 TO APPLY)
+DECLARE @ApplyTrustworthy   BIT = 0   -- SET TRUSTWORTHY OFF on user databases (SET TO 1 TO APPLY)
+DECLARE @ApplyChaining      BIT = 0   -- SET DB_CHAINING OFF on user databases (SET TO 1 TO APPLY)
+DECLARE @EnableRCSI         BIT = 0   -- Enable RCSI on OLTP user databases (SET TO 1 TO APPLY)
+DECLARE @UpgradeCompatLevel BIT = 0   -- Upgrade database compat levels (SET TO 1 TO APPLY)
+DECLARE @ApplyTraceFlags    BIT = 0   -- Write trace flags to registry startup params (SET TO 1 TO APPLY)
+DECLARE @EnableAudit        BIT = 0   -- Create/enable SQL Server Audit (SET TO 1 TO CREATE)
+DECLARE @ForChangeControl	BIT = 1	  -- SET to 1 to create print output of change control
 
-SET @DoDeadlocks = 0
-SET @UpdateOla = 0
-SET @AddMappedDrive = 0
-SET @NeedEmptyFile = 0
+IF @ForChangeControl = 1
+BEGIN
+	/*we are doing a change control, so mark everything as 0*/
+	 SET @UpdateOla				= 0     
+	 SET @AddMappedDrive     	= 0
+	 SET @NeedEmptyFile      	= 0
+	 SET @DoDeadlocks        	= 0
+	 SET @ApplyMaxMemory     	= 0
+	 SET @ApplyTrustworthy   	= 0
+	 SET @ApplyChaining      	= 0
+	 SET @EnableRCSI         	= 0
+	 SET @UpgradeCompatLevel 	= 0
+	 SET @ApplyTraceFlags    	= 0
+	 SET @EnableAudit        	= 0
+END
+-- Mapped drive credential — only used when @AddMappedDrive = 1
+-- FILL IN: replace with actual domain account and password before running
+DECLARE @MappedDriveDomainName     NVARCHAR(200) = 'DOMAIN\administrator'
+DECLARE @MappedDriveDomainPassword NVARCHAR(200) = '/* FILL IN: domain password */'
+-- ============================================================
 
 DECLARE @Raiseme NVARCHAR(500) 
 SET @Raiseme = ''
@@ -137,9 +169,9 @@ END
 */
 IF OBJECT_ID('master.dbo.DBA_SYS_DATABASES') IS NULL
 BEGIN
-	SELECT GETDATE() [timestamp],* 
+	EXEC('SELECT GETDATE() [timestamp],* 
 	INTO master.dbo.DBA_SYS_DATABASES
-	FROM sys.databases
+	FROM sys.databases')
 END 
 ELSE
 BEGIN
@@ -151,10 +183,10 @@ END
 
 IF OBJECT_ID('master.dbo.DBA_SYS_DATABASE_FILES') IS NULL
 BEGIN
-	SELECT GETDATE() [Timestamp], DB_NAME(dbid) AS [DB], *
+	EXEC('SELECT GETDATE() [Timestamp], DB_NAME(dbid) AS [DB], *
 	INTO master.dbo.DBA_SYS_DATABASE_FILES
-	FROM sys.sysaltfiles SF
-END 
+	FROM sys.sysaltfiles SF')
+END
 ELSE
 BEGIN
 	INSERT  INTO master.dbo.DBA_SYS_DATABASE_FILES
@@ -183,20 +215,14 @@ END
 
 IF @AddMappedDrive = 1
 BEGIN
-	/*Need a mapped drive for the SQL service?*/
+	-- Credential values come from @MappedDriveDomainName / @MappedDriveDomainPassword in the configuration block above
 	DECLARE @MappedDriveCMD NVARCHAR(200)
-	DECLARE @MappedDriveDomainName NVARCHAR(200)
-
-	DECLARE @MappedDriveDomainPassword NVARCHAR(200)
-	SET @MappedDriveDomainName = 'DOMAIN\administrator'
-	SET @MappedDriveDomainPassword = 'PASSWORD'
-	SET @MappedDriveCMD = 'net use s: \\server\Backup\SQLServer /USER:'+@MappedDriveDomainName+' '+@MappedDriveDomainPassword+' /p:yes'
+	SET @MappedDriveCMD = 'net use s: \\server\Backup\SQLServer /USER:' + @MappedDriveDomainName + ' ' + @MappedDriveDomainPassword + ' /p:yes'
 	EXEC sp_configure 'show advanced options', 1;
 	RECONFIGURE;
-	EXEC sp_configure 'xp_cmdshell',1
-	RECONFIGURE
-	EXEC xp_cmdshell @MappedDriveCMD
-
+	EXEC sp_configure 'xp_cmdshell', 1;
+	RECONFIGURE;
+	EXEC xp_cmdshell @MappedDriveCMD;
 END
 IF @NeedEmptyFile = 1
 BEGIN
@@ -689,8 +715,6 @@ END CATCH
 
 
 USE [msdb]
-GO
-
 
 
 /*
@@ -817,8 +841,8 @@ IF NOT EXISTS (SELECT *
 
 DECLARE @ReturnCode INT
 SELECT @ReturnCode = 0
-DECLARE @the_job_Id BINARY(16)
-DECLARE @the_job_name NVARCHAR(200)
+--DECLARE @the_job_Id BINARY(16)
+--DECLARE @the_job_name NVARCHAR(200)
 DECLARE @thealert_Id BINARY(16)
 DECLARE @thealert_name NVARCHAR(200)
 SET @the_job_name =  '996. Deadlocks'
@@ -908,7 +932,7 @@ END
 -- Alert Names start with the name of the server 
 
 
-
+SET NOCOUNT ON
 DECLARE @AlertTable TABLE 
 (
 	ID INT IDENTITY(1,1)
@@ -1071,9 +1095,6 @@ INSERT INTO @AlertTable VALUES ('Error',596,	@ServerName + N' Error 596: LCK_M_I
 INSERT INTO @AlertTable VALUES ('Error',595,	@ServerName + N' Error 595: Lock escalation prevented')
 INSERT INTO @AlertTable VALUES ('Error',1221,	@ServerName + N' Error 1221: Lock resources exceeded (deadlock victim)')
 
-/* TempDB critical issues */
-INSERT INTO @AlertTable VALUES ('Error',1105,	@ServerName + N' Error 1105: Could not allocate space in tempdb')
-
 /* Query Store errors */
 INSERT INTO @AlertTable VALUES ('Error',12410,	@ServerName + N' Error 12410: Query Store internal error')
 INSERT INTO @AlertTable VALUES ('Error',12411,	@ServerName + N' Error 12411: Query Store collection failed')
@@ -1087,9 +1108,7 @@ INSERT INTO @AlertTable VALUES ('Error',9013,	@ServerName + N' Error 9013: Virtu
 INSERT INTO @AlertTable VALUES ('Error',233,	@ServerName + N' Error 233: Shared memory provider disconnected')
 
 /* Brent Ozar / Microsoft additional critical alerts */
-/* Out of memory conditions */
-INSERT INTO @AlertTable VALUES ('Error',701, 	@ServerName + N' Error 701: Insufficient memory (resource pool)')
-INSERT INTO @AlertTable VALUES ('Error',802, 	@ServerName + N' Error 802: Buffer pool insufficient memory')
+/* Resource semaphore exhaustion */
 INSERT INTO @AlertTable VALUES ('Error',8645, 	@ServerName + N' Error 8645: Resource semaphore wait timeout')
 
 /* SOS scheduler exhaustion (critical) */
@@ -1280,7 +1299,7 @@ RAISERROR ( 'Daily Cycle Log job created',0,1) WITH NOWAIT;
 
 -- Limit error logs
 EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'NumErrorLogs', REG_DWORD, 100
-GO
+--GO
 RAISERROR ('Action: Set Errorlogs to 100',0,1) WITH NOWAIT;
 -- Set sp_configure settings
 
@@ -1500,8 +1519,14 @@ SET @MaxMemMsg = 'Action: Set max server memory to ' + CONVERT(VARCHAR(10), @Tar
     + ' MB (total RAM: ' + CONVERT(VARCHAR(10), @TotalRAMMB) + ' MB, reserved for OS: ' + CONVERT(VARCHAR(10), @ReservedForOSMB) + ' MB)'
 RAISERROR (@MaxMemMsg, 0, 1) WITH NOWAIT;
 
---EXEC sys.sp_configure N'max server memory (MB)', @TargetMaxMemMB
---RECONFIGURE WITH OVERRIDE
+IF @ApplyMaxMemory = 1
+BEGIN
+    EXEC sys.sp_configure N'max server memory (MB)', @TargetMaxMemMB;
+    RECONFIGURE WITH OVERRIDE;
+    RAISERROR ('Action: Applied max server memory setting', 0, 1) WITH NOWAIT;
+END
+ELSE
+    RAISERROR ('Notice: @ApplyMaxMemory = 0 — max server memory not changed (set to 1 to apply)', 0, 1) WITH NOWAIT;
 
 /*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1563,7 +1588,7 @@ DECLARE @CPUHyperthreadratio MONEY;
 DECLARE @DatabaseName SYSNAME;
 DECLARE @Databasei_Count INT;
 DECLARE @Databasei_Max INT;
-DECLARE @DynamicSQL NVARCHAR(4000);
+--DECLARE @DynamicSQL NVARCHAR(4000);
 DECLARE @DynamicSQLforDB NVARCHAR(4000);
 DECLARE @state TINYINT
 DECLARE @AutoClose TINYINT
@@ -1619,10 +1644,8 @@ SET @DynamicSQL = 'SELECT
 	' + CASE WHEN CONVERT(INT, LEFT(CONVERT(NVARCHAR(20), SERVERPROPERTY('productversion')), CHARINDEX('.', CONVERT(NVARCHAR(20), SERVERPROPERTY('productversion'))) - 1)) < 13 THEN ', db.is_query_store_on' ELSE ', NULL' END +'
 	FROM sys.databases db ';
 
-IF 'Yes please dont do the system databases' IS NOT NULL
-BEGIN
-	SET @DynamicSQL = @DynamicSQL + ' WHERE database_id > 4 AND state NOT IN (1,2,3,6)';
-END
+-- Exclude system databases and offline/restoring databases
+SET @DynamicSQL = @DynamicSQL + ' WHERE database_id > 4 AND state NOT IN (1,2,3,6)';
 SET @DynamicSQL = @DynamicSQL + ' OPTION (RECOMPILE)'
 INSERT INTO @Databases 
 EXEC sp_executesql @DynamicSQL ;
@@ -1761,9 +1784,15 @@ WHERE is_trustworthy_on = 1
 
 IF @TrustSQL <> N''
 BEGIN
-    RAISERROR ('Action: Setting TRUSTWORTHY OFF on user databases', 0, 1) WITH NOWAIT;
+    RAISERROR ('Notice: Databases found with TRUSTWORTHY ON:', 0, 1) WITH NOWAIT;
     RAISERROR (@TrustSQL, 0, 1) WITH NOWAIT;
-    --EXEC sys.sp_executesql @TrustSQL;
+    IF @ApplyTrustworthy = 1
+    BEGIN
+        EXEC sys.sp_executesql @TrustSQL;
+        RAISERROR ('Action: Set TRUSTWORTHY OFF on user databases', 0, 1) WITH NOWAIT;
+    END
+    ELSE
+        RAISERROR ('Notice: @ApplyTrustworthy = 0 — TRUSTWORTHY not changed (set to 1 to apply)', 0, 1) WITH NOWAIT;
 END
 ELSE
     RAISERROR ('Action: TRUSTWORTHY already OFF on all user databases', 0, 1) WITH NOWAIT;
@@ -1781,9 +1810,9 @@ ELSE
 /* Databases on an old compatibility level miss cardinality estimator improvements,
    Query Store features, and many query optimizer fixes tied to newer compat levels.
    This block reports databases below the current engine level and optionally upgrades them.
-   Set @UpgradeCompatLevel = 1 to apply. Leave 0 to report only.
+   Set @UpgradeCompatLevel = 1 (in the configuration block at the top) to apply.
+   Leave 0 to report only.
    WARNING: Test workloads after upgrading compat level — query plans can change.        */
-DECLARE @UpgradeCompatLevel BIT = 0   -- SET TO 1 TO APPLY
 DECLARE @EngineCompatLevel  INT
 DECLARE @CompatSQL          NVARCHAR(MAX) = N''
 DECLARE @CompatReport       NVARCHAR(MAX) = N''
@@ -1855,9 +1884,15 @@ WHERE is_db_chaining_on = 1
 
 IF @ChainSQL <> N''
 BEGIN
-    RAISERROR ('Action: Disabling DB_CHAINING on user databases', 0, 1) WITH NOWAIT;
+    RAISERROR ('Notice: Databases found with DB_CHAINING ON:', 0, 1) WITH NOWAIT;
     RAISERROR (@ChainSQL, 0, 1) WITH NOWAIT;
-    --EXEC sys.sp_executesql @ChainSQL;
+    IF @ApplyChaining = 1
+    BEGIN
+        EXEC sys.sp_executesql @ChainSQL;
+        RAISERROR ('Action: Disabled DB_CHAINING on user databases', 0, 1) WITH NOWAIT;
+    END
+    ELSE
+        RAISERROR ('Notice: @ApplyChaining = 0 — DB_CHAINING not changed (set to 1 to apply)', 0, 1) WITH NOWAIT;
 END
 ELSE
     RAISERROR ('Action: DB_CHAINING already OFF on all user databases', 0, 1) WITH NOWAIT;
@@ -1894,10 +1929,8 @@ ELSE
 /* RCSI allows readers to see the last committed version of a row without
    taking shared locks, eliminating the most common cause of blocking on OLTP.
    Requires tempdb space for the version store.
-   REVIEW: this is opt-in per database — set @EnableRCSI = 1 to activate.
-   Databases with RCSI already enabled are skipped.                         */
-DECLARE @EnableRCSI BIT = 0  -- SET TO 1 TO ENABLE ON ALL OLTP USER DATABASES
-
+   REVIEW: this is opt-in per database — set @EnableRCSI = 1 (in the configuration block
+   at the top) to activate. Databases with RCSI already enabled are skipped.             */
 IF @EnableRCSI = 1
 BEGIN
     DECLARE @RCSIName SYSNAME
@@ -1977,6 +2010,7 @@ DECLARE @ConfigAutoGrowth TABLE
 )
 
 -- Inserting data into staging table
+-- sys.master_files replaces deprecated sys.sysaltfiles (type: 0=data, 1=log; is_percent_growth replaces status bitmask)
 INSERT INTO @ConfigAutoGrowth
 SELECT
 	SD.database_id
@@ -2019,6 +2053,7 @@ SELECT
 FROM sys.sysaltfiles SF
 INNER JOIN sys.databases SD ON SD.database_id = SF.dbid
 
+
  
 -- Dynamically alters the file to set auto growth option to fixed mb
 DECLARE @name VARCHAR ( 500 ) -- Database Name
@@ -2027,7 +2062,7 @@ DECLARE @vFileName VARCHAR ( 500 ) -- Logical file name
 DECLARE @vGrowthOption VARCHAR ( 500 ) -- Growth option
 DECLARE @Query NVARCHAR(2000) -- Variable to store dynamic sql
 DECLARE @Option NVARCHAR(500)
-DECLARE @Raiseme NVARCHAR(500)
+--DECLARE @Raiseme NVARCHAR(500)
 DECLARE db_cursor CURSOR FOR
 SELECT
 iDBID,sDBName,vFileName,vGrowthOption, [Command], [Option]
@@ -2084,7 +2119,7 @@ EXEC sp_MSforeachdb @SQL
 
 
 
-GO
+--GO
 
 
 
@@ -2094,6 +2129,7 @@ GO
    SECTION 6: TRACE FLAGS
    Configure startup trace flags based on SQL Server version
    Uses table-driven approach for maintainability
+   https://github.com/ktaranov/sqlserver-kit/blob/master/SQL%20Server%20Trace%20Flag.md
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
 
@@ -2131,7 +2167,9 @@ DECLARE @MaxValue   INTEGER,
  
 SET @RegHive = 'HKEY_LOCAL_MACHINE';
 SET @RegKey  = 'Software\Microsoft\MSSQLSERVER\MSSQLServer\Parameters';
-SET @DebugLevel = 0;  -- only makes changes if set to zero!
+-- @ApplyTraceFlags from the configuration block at the top controls whether registry writes occur.
+-- @DebugLevel mirrors it: 0 = apply changes, 1 = report only (Wayne Sheffield's convention).
+SET @DebugLevel = CASE WHEN @ApplyTraceFlags = 1 THEN 0 ELSE 1 END;
 DECLARE @CurrentTF INT
 DECLARE @CurrentTFWarn NVARCHAR(500)
 SELECT @CurrentTF = COUNT(*)
@@ -2147,184 +2185,225 @@ DECLARE @TraceFlags TABLE (
     TF                  NVARCHAR(20),
     enable              BIT,
     enable_on_startup   BIT,
-    TF2                 AS '-T' + CONVERT(VARCHAR(15), TF)
+    TF2                 AS '-T' + CONVERT(VARCHAR(15), TF),
+	MinSQLVersion		INT,
+	MaxSQLVersion		INT,
+	ToImplement			BIT,
+	WorthImplementing	BIT,
+	TFDescription		NVARCHAR(2000)
 );
 
 -- To work with SQL 2005, cannot use a table value constructor.
 -- So, use SELECT statements with UNION ALL for each TF to modify.
-DECLARE @SQLVersion INT
+--DECLARE @SQLVersion INT
 SELECT @SQLVersion = @@MicrosoftVersion / 0x01000000  OPTION (RECOMPILE)-- Get major version
 
-INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-SELECT 1204, 1, 1 /*Deadlock related*/
+INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+SELECT 1204, 1, 1, 0, 99, 1, 1, 'captures deadlock graphs in the error log'
 UNION ALL 
-SELECT 1222, 1, 1 /*Deadlock related*/
---SELECT 1224, 1, 1  /*Lock escalation - NOT WORTH IT*/
+SELECT 1222, 1, 1, 0, 99, 1, 1, 'captures deadlock graphs in the error log' 
 
-
-/*sp_Blitz
-								CASE WHEN [T].[TraceFlag] = '652'  THEN '652 enabled globally, which disables pre-fetching during index scans. This is usually a very bad idea.'
-											 WHEN [T].[TraceFlag] = '661'  THEN '661 enabled globally, which disables ghost record removal, causing the database to grow in size. This is usually a very bad idea.'
-										     WHEN [T].[TraceFlag] = '834'  AND @ColumnStoreIndexesInUse = 1 THEN '834 is enabled globally, but you also have columnstore indexes. That combination is not recommended by Microsoft.'
-											 WHEN [T].[TraceFlag] = '834'  AND @CheckUserDatabaseObjects = 0 THEN '834 is enabled globally, but @CheckUserDatabaseObjects was set to 0, so we skipped checking if any databases have columnstore indexes. That combination is not recommended by Microsoft.'
-											 WHEN [T].[TraceFlag] = '1117' THEN '1117 enabled globally, which grows all files in a filegroup at the same time.'
-											 WHEN [T].[TraceFlag] = '1118' THEN '1118 enabled globally, which tries to reduce SGAM waits.'
-											 WHEN [T].[TraceFlag] = '1211' THEN '1211 enabled globally, which disables lock escalation when you least expect it. This is usually a very bad idea.'
-											 WHEN [T].[TraceFlag] = '1204' THEN '1204 enabled globally, which captures deadlock graphs in the error log.'
-											 WHEN [T].[TraceFlag] = '1222' THEN '1222 enabled globally, which captures deadlock graphs in the error log.'
-											 WHEN [T].[TraceFlag] = '1224' THEN '1224 enabled globally, which disables lock escalation until the server has memory pressure. This is usually a very bad idea.'
-											 WHEN [T].[TraceFlag] = '1806' THEN '1806 enabled globally, which disables Instant File Initialization, causing restores and file growths to take longer. This is usually a very bad idea.'
-											 WHEN [T].[TraceFlag] = '2330' THEN '2330 enabled globally, which disables missing index requests. This is usually a very bad idea.'
-											 WHEN [T].[TraceFlag] = '2371' THEN '2371 enabled globally, which changes the auto update stats threshold.'
-											 WHEN [T].[TraceFlag] = '3023' THEN '3023 enabled globally, which performs checksums by default when doing database backups.'
-											 WHEN [T].[TraceFlag] = '3226' THEN '3226 enabled globally, which keeps the event log clean by not reporting successful backups.'
-											 WHEN [T].[TraceFlag] = '3505' THEN '3505 enabled globally, which disables Checkpoints. This is usually a very bad idea.'
-											 WHEN [T].[TraceFlag] = '4199' THEN '4199 enabled globally, which enables non-default Query Optimizer fixes, changing query plans from the default behaviors.'
-											 WHEN [T].[TraceFlag] = '7745' AND @CheckUserDatabaseObjects = 0 THEN '7745 enabled globally, which makes shutdowns/failovers quicker by not waiting for Query Store to flush to disk. This good idea loses you the non-flushed Query Store data. @CheckUserDatabaseObjects was set to 0, so we skipped checking if any databases have Query Store enabled.'
-											 WHEN [T].[TraceFlag] = '7745' AND @QueryStoreInUse = 1 THEN '7745 enabled globally, which makes shutdowns/failovers quicker by not waiting for Query Store to flush to disk. This good idea loses you the non-flushed Query Store data.'
-											 WHEN [T].[TraceFlag] = '7745' AND  @ProductVersionMajor > 12 THEN '7745 enabled globally, which is for Query Store. None of your databases have Query Store enabled, so why do you have this turned on?'
-											 WHEN [T].[TraceFlag] = '7745' AND  @ProductVersionMajor <= 12 THEN '7745 enabled globally, which is for Query Store. Query Store does not exist on your SQL Server version, so why do you have this turned on?'
-											 WHEN [T].[TraceFlag] = '7752' AND  @ProductVersionMajor > 14 THEN '7752 enabled globally, which is for Query Store. However, it has no effect in your SQL Server version. Consider turning it off.'
-											 WHEN [T].[TraceFlag] = '7752' AND  @ProductVersionMajor <= 12 THEN '7752 enabled globally, which is for Query Store. Query Store does not exist on your SQL Server version, so why do you have this turned on?'
-											 WHEN [T].[TraceFlag] = '7752' AND @CheckUserDatabaseObjects = 0 THEN '7752 enabled globally, which stops queries needing to wait on Query Store loading up after database recovery. @CheckUserDatabaseObjects was set to 0, so we skipped checking if any databases have Query Store enabled.'
-											 WHEN [T].[TraceFlag] = '7752' AND @QueryStoreInUse = 1 THEN '7752 enabled globally, which stops queries needing to wait on Query Store loading up after database recovery.'
-											 WHEN [T].[TraceFlag] = '7752' AND  @ProductVersionMajor > 12 THEN '7752 enabled globally, which is for Query Store. None of your databases have Query Store enabled, so why do you have this turned on?'
-											 WHEN [T].[TraceFlag] = '8048' THEN '8048 enabled globally, which tries to reduce CMEMTHREAD waits on servers with a lot of logical processors.'
-											 WHEN [T].[TraceFlag] = '8017' AND (CAST(SERVERPROPERTY('Edition') AS NVARCHAR(1000)) LIKE N'%Express%') THEN '8017 is enabled globally, but this is the default for Express Edition.'
-                                             WHEN [T].[TraceFlag] = '8017' AND (CAST(SERVERPROPERTY('Edition') AS NVARCHAR(1000)) NOT LIKE N'%Express%') THEN '8017 is enabled globally, which disables the creation of schedulers for all logical processors.'
-											 WHEN [T].[TraceFlag] = '8649' THEN '8649 enabled globally, which cost threshold for parallelism down to 0.  This is usually a very bad idea.'
-											 ELSE [T].[TraceFlag] + ' is enabled globally.' END
-*/
-/*
-1488, Enables Replication to continue when the secondary node is down
-*/
+-- sp_Blitz trace flag reference notes moved to REFERENCE NOTES section at the bottom of this script.
 IF @SQLVersion >= 10
 BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 3226, 1, 1  /*Supress backup log information in SQL event log*/
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 3226, 1, 1, 10, 99, 1, 1, 'Supress backup log information in SQL event log'
 END
+
 
 /* TF 1117, 1118 (tempdb uniform extent / single file growth) and TF 2371 (statistics auto-update threshold)
    are built-in/deprecated from SQL Server 2016 (version 13) onward. Only apply to pre-2016. */
 IF @SQLVersion >= 10 AND @SQLVersion < 13
 BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 1117, 1, 1  /*Tempdb: grow all files equally*/
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 1117, 1, 1, 10, 12, 1, 1, 'You are on an unsupported version of SQL, you have bigger issues. Tempdb: grow all files equally at the same time'
 	UNION ALL
-	SELECT 1118, 1, 1  /*Tempdb: uniform extent allocation*/
+	SELECT 1118, 1, 1, 10, 12, 1, 1, 'You are on an unsupported version of SQL, you have bigger issues. Tempdb: uniform extent allocation,tries to reduce SGAM waits'
 	UNION ALL
-	SELECT 2371, 1, 1  /*Statistics update threshold fixer (deprecated in SQL 2016+, built-in)*/
+	SELECT 2371, 1, 1, 10, 12, 1, 1, 'You are on an unsupported version of SQL, you have bigger issues. Statistics update threshold fixer (deprecated in SQL 2016+, built-in). Good for VLDBs.'
+
 END
-DECLARE @sqledition NVARCHAR(500)
+
+
+
+--DECLARE @sqledition NVARCHAR(500)
 SELECT @sqledition = CONVERT(NVARCHAR(500),SERVERPROPERTY('edition') )
 IF @SQLVersion >= 10 AND @sqledition LIKE '%Express%'
 BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 7806,1,1 /*Always enable DAC for SQL Express*/
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 7806, 1, 1, 10, 99, 1, 1, 'Always enable DAC for SQL Express'
 END
 
-
-IF @SQLVersion >= 11
-BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 2453, 1, 1 /*Table variable fix*/
-	UNION ALL 
-	SELECT 1800, 1, 1 /*Assume the machine is likely a VM, so for 4K Transaction log cluster size*/
-	UNION ALL 
-	SELECT 9488, 1, 1 /*Table valued function fixed estimation*/
-	UNION ALL
-	SELECT 174,1,1	/*Increase plan cache bucket count, https://www.sqlskills.com/blogs/erin/sql-server-plan-cache-limits/ */
-END
-
-
-IF @SQLVersion >= 13
-BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 9567, 1, 1  /*Compress AG seed workload*/
-	UNION ALL
-	SELECT 4199,1,1 /* Trace Flag 4199 is not enabled to control multiple query optimizer changes
-		--https://www.mssqltips.com/sqlservertip/3320/
-		--4136 IGNORE STATISTICS
-	*/
-	UNION ALL
-	SELECT 9472, 1, 1  /*SQL 2016+: Force singleton estimate for DBCC CHECKDB/CHECKTABLE*/
-	UNION ALL
-	SELECT 10204, 1, 1  /*SQL 2016+: Disable page latch during DBCC CHECKDB/rebuild*/
-	UNION ALL
-	SELECT 9476, 1, 1  /*SQL 2017+: Snapshot baseline for CE model version 120+ to control multiple query optimizer changes*
---https://www.mssqltips.com/sqlservertip/3320/enabling-sql-server-trace-flag-for-a-poor-performing-query-using-querytraceon/
-	--4136 IGNORE STATISTICS */
-	UNION ALL 
-	SELECT 2451,1,1
-
-END
-
-/* TF 2330: Disable collection of sys.dm_db_index_usage_stats.
-   On very busy servers with many databases the DMV update path creates
-   CMEMTHREAD spinlock contention. Disable it when you are not actively
-   using the DMV for index maintenance decisions. Pre-SQL 2016 only --
-   SQL 2016+ uses a partitioned structure that largely eliminates this. */
-IF @SQLVersion >= 10 AND @SQLVersion < 13
-BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 2330, 1, 1  /*Reduce CMEMTHREAD contention on index_usage_stats DMV (pre-SQL 2016)*/
-END
-
-/* SQL 2019+ additional trace flags */
-IF @SQLVersion >= 15
-BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 2424, 1, 1  /*Enable async statistics update for large tables*/
-	UNION ALL
-	SELECT 13116, 1, 1  /*Disable parallel page supplier during DBCC CHECKDB*/
-END
-
-/* SQL 2022+ additional trace flags */
-IF @SQLVersion >= 16
-BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 3892, 1, 1  /*Trace flag for Columnstore snapshot read consistency*/
-	UNION ALL
-	SELECT 13056, 1, 1  /*Trace flag to enable detailed memory grant feedback for index rebuilds*/
-	UNION ALL
-	SELECT 1766, 1, 1  /*Trace flag to enable large page allocations for batch mode*/
-	UNION ALL
-	SELECT 9453, 1, 1  /*Trace flag to disable batch mode execution for serialized plans*/
-END
-
-/* Additional enterprise-grade trace flags (Brent Ozar recommendations) */
-IF @SQLVersion >= 11
-BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 7465, 1, 1  /*Disable table cardinality hint auto-update*/
-	UNION ALL
-	SELECT 2309, 1, 1  /*Trace flag to always use set based cardinality estimation*/
-END
 
 /* TF 8048: Partition memory objects by logical CPU (not just NUMA node).
    Resolves SOS_CACHESTORE spinlock storms on SQL 2008/2008R2/2012 with
    high logical core counts (>8 per NUMA node). Not needed SQL 2014+. */
 IF @SQLVersion >= 10 AND @SQLVersion < 12
 BEGIN
-	INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-	SELECT 8048, 1, 1  /*Partition memory objects by logical CPU -- spinlock relief pre-SQL 2014*/
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 8048, 1, 1, 10, 11, 1, 1, 'You are on an unsupported version of SQL, you have bigger issues. Partition memory objects by logical CPU -- spinlock relief pre-SQL 2014. Brent says -> Someone thinks they’re a rocket scientist. Changes SQL’s behavior to NUMA based partitioning.'
 END
 
-/* TF 834: Large page allocations for buffer pool.
-   Reduces TLB miss overhead on servers with large RAM (>32 GB) by using
-   Windows large page support. Enterprise Edition only -- can cause issues
-   with Transparent Data Encryption and non-Enterprise SKUs. Guarded to
-   Enterprise and large-memory servers only. */
-IF @SQLVersion >= 9 AND @sqledition LIKE '%Enterprise%'
+
+
+
+IF @SQLVersion >= 11
 BEGIN
-	DECLARE @TotalRAMForTF BIGINT
-	SELECT @TotalRAMForTF = physical_memory_kb / 1024 FROM sys.dm_os_sys_info
-	IF @TotalRAMForTF > 32768  -- only apply on servers with > 32 GB RAM
-	BEGIN
-		INSERT INTO @TraceFlags (TF, enable, enable_on_startup)
-		SELECT 834, 1, 1  /*Large page allocations for buffer pool (Enterprise, >32GB RAM only)*/
-	END
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 2453, 1, 1, 11, 99, 1, 1, 'Table variable fix'
+	UNION ALL 
+	SELECT 1800, 1, 1, 11, 99, 1, 1, 'Assume the machine is likely a VM, so for 4K Transaction log cluster size'
+	UNION ALL 
+	SELECT 9488, 1, 1, 11, 99, 1, 1, 'Table valued function fixed estimation'
+	UNION ALL
+	SELECT 174, 1, 1, 11, 99, 1, 1, 'Increase plan cache bucket count, https://www.sqlskills.com/blogs/erin/sql-server-plan-cache-limits/'
+	UNION ALL
+	SELECT 7465, 1, 1, 11, 99, 1, 1, 'Disable table cardinality hint auto-update'
+	UNION ALL
+	SELECT 2309, 1, 1, 11, 99, 1, 1, 'Trace flag to always use set based cardinality estimation'
 END
+
+IF @SQLVersion >= 13
+BEGIN
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 9567, 1, 1, 13, 99, 1, 1, 'Compress AG seed workload'
+	UNION ALL
+	SELECT 9472, 1, 1, 13, 99, 1, 1, 'SQL 2016+: Force singleton estimate for DBCC CHECKDB/CHECKTABLE'
+	UNION ALL
+	SELECT 10204, 1, 1, 13, 99, 1, 1, 'SQL 2016+: Disable page latch during DBCC CHECKDB/rebuild'
+	UNION ALL
+	SELECT 9476, 1, 1, 14, 99, 1, 1, 'SQL 2017+: Snapshot baseline for CE model version 120+ to control multiple query optimizer changes'
+	
+END
+
+/* SQL 2019+ additional trace flags */
+IF @SQLVersion >= 15
+BEGIN
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+
+	SELECT 2424, 1, 1, 15, 99, 1, 1, 'Enable async statistics update for large tables'
+	UNION ALL
+	SELECT 13116, 1, 1, 15, 99, 1, 1, 'Disable parallel page supplier during DBCC CHECKDB'
+	UNION ALL 
+	SELECT 2451,1,1, 15, 99, 1, 1, 'SQL 2019+: Shows the last actual execution plan for queries in DMV'
+
+END
+
+/* SQL 2022+ additional trace flags */
+IF @SQLVersion >= 16
+BEGIN
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 3892, 1, 1, 16, 99, 1, 1, 'Columnstore snapshot read consistency'
+	UNION ALL
+	SELECT 13056, 1, 1, 16, 99, 1, 1, 'enable detailed memory grant feedback for index rebuilds'
+	UNION ALL
+	SELECT 1766, 1, 1 , 16, 99, 1, 1, 'enable large page allocations for batch mode'
+	UNION ALL
+	SELECT 9453, 1, 1, 16, 99, 1, 1, 'disable batch mode execution for serialized plans'
+END
+
+--good ideas?
+IF 'to keep note' IS NULL
+BEGIN
+	PRINT '7752 ,Enables asynchronous load of Query Store.'
+	PRINT '3605	Not a great idea, but still and idea. Sends a variety of types of information to the SQL Server error log instead of to the user console. Often referenced in KB and blog articles in the context of other trace flags. Used alongside 1204 and 1222 to send deadlock information to the error log.'
+	PRINT '3023	Not a great idea, but still and idea. SQL 2014+:Used to enable checksums for backups, if you can’t enable them through a 3rd party tool.'
+	PRINT '2468	Not a great idea, but still and idea. CPU scheduling – place threads within the same node.Function: “Find the next node that can service the DOP request. Unlike full mode, the global, resource manager keeps track of the last node used. Starting from the last position, and moving to the next node, SQL Server checks for query placement opportunities. If a node can’t support the request SQL Server continues advancing nodes and searching.'
+END
+
+
+
+
+/*DO DISABLE FOR BAD, or possibly bad, TRACEFLAGS. we are going with a template approach, your mileage may vary>>*/
+	IF OBJECT_ID('tempdb..#TemporaryDatabaseResults') IS NOT NULL
+			DROP TABLE #TemporaryDatabaseResults;
+	CREATE TABLE #TemporaryDatabaseResults
+				(
+				  DatabaseName NVARCHAR(128) ,
+				  Finding NVARCHAR(128)
+				);
+	EXEC dbo.sp_MSforeachdb 'USE [?]; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; IF EXISTS(SELECT * FROM sys.indexes WHERE type IN (5,6)) INSERT INTO #TemporaryDatabaseResults (DatabaseName, Finding) VALUES (DB_NAME(), ''Yup'') OPTION (RECOMPILE);';
+	IF EXISTS (SELECT * FROM #TemporaryDatabaseResults) 
+	BEGIN
+		INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+		SELECT 834, 0, 0, 0, 99, 1, 1, 'SQL 2005 era. Large page allocations for buffer pool (Enterprise, >32GB RAM only). When combined with columnstore idnexes it is not recommended by Microsoft'
+	END
+
+	IF @SQLVersion >= 9 AND @sqledition LIKE '%Enterprise%'
+	BEGIN
+		DECLARE @TotalRAMForTF BIGINT
+		SELECT @TotalRAMForTF = physical_memory_kb / 1024 FROM sys.dm_os_sys_info
+		IF @TotalRAMForTF > 32768  -- only apply on servers with > 32 GB RAM
+		BEGIN
+			INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+			SELECT 834, 0, 0, 0, 99, 1, 1, 'Large page allocations for buffer pool (Enterprise, >32GB RAM only)'
+			/* TF 834: Large page allocations for buffer pool.
+		   Reduces TLB miss overhead on servers with large RAM (>32 GB) by using
+		   Windows large page support. Enterprise Edition only -- can cause issues
+		   with Transparent Data Encryption and non-Enterprise SKUs. Guarded to
+		   Enterprise and large-memory servers only. */
+
+		   /*NOTE: Uses large page allocations for the buffer pool. Has been known to prevent SQL from starting up, or being very slow to start up.*/
+
+		END
+	END
+	INSERT INTO @TraceFlags (TF, enable, enable_on_startup, MinSQLVersion, MaxSQLVersion, ToImplement, WorthImplementing, TFDescription)
+	SELECT 1224, 1, 0, 0, 99, 1, 1, 'disables lock escalation until the server has memory pressure. This is usually a very bad idea'
+	UNION ALL
+	SELECT 652, 0, 0, 0, 99, 1, 1, 'Disables page pre-fetching in scans. Under most circumstances you want SQL to read pages that will be touched by a scan into memory as soon as possible.. This is usually a very bad idea.'
+	UNION ALL
+	SELECT 4136, 0, 0, 0, 99, 1, 1, 'This Trace Flag disables parameter sniffing, and should only be used in carefully chosen and monitored environments. If you’re on 2016+, you’re better off using the PARAMETER_SNIFFING Database Scoped Configuration.'
+	UNION ALL
+		SELECT 2330, 0, 0, 10, 12, 1, 1, 'Disables collection of index usage/missing index requests. Bad idea for 99.9% of people. Reduce CMEMTHREAD contention on index_usage_stats DMV (pre-SQL 2016). This is usually a very bad idea.'
+		/* TF 2330: Disable collection of sys.dm_db_index_usage_stats.
+	   On very busy servers with many databases the DMV update path creates
+	   CMEMTHREAD spinlock contention. Disable it when you are not actively
+	   using the DMV for index maintenance decisions. Pre-SQL 2016 only --
+	   SQL 2016+ uses a partitioned structure that largely eliminates this. */
+	UNION ALL
+	SELECT 4199, 0, 0, 13, 99, 1, 1, 'to control multiple query optimizer changes,enables non-default Query Optimizer fixes, changing query plans from the default behaviors.Considering it, but will set disable'
+	UNION ALL
+	SELECT 661, 0, 0, 0, 99, 1, 1, 'Disables the ghost record removal process. This is how deleted records are removed permanently.This is usually a very bad idea.'
+	UNION ALL
+	SELECT 845, 0, 0, 0, 99, 1, 1, 'Enables lock pages in memory if you’re on Standard Edition.'
+	UNION ALL
+	SELECT 1211, 0, 0, 0, 99, 1, 1, 'Disables lock escalation if there’s memory pressure on your system. Takes precedence over 1224 if both are enabled. disables lock escalation when you least expect it. This is usually a very bad idea.'
+	UNION ALL
+	SELECT 1806, 0, 0, 0, 99, 1, 1, 'Disables Instant File Initialization! Boo! Boo this man! Causing restores and file growths to take longer. This is usually a very bad idea.'
+	UNION ALL
+	SELECT 2312, 0, 0, 0, 99, 1, 1, 'This will make the optimizer use the 2014 cardinality estimator.'
+	UNION ALL
+	SELECT 2549, 0, 0, 0, 99, 1, 1, 'Sometimes used to help efficiency of DBCC CHECKDB for files on multiple disks. Won’t help otherwise.'
+	UNION ALL
+	SELECT 2562, 0, 0, 0, 99, 1, 1, 'Changes the behavior of DBCC CHECKDB to run in one batch. Don’t use this if tempdb is a problem area for you.'
+	UNION ALL
+	SELECT 2861, 0, 0, 0, 99, 1, 1, 'Keeps zero cost plans in cache. Often enabled by some monitoring products that want to monitor the impact of even lightweight queries.'
+	UNION ALL
+	SELECT 3042, 0, 0, 0, 99, 1, 1, 'Instead of preallocating space for compressed backups, SQL will expand incrementally. Can slow backups down.'
+	UNION ALL
+	SELECT 3505, 0, 0, 0, 99, 1, 1, 'Disables Checkpoints. Um, you want those. This is usually a very bad idea.'
+	UNION ALL
+	SELECT 3801, 0, 0, 0, 99, 1, 1, 'This gets the only* probably on the list. It prohibits running USE [database] statements. Probably helpful in Azure, but not anywhere else.'
+	UNION ALL
+	SELECT 4137, 0, 0, 0, 99, 1, 1, 'Changes how some cardinality estimates are calculated (think queries with lots of ANDs in them). It may help in some cases. See here for more details.'
+	UNION ALL
+	SELECT 4138, 0, 0, 0, 99, 1, 1, 'Disables all row goal optimizations. You probably want these. What’s life without goals? Basically college.'
+	UNION ALL
+	SELECT 7471, 0, 0, 0, 99, 1, 1, 'This causes deadlocks if you’re creating and updating statistics simultaneously. Only turn it on if you’re updating stats with multiple parallel jobs.'
+	UNION ALL
+	SELECT 8015, 0, 0, 0, 99, 1, 1, 'Someone thinks they’re a rocket scientist. This will make SQL ignore the NUMA setup of a server and manage the nodes as one.'
+	UNION ALL
+	SELECT 8649, 0, 0, 0, 99, 1, 1, 'This drops cost threshold for parallelism to 0. It’s used as a query hint ON DEV SERVERS to troubleshoot perf issues. It looks like someone may have enabled it globally. How are your CPUs doing? This is usually a very bad idea.'
+	UNION ALL
+	SELECT 9481, 0, 0, 0, 99, 1, 1, 'This will make the optimizer use the pre-2014 cardinality estimator.'
+
+
+/*<<DO DISABLE FOR BAD TRACEFLAGS*/
+
+
+
+
+
 
 -- Get all of the arguments / parameters when starting up the service.
 DECLARE @SQLArgs TABLE (
@@ -2339,31 +2418,54 @@ INSERT INTO @SQLArgs
 SELECT  @MaxValue = MAX(ArgNum) 
 FROM    @SQLArgs;
 --RAISERROR('MaxValue: %i', 10, 1, @MaxValue) WITH NOWAIT;
- 
--- Disable specified trace flags
-SELECT  @SQLCMD = 'DBCC TRACEOFF(' + 
-        STUFF((SELECT ',' + CONVERT(VARCHAR(15), TF)
-               FROM   @TraceFlags
-               WHERE  enable = 0
-               ORDER BY TF
-               FOR XML PATH(''), TYPE).value('.','varchar(max)')
-              ,1,1,'') + ', -1);'
 
-IF @DebugLevel = 0 
-EXECUTE (@SQLCMD);
-RAISERROR('Manual - Disable TFs Command: "%s"', 0, 1, @SQLCMD) WITH NOWAIT;
+DECLARE @CurrentTraces TABLE
+(
+	TraceFlag INT
+	,[Status] BIT
+	,[Global] BIT
+	,[Session] BIT
+)
+INSERT INTO @CurrentTraces
+EXEC('DBCC TRACESTATUS')
 
+IF EXISTS
+	(
+		SELECT 1 
+		FROM  @TraceFlags T
+		INNER JOIN @CurrentTraces TF ON T.TF = TF.TraceFlag
+		WHERE  
+		enable = 0 AND WorthImplementing = 1
+	)
+BEGIN
+RAISERROR('!! Manual - Disable these traceflags in startup', 0, 1, '') WITH NOWAIT;
+	-- Disable specified trace flags
+	SELECT  @SQLCMD = 'DBCC TRACEOFF(' + 
+			STUFF((SELECT ',' + CONVERT(VARCHAR(15), TF)
+				   FROM   @TraceFlags
+				   WHERE  enable = 0
+				   AND WorthImplementing = 1
+				   ORDER BY TF
+				   FOR XML PATH(''), TYPE).value('.','varchar(max)')
+				  ,1,1,'') + ', -1);'
 
+	IF @DebugLevel = 0 
+	EXECUTE (@SQLCMD);
+	RAISERROR('Manual - Disable TFs Command: "%s"', 0, 1, @SQLCMD) WITH NOWAIT;
+END
 
-
+--SELECT * FROM @TraceFlags
 -- Enable specified trace flags
 DECLARE @traceflagtodo NVARCHAR(20)
-WHILE EXISTS(SELECT 1 FROM @TraceFlags)
+WHILE EXISTS(SELECT 1 FROM @TraceFlags  
+	WHERE  enable = 1
+	AND WorthImplementing = 1)
 BEGIN
 	SELECT TOP 1 
 	@traceflagtodo  = TF 
 	FROM @TraceFlags
     WHERE  enable = 1
+	AND WorthImplementing = 1
     ORDER BY TF
 	SET @SQLCMD = 'DBCC TRACEON(' + @traceflagtodo + ', -1);'
     
@@ -2387,6 +2489,8 @@ WITH cte AS
             ROW_NUMBER() OVER (ORDER BY ISNULL(ArgNum, 999999999), TF) - 1 AS RN
     FROM    @SQLArgs arg
     FULL OUTER JOIN @TraceFlags tf ON arg.Data = tf.TF2
+	WHERE  enable = 1
+	AND WorthImplementing = 1
 ), cte2 AS
 (
     -- Use the row number to calc the SQLArg# for new TFs. 
@@ -2425,7 +2529,7 @@ IF @CurrentTF < (SELECT COUNT(*) FROM @TraceFlags)
 BEGIN
 	SET @CurrentTFWarn  = 'Current startup TF count is: ' + CONVERT(VARCHAR(5),@CurrentTF)
 	RAISERROR(@CurrentTFWarn, 0, 1) WITH NOWAIT;
-	SET @CurrentTFWarn  = 'Expected startup TF count is: ' + CONVERT(VARCHAR(5),(SELECT COUNT(*) FROM @TraceFlags))
+	SET @CurrentTFWarn  = 'Expected startup TF count is: ' + CONVERT(VARCHAR(5),(SELECT COUNT(*) FROM @TraceFlags WHERE  enable = 1 AND WorthImplementing = 1))
 	RAISERROR(@CurrentTFWarn, 0, 1) WITH NOWAIT;
 	RAISERROR('You will need to set some traceflags manually', 0, 1) WITH NOWAIT;
 END
@@ -2472,143 +2576,25 @@ END;
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
 
-IF EXISTS(
-SELECT * 
-FROM [msdb].[dbo].[sysoperators]
-WHERE name = N'Lexel DBA')
+IF EXISTS(SELECT * FROM [msdb].[dbo].[sysoperators] WHERE name = N'Lexel DBA')
 BEGIN TRY
-	EXEC msdb.dbo.sp_update_operator @name=N'Lexel DBA', 
-		@enabled=1, 
-		@pager_days=0, 
-		@email_address=N'alerts@sqldba.org', 
-		@pager_address=N''
-		/*Rename*/
-		EXEC msdb.dbo.sp_update_operator 
-		@name = 'Lexel DBA', 
-		@new_name = 'SQLDBA';
+	EXEC msdb.dbo.sp_update_operator
+		@name         = N'Lexel DBA',
+		@enabled      = 1,
+		@pager_days   = 0,
+		@email_address = N'alerts@sqldba.org',
+		@pager_address = N'';
+
+	EXEC msdb.dbo.sp_update_operator
+		@name     = N'Lexel DBA',
+		@new_name = N'SQLDBA';
 END TRY
 BEGIN CATCH
-	RAISERROR ( 'Problem with changing Lexel DBA Operator',0,1) WITH NOWAIT;
+	RAISERROR ('Problem updating Lexel DBA operator', 0, 1) WITH NOWAIT;
 END CATCH
 
 
 
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- Create sp_triage®_view and export to text
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-
-Use [master]
-IF OBJECT_ID('dbo.[sqldba_sp_triage®_view]') IS NULL
-  EXEC ('CREATE PROCEDURE dbo.[sqldba_sp_triage®_view] AS RETURN 0;');
-GO
-ALTER PROCEDURE [dbo].[sqldba_sp_triage®_view]
-AS
-SELECT TOP (100) PERCENT 
-ID, evaldate, domain, SQLInstance, SectionID, Section, Summary, Severity, Details, HoursToResolveWithTesting, QueryPlan
-
-FROM 
- (SELECT         CONVERT(NVARCHAR(25), T1.ID) AS ID, REPLACE(T1.evaldate, '~', '-') AS evaldate, REPLACE(T1.domain, '~', '-') AS domain, REPLACE(T1.SQLInstance, '~', '-') 
-AS SQLInstance, REPLACE(CONVERT(NVARCHAR(10), T1.SectionID), '~', '-') AS SectionID, REPLACE(T1.Section, '~', '-') AS Section, REPLACE(T1.Summary, '~', '-') AS Summary, 
- REPLACE(T1.Severity, '~', '-') AS Severity, REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(REPLACE(T1.Details, '~', '-'), N''), CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '), ' ', ' ') AS Details, 
- REPLACE(CONVERT(NVARCHAR(10), T1.HoursToResolveWithTesting), '~', '-') AS HoursToResolveWithTesting, REPLACE(T1.QueryPlan, '~', '-') AS QueryPlan, T1.ID AS Sorter
-FROM            dbo.[sqldba_sp_triage®_output] AS T1 INNER JOIN
-(SELECT        MAX(evaldate) AS evaldate
-FROM            dbo.[sqldba_sp_triage®_output]) AS T2 ON T1.evaldate = T2.evaldate) AS T3
-ORDER BY Sorter ASC
-GO
-Use [master]
-IF OBJECT_ID('dbo.[sp_triage®_to_text]') IS NULL
-  EXEC ('CREATE PROCEDURE dbo.[sp_triage®_to_text] AS RETURN 0;');
-GO
-ALTER PROCEDURE [dbo].[sp_triage®_to_text]
-AS
-BEGIN
-	DECLARE @StateOfXP_CMDSHELL INT
-	SELECT @StateOfXP_CMDSHELL = CONVERT(INT, ISNULL(value, value_in_use)) 
-	FROM  sys.configurations
-	WHERE  name = 'xp_cmdshell' ;
-
-	IF @StateOfXP_CMDSHELL = 0 
-	BEGIN
-		-- To allow advanced options to be changed.
-		EXEC sp_configure 'show advanced options', 1
-		-- To update the currently configured value for advanced options.
-		RECONFIGURE
-		-- To enable the feature.
-		EXEC sp_configure 'xp_cmdshell', 1
-		-- To update the currently configured value for this feature.
-		RECONFIGURE
-	END	
-	DECLARE @Es NVARCHAR(500)
-	DECLARE @M_R NVARCHAR(500) 
-	DECLARE @MaxDate DATETIME
-	SELECT @MaxDate = MAX(evaldate) FROM [master].[dbo].[sqldba_sp_triage®_output]
-	DECLARE @evaldate NVARCHAR(25)
-	DECLARE @TD NVARCHAR(50)
-	DECLARE @T_S NVARCHAR(50)
-	DECLARE @Ctt CHAR(1)
-	SET @Ctt = '\'
-	SELECT @evaldate = evaldate, @TD = domain , @T_S = SQLInstance 
-	FROM [master].[dbo].[sqldba_sp_triage®_output]
-	WHERE evaldate = @MaxDate
-	DECLARE @EmailBody NVARCHAR(500) 
-	DECLARE @qrs NVARCHAR(50)
-	DECLARE @S_Ex NVARCHAR(4000)
-	DECLARE @EmailProfile NVARCHAR(500)
-	DECLARE @A_F NVARCHAR(500)
-	SET @qrs = '~';--char(9);
-	SET @M_R ='scriptoutput@sqldba.org'
-	SET @Es = 'Sqldba_sqlmagic_data for ' +@TD + ' '+@T_S + '' + REPLACE(REPLACE(REPLACE(@evaldate,'-','_'),':',''),' ','');
-	SET @A_F = 'sqldba_sqlmagic_data__' +REPLACE(@TD,'.','_') + '_'+ REPLACE(@T_S,@Ctt,'_') + '_' + REPLACE(REPLACE(REPLACE(@evaldate,'-','_'),':',''),' ','') +'.csv' 
-	DECLARE @xpSQL NVARCHAR(4000)
-	DECLARE @bu NVARCHAR(400)
-	DECLARE @SQLB TABLE (v1 NVARCHAR(50), d1 NVARCHAR(500))
-	INSERT @SQLB
-	EXECUTE [master].dbo.xp_instance_regread N'HKEY_LOCAL_MACHINE', N'SOFTWARE\Microsoft\MSSQLServer\MSSQLServer', N'BackupDirectory'
-	SELECT @bu = d1 FROM @SQLB
-
-	DECLARE @pstext NVARCHAR(4000)
-	SET @pstext =''
-	SET @pstext = @pstext + '$sqlConString = "Server = ' + @T_S +'; Database = master; Integrated Security = True;";' ;
-	SET @pstext = @pstext + '$outfile = "' + @bu+'\' + @A_F + '";' ;
-	SET @pstext = @pstext + '$SqlQueryM3 = "[dbo].[sqldba_sp_triage®_view];"  ;' ;
-	SET @pstext = @pstext + '$SqlConnectionM3 = New-Object System.Data.SqlClient.SqlConnection  ;' ;
-	SET @pstext = @pstext + '$SqlConnectionM3.ConnectionString = $sqlConString;' ;
-	SET @pstext = @pstext + '$SqlCmdM3 = New-Object System.Data.SqlClient.SqlCommand  ;' ;
-	SET @pstext = @pstext + '$SqlCmdM3.CommandText = $SqlQueryM3  ;' ;
-	SET @pstext = @pstext + '$SqlCmdM3.Connection = $SqlConnectionM3  ;' ;
-	SET @pstext = @pstext + '$SqlAdapterM3 = New-Object System.Data.SqlClient.SqlDataAdapter  ;' ;
-	SET @pstext = @pstext + '$SqlAdapterM3.SelectCommand = $SqlCmdM3   ;' ;
-	SET @pstext = @pstext + '$DataSetM3 = New-Object System.Data.DataSet  ;' ;
-	SET @pstext = @pstext + '$SqlAdapterM3.SelectCommand.CommandTimeout = 1200;' ;
-	SET @pstext = @pstext + '$SqlAdapterM3.Fill($DataSetM3) | Out-null ;' ;
-	SET @pstext = @pstext + '$DataSetM3.Tables[0] | export-csv -Delimiter "~" -Path "$outfile" -NoTypeInformation -Encoding UTF8;' ;
-	SET @pstext = @pstext + '$SqlConnectionM3.Close();' ;
-		
-	SET @pstext = REPLACE(REPLACE(@pstext,'"','"""'),';;',';')
-	SET @pstext = 'powershell.exe -ExecutionPolicy Bypass -NoLogo -NonInteractive -NoProfile -Command "' + @pstext + '" '
-
-	EXEC xp_cmdshell @pstext
-	IF @StateOfXP_CMDSHELL = 0 /*It was originally disabled, then disable it*/
-BEGIN
-	-- To allow advanced options to be changed.
-	EXEC sp_configure 'show advanced options', 1
-	-- To update the currently configured value for advanced options.
-	RECONFIGURE
-	-- To enable the feature.
-	EXEC sp_configure 'xp_cmdshell', 0
-	-- To update the currently configured value for this feature.
-	RECONFIGURE
-END
-
-END
-GO
 
 
 
@@ -2623,7 +2609,7 @@ GO
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
 
-DECLARE @the_job_Id BINARY(16)
+--DECLARE @the_job_Id BINARY(16)
 DECLARE @jobs TABLE (id INT IDENTITY(1,1), job_id BINARY(16), [name]  NVARCHAR(500))
 INSERT @jobs
 SELECT
@@ -2664,20 +2650,8 @@ END
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
 
--- Check for orphaned users (Brent Ozar's sp_Blitz)
-DECLARE @OrphanedUsers TABLE (UserName NVARCHAR(128), UserSID NVARCHAR(128))
-INSERT INTO @OrphanedUsers
-EXEC sp_change_users_login 'Report'
-
-IF EXISTS (SELECT 1 FROM @OrphanedUsers)
-BEGIN
-    RAISERROR('WARNING: Found orphaned users in user databases', 10, 1) WITH NOWAIT;
-    DECLARE @OrphanMsg NVARCHAR(500)
-    SELECT @OrphanMsg = '      ' + UserName + ' (SID: ' + UserSID + ')'
-    FROM @OrphanedUsers
-    RAISERROR(@OrphanMsg, 10, 1) WITH NOWAIT;
-    RAISERROR('      Run: ALTER USER [username] WITH LOGIN = [username] to fix', 10, 1) WITH NOWAIT;
-END
+-- Note: orphaned user check is performed in Section 9.5 using sys.database_principals
+--       (sp_change_users_login is deprecated; removed from this section)
 
 -- Check for SQL Server sysadmin role members
 DECLARE @SysAdmins TABLE (Name NVARCHAR(128), ID INT)
@@ -2690,6 +2664,7 @@ INNER JOIN sys.server_principals rp ON rm2.role_principal_id = rp.principal_id
 WHERE rp.name = 'sysadmin'
 
 RAISERROR('INFO: Current sysadmin role members:', 10, 1) WITH NOWAIT;
+DECLARE @OrphanMsg NVARCHAR(250)
 SELECT @OrphanMsg = '      ' + Name FROM @SysAdmins
 RAISERROR(@OrphanMsg, 10, 1) WITH NOWAIT;
 
@@ -2733,9 +2708,8 @@ END
    CREATE/ALTER/ADD keyword-phrases in a string literal and does not false-positive. 
    https://tracyboggiano.com/archive/2022/04/sql-audit-stig/
    */
-DECLARE @ifaudit BIT
-SET @ifaudit = 0
-IF @ifaudit = 1
+-- @EnableAudit is set in the configuration block at the top
+IF @EnableAudit = 1
 BEGIN
 	DECLARE @AuditVer INT
 	DECLARE @AuditSQL NVARCHAR(MAX)
@@ -2765,13 +2739,14 @@ BEGIN
 	
 
 
-			 RAISERROR ('Notice: Cannot see SQL Audis, might be missing some items.', 0, 1) WITH NOWAIT
+			 RAISERROR ('Notice: Cannot see all SQL Audit actions, some items may be missing.', 0, 1) WITH NOWAIT
 		END
 
-	SELECT name AS 'Audit Name', 
-	status_desc AS 'Audit Status', 
-	audit_file_path AS 'Current Audit File' 
-	FROM sys.dm_server_audit_status 
+		-- Show current audit status
+		SELECT name AS 'Audit Name',
+		       status_desc AS 'Audit Status',
+		       audit_file_path AS 'Current Audit File'
+		FROM sys.dm_server_audit_status;
 
 		/* 1. Server Audit -> Windows Application event log */
 		IF NOT EXISTS (SELECT 1 FROM sys.server_audits WHERE name = N'SQLDBA_SecurityAudit')
@@ -3049,6 +3024,163 @@ ELSE
     RAISERROR ('      INFO: Guest user has no unexpected permissions', 10, 1) WITH NOWAIT;
 
 
+
+
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Create sp_triage®_view and export to text
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+
+Use [master]
+IF OBJECT_ID('dbo.[sqldba_sp_triage®_view]') IS NULL
+  EXEC ('CREATE PROCEDURE dbo.[sqldba_sp_triage®_view] AS RETURN 0;');
+GO
+ALTER PROCEDURE [dbo].[sqldba_sp_triage®_view]
+AS
+SELECT TOP (100) PERCENT 
+ID, evaldate, domain, SQLInstance, SectionID, Section, Summary, Severity, Details, HoursToResolveWithTesting, QueryPlan
+
+FROM 
+ (SELECT         CONVERT(NVARCHAR(25), T1.ID) AS ID, REPLACE(T1.evaldate, '~', '-') AS evaldate, REPLACE(T1.domain, '~', '-') AS domain, REPLACE(T1.SQLInstance, '~', '-') 
+AS SQLInstance, REPLACE(CONVERT(NVARCHAR(10), T1.SectionID), '~', '-') AS SectionID, REPLACE(T1.Section, '~', '-') AS Section, REPLACE(T1.Summary, '~', '-') AS Summary, 
+ REPLACE(T1.Severity, '~', '-') AS Severity, REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(REPLACE(T1.Details, '~', '-'), N''), CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '), ' ', ' ') AS Details, 
+ REPLACE(CONVERT(NVARCHAR(10), T1.HoursToResolveWithTesting), '~', '-') AS HoursToResolveWithTesting, REPLACE(T1.QueryPlan, '~', '-') AS QueryPlan, T1.ID AS Sorter
+FROM            dbo.[sqldba_sp_triage®_output] AS T1 INNER JOIN
+(SELECT        MAX(evaldate) AS evaldate
+FROM            dbo.[sqldba_sp_triage®_output]) AS T2 ON T1.evaldate = T2.evaldate) AS T3
+ORDER BY Sorter ASC
+GO
+Use [master]
+IF OBJECT_ID('dbo.[sp_triage®_to_text]') IS NULL
+  EXEC ('CREATE PROCEDURE dbo.[sp_triage®_to_text] AS RETURN 0;');
+GO
+ALTER PROCEDURE [dbo].[sp_triage®_to_text]
+AS
+BEGIN
+	DECLARE @StateOfXP_CMDSHELL INT
+	SELECT @StateOfXP_CMDSHELL = CONVERT(INT, ISNULL(value, value_in_use)) 
+	FROM  sys.configurations
+	WHERE  name = 'xp_cmdshell' ;
+
+	IF @StateOfXP_CMDSHELL = 0 
+	BEGIN
+		-- To allow advanced options to be changed.
+		EXEC sp_configure 'show advanced options', 1
+		-- To update the currently configured value for advanced options.
+		RECONFIGURE
+		-- To enable the feature.
+		EXEC sp_configure 'xp_cmdshell', 1
+		-- To update the currently configured value for this feature.
+		RECONFIGURE
+	END	
+	DECLARE @Es NVARCHAR(500)
+	DECLARE @M_R NVARCHAR(500) 
+	DECLARE @MaxDate DATETIME
+	SELECT @MaxDate = MAX(evaldate) FROM [master].[dbo].[sqldba_sp_triage®_output]
+	DECLARE @evaldate NVARCHAR(25)
+	DECLARE @TD NVARCHAR(50)
+	DECLARE @T_S NVARCHAR(50)
+	DECLARE @Ctt CHAR(1)
+	SET @Ctt = '\'
+	SELECT @evaldate = evaldate, @TD = domain , @T_S = SQLInstance 
+	FROM [master].[dbo].[sqldba_sp_triage®_output]
+	WHERE evaldate = @MaxDate
+	DECLARE @EmailBody NVARCHAR(500) 
+	DECLARE @qrs NVARCHAR(50)
+	DECLARE @S_Ex NVARCHAR(4000)
+	DECLARE @EmailProfile NVARCHAR(500)
+	DECLARE @A_F NVARCHAR(500)
+	SET @qrs = '~';--char(9);
+	SET @M_R ='scriptoutput@sqldba.org'
+	SET @Es = 'Sqldba_sqlmagic_data for ' +@TD + ' '+@T_S + '' + REPLACE(REPLACE(REPLACE(@evaldate,'-','_'),':',''),' ','');
+	SET @A_F = 'sqldba_sqlmagic_data__' +REPLACE(@TD,'.','_') + '_'+ REPLACE(@T_S,@Ctt,'_') + '_' + REPLACE(REPLACE(REPLACE(@evaldate,'-','_'),':',''),' ','') +'.csv' 
+	DECLARE @xpSQL NVARCHAR(4000)
+	DECLARE @bu NVARCHAR(400)
+	DECLARE @SQLB TABLE (v1 NVARCHAR(50), d1 NVARCHAR(500))
+	INSERT @SQLB
+	EXECUTE [master].dbo.xp_instance_regread N'HKEY_LOCAL_MACHINE', N'SOFTWARE\Microsoft\MSSQLServer\MSSQLServer', N'BackupDirectory'
+	SELECT @bu = d1 FROM @SQLB
+
+	DECLARE @pstext NVARCHAR(4000)
+	SET @pstext =''
+	SET @pstext = @pstext + '$sqlConString = "Server = ' + @T_S +'; Database = master; Integrated Security = True;";' ;
+	SET @pstext = @pstext + '$outfile = "' + @bu+'\' + @A_F + '";' ;
+	SET @pstext = @pstext + '$SqlQueryM3 = "[dbo].[sqldba_sp_triage®_view];"  ;' ;
+	SET @pstext = @pstext + '$SqlConnectionM3 = New-Object System.Data.SqlClient.SqlConnection  ;' ;
+	SET @pstext = @pstext + '$SqlConnectionM3.ConnectionString = $sqlConString;' ;
+	SET @pstext = @pstext + '$SqlCmdM3 = New-Object System.Data.SqlClient.SqlCommand  ;' ;
+	SET @pstext = @pstext + '$SqlCmdM3.CommandText = $SqlQueryM3  ;' ;
+	SET @pstext = @pstext + '$SqlCmdM3.Connection = $SqlConnectionM3  ;' ;
+	SET @pstext = @pstext + '$SqlAdapterM3 = New-Object System.Data.SqlClient.SqlDataAdapter  ;' ;
+	SET @pstext = @pstext + '$SqlAdapterM3.SelectCommand = $SqlCmdM3   ;' ;
+	SET @pstext = @pstext + '$DataSetM3 = New-Object System.Data.DataSet  ;' ;
+	SET @pstext = @pstext + '$SqlAdapterM3.SelectCommand.CommandTimeout = 1200;' ;
+	SET @pstext = @pstext + '$SqlAdapterM3.Fill($DataSetM3) | Out-null ;' ;
+	SET @pstext = @pstext + '$DataSetM3.Tables[0] | export-csv -Delimiter "~" -Path "$outfile" -NoTypeInformation -Encoding UTF8;' ;
+	SET @pstext = @pstext + '$SqlConnectionM3.Close();' ;
+		
+	SET @pstext = REPLACE(REPLACE(@pstext,'"','"""'),';;',';')
+	SET @pstext = 'powershell.exe -ExecutionPolicy Bypass -NoLogo -NonInteractive -NoProfile -Command "' + @pstext + '" '
+
+	EXEC xp_cmdshell @pstext
+	IF @StateOfXP_CMDSHELL = 0 /*It was originally disabled, then disable it*/
+BEGIN
+	-- To allow advanced options to be changed.
+	EXEC sp_configure 'show advanced options', 1
+	-- To update the currently configured value for advanced options.
+	RECONFIGURE
+	-- To enable the feature.
+	EXEC sp_configure 'xp_cmdshell', 0
+	-- To update the currently configured value for this feature.
+	RECONFIGURE
+END
+
+END
+GO
+
+
 USE [master]
 GO
-RAISERROR ('Congratulations you awesome DBA you! Now go herd some more cats'  ,0,1) WITH NOWAIT;
+RAISERROR ('Congratulations you awesome DBA you! Now go herd some more cats', 0, 1) WITH NOWAIT;
+
+
+/*
+================================================================================
+  REFERENCE NOTES — sp_Blitz trace flag descriptions (Brent Ozar ULT)
+  Source: https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit
+  These are informational only and have no effect on script execution.
+================================================================================
+
+  652  — disables pre-fetching during index scans. Usually a very bad idea.
+  661  — disables ghost record removal, causing the database to grow. Usually a very bad idea.
+  834  — with columnstore indexes: not recommended by Microsoft.
+  1117 — grows all files in a filegroup at the same time (built-in SQL 2016+).
+  1118 — tries to reduce SGAM waits (built-in SQL 2016+).
+  1204 — captures deadlock graphs in the error log.
+  1211 — disables lock escalation unconditionally. Usually a very bad idea.
+  1222 — captures deadlock graphs in the error log (more detail than 1204).
+  1224 — disables lock escalation until memory pressure. Usually a very bad idea.
+  1806 — disables Instant File Initialization. Usually a very bad idea.
+  2330 — disables missing index requests. Usually a very bad idea.
+  2371 — changes auto update stats threshold (built-in SQL 2016+).
+  3023 — performs checksums by default on database backups.
+  3226 — suppresses successful backup entries from the event log.
+  3505 — disables Checkpoints. Usually a very bad idea.
+  4199 — enables non-default Query Optimizer fixes, may change plans.
+  7745 — makes shutdowns/failovers quicker by not waiting for Query Store flush.
+         Loses non-flushed Query Store data. Only useful if Query Store is in use.
+  7752 — stops queries waiting on Query Store load after database recovery.
+  8017 — disables schedulers for all logical processors (default on Express Edition).
+  8048 — tries to reduce CMEMTHREAD waits on high-core-count servers.
+  8649 — sets cost threshold for parallelism to 0. Usually a very bad idea.
+  1488 — enables Replication to continue when the secondary node is down.
+
+================================================================================
+*/

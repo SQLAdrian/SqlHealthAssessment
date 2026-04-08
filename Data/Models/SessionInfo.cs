@@ -45,5 +45,11 @@ namespace SqlHealthAssessment.Data.Models
 
         /// <summary>Activity score used for bubble sizing (higher = bigger).</summary>
         public double ActivityScore => CpuTime + LogicalReads + (Writes * 2);
+
+        /// <summary>Memory usage in KB from sys.dm_exec_sessions.memory_usage.</summary>
+        public long MemoryUsageKB { get; set; }
+
+        /// <summary>Row count from sys.dm_exec_requests when active.</summary>
+        public long? RowCount { get; set; }
     }
 }

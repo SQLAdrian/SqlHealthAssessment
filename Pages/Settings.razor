@@ -495,6 +495,25 @@
         </p>
     </div>
 
+    <!-- Preview Features -->
+    <div class="settings-group">
+        <h3>Preview Features</h3>
+        <div class="settings-row">
+            <label class="settings-label">
+                Show Maturity Roadmap
+                <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(requires No-Pants + Experimental)</span>
+            </label>
+            <input type="checkbox" @bind="_showMaturityRoadmap" @bind:after="SavePreviewSettings"
+                   disabled="@(!_noPantsModeActive || !_experimentalModeActive)" />
+        </div>
+        @if (!_noPantsModeActive || !_experimentalModeActive)
+        {
+            <p style="color:var(--text-muted);font-size:12px;margin-top:4px;">
+                Enable both <strong>No-Pants Mode</strong> and <strong>Experimental Mode</strong> in the sidebar first.
+            </p>
+        }
+    </div>
+
 </div>
 
 @* ── SQLDBA.ORG Consent Modal ── *@
@@ -680,6 +699,11 @@
     // Notifications
     private bool _showReleaseNotesOnUpdate;
 
+    // Preview features
+    private bool _showMaturityRoadmap;
+    private bool _noPantsModeActive;
+    private bool _experimentalModeActive;
+
     protected override void OnInitialized()
     {
         // Load configuration
@@ -727,6 +751,11 @@
 
         // Load notification settings
         _showReleaseNotesOnUpdate = s.ShowReleaseNotesOnUpdate;
+
+        // Load preview feature settings
+        _showMaturityRoadmap = s.ShowMaturityRoadmap;
+        _noPantsModeActive   = s.NoPantsMode;
+        _experimentalModeActive = s.ExperimentalMode;
     }
 
     private void OnZoomLevelChanged(ChangeEventArgs e)
@@ -970,6 +999,11 @@
     private void SaveNotificationSettings()
     {
         UserSettings.SetShowReleaseNotesOnUpdate(_showReleaseNotesOnUpdate);
+    }
+
+    private void SavePreviewSettings()
+    {
+        UserSettings.SetShowMaturityRoadmap(_showMaturityRoadmap);
     }
 
     private void ValidateConfig()

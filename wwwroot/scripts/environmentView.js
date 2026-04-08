@@ -69,10 +69,10 @@ window.environmentView = (function () {
 
     // ── Force simulation ─────────────────────────────────────────────────
     function createSimulation(nodes, edges, W, H) {
-        var REPEL  = 18000;
-        var SPRING = 0.04;
-        var DAMP   = 0.82;
-        var GRAV   = 0.012;
+        var REPEL  = 9000;
+        var SPRING = 0.035;
+        var DAMP   = 0.72;
+        var GRAV   = 0.018;
 
         // Target rest lengths
         function restLen(a, b) {
@@ -88,7 +88,7 @@ window.environmentView = (function () {
                 nodes[i].fx = 0; nodes[i].fy = 0;
             }
 
-            // Repulsion between all pairs
+            // Repulsion between all pairs (only push non-pinned nodes)
             for (var i = 0; i < n; i++) {
                 for (var j = i + 1; j < n; j++) {
                     var ni = nodes[i], nj = nodes[j];
@@ -96,12 +96,12 @@ window.environmentView = (function () {
                     var d2 = dx*dx + dy*dy + 1;
                     var f  = REPEL / d2;
                     var ux = dx / Math.sqrt(d2), uy = dy / Math.sqrt(d2);
-                    ni.fx += f * ux; ni.fy += f * uy;
-                    nj.fx -= f * ux; nj.fy -= f * uy;
+                    if (!ni.pinned) { ni.fx += f * ux; ni.fy += f * uy; }
+                    if (!nj.pinned) { nj.fx -= f * ux; nj.fy -= f * uy; }
                 }
             }
 
-            // Spring forces along edges
+            // Spring forces along edges (only pull non-pinned nodes)
             for (var k = 0; k < edges.length; k++) {
                 var e = edges[k];
                 var a = e.source, b = e.target;
@@ -110,8 +110,8 @@ window.environmentView = (function () {
                 var rl = restLen(a, b);
                 var f = SPRING * (d - rl);
                 var ux = dx/d, uy = dy/d;
-                a.fx += f * ux; a.fy += f * uy;
-                b.fx -= f * ux; b.fy -= f * uy;
+                if (!a.pinned) { a.fx += f * ux; a.fy += f * uy; }
+                if (!b.pinned) { b.fx -= f * ux; b.fy -= f * uy; }
             }
 
             // Gravity toward center
@@ -219,6 +219,16 @@ window.environmentView = (function () {
             ctx.fillStyle = C.errText;
             ctx.fillText('error', x, y + 22);
         }
+    }
+
+    function drawPinDot(ctx, nd) {
+        // Small dot in top-right corner to indicate node is manually pinned
+        var px = nd.type === 'server' ? nd.x + RAD_SERVER * 0.65 : nd.x + HOST_W/2 - 5;
+        var py = nd.type === 'server' ? nd.y - RAD_SERVER * 0.65 : nd.y - HOST_H/2 + 5;
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(245,158,11,0.85)';
+        ctx.fill();
     }
 
     function drawHostNode(ctx, nd, hover, active) {
@@ -370,13 +380,15 @@ window.environmentView = (function () {
         var tb = document.createElement('div');
         tb.className = 'env-fd-toolbar';
         tb.innerHTML =
-            '<button data-action="zoomin"  title="Zoom in">+</button>' +
-            '<button data-action="zoomout" title="Zoom out">−</button>' +
-            '<button data-action="fit"     title="Fit to screen">⤢</button>' +
+            '<button data-action="zoomin"   title="Zoom in">+</button>' +
+            '<button data-action="zoomout"  title="Zoom out">−</button>' +
+            '<button data-action="fit"      title="Fit to screen">⤢</button>' +
+            '<button data-action="relayout" title="Re-run layout (unpins all nodes)" style="font-size:11px;padding:2px 8px;">↺ Re-layout</button>' +
             '<span class="env-fd-legend">' +
                 '<span class="env-fd-leg-dot" style="background:#10b981"></span>SQL Server ' +
                 '<span class="env-fd-leg-dot" style="background:#6366f1;margin-left:8px"></span>Host ' +
-                '<span class="env-fd-leg-dash" style="border-color:#f59e0b;margin-left:8px"></span>Cross-server link' +
+                '<span class="env-fd-leg-dash" style="border-color:#f59e0b;margin-left:8px"></span>Cross-server link ' +
+                '<span style="color:#64748b;font-size:10px;margin-left:10px;">Drag to pin · Dbl-click node to unpin · Dbl-click canvas to fit</span>' +
             '</span>';
         vp.appendChild(tb);
 
@@ -496,6 +508,7 @@ window.environmentView = (function () {
                 } else {
                     drawHostNode(ctx, nd, nd === _hover, nd === _active);
                 }
+                if (nd.pinned) drawPinDot(ctx, nd);
             });
 
             ctx.restore();
@@ -577,8 +590,9 @@ window.environmentView = (function () {
                 _nodeDrag = hit;
                 _ndOffX   = hit.x - w.x;
                 _ndOffY   = hit.y - w.y;
-                hit.pinned = true;
-                _steps = 0; // re-enable sim
+                hit.pinned = true;  // pin immediately; stays pinned after drop
+                hit.vx = 0; hit.vy = 0;
+                // do NOT restart simulation — only dragged node moves
             } else {
                 _drag = true; _lx = e.clientX; _ly = e.clientY;
                 cvs.style.cursor = 'grabbing';
@@ -588,7 +602,11 @@ window.environmentView = (function () {
 
         function onMouseUp() {
             var wasDraggingNode = _nodeDrag;
-            if (_nodeDrag) { _nodeDrag.pinned = false; _nodeDrag = null; }
+            if (_nodeDrag) {
+                // Keep node pinned where user dropped it; zero velocity
+                _nodeDrag.vx = 0; _nodeDrag.vy = 0;
+                _nodeDrag = null;
+            }
             if (_drag) { _drag = false; cvs.style.cursor = _hover ? 'pointer' : 'grab'; }
             return wasDraggingNode;
         }
@@ -616,7 +634,18 @@ window.environmentView = (function () {
             }
         });
 
-        cvs.addEventListener('dblclick', fit);
+        cvs.addEventListener('dblclick', function(e) {
+            var p = canvasXY(e); var w = toWorld(p.cx, p.cy);
+            var hit = hitNode(nodes, w.x, w.y);
+            if (hit) {
+                // Unpin this node — release it back to simulation
+                hit.pinned = false;
+                hit.vx = 0; hit.vy = 0;
+                if (_steps >= MAX_SIM_STEPS) _steps = Math.max(0, MAX_SIM_STEPS - 120);
+            } else {
+                fit();
+            }
+        });
 
         cvs.addEventListener('wheel', function(e) {
             e.preventDefault();
@@ -632,9 +661,14 @@ window.environmentView = (function () {
             var btn = e.target.closest('[data-action]');
             if (!btn) return;
             var f = btn.dataset.action;
-            if      (f==='zoomin')  { _scale = Math.min(5, _scale*1.25); }
-            else if (f==='zoomout') { _scale = Math.max(0.1, _scale/1.25); }
-            else if (f==='fit')     fit();
+            if      (f==='zoomin')   { _scale = Math.min(5, _scale*1.25); }
+            else if (f==='zoomout')  { _scale = Math.max(0.1, _scale/1.25); }
+            else if (f==='fit')      fit();
+            else if (f==='relayout') {
+                // Unpin all nodes, reset velocities, restart simulation
+                nodes.forEach(function(nd) { nd.pinned = false; nd.vx = 0; nd.vy = 0; nd.fx = 0; nd.fy = 0; });
+                _steps = 0;
+            }
         });
 
         // ── ResizeObserver ───────────────────────────────────────────────

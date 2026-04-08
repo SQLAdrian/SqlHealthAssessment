@@ -313,9 +313,6 @@ namespace SqlHealthAssessment
             Log.Information("Application exiting...");
             Log.CloseAndFlush();
             base.OnExit(e);
-
-            // Force-kill lingering threads (Kestrel, timers) that prevent clean exit
-            Environment.Exit(0);
         }
 
         /// <summary>

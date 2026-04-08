@@ -309,7 +309,8 @@ namespace SqlHealthAssessment.Data
             }
 
             // Fire per-check diagnostic event
-            try { OnCheckCompleted?.Invoke(result); } catch { /* don't let subscriber errors break execution */ }
+            try { OnCheckCompleted?.Invoke(result); }
+            catch (Exception ex) { _logger.LogWarning(ex, "OnCheckCompleted subscriber threw for check {CheckId}", result.CheckId); }
 
             return result;
         }

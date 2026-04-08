@@ -20,31 +20,50 @@ namespace SqlHealthAssessment.Data
     {
         private readonly IDbConnectionFactory _connectionFactory;
 
-        private const string LiveSessionsQuery = @"
-            SELECT TOP (@TopCount)
-                s.session_id AS SPID,
-                s.login_name AS LoginName,
-                ISNULL(s.host_name, '') AS HostName,
-                ISNULL(DB_NAME(s.database_id), '') AS DatabaseName,
-                s.status AS SessionStatus,
-                s.cpu_time AS CpuTime,
-                s.reads AS LogicalReads,
-                s.writes AS Writes,
-                s.open_transaction_count AS OpenTransactionCount,
-                r.status AS RequestStatus,
-                r.command AS Command,
-                r.wait_type AS WaitType,
-                ISNULL(r.wait_time, 0) AS WaitTime,
-                ISNULL(r.blocking_session_id, 0) AS BlockingSessionId,
-                ISNULL(r.total_elapsed_time, 0) AS TotalElapsedTime,
-                ISNULL(s.program_name, '') AS ProgramName,
-                t.text AS QueryText
-            FROM sys.dm_exec_sessions s WITH (NOLOCK)
-            LEFT JOIN sys.dm_exec_requests r WITH (NOLOCK)
-                ON s.session_id = r.session_id
-            OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
-            WHERE s.is_user_process = 1
-            ORDER BY s.cpu_time + s.reads DESC";
+        private string BuildLiveSessionsQuery(int topCount, bool hideSleeping, bool onlyBlocked, bool hideLowIO, string searchText = "")
+        {
+            var conditions = new List<string> { "s.is_user_process = 1" };
+
+            if (hideSleeping)
+                conditions.Add("s.status <> 'sleeping'");
+
+            if (onlyBlocked)
+                conditions.Add("(r.blocking_session_id > 0 OR EXISTS (SELECT 1 FROM sys.dm_exec_requests br WITH (NOLOCK) WHERE br.blocking_session_id = s.session_id))");
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+                conditions.Add("(s.login_name LIKE '%' + @SearchText + '%' OR s.host_name LIKE '%' + @SearchText + '%' OR s.program_name LIKE '%' + @SearchText + '%' OR DB_NAME(s.database_id) LIKE '%' + @SearchText + '%')");
+
+            var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : "";
+
+            // ENHANCEMENT: Added memory_usage and row_count (aliased without brackets to avoid parser confusion)
+            return $@"
+SELECT TOP ({topCount})
+    s.session_id AS SPID,
+    s.login_name AS LoginName,
+    ISNULL(s.host_name, '') AS HostName,
+    ISNULL(DB_NAME(s.database_id), '') AS DatabaseName,
+    s.status AS SessionStatus,
+    s.cpu_time AS CpuTime,
+    s.reads AS LogicalReads,
+    s.writes AS Writes,
+    s.open_transaction_count AS OpenTransactionCount,
+    r.status AS RequestStatus,
+    r.command AS Command,
+    r.wait_type AS WaitType,
+    ISNULL(r.wait_time, 0) AS WaitTime,
+    ISNULL(r.blocking_session_id, 0) AS BlockingSessionId,
+    ISNULL(r.total_elapsed_time, 0) AS TotalElapsedTime,
+    ISNULL(s.program_name, '') AS ProgramName,
+    t.text AS QueryText,
+    s.memory_usage AS MemoryUsageKB,
+    ISNULL(r.row_count, 0) AS [RowCount]
+FROM sys.dm_exec_sessions s WITH (NOLOCK)
+LEFT JOIN sys.dm_exec_requests r WITH (NOLOCK)
+    ON s.session_id = r.session_id
+OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
+{whereClause}
+ORDER BY s.cpu_time + s.reads DESC";
+        }
 
         public SessionDataService(IDbConnectionFactory connectionFactory)
         {
@@ -54,26 +73,32 @@ namespace SqlHealthAssessment.Data
         /// <summary>
         /// Fetches all live user sessions from the currently connected SQL Server instance.
         /// Uses master database for live session DMVs which are server-scoped.
+        /// ENHANCEMENT: Added server-side filtering, memory usage, row count, and search.
         /// </summary>
-        public async Task<List<SessionInfo>> GetLiveSessionsAsync(int topCount = 100)
+        public async Task<List<SessionInfo>> GetLiveSessionsAsync(
+            int topCount = 100,
+            bool hideSleeping = false,
+            bool onlyBlocked = false,
+            bool hideLowIO = false,
+            string searchText = "")
         {
             var sessions = new List<SessionInfo>();
 
-            // Live session DMVs are server-scoped; use master database directly
-            // to avoid dependency on SQLWATCH database being present.
-            // Cast to SqlServerConnectionFactory to use the CreateConnection(initialDatabase) overload
             using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
                 ? (SqlConnection)sqlFactory.CreateConnection("master")
                 : (SqlConnection)_connectionFactory.CreateConnection();
             await conn.OpenAsync();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = LiveSessionsQuery;
+            cmd.CommandText = BuildLiveSessionsQuery(topCount, hideSleeping, onlyBlocked, hideLowIO, searchText);
             cmd.CommandTimeout = 30;
 
-            var topParam = cmd.CreateParameter();
-            topParam.ParameterName = "@TopCount";
-            topParam.Value = topCount;
-            cmd.Parameters.Add(topParam);
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var searchParam = cmd.CreateParameter();
+                searchParam.ParameterName = "@SearchText";
+                searchParam.Value = searchText;
+                cmd.Parameters.Add(searchParam);
+            }
 
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -96,11 +121,54 @@ namespace SqlHealthAssessment.Data
                     BlockingSessionId = reader.GetInt16(reader.GetOrdinal("BlockingSessionId")),
                     TotalElapsedTime = reader.GetInt32(reader.GetOrdinal("TotalElapsedTime")),
                     ProgramName = reader.GetString(reader.GetOrdinal("ProgramName")),
-                    QueryText = reader.IsDBNull(reader.GetOrdinal("QueryText")) ? null : reader.GetString(reader.GetOrdinal("QueryText"))
+                    QueryText = reader.IsDBNull(reader.GetOrdinal("QueryText")) ? null : reader.GetString(reader.GetOrdinal("QueryText")),
+                    MemoryUsageKB = reader.GetInt32(reader.GetOrdinal("MemoryUsageKB")),
+                    RowCount = reader.GetInt64(reader.GetOrdinal("RowCount"))
                 });
             }
 
             return sessions;
+        }
+
+        /// <summary>
+        /// Gets detailed blocking information from sys.dm_os_waiting_tasks for more accurate chain.
+        /// </summary>
+        public async Task<List<BlockingInfo>> GetBlockingChainAsync()
+        {
+            var blockers = new List<BlockingInfo>();
+
+            // Use SqlConnection for async support
+            using var conn = await _connectionFactory.CreateConnectionAsync();
+            if (conn is not SqlConnection sqlConn)
+                throw new InvalidOperationException("GetBlockingChainAsync requires a SQL Server connection.");
+
+            await sqlConn.OpenAsync();
+            sqlConn.ChangeDatabase("master");
+            using var cmd = sqlConn.CreateCommand();
+            cmd.CommandText = @"
+                SELECT 
+                    blocking_session_id AS BlockingSPID,
+                    session_id AS BlockedSPID,
+                    wait_duration_ms AS WaitDurationMs,
+                    wait_type AS WaitType
+                FROM sys.dm_os_waiting_tasks WITH (NOLOCK)
+                WHERE blocking_session_id IS NOT NULL
+                  AND blocking_session_id > 0";
+            cmd.CommandTimeout = 15;
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                blockers.Add(new BlockingInfo
+                {
+                    BlockingSPID = reader.GetInt32(reader.GetOrdinal("BlockingSPID")),
+                    BlockedSPID = reader.GetInt32(reader.GetOrdinal("BlockedSPID")),
+                    WaitDurationMs = reader.GetInt64(reader.GetOrdinal("WaitDurationMs")),
+                    WaitType = reader.GetString(reader.GetOrdinal("WaitType"))
+                });
+            }
+
+            return blockers;
         }
 
         /// <summary>

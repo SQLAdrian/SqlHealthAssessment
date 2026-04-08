@@ -5,7 +5,7 @@
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;publish\**;release\**;lib\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;publish\**;release\**;lib\**;BPScripts\Ignore\**</DefaultItemExcludes>
     <NoWarn>$(NoWarn);CS0169;CS0414;BL0007</NoWarn>
     <RootNamespace>SqlHealthAssessment</RootNamespace>
     <AssemblyName>SqlHealthAssessment</AssemblyName>
@@ -199,6 +199,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="BPScripts\Ignore\**" />
+    <Content Remove="BPScripts\Ignore\**" />
     <None Update="BPScripts\01. MaintenanceSolution.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
