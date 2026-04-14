@@ -83,6 +83,34 @@
                 </select>
             </div>
         </div>
+
+        @* ── OAuth2 / Microsoft Graph ── *@
+        <div style="margin-top: 12px; padding: 12px; background: var(--bg-hover); border-radius: 6px; border: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <input type="checkbox" @bind="_smtp.UseOAuth2" style="width: auto;" />
+                <label style="margin: 0; font-weight: 600;">Use OAuth2 (Microsoft Graph) for O365</label>
+                <small style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">— replaces Basic Auth; requires Azure App Registration</small>
+            </div>
+            @if (_smtp.UseOAuth2)
+            {
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="settings-field">
+                        <label>Tenant ID <span style="color: var(--red);">*</span></label>
+                        <input type="text" @bind="_smtp.TenantId" @bind:event="oninput" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                    </div>
+                    <div class="settings-field">
+                        <label>Client ID <span style="color: var(--red);">*</span></label>
+                        <input type="text" @bind="_smtp.ClientId" @bind:event="oninput" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                    </div>
+                </div>
+                <div class="settings-field" style="margin-top: 8px;">
+                    <label>Client Secret <span style="color: var(--red);">*</span></label>
+                    <input type="password" @bind="_smtpClientSecret" @bind:event="oninput"
+                           placeholder="@(_hasExistingSmtpClientSecret ? "(encrypted — leave blank to keep)" : "Enter client secret")" />
+                    <small style="display: block; margin-top: 4px; color: var(--text-muted); font-size: 11px;">App Registration → Certificates &amp; secrets → Client secrets</small>
+                </div>
+            }
+        </div>
     </div>
 
     @if (UserSettings.GetExperimentalMode())
@@ -721,6 +749,7 @@
     private WhatsAppChannelConfig _whatsApp = new();
 
     private string _smtpPassword = "";
+    private string _smtpClientSecret = "";
     private string _smtpToAddresses = "";
     private string _teamsWebhookUrl = "";
     private string _slackWebhookUrl = "";
@@ -733,6 +762,7 @@
     private string _whatsAppRecipients = "";
 
     private bool _hasExistingSmtpPassword;
+    private bool _hasExistingSmtpClientSecret;
     private bool _hasExistingTeamsUrl;
     private bool _hasExistingSlackUrl;
     private bool _hasExistingWebhookUrl;
@@ -889,9 +919,13 @@
             FromName = config.Smtp.FromName,
             ReplyToAddress = config.Smtp.ReplyToAddress,
             MinimumSeverity = config.Smtp.MinimumSeverity,
-            ToAddresses = new List<string>(config.Smtp.ToAddresses)
+            ToAddresses = new List<string>(config.Smtp.ToAddresses),
+            UseOAuth2 = config.Smtp.UseOAuth2,
+            TenantId = config.Smtp.TenantId,
+            ClientId = config.Smtp.ClientId
         };
         _hasExistingSmtpPassword = !string.IsNullOrEmpty(config.Smtp.Password);
+        _hasExistingSmtpClientSecret = !string.IsNullOrEmpty(config.Smtp.ClientSecret);
         _smtpToAddresses = string.Join(", ", _smtp.ToAddresses);
 
         // Deep copy Teams config
@@ -994,6 +1028,12 @@
         else if (_hasExistingSmtpPassword)
             _smtp.Password = ChannelService.Config.Smtp.Password;
 
+        // ── OAuth2 client secret ──
+        if (!string.IsNullOrEmpty(_smtpClientSecret))
+            _smtp.ClientSecret = CredentialProtector.Encrypt(_smtpClientSecret);
+        else if (_hasExistingSmtpClientSecret)
+            _smtp.ClientSecret = ChannelService.Config.Smtp.ClientSecret;
+
         // ── Teams webhook URL ──
         if (!string.IsNullOrEmpty(_teamsWebhookUrl))
             _teams.WebhookUrl = CredentialProtector.Encrypt(_teamsWebhookUrl);
@@ -1059,6 +1099,7 @@
         ChannelService.UpdateConfig(config);
 
         _hasExistingSmtpPassword = !string.IsNullOrEmpty(_smtp.Password);
+        _hasExistingSmtpClientSecret = !string.IsNullOrEmpty(_smtp.ClientSecret);
         _hasExistingTeamsUrl = !string.IsNullOrEmpty(_teams.WebhookUrl);
         _hasExistingSlackUrl = !string.IsNullOrEmpty(_slack.WebhookUrl);
         _hasExistingWebhookUrl = !string.IsNullOrEmpty(_webhook.Url);
@@ -1069,6 +1110,7 @@
         _hasExistingWhatsAppToken = !string.IsNullOrEmpty(_whatsApp.AccessToken);
 
         _smtpPassword = "";
+        _smtpClientSecret = "";
         _teamsWebhookUrl = "";
         _slackWebhookUrl = "";
         _webhookUrl = "";

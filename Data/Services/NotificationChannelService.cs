@@ -188,50 +188,17 @@ namespace SqlHealthAssessment.Data.Services
             try
             {
                 var smtp = _config.Smtp;
-                if (string.IsNullOrEmpty(smtp.Host) || smtp.ToAddresses.Count == 0)
+                if (smtp.ToAddresses.Count == 0)
                 {
                     _logger.LogWarning("SMTP not fully configured — skipping email notification");
                     return;
                 }
 
-                var password = DecryptIfNeeded(smtp.Password);
+                if (smtp.UseOAuth2)
+                    await SendEmailViaGraphAsync(smtp, notification);
+                else
+                    await SendEmailViaSmtpAsync(smtp, notification);
 
-                using var client = new SmtpClient(smtp.Host, smtp.Port)
-                {
-                    EnableSsl = smtp.UseTls,
-                    DeliveryMethod = SmtpDeliveryMethod.Network,
-                    Timeout = 15000
-                };
-
-                if (!string.IsNullOrEmpty(smtp.Username) && !string.IsNullOrEmpty(password))
-                {
-                    client.Credentials = new NetworkCredential(smtp.Username, password);
-                }
-
-                var from = new MailAddress(
-                    string.IsNullOrEmpty(smtp.FromAddress) ? smtp.Username : smtp.FromAddress,
-                    smtp.FromName);
-
-                var emailTemplate = _templates.Config.Email;
-                using var message = new MailMessage
-                {
-                    From = from,
-                    Subject = AlertTemplateService.Render(emailTemplate.Subject, notification),
-                    IsBodyHtml = true,
-                    Body = AlertTemplateService.Render(emailTemplate.Body, notification)
-                };
-
-                foreach (var to in smtp.ToAddresses.Where(a => !string.IsNullOrWhiteSpace(a)))
-                {
-                    message.To.Add(to.Trim());
-                }
-
-                if (!string.IsNullOrWhiteSpace(smtp.ReplyToAddress))
-                {
-                    message.ReplyToList.Add(new MailAddress(smtp.ReplyToAddress.Trim()));
-                }
-
-                await client.SendMailAsync(message);
                 _logger.LogInformation("Email alert sent: {AlertName} to {Recipients}",
                     notification.AlertName, string.Join(", ", smtp.ToAddresses));
             }
@@ -240,6 +207,138 @@ namespace SqlHealthAssessment.Data.Services
                 _logger.LogError(ex, "Failed to send email alert: {AlertName}", notification.AlertName);
                 if (rethrow) throw;
             }
+        }
+
+        // ── Basic Auth SMTP (legacy) ──────────────────────────────────────────
+
+        private async Task SendEmailViaSmtpAsync(SmtpChannelConfig smtp, AlertNotification notification)
+        {
+            if (string.IsNullOrEmpty(smtp.Host))
+                throw new InvalidOperationException("SMTP host is not configured.");
+
+            var password = DecryptIfNeeded(smtp.Password);
+
+            using var client = new SmtpClient(smtp.Host, smtp.Port)
+            {
+                EnableSsl = smtp.UseTls,
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                Timeout = 15000
+            };
+
+            if (!string.IsNullOrEmpty(smtp.Username) && !string.IsNullOrEmpty(password))
+                client.Credentials = new NetworkCredential(smtp.Username, password);
+
+            var from = new MailAddress(
+                string.IsNullOrEmpty(smtp.FromAddress) ? smtp.Username : smtp.FromAddress,
+                smtp.FromName);
+
+            var emailTemplate = _templates.Config.Email;
+            using var message = new MailMessage
+            {
+                From = from,
+                Subject = AlertTemplateService.Render(emailTemplate.Subject, notification),
+                IsBodyHtml = true,
+                Body = AlertTemplateService.Render(emailTemplate.Body, notification)
+            };
+
+            foreach (var to in smtp.ToAddresses.Where(a => !string.IsNullOrWhiteSpace(a)))
+                message.To.Add(to.Trim());
+
+            if (!string.IsNullOrWhiteSpace(smtp.ReplyToAddress))
+                message.ReplyToList.Add(new MailAddress(smtp.ReplyToAddress.Trim()));
+
+            await client.SendMailAsync(message);
+        }
+
+        // ── OAuth2 via Microsoft Graph API ────────────────────────────────────
+        // Requires an Azure AD app registration with Mail.Send application permission.
+        // No extra NuGet — uses HttpClient already in the service.
+
+        private async Task SendEmailViaGraphAsync(SmtpChannelConfig smtp, AlertNotification notification)
+        {
+            if (string.IsNullOrEmpty(smtp.TenantId) || string.IsNullOrEmpty(smtp.ClientId))
+                throw new InvalidOperationException("OAuth2 requires Tenant ID and Client ID.");
+
+            var clientSecret = DecryptIfNeeded(smtp.ClientSecret);
+            if (string.IsNullOrEmpty(clientSecret))
+                throw new InvalidOperationException("OAuth2 client secret is not configured.");
+
+            var fromAddress = string.IsNullOrEmpty(smtp.FromAddress) ? smtp.Username : smtp.FromAddress;
+            if (string.IsNullOrEmpty(fromAddress))
+                throw new InvalidOperationException("From address is required for OAuth2 send.");
+
+            // ── Step 1: acquire bearer token via client credentials flow ──────
+            var token = await AcquireGraphTokenAsync(smtp.TenantId, smtp.ClientId, clientSecret);
+
+            // ── Step 2: build Graph sendMail payload ──────────────────────────
+            var emailTemplate = _templates.Config.Email;
+            var subject = AlertTemplateService.Render(emailTemplate.Subject, notification);
+            var body    = AlertTemplateService.Render(emailTemplate.Body, notification);
+
+            var toRecipients = smtp.ToAddresses
+                .Where(a => !string.IsNullOrWhiteSpace(a))
+                .Select(a => new { emailAddress = new { address = a.Trim() } })
+                .ToArray();
+
+            var payload = new
+            {
+                message = new
+                {
+                    subject,
+                    body = new { contentType = "HTML", content = body },
+                    toRecipients,
+                    from = new { emailAddress = new { address = fromAddress, name = smtp.FromName } },
+                    replyTo = string.IsNullOrWhiteSpace(smtp.ReplyToAddress)
+                        ? null
+                        : new[] { new { emailAddress = new { address = smtp.ReplyToAddress.Trim() } } }
+                },
+                saveToSentItems = false
+            };
+
+            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            });
+
+            // ── Step 3: POST to /users/{from}/sendMail ────────────────────────
+            var url = $"https://graph.microsoft.com/v1.0/users/{Uri.EscapeDataString(fromAddress)}/sendMail";
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException(
+                    $"Graph API returned {(int)response.StatusCode}: {error}");
+            }
+        }
+
+        private async Task<string> AcquireGraphTokenAsync(string tenantId, string clientId, string clientSecret)
+        {
+            var tokenUrl = $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
+            var form = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("client_id",     clientId),
+                new KeyValuePair<string, string>("client_secret", clientSecret),
+                new KeyValuePair<string, string>("scope",         "https://graph.microsoft.com/.default"),
+                new KeyValuePair<string, string>("grant_type",    "client_credentials"),
+            });
+
+            using var response = await _httpClient.PostAsync(tokenUrl, form);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"Token request failed {(int)response.StatusCode}: {body}");
+
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("access_token", out var tokenEl))
+                throw new InvalidOperationException($"No access_token in response: {body}");
+
+            return tokenEl.GetString()!;
         }
 
         private static string BuildEmailBody(AlertNotification notification)

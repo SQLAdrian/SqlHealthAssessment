@@ -78,6 +78,27 @@ namespace SqlHealthAssessment.Data.Models
         /// </summary>
         [JsonPropertyName("minimumSeverity")]
         public string MinimumSeverity { get; set; } = "warning";
+
+        // ── OAuth2 / Microsoft Graph (replaces Basic Auth for O365) ──────────
+
+        /// <summary>
+        /// When true, sends via Microsoft Graph API instead of SmtpClient.
+        /// Requires TenantId, ClientId, ClientSecret.
+        /// </summary>
+        [JsonPropertyName("useOAuth2")]
+        public bool UseOAuth2 { get; set; }
+
+        /// <summary>Azure AD tenant ID (GUID or domain).</summary>
+        [JsonPropertyName("tenantId")]
+        public string TenantId { get; set; } = string.Empty;
+
+        /// <summary>App registration client ID.</summary>
+        [JsonPropertyName("clientId")]
+        public string ClientId { get; set; } = string.Empty;
+
+        /// <summary>Client secret — encrypted via CredentialProtector.</summary>
+        [JsonPropertyName("clientSecret")]
+        public string ClientSecret { get; set; } = string.Empty;
     }
 
     public class TeamsWebhookChannelConfig
