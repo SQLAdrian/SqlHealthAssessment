@@ -180,7 +180,10 @@ namespace SqlHealthAssessment.Data.Services
 
         // ──────────────── SMTP Email ────────────────
 
-        private async Task SendEmailAsync(AlertNotification notification)
+        private Task SendEmailAsync(AlertNotification notification)
+            => SendEmailCoreAsync(notification, rethrow: false);
+
+        private async Task SendEmailCoreAsync(AlertNotification notification, bool rethrow)
         {
             try
             {
@@ -235,6 +238,7 @@ namespace SqlHealthAssessment.Data.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to send email alert: {AlertName}", notification.AlertName);
+                if (rethrow) throw;
             }
         }
 
@@ -294,7 +298,7 @@ namespace SqlHealthAssessment.Data.Services
                     InstanceName = Environment.MachineName
                 };
 
-                await SendEmailAsync(testNotification);
+                await SendEmailCoreAsync(testNotification, rethrow: true);
                 return (true, $"Test email sent to {string.Join(", ", smtp.ToAddresses)}");
             }
             catch (Exception ex)
