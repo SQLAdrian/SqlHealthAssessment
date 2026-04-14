@@ -473,6 +473,41 @@
     </div>
 
     <div class="about-section">
+        <h2><i class="fa-solid fa-envelope"></i> Email Notifications — OAuth2 Setup (O365)</h2>
+        <p>
+            Microsoft 365 has disabled Basic Auth for SMTP. To send alert emails from an O365 mailbox,
+            create an Azure App Registration with <strong>Mail.Send</strong> application permission,
+            then enable OAuth2 in <strong>Alerting Config → Email (SMTP)</strong>.
+        </p>
+        <ol>
+            <li>
+                <strong>portal.azure.com</strong> → Azure Active Directory → App registrations → <strong>New registration</strong><br />
+                <span style="color: var(--text-muted); font-size: 13px;">Name: anything · Account type: This org only · No redirect URI needed</span>
+            </li>
+            <li>
+                App → API permissions → <strong>Add a permission</strong> → Microsoft Graph → Application permissions → <code>Mail.Send</code> → Add<br />
+                → <strong>Grant admin consent</strong> (requires Global Admin)
+            </li>
+            <li>
+                Certificates &amp; secrets → <strong>New client secret</strong> — copy the <strong>Value</strong> immediately (shown once only)
+            </li>
+            <li>
+                From the app Overview page, copy <strong>Directory (tenant) ID</strong> and <strong>Application (client) ID</strong>
+            </li>
+            <li>
+                In Alerting Config → Email → check <strong>Use OAuth2</strong>, enter the three values,
+                set <strong>From Address</strong> to the licensed mailbox, Save, then Test.
+            </li>
+        </ol>
+        <p style="font-size: 13px; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i>
+            The From Address must match the mailbox the app registration has Mail.Send permission on.
+            Username and Password are ignored when OAuth2 is enabled. A <strong>?</strong> button
+            next to the OAuth2 toggle in Alerting Config shows these same instructions in-context.
+        </p>
+    </div>
+
+    <div class="about-section">
         <h2><i class="fa-solid fa-phone"></i> Support</h2>
         <p>
             For issues and feedback, visit the project repository:

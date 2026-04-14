@@ -90,6 +90,9 @@
                 <input type="checkbox" @bind="_smtp.UseOAuth2" style="width: auto;" />
                 <label style="margin: 0; font-weight: 600;">Use OAuth2 (Microsoft Graph) for O365</label>
                 <small style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">— replaces Basic Auth; requires Azure App Registration</small>
+                <button type="button" @onclick="() => _showOAuth2Help = true"
+                        style="margin-left: auto; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"
+                        title="How to set up Azure App Registration">?</button>
             </div>
             @if (_smtp.UseOAuth2)
             {
@@ -738,6 +741,61 @@
 
 </div>
 
+@* ── OAuth2 Setup Help Modal ── *@
+@if (_showOAuth2Help)
+{
+    <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center;" @onclick="() => _showOAuth2Help = false">
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 28px; max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto;" @onclick:stopPropagation>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-brands fa-microsoft" style="color: var(--accent);"></i>
+                    Azure App Registration for OAuth2 Email
+                </h3>
+                <button type="button" @onclick="() => _showOAuth2Help = false"
+                        style="background: none; border: none; color: var(--text-secondary); font-size: 18px; cursor: pointer; padding: 4px 8px;">&times;</button>
+            </div>
+
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 20px;">
+                O365 has disabled Basic Auth for SMTP. OAuth2 via Microsoft Graph is the supported replacement.
+                You need a one-time Azure App Registration with <strong>Mail.Send</strong> permission.
+            </p>
+
+            <ol style="padding-left: 20px; line-height: 2; font-size: 13px;">
+                <li>
+                    Go to <strong>portal.azure.com</strong> → <em>Azure Active Directory</em> → <em>App registrations</em> → <strong>New registration</strong><br />
+                    <span style="color: var(--text-muted);">Name: anything (e.g. "SQL Health Monitor") · Account type: This org only · No redirect URI needed</span>
+                </li>
+                <li>
+                    Open the new app → <em>API permissions</em> → <strong>Add a permission</strong><br />
+                    → Microsoft Graph → <strong>Application permissions</strong> → search <code>Mail.Send</code> → check it → Add<br />
+                    → Click <strong>Grant admin consent</strong> (requires Global Admin)
+                </li>
+                <li>
+                    <em>Certificates &amp; secrets</em> → <strong>New client secret</strong><br />
+                    <span style="color: var(--text-muted);">Copy the <strong>Value</strong> immediately — it is only shown once.</span>
+                </li>
+                <li>
+                    From the app <em>Overview</em> page, copy:<br />
+                    <span style="color: var(--text-muted);"><strong>Directory (tenant) ID</strong> and <strong>Application (client) ID</strong></span>
+                </li>
+                <li>
+                    Back here: check <strong>Use OAuth2</strong>, enter the three values, set <strong>From Address</strong> to the licensed mailbox, <strong>Save</strong>, then <strong>Test</strong>.
+                </li>
+            </ol>
+
+            <div style="margin-top: 20px; padding: 10px 14px; background: var(--bg-hover); border-radius: 6px; border-left: 3px solid var(--accent); font-size: 12px; color: var(--text-secondary);">
+                <i class="fa-solid fa-circle-info" style="margin-right: 6px;"></i>
+                The From Address must match the mailbox the app has <strong>Mail.Send</strong> permission on.
+                Username and Password fields are ignored when OAuth2 is enabled.
+            </div>
+
+            <div style="margin-top: 16px; text-align: right;">
+                <button class="settings-btn" @onclick="() => _showOAuth2Help = false">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     // Local copies for editing
     private SmtpChannelConfig _smtp = new();
@@ -775,6 +833,7 @@
     // Status
     private string? _statusMessage;
     private bool _statusSuccess;
+    private bool _showOAuth2Help;
     private bool _testingSmtp;
     private bool _testingTeams;
     private bool _testingSlack;
