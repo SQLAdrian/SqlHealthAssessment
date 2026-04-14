@@ -359,12 +359,13 @@ namespace SqlHealthAssessment.Data.Services
                 using var sqlConn = new SqlConnection(connStr);
                 await sqlConn.OpenAsync();
 
-                // Count matching errors in xp_readerrorlog output from the last 5 minutes
+                // Count matching errors in xp_readerrorlog output from the last 5 minutes.
+                // xp_readerrorlog params 5 & 6 must be datetime variables, not inline expressions.
                 var sql = alert.Id switch
                 {
-                    "error_log_severity" => "DECLARE @t TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @t EXEC xp_readerrorlog 0, 1, NULL, NULL, DATEADD(MINUTE,-5,GETDATE()), GETDATE(); SELECT COUNT(*) FROM @t WHERE [Text] NOT LIKE '%Backup%'",
-                    "error_log_fatal" => "DECLARE @t TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @t EXEC xp_readerrorlog 0, 1, NULL, NULL, DATEADD(MINUTE,-5,GETDATE()), GETDATE(); SELECT COUNT(*) FROM @t WHERE [Text] LIKE '%Fatal%' OR [Text] LIKE '%severity 20%' OR [Text] LIKE '%severity 21%' OR [Text] LIKE '%severity 22%' OR [Text] LIKE '%severity 23%' OR [Text] LIKE '%severity 24%' OR [Text] LIKE '%severity 25%'",
-                    "logon_failure" => "DECLARE @t TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @t EXEC xp_readerrorlog 0, 1, 'Login failed', NULL, DATEADD(MINUTE,-5,GETDATE()), GETDATE(); SELECT COUNT(*) FROM @t",
+                    "error_log_severity" => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, NULL, NULL, @f, @t; SELECT COUNT(*) FROM @r WHERE [Text] NOT LIKE '%Backup%'",
+                    "error_log_fatal"    => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, NULL, NULL, @f, @t; SELECT COUNT(*) FROM @r WHERE [Text] LIKE '%Fatal%' OR [Text] LIKE '%severity 2[0-5]%'",
+                    "logon_failure"      => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, 'Login failed', NULL, @f, @t; SELECT COUNT(*) FROM @r",
                     _ => null
                 };
 
@@ -410,25 +411,38 @@ namespace SqlHealthAssessment.Data.Services
                 using var sqlConn = new SqlConnection(connStr);
                 await sqlConn.OpenAsync();
 
-                // Count deadlock events in the ring buffer from the last 5 minutes.
-                // Falls back to 0 if no ring buffer or no recent events.
+                // Count xml_deadlock_report events in the last 5 minutes from system_health ring buffer.
+                // Pre-check: if target_data contains no 'xml_deadlock_report' string at all,
+                // return 0 immediately without any XML parse — this is the fast path when there
+                // are no deadlocks (the common case). Only cast to XML when deadlocks exist.
                 const string sql = @"
-                    SELECT ISNULL(SUM(event_count), 0)
-                    FROM (
-                        SELECT COUNT(*) AS event_count
+                    IF NOT EXISTS (
+                        SELECT 1 FROM sys.dm_xe_session_targets st WITH (NOLOCK)
+                        JOIN sys.dm_xe_sessions s WITH (NOLOCK)
+                          ON s.address = st.event_session_address
+                        WHERE s.name = N'system_health'
+                          AND st.target_name = N'ring_buffer'
+                          AND CAST(target_data AS NVARCHAR(MAX)) LIKE N'%xml_deadlock_report%'
+                    )
+                    BEGIN SELECT 0; RETURN; END;
+
+                    SELECT COUNT(*) FROM (
+                        SELECT TOP 200 xed.value('(@timestamp)[1]', 'varchar(50)') AS ts
                         FROM (
                             SELECT CAST(target_data AS XML) AS td
-                            FROM sys.dm_xe_session_targets st
-                            JOIN sys.dm_xe_sessions s ON s.address = st.event_session_address
+                            FROM sys.dm_xe_session_targets st WITH (NOLOCK)
+                            JOIN sys.dm_xe_sessions s WITH (NOLOCK)
+                              ON s.address = st.event_session_address
                             WHERE s.name = N'system_health'
                               AND st.target_name = N'ring_buffer'
-                        ) AS rb
-                        CROSS APPLY rb.td.nodes('RingBufferTarget/event') AS xe(xed)
-                        WHERE xed.exist('(./data/value/deadlock)[1]') = 1
-                          AND TRY_CAST(xed.value('(@timestamp)[1]', 'varchar(50)') AS datetimeoffset) >= DATEADD(MINUTE, -5, SYSUTCDATETIME())
-                    ) AS counts";
+                        ) rb
+                        CROSS APPLY rb.td.nodes(
+                            'RingBufferTarget/event[@name=''xml_deadlock_report'']') xe(xed)
+                    ) ev
+                    WHERE TRY_CAST(ts AS datetimeoffset)
+                          >= DATEADD(MINUTE, -5, SYSUTCDATETIME())";
 
-                using var cmd = new SqlCommand(sql, sqlConn) { CommandTimeout = 20 };
+                using var cmd = new SqlCommand(sql, sqlConn) { CommandTimeout = 30 };
                 var result = await cmd.ExecuteScalarAsync();
                 return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
             }
