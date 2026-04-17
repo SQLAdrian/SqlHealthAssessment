@@ -1,0 +1,189 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'          # triggers on v0.85.2, v1.0.0, etc.
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PUBLISH_DIR: publish
+  EXE_NAME: LiveMonitor.exe
+  INSTALLER_NAME: LiveMonitor-Setup.exe
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-and-release:
+    name: Build, Sign & Release
+    runs-on: windows-latest
+    permissions:
+      contents: write     # needed to create the GitHub Release
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0   # full history for changelog generation
+
+      # ── 2. .NET setup ────────────────────────────────────────────────────
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # ── 3. Read version from Config/version.json ─────────────────────────
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Content Config/version.json | ConvertFrom-Json)
+          echo "version=$($v.version)" >> $env:GITHUB_OUTPUT
+          echo "build=$($v.buildNumber)" >> $env:GITHUB_OUTPUT
+          echo "tag=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+
+      # ── 4. Restore ───────────────────────────────────────────────────────
+      - name: Restore NuGet packages
+        run: dotnet restore SqlHealthAssessment.sln
+
+      # ── 5. Build & Publish (self-contained, win-x64) ─────────────────────
+      - name: Publish
+        run: |
+          dotnet publish SqlHealthAssessment.sln `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o ${{ env.PUBLISH_DIR }}
+
+      # ── 6. Code-sign exe (skipped if secret not configured) ──────────────
+      - name: Sign executable
+        if: ${{ secrets.CODESIGN_CERT_BASE64 != '' }}
+        shell: pwsh
+        env:
+          CERT_BASE64:  ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+        run: |
+          $certBytes = [Convert]::FromBase64String($env:CERT_BASE64)
+          $certPath  = "codesign.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+
+          # Find signtool — location varies by Windows SDK version
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse -Filter "signtool.exe" |
+            Where-Object { $_.FullName -like "*x64*" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
+
+          & $signtool sign `
+            /fd sha256 `
+            /tr http://timestamp.digicert.com `
+            /td sha256 `
+            /f $certPath `
+            /p $env:CERT_PASSWORD `
+            "${{ env.PUBLISH_DIR }}\SqlHealthAssessment.exe"
+
+          Remove-Item $certPath -Force
+          Write-Host "Executable signed successfully."
+
+      # ── 7. Rename exe to LiveMonitor.exe ─────────────────────────────────
+      - name: Rename exe
+        shell: pwsh
+        run: |
+          $src = Get-ChildItem "${{ env.PUBLISH_DIR }}" -Filter "*.exe" | Select-Object -First 1
+          if ($src.Name -ne "${{ env.EXE_NAME }}") {
+            Rename-Item $src.FullName "${{ env.EXE_NAME }}"
+          }
+          Write-Host "Exe: ${{ env.PUBLISH_DIR }}\${{ env.EXE_NAME }}"
+
+      # ── 8. ZIP the raw exe ───────────────────────────────────────────────
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $zipName = "LiveMonitor-${{ steps.ver.outputs.version }}.zip"
+          Compress-Archive -Path "${{ env.PUBLISH_DIR }}\${{ env.EXE_NAME }}" `
+                           -DestinationPath $zipName
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      # ── 9. Build Inno Setup installer ────────────────────────────────────
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          # Patch version.iss so the ISS picks up the right version at build time
+          $ver   = "${{ steps.ver.outputs.version }}"
+          $build = "${{ steps.ver.outputs.build }}"
+          Set-Content installer\version.iss "#define AppVersion `"$ver`"`n#define BuildNumber `"$build`""
+
+          # Override SourceDir to point at our publish output
+          $workspace = "${{ github.workspace }}"
+          $sourceDir = "$workspace\${{ env.PUBLISH_DIR }}"
+          $outputDir = "$workspace\installer\Output"
+
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc installer\LiveMonitor.iss `
+            /DSourceDir="$sourceDir" `
+            /DOutputDir="$outputDir"
+
+          $setup = Get-ChildItem installer\Output -Filter "*.exe" | Select-Object -First 1
+          Copy-Item $setup.FullName "${{ env.INSTALLER_NAME }}"
+
+      # ── 10. Sign installer ───────────────────────────────────────────────
+      - name: Sign installer
+        if: ${{ secrets.CODESIGN_CERT_BASE64 != '' }}
+        shell: pwsh
+        env:
+          CERT_BASE64:   ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+        run: |
+          $certBytes = [Convert]::FromBase64String($env:CERT_BASE64)
+          $certPath  = "codesign.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse -Filter "signtool.exe" |
+            Where-Object { $_.FullName -like "*x64*" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          & $signtool sign `
+            /fd sha256 `
+            /tr http://timestamp.digicert.com `
+            /td sha256 `
+            /f $certPath `
+            /p $env:CERT_PASSWORD `
+            "${{ env.INSTALLER_NAME }}"
+
+          Remove-Item $certPath -Force
+          Write-Host "Installer signed successfully."
+
+      # ── 11. Extract release notes from version.json ──────────────────────
+      - name: Extract release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $v = Get-Content Config/version.json | ConvertFrom-Json
+          $notes = $v.whatsnew -join "`n- "
+          $body = "## What's New in v$($v.version)`n`n- $notes`n`n---`n`n**Full changelog:** [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)"
+          # Write to file to avoid env var length limits
+          $body | Out-File -FilePath release_notes.md -Encoding utf8
+
+      # ── 12. Create GitHub Release ─────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "LiveMonitor v${{ steps.ver.outputs.version }}"
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          files: |
+            ${{ env.ZIP_NAME }}
+            ${{ env.INSTALLER_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
