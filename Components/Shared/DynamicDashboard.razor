@@ -714,8 +714,12 @@
         }
 
         Logger.LogInformation("[DynamicDashboard:{DashboardId}] Starting initial data load", DashboardId);
+
+        // Pre-render from cache immediately — show stale data while the live fetch runs
+        await PreloadFromCacheAsync();
+
         await StartLoad();
-        if (AutoRefresh) 
+        if (AutoRefresh)
         {
             Logger.LogDebug("[DynamicDashboard:{DashboardId}] Starting auto-refresh service", DashboardId);
             RefreshService.Start();
@@ -922,6 +926,47 @@
     /// Adopted from sqltoolsservice QueryExecutionService pattern: always cancel previous
     /// request before issuing a new one so stale results never overwrite fresh data.
     /// </summary>
+    /// <summary>
+    /// Reads whatever is already in SQLite for every panel and renders it immediately.
+    /// No SQL Server roundtrip — makes the dashboard feel instant on repeat visits.
+    /// The live fetch in LoadData will overwrite these with fresh values as they arrive.
+    /// </summary>
+    private async Task PreloadFromCacheAsync()
+    {
+        if (Dashboard == null) return;
+
+        var filter = BuildFilter();
+        if (filter == null) return;
+
+        var panels = _enabledPanelsCache ?? Dashboard.Panels;
+        if (panels == null || !panels.Any()) return;
+
+        var tsResults   = new ConcurrentDictionary<string, List<TimeSeriesPoint>>();
+        var statResults = new ConcurrentDictionary<string, StatValue>();
+        var bgResults   = new ConcurrentDictionary<string, List<StatValue>>();
+        var gridResults = new ConcurrentDictionary<string, DataTable>();
+        var checkResults = new ConcurrentDictionary<string, List<CheckStatus>>();
+
+        try
+        {
+            await CachingExecutor.PreloadFromCacheAsync(panels, filter, tsResults, statResults, bgResults, gridResults, checkResults);
+        }
+        catch { return; }
+
+        // Only swap in and render if we actually got something
+        var hasAny = tsResults.Any() || statResults.Any() || bgResults.Any() || gridResults.Any() || checkResults.Any();
+        if (!hasAny) return;
+
+        _timeSeriesResults = tsResults;
+        _statResults       = statResults;
+        _barGaugeResults   = bgResults;
+        _gridResults       = gridResults;
+        _checkResults      = checkResults;
+        _hasLoadedOnce     = true;   // suppress the "Loading data..." blank state
+        IsLoading          = true;   // keep the loading bar visible so user knows refresh is in progress
+        await SafeStateHasChanged();
+    }
+
     private async Task StartLoad()
     {
         _loadCts?.Cancel();
@@ -1164,6 +1209,8 @@
                 case "DataGrid":
                 case "TextCard":
                 case "Deadlock":
+                case "XeStatus":
+                case "BlockingTree":
                     Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Loading {PanelType} data", DashboardId, panel.Id, panel.PanelType);
                     Dictionary<string, object>? gridParams = null;
                     if (panel.DataGridTopRows > 0)

@@ -13,6 +13,7 @@
 @inject UserSettingsService UserSettings
 @inject LocalLogService Log
 @inject ToastService Toast
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
 
 <style>
     /* ── Check Validator scoped styles ── */
@@ -132,6 +133,14 @@
         border-radius: 4px; font-size: 12px; font-family: monospace; color: #fca5a5;
     }
 </style>
+
+@if (!RbacService.HasPermission(UserState.Role, "run_scripts"))
+{
+    <div style="padding: 32px;">
+        <AccessDenied RequiredRole="Operator" Message="Check Validator requires Operator or Admin role." />
+    </div>
+    return;
+}
 
 <div class="cv-page">
 

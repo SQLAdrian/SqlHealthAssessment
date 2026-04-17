@@ -177,6 +177,8 @@ namespace SqlHealthAssessment
             services.AddSingleton<Data.Services.ForecastService>();
             services.AddSingleton<Data.Services.ProductionReadinessGate>();
             services.AddSingleton<Data.Services.RbacService>();
+            // Scoped per Blazor circuit — holds current user's role (WPF=Admin, Server=from cookie)
+            services.AddScoped<Data.Services.AppUserState>();
 
             // Local log service — thin wrapper over ILogger, routes through Serilog
             services.AddSingleton<LocalLogService>();

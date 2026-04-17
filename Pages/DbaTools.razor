@@ -3,10 +3,19 @@
 @inject SqlHealthAssessment.Data.Services.PowerShellService PS
 @inject SqlHealthAssessment.Data.ServerConnectionManager ConnectionManager
 @inject IJSRuntime JS
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
 @using System.Data
 @using System.Linq
 @using SqlHealthAssessment.Data.Services
 @implements IDisposable
+
+@if (!RbacService.HasPermission(UserState.Role, "run_scripts"))
+{
+    <div style="padding: 32px;">
+        <AccessDenied RequiredRole="Operator" Message="DbaTools requires Operator or Admin role." />
+    </div>
+    return;
+}
 
 <div class="settings-page">
     <div class="settings-header">

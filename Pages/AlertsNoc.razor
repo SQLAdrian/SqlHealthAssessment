@@ -8,6 +8,8 @@
 @inject AlertHistoryService History
 @inject ServerConnectionManager ConnectionManager
 @inject AlertBaselineService Baseline
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
+@inject SqlHealthAssessment.Data.ToastService Toast
 @implements IDisposable
 
 <div style="padding: 16px; max-width: 100%;">
@@ -84,13 +86,10 @@
                             @server.ServerName
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 1px;">
-                            @server.Status switch
-                            {
-                                NocStatus.Critical => "CRITICAL",
-                                NocStatus.Warning  => "WARNING",
-                                NocStatus.Ok       => "OK — no active alerts",
-                                _                  => "No data"
-                            }
+                            @(server.Status == NocStatus.Critical ? "CRITICAL"
+                            : server.Status == NocStatus.Warning  ? "WARNING"
+                            : server.Status == NocStatus.Ok       ? "OK — no active alerts"
+                            : "No data")
                         </div>
                     </div>
                 </div>
@@ -368,12 +367,16 @@
 
     private void AckOne(AlertState alert)
     {
+        if (!RbacService.HasPermission(UserState.Role, "acknowledge_alerts"))
+        { Toast.ShowWarning("Insufficient permissions. Operator role required."); return; }
         Engine.AcknowledgeAlert(alert.AlertId, alert.ServerName);
         Refresh();
     }
 
     private void AckAll()
     {
+        if (!RbacService.HasPermission(UserState.Role, "acknowledge_alerts"))
+        { Toast.ShowWarning("Insufficient permissions. Operator role required."); return; }
         Engine.AcknowledgeAll();
         Refresh();
     }

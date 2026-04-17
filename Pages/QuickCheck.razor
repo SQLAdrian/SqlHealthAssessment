@@ -14,6 +14,7 @@
 @inject SqlHealthAssessment.Data.ToastService Toast
 @inject SqlHealthAssessment.Data.Services.KeyboardShortcutService ShortcutSvc
 @inject IJSRuntime JSRuntime
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
 @implements IDisposable
 
 <PdfExportModal @ref="_pdfModal"
@@ -712,6 +713,11 @@
 
     private async Task RunChecks()
     {
+        if (!RbacService.HasPermission(UserState.Role, "execute_checks"))
+        {
+            Toast.ShowWarning("Insufficient permissions. Operator role required to run checks.");
+            return;
+        }
         CheckExecutor.ClearAllResults();
         State.IsRunning       = true;
         State.Progress        = 0;

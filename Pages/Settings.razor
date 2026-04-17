@@ -21,6 +21,16 @@
 @inject AutoUpdateService UpdateService
 @inject AzureBlobExportService BlobExport
 @inject SqlHealthAssessment.Data.ToastService Toast
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
+@inject SqlHealthAssessment.Data.Services.RbacService RbacService
+
+@if (!RbacService.HasPermission(UserState.Role, "settings"))
+{
+    <div style="padding: 32px;">
+        <AccessDenied RequiredRole="Admin" Message="Settings are restricted to Admin users." />
+    </div>
+    return;
+}
 
 <div class="settings-page" style="max-width: 1000px;">
     <h2 style="margin-bottom: 20px;">Settings</h2>
@@ -217,6 +227,13 @@
 
     <div class="settings-group">
         <h3>Diagnostics</h3>
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <button class="settings-btn" style="color:var(--red,#cc3333);"
+                    @onclick="ResetAllSettings"
+                    title="Resets all app preferences to factory defaults (connections are not affected)">
+                <i class="fa-solid fa-rotate-left"></i> Reset app settings to defaults
+            </button>
+        </div>
         <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="enableDebugLogging" checked="@_debugLogging"
                    @onchange="ToggleDebugLogging" style="width: auto;" />
@@ -532,6 +549,177 @@
         </p>
     </div>
 
+    <!-- RBAC / Access Control -->
+    <div class="settings-group">
+        <h3>Access Control <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(Server Mode only)</span></h3>
+
+        <div class="settings-row">
+            <label class="settings-label">Enable RBAC</label>
+            <input type="checkbox" @bind="_rbacEnabled" @bind:after="SaveRbacConfig" />
+        </div>
+        <p style="color:var(--text-muted);font-size:12px;margin-top:2px;margin-bottom:10px;">
+            When enabled, users authenticate via OAuth and are assigned roles. Has no effect in WPF (desktop) mode.
+        </p>
+
+        @if (_rbacEnabled)
+        {
+            <div class="settings-row" style="margin-top:8px;">
+                <label class="settings-label">Require explicit user list</label>
+                <input type="checkbox" @bind="_rbacRequireExplicit" @bind:after="SaveRbacConfig" />
+            </div>
+            <p style="color:var(--text-muted);font-size:12px;margin-top:2px;margin-bottom:10px;">
+                When on, unknown users are denied. When off, they are auto-created with the default role.
+            </p>
+
+            <div class="settings-row">
+                <label class="settings-label">Default role for new users</label>
+                <select @bind="_rbacDefaultRole" @bind:after="SaveRbacConfig" class="settings-input" style="max-width:140px;">
+                    <option value="admin">Admin</option>
+                    <option value="operator">Operator</option>
+                    <option value="viewer">Viewer</option>
+                </select>
+            </div>
+
+            <h4 style="margin:16px 0 8px;font-size:13px;color:var(--text-primary);">OAuth Providers</h4>
+
+            <!-- Google -->
+            <div style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:10px;">
+                <div class="settings-row" style="margin-bottom:8px;">
+                    <label class="settings-label" style="font-weight:600;">
+                        <i class="fa-brands fa-google" style="margin-right:5px;"></i>Google
+                    </label>
+                    <input type="checkbox" @bind="_rbacGoogleEnabled" @bind:after="SaveRbacConfig" />
+                </div>
+                @if (_rbacGoogleEnabled)
+                {
+                    <div class="settings-row" style="margin-bottom:6px;">
+                        <label class="settings-label">Client ID</label>
+                        <input type="text" class="settings-input" @bind="_rbacGoogleClientId" placeholder="…apps.googleusercontent.com" />
+                    </div>
+                    <div class="settings-row" style="margin-bottom:6px;">
+                        <label class="settings-label">Client Secret</label>
+                        <input type="password" class="settings-input" @bind="_rbacGoogleClientSecret" placeholder="(unchanged)" />
+                    </div>
+                    <div class="settings-row" style="margin-bottom:0;">
+                        <label class="settings-label">Restrict domain <span style="font-size:11px;color:var(--text-muted);">(optional)</span></label>
+                        <input type="text" class="settings-input" @bind="_rbacGoogleDomain" placeholder="contoso.com" />
+                    </div>
+                    <button class="btn-secondary" style="margin-top:10px;font-size:12px;" @onclick="SaveOAuthConfig">Save Google config</button>
+                }
+            </div>
+
+            <!-- Microsoft -->
+            <div style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:16px;">
+                <div class="settings-row" style="margin-bottom:8px;">
+                    <label class="settings-label" style="font-weight:600;">
+                        <i class="fa-brands fa-microsoft" style="margin-right:5px;"></i>Microsoft
+                    </label>
+                    <input type="checkbox" @bind="_rbacMsEnabled" @bind:after="SaveRbacConfig" />
+                </div>
+                @if (_rbacMsEnabled)
+                {
+                    <div class="settings-row" style="margin-bottom:6px;">
+                        <label class="settings-label">Client ID</label>
+                        <input type="text" class="settings-input" @bind="_rbacMsClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                    </div>
+                    <div class="settings-row" style="margin-bottom:6px;">
+                        <label class="settings-label">Client Secret</label>
+                        <input type="password" class="settings-input" @bind="_rbacMsClientSecret" placeholder="(unchanged)" />
+                    </div>
+                    <div class="settings-row" style="margin-bottom:0;">
+                        <label class="settings-label">Restrict domain <span style="font-size:11px;color:var(--text-muted);">(optional)</span></label>
+                        <input type="text" class="settings-input" @bind="_rbacMsDomain" placeholder="contoso.com" />
+                    </div>
+                    <button class="btn-secondary" style="margin-top:10px;font-size:12px;" @onclick="SaveOAuthConfig">Save Microsoft config</button>
+                }
+            </div>
+
+            <!-- User list -->
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--text-primary);">Users</h4>
+            @if (_rbacUsers.Count == 0)
+            {
+                <p style="color:var(--text-muted);font-size:12px;">No users yet. Users are added automatically on first login.</p>
+            }
+            else
+            {
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--border);color:var(--text-muted);">
+                            <th style="text-align:left;padding:4px 8px 6px 0;">Email</th>
+                            <th style="text-align:left;padding:4px 8px 6px;">Display Name</th>
+                            <th style="text-align:left;padding:4px 8px 6px;">Provider</th>
+                            <th style="text-align:left;padding:4px 8px 6px;">Role</th>
+                            <th style="text-align:left;padding:4px 8px 6px;">Enabled</th>
+                            <th style="text-align:left;padding:4px 0 6px 8px;">Last Login</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in _rbacUsers)
+                        {
+                            <tr style="border-bottom:1px solid var(--border-subtle,var(--border));">
+                                <td style="padding:5px 8px 5px 0;color:var(--text-primary);">@u.Email</td>
+                                <td style="padding:5px 8px;color:var(--text-secondary);">@u.DisplayName</td>
+                                <td style="padding:5px 8px;">
+                                    @if (u.Provider == "google")
+                                    {
+                                        <i class="fa-brands fa-google" title="Google"></i>
+                                    }
+                                    else if (u.Provider == "microsoft")
+                                    {
+                                        <i class="fa-brands fa-microsoft" title="Microsoft"></i>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:var(--text-muted);">local</span>
+                                    }
+                                </td>
+                                <td style="padding:5px 8px;">
+                                    <select value="@u.Role" @onchange="e => ChangeUserRole(u, e.Value?.ToString() ?? u.Role)"
+                                            style="font-size:12px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:2px 4px;">
+                                        <option value="admin">Admin</option>
+                                        <option value="operator">Operator</option>
+                                        <option value="viewer">Viewer</option>
+                                    </select>
+                                </td>
+                                <td style="padding:5px 8px;text-align:center;">
+                                    <input type="checkbox" checked="@u.Enabled"
+                                           @onchange="e => ToggleUserEnabled(u, (bool)(e.Value ?? true))" />
+                                </td>
+                                <td style="padding:5px 0 5px 8px;color:var(--text-muted);">
+                                    @(u.LastLogin.HasValue ? u.LastLogin.Value.ToString("yyyy-MM-dd HH:mm") : "—")
+                                </td>
+                                <td style="padding:5px 0 5px 6px;">
+                                    <button class="btn-icon" title="Remove user" style="color:var(--error,#e05252);"
+                                            @onclick="() => RemoveRbacUser(u.Id)">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <!-- Add user manually -->
+            <div style="margin-top:12px;display:flex;gap:6px;align-items:center;">
+                <input type="text" class="settings-input" @bind="_newUserEmail" placeholder="user@example.com" style="flex:1;" />
+                <select @bind="_newUserRole" style="font-size:12px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:4px 6px;">
+                    <option value="admin">Admin</option>
+                    <option value="operator">Operator</option>
+                    <option value="viewer">Viewer</option>
+                </select>
+                <button class="btn-secondary" style="font-size:12px;white-space:nowrap;" @onclick="AddRbacUser">
+                    <i class="fa-solid fa-plus" style="margin-right:4px;"></i>Add User
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(_rbacMessage))
+            {
+                <p style="font-size:12px;margin-top:6px;color:@(_rbacSuccess ? "var(--success,#4caf50)" : "var(--error,#e05252)");">@_rbacMessage</p>
+            }
+        }
+    </div>
+
     <!-- Preview Features -->
     <div class="settings-group">
         <h3>Preview Features</h3>
@@ -745,6 +933,21 @@
     private bool _noPantsModeActive;
     private bool _experimentalModeActive;
 
+    private void LoadSettings()
+    {
+        ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
+        _debugLogging = UserSettings.GetDebugLogging();
+        _anonymiseServerNames = UserSettings.GetAnonymiseServerNames();
+        LogAnon.Enabled = _anonymiseServerNames;
+        _useV2PlanIcons          = UserSettings.GetUseV2PlanIcons();
+        _noPantsMode             = UserSettings.GetNoPantsMode();
+        _experimentalMode        = UserSettings.GetExperimentalMode();
+        _alertBaselineEnabled    = UserSettings.GetAlertBaselineEnabled();
+        _alertBaselinePerServer  = UserSettings.GetAlertBaselinePerServer();
+        DefaultDashboardId = UserSettings.GetDefaultDashboardId();
+        _zoomLevel = UserSettings.GetZoomLevel();
+    }
+
     protected override void OnInitialized()
     {
         // Load configuration
@@ -755,17 +958,7 @@
         // Mask the password in the connection string for display
         SqlServerConnectionString = MaskConnectionStringPassword(connStr);
         // Load user settings
-        ShowDiagnosticPane = UserSettings.GetShowDiagnosticPane();
-        _debugLogging = UserSettings.GetDebugLogging();
-        _anonymiseServerNames = UserSettings.GetAnonymiseServerNames();
-        LogAnon.Enabled = _anonymiseServerNames;
-        _useV2PlanIcons   = UserSettings.GetUseV2PlanIcons();
-        _noPantsMode             = UserSettings.GetNoPantsMode();
-        _experimentalMode        = UserSettings.GetExperimentalMode();
-        _alertBaselineEnabled    = UserSettings.GetAlertBaselineEnabled();
-        _alertBaselinePerServer  = UserSettings.GetAlertBaselinePerServer();
-        DefaultDashboardId = UserSettings.GetDefaultDashboardId();
-        _zoomLevel = UserSettings.GetZoomLevel();
+        LoadSettings();
 
         // Get cache file size
         UpdateCacheFileSize();
@@ -799,6 +992,9 @@
         _showMaturityRoadmap = s.ShowMaturityRoadmap;
         _noPantsModeActive   = s.NoPantsMode;
         _experimentalModeActive = s.ExperimentalMode;
+
+        // Load RBAC settings
+        LoadRbacSettings();
     }
 
     private void OnZoomLevelChanged(ChangeEventArgs e)
@@ -820,6 +1016,14 @@
     {
         _debugLogging = (bool)(e.Value ?? false);
         UserSettings.SetDebugLogging(_debugLogging);
+    }
+
+    private void ResetAllSettings()
+    {
+        UserSettings.ResetToDefaults();
+        // Reload local field cache so the UI reflects the reset values
+        LoadSettings();
+        Toast.ShowSuccess("App settings reset to defaults.");
     }
 
     private void ToggleAnonymiseServerNames(ChangeEventArgs e)
@@ -1055,6 +1259,118 @@
     private void SavePreviewSettings()
     {
         UserSettings.SetShowMaturityRoadmap(_showMaturityRoadmap);
+    }
+
+    // ── RBAC ──────────────────────────────────────────────────────────────
+
+    private bool _rbacEnabled;
+    private bool _rbacRequireExplicit;
+    private string _rbacDefaultRole = AppRoles.Viewer;
+    private bool _rbacGoogleEnabled;
+    private string _rbacGoogleClientId = string.Empty;
+    private string _rbacGoogleClientSecret = string.Empty;
+    private string _rbacGoogleDomain = string.Empty;
+    private bool _rbacMsEnabled;
+    private string _rbacMsClientId = string.Empty;
+    private string _rbacMsClientSecret = string.Empty;
+    private string _rbacMsDomain = string.Empty;
+    private List<RbacUser> _rbacUsers = new();
+    private string _newUserEmail = string.Empty;
+    private string _newUserRole = AppRoles.Viewer;
+    private string? _rbacMessage;
+    private bool _rbacSuccess;
+
+    private void LoadRbacSettings()
+    {
+        var cfg = RbacService.Config;
+        _rbacEnabled         = cfg.Enabled;
+        _rbacRequireExplicit = cfg.RequireExplicitAccess;
+        _rbacDefaultRole     = cfg.DefaultRole;
+        _rbacGoogleEnabled   = cfg.Google.Enabled;
+        _rbacGoogleClientId  = cfg.Google.ClientId;
+        _rbacGoogleDomain    = cfg.Google.AllowedDomain;
+        _rbacMsEnabled       = cfg.Microsoft.Enabled;
+        _rbacMsClientId      = cfg.Microsoft.ClientId;
+        _rbacMsDomain        = cfg.Microsoft.AllowedDomain;
+        // Secrets: never pre-populate — leave blank (placeholder shows "(unchanged)")
+        _rbacUsers = RbacService.GetUsers();
+    }
+
+    private void SaveRbacConfig()
+    {
+        var existing = RbacService.Config;
+        RbacService.UpdateConfig(new RbacConfig
+        {
+            Enabled               = _rbacEnabled,
+            RequireExplicitAccess = _rbacRequireExplicit,
+            DefaultRole           = _rbacDefaultRole,
+            Google = new OAuthProviderConfig
+            {
+                Enabled       = _rbacGoogleEnabled,
+                ClientId      = _rbacGoogleClientId,
+                // Keep existing secret if field left blank
+                ClientSecret  = string.IsNullOrWhiteSpace(_rbacGoogleClientSecret)
+                                    ? existing.Google.ClientSecret
+                                    : _rbacGoogleClientSecret,
+                AllowedDomain = _rbacGoogleDomain,
+            },
+            Microsoft = new OAuthProviderConfig
+            {
+                Enabled       = _rbacMsEnabled,
+                ClientId      = _rbacMsClientId,
+                ClientSecret  = string.IsNullOrWhiteSpace(_rbacMsClientSecret)
+                                    ? existing.Microsoft.ClientSecret
+                                    : _rbacMsClientSecret,
+                AllowedDomain = _rbacMsDomain,
+            },
+        });
+    }
+
+    private void SaveOAuthConfig()
+    {
+        SaveRbacConfig();
+        _rbacMessage = "OAuth config saved.";
+        _rbacSuccess = true;
+    }
+
+    private void ChangeUserRole(RbacUser user, string role)
+    {
+        user.Role = role;
+        RbacService.UpdateUser(user);
+        _rbacUsers = RbacService.GetUsers();
+    }
+
+    private void ToggleUserEnabled(RbacUser user, bool enabled)
+    {
+        user.Enabled = enabled;
+        RbacService.UpdateUser(user);
+        _rbacUsers = RbacService.GetUsers();
+    }
+
+    private void RemoveRbacUser(string id)
+    {
+        RbacService.RemoveUser(id);
+        _rbacUsers = RbacService.GetUsers();
+    }
+
+    private void AddRbacUser()
+    {
+        _rbacMessage = null;
+        if (string.IsNullOrWhiteSpace(_newUserEmail) || !_newUserEmail.Contains('@'))
+        {
+            _rbacMessage = "Enter a valid email address.";
+            _rbacSuccess = false;
+            return;
+        }
+        RbacService.AddUser(new RbacUser
+        {
+            Email = _newUserEmail.Trim(),
+            Role  = _newUserRole,
+        });
+        _newUserEmail = string.Empty;
+        _rbacUsers    = RbacService.GetUsers();
+        _rbacMessage  = "User added.";
+        _rbacSuccess  = true;
     }
 
     private void ValidateConfig()

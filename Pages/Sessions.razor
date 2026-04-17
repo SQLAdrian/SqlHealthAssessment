@@ -11,6 +11,7 @@
 @inject SqlHealthAssessment.Data.ToastService Toast
 @inject IJSRuntime JSRuntime
 @inject SqlHealthAssessment.Data.UserSettingsService UserSettings
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
 @implements IDisposable
 
 <!-- Charts Modal -->
@@ -661,6 +662,11 @@
     // ENHANCEMENT: Kill session
     private async Task KillSelectedSession(int spid)
     {
+        if (!RbacService.HasPermission(UserState.Role, "run_scripts"))
+        {
+            Toast.ShowWarning("Insufficient permissions to kill sessions. Operator role required.");
+            return;
+        }
         // Use spid (from child) to ensure we kill the correct session
         if (SelectedSession == null || SelectedSession.SPID != spid)
         {

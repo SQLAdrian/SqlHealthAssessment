@@ -3,19 +3,22 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078d4.svg)](https://github.com/SQLAdrian/SqlHealthAssessment/releases)
 [![SQL Server 2016+](https://img.shields.io/badge/SQL%20Server-2016%2B-red.svg)](https://www.microsoft.com/en-us/sql-server)
+[![Version](https://img.shields.io/badge/version-0.85.2-blue.svg)](https://github.com/SQLAdrian/SqlHealthAssessment/releases/latest)
 
 > **Free, open-source SQL Server monitoring — no agents, no per-server licensing, single exe.**
 > A lightweight alternative to SolarWinds DPA, Redgate SQL Monitor, SentryOne, and Idera SQL Diagnostic Manager.
 
-**LiveMonitor** is a Windows desktop application (Blazor UI hosted in WPF) that monitors multiple SQL Server instances in real time. It ships as a single executable and can also run as a headless Windows Service for 24/7 monitoring with remote browser access.
+**LiveMonitor** (formerly *SQL Health Assessment*) is a Windows desktop application (Blazor UI hosted in WPF) that monitors multiple SQL Server instances in real time. It ships as a single executable and can also run as a headless Windows Service for 24/7 monitoring with remote browser access.
 
 No software is installed on your SQL Servers. Everything runs from your workstation or a dedicated monitoring host.
+
+> **Version 0.85.2** — production-quality, actively developed. Suitable for production DBA use. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ---
 
 ## Quick Start
 
-> **Requires:** Windows 10 1809+ · SQL Server 2016+
+> **Requires:** Windows 10 1809+ · SQL Server 2016+  
 > .NET runtime and WebView2 are bundled — no prerequisites to install.
 
 ```
@@ -26,8 +29,10 @@ No software is installed on your SQL Servers. Everything runs from your workstat
 5. Run a Quick Check (Ctrl+Q) for an instant health snapshot
 ```
 
-First time? The built-in onboarding wizard walks you through the setup in 3 steps.
+First time? The built-in onboarding wizard walks you through the setup in 3 steps.  
 Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handles the deployment for you.
+
+**[→ Full Quick Start Guide (5 min read)](QUICKSTART.md)**
 
 ---
 
@@ -99,6 +104,8 @@ Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handle
 - **Timer-based evaluation** — 30-second alert cycle with configurable severity thresholds and cooldowns
 - **7 notification channels** — Email (SMTP), Microsoft Teams, Slack, generic Webhooks, PagerDuty, ServiceNow, WhatsApp
 - **Alert history** — SQLite-backed alert log with acknowledgement and auto-resolution
+- **Maintenance windows** — suppress non-critical alerts on a schedule or with a manual toggle
+- **Toast flood control** — when 5+ alerts fire within 5 seconds, a mute banner appears with a "Mute 5 min" option
 - **Scheduled tasks** — automated task engine with CSV export, Azure Blob upload, and email delivery
 - **No-Pants Mode** — Safety toggle for destructive actions (e.g., kill sessions)
 
@@ -113,7 +120,8 @@ Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handle
 - **DataGrid max-height overflow** — dashboard tables cap at 3× their configured panel height with sticky headers; prevents page-layout jitter on result-count changes
 
 ### Updates & Maintenance
-- **Squirrel.Windows Auto-Updates** — Silent, delta-based updates from GitHub releases; 3-tier extraction fallback (`Expand-Archive` → .NET `ZipFile` → `Shell.Application` COM) for older Windows Server targets
+- **Background update check** — checks GitHub releases on startup; shows a banner when a newer version is available
+- **Auto-update** — Silent, delta-based updates from GitHub releases; 3-tier extraction fallback (`Expand-Archive` → .NET `ZipFile` → `Shell.Application` COM) for older Windows Server targets
 - **Manual ZIP import** — server mode / air-gap: upload a downloaded release ZIP directly via the Service Management page
 - **GitHub Actions CI/CD** — Automated build, test, and release on version tags
 
@@ -123,15 +131,16 @@ Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handle
 - **Connection diagnostics** — built-in modal to troubleshoot Azure Blob authentication issues
 - **Toast notifications** — real-time upload success/failure feedback
 
-### Security
+### Security & Access Control
 - **AES-256-GCM credential encryption** — machine-scoped DPAPI key file + authenticated encryption; works for interactive and service accounts
 - **Ephemeral session keys** — dashboard results encrypted with a per-process key (never persisted)
 - **MFA / Azure AD authentication** — supports modern auth via `Azure.Identity`
+- **RBAC (Role-Based Access Control)** — Admin / Operator / Viewer roles in server mode; OAuth via Google or Microsoft; auto-assign or explicit user list; configured in Settings → Access Control
 - **Parameterised queries only** — SQL injection prevention throughout
 - **Assembly obfuscation** — ConfuserEx2 (anti-tamper, anti-debug, string encryption). The source code is fully open — the obfuscation protects the compiled binary from trivial tampering, not the source. Build from source for an unobfuscated binary.
 - **Audit log** — full query-execution and user-action trail (90-day retention)
 - **Rate limiting** — configurable max queries per minute with optional UI warnings
-- **Windows Service mode** — headless deployment with Kestrel HTTPS support
+- **Windows Service mode** — headless deployment with Kestrel HTTPS support; UAC elevation prompt for service install/uninstall
 
 ### Server Management
 - **Server tagging** — assign tags (e.g. `finance`, `critical`, `east-us`) and environment labels (Production, Staging, Dev, QA, DR)
@@ -215,6 +224,7 @@ For SQLWATCH dashboards the monitoring account additionally needs `db_owner` on 
 | Vulnerability Assessment | SQL Server security assessment results | — |
 | Checks | Automated health check results | — |
 | Quick Check | Instant health snapshot | `Ctrl+Q` |
+| Environment Map | Force-directed network topology: SQL instances → hosts → applications; scan, merge physical hosts | — |
 | Diagnostics Maturity Roadmap | Multi-server maturity scoring from sp_triage / sp_Blitz output, 5-level framework, PDF export | — |
 
 Press `?` at any time to see the full keyboard shortcut reference.
@@ -300,6 +310,12 @@ This project stands on the shoulders of giants:
 | [PerformanceMonitor](https://github.com/erikdarlingdata/DarlingData) | Erik Darling | Performance Monitor framework and diagnostic queries |
 | [MadeiraToolbox](https://github.com/MadeiraData/MadeiraToolbox) | Eitan Blumin | SQL Server maintenance, diagnostics, and best-practice scripts |
 | [TigerToolbox](https://github.com/microsoft/tigertoolbox) | Pedro Lopes (Microsoft) | Collection of SQL Server tools and utilities |
+| [ola.hallengren.com](https://ola.hallengren.com) | Ola Hallengren | SQL Server Maintenance Solution — backup, integrity check, index optimisation |
+| [Glenn Berry's DMV Queries](https://www.sqlskills.com/blogs/glenn/) | Glenn Berry | Diagnostic queries for SQL Server health and configuration |
+| [sqlserver-kit](https://github.com/ktaranov/sqlserver-kit) | Konstantin Taranov | SQL Server scripts, stored procedures, and best practices collection |
+| [Wayne Sheffield Blog](https://blog.waynesheffield.com) | Wayne Sheffield | SQL Server scripts and best practices |
+| [TracyBoggiano.com](https://tracyboggiano.com) | Tracy Boggiano | SQL Server performance and monitoring scripts |
+| [SQLMag / Tim Ford](https://www.sqlmag.com) | Tim Ford | SQL Server scripts and tooling |
 | [html-query-plan](https://github.com/JustinPealing/html-query-plan) | Justin Pealing | Interactive graphical SQL execution plan viewer |
 | [Blazor-ApexCharts](https://github.com/apexcharts/Blazor-ApexCharts) | ApexCharts Team | Rich interactive charts and time-series visualisations |
 | [Serilog](https://github.com/serilog/serilog) | Serilog Contributors | Structured diagnostic logging for .NET |
@@ -339,20 +355,29 @@ Found a security vulnerability? Please review our [Security Policy](SECURITY.md)
 **Q: Does this require installing anything on the SQL Server?**
 A: No agent is needed on the SQL Server. The app connects remotely via standard SQL connections. Optionally, you can deploy the SQLWATCH database for historical metrics collection.
 
+**Q: Is this production-ready?**
+A: Yes — current version is 0.85.2, actively used in production environments. The version will reach 1.0 once the installer, RBAC, and documentation are complete. See [CHANGELOG.md](CHANGELOG.md) for stability notes.
+
+**Q: What's the difference between "LiveMonitor" and "SQL Health Assessment"?**
+A: LiveMonitor is the product name. SQL Health Assessment is the internal project/repo name. Both refer to the same tool — the branding is being unified under LiveMonitor.
+
 **Q: Can I monitor Azure SQL Database or Azure SQL Managed Instance?**
 A: Azure SQL Managed Instance is supported. Azure SQL Database (PaaS) has limited support — some DMV-based checks require server-level permissions not available in PaaS.
 
 **Q: Is this a replacement for SSMS (SQL Server Management Studio)?**
-A: No — it complements SSMS. SQL Health Assessment focuses on monitoring, health checks, and performance analysis. Use SSMS for query authoring, schema management, and administration tasks.
+A: No — it complements SSMS. LiveMonitor focuses on monitoring, health checks, and performance analysis. Use SSMS for query authoring, schema management, and administration tasks.
 
 **Q: Can I run this as a Windows Service for 24/7 monitoring?**
-A: Yes — the app supports headless Windows Service mode with Kestrel HTTPS for remote dashboard access.
+A: Yes — the app supports headless Windows Service mode with Kestrel HTTPS for remote dashboard access. Go to Service Management to install/uninstall (UAC prompt triggers automatically if needed).
 
 **Q: Are credentials stored securely?**
 A: Yes — all passwords are encrypted using AES-256-GCM with a machine-scoped DPAPI key. Credentials are tied to the machine and cannot be decrypted on another computer.
 
 **Q: How does this compare to commercial tools like SolarWinds DPA or Redgate SQL Monitor?**
-A: SQL Health Assessment is free and open-source with no licensing costs. It covers core monitoring, health checks, execution plans, and wait stats. Commercial tools may offer deeper historical trending, mobile apps, or cloud-hosted dashboards, but this tool handles the majority of day-to-day DBA monitoring needs.
+A: LiveMonitor is free and open-source with no licensing costs. It covers core monitoring, health checks, execution plans, and wait stats. Commercial tools may offer deeper historical trending, mobile apps, or cloud-hosted dashboards, but this tool handles the majority of day-to-day DBA monitoring needs.
+
+**Q: Something is wrong — how do I get help?**
+A: Use the **Report / Feedback** button in the app sidebar, or open a [GitHub Issue](https://github.com/SQLAdrian/SqlHealthAssessment/issues). For email support: [adrian@sqldba.org](mailto:adrian@sqldba.org).
 
 ---
 

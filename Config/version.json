@@ -1,7 +1,7 @@
 {
     "version":  "0.85.2",
-    "buildNumber":  1096,
-    "buildDate":  "2026-04-15",
+    "buildNumber":  1154,
+    "buildDate":  "2026-04-18",
     "releaseType":  "Production",
     "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SqlHealthAssessment/releases/latest",
     "whatsnew":  [
@@ -14,7 +14,7 @@
                      "AutoUpdate: version comparison now handles GitHub tag format v0.85.2-build1046 correctly",
                      "Query Plan: stored procedure plans (StmtCond WHILE/IF) now parse correctly — condition plan shown, body statements as separate tabs",
                      "Query Plan: null-safety fix for fallback parent-selection path in ParseAll",
-                     "Alerting: xp_readerrorlog datetime params pre-declared as variables — fixes 'Incorrect syntax near MINUTE' on every poll cycle",
+                     "Alerting: xp_readerrorlog datetime params pre-declared as variables — fixes \u0027Incorrect syntax near MINUTE\u0027 on every poll cycle",
                      "Alerting: deadlock count fast-path — NVARCHAR LIKE pre-check skips full XML cast when no deadlocks in ring buffer; timeout raised to 30s"
                  ]
 }

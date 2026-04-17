@@ -189,6 +189,21 @@ namespace SqlHealthAssessment.Data
             }
         }
 
+        /// <summary>
+        /// Resets all settings to factory defaults and saves. Preserves nothing.
+        /// </summary>
+        public void ResetToDefaults()
+        {
+            lock (_lock)
+            {
+                _settings = new UserSettings();
+                SaveSettings();
+            }
+            // Fire mode-change events so NavMenu toggles update immediately
+            OnNoPantsModeChanged?.Invoke(false);
+            OnExperimentalModeChanged?.Invoke(false);
+        }
+
         public string GetRadzenUiTheme() { lock (_lock) return _settings.RadzenUiTheme; }
 
         public void SetRadzenUiTheme(string theme)

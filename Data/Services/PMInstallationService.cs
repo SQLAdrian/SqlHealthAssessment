@@ -144,22 +144,33 @@ namespace SqlHealthAssessment.Data.Services
         {
             string appBase = AppDomain.CurrentDomain.BaseDirectory;
 
+            string pmRoot = Path.Combine(appBase, "Deploy", "PerformanceMonitor_db");
+
             // Primary: <appBase>/Deploy/PerformanceMonitor_db/install/
-            string primaryInstall = Path.Combine(appBase, "Deploy", "PerformanceMonitor_db", "install");
+            string primaryInstall = Path.Combine(pmRoot, "install");
             if (Directory.Exists(primaryInstall))
             {
                 var files = GetInstallFiles(primaryInstall);
                 if (files.Count > 0)
-                    return (primaryInstall, Path.Combine(appBase, "Deploy", "PerformanceMonitor_db"), files);
+                    return (primaryInstall, pmRoot, files);
+            }
+
+            // Secondary: <appBase>/Deploy/PerformanceMonitor_db/install/passed/
+            // (scripts land here when installer marks them as already applied)
+            string passedInstall = Path.Combine(pmRoot, "install", "passed");
+            if (Directory.Exists(passedInstall))
+            {
+                var files = GetInstallFiles(passedInstall);
+                if (files.Count > 0)
+                    return (passedInstall, pmRoot, files);
             }
 
             // Fallback: <appBase>/Deploy/PerformanceMonitor_db/ (flat structure)
-            string primaryFlat = Path.Combine(appBase, "Deploy", "PerformanceMonitor_db");
-            if (Directory.Exists(primaryFlat))
+            if (Directory.Exists(pmRoot))
             {
-                var files = GetInstallFiles(primaryFlat);
+                var files = GetInstallFiles(pmRoot);
                 if (files.Count > 0)
-                    return (primaryFlat, primaryFlat, files);
+                    return (pmRoot, pmRoot, files);
             }
 
             return (null, null, new List<string>());

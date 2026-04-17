@@ -7,7 +7,16 @@
 @inject UserSettingsService UserSettings
 @inject XEventService XEventService
 @inject ServerConnectionManager ConnectionManager
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
 @implements IDisposable
+
+@if (!RbacService.HasPermission(UserState.Role, "manage_alerts"))
+{
+    <div style="padding: 32px;">
+        <AccessDenied RequiredRole="Admin" Message="Notification channel configuration is restricted to Admin users." />
+    </div>
+    return;
+}
 
 <div class="settings-page" style="max-width: 900px;">
     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-envelope" style="color: var(--accent); margin-right: 8px;"></i>Notification Channels</h2>

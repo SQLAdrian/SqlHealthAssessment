@@ -336,6 +336,7 @@ namespace SqlHealthAssessment.Data.Services
 
             // Scoped services — each browser tab/circuit gets its own instance
             services.AddScoped<DashboardDataService>();
+            services.AddScoped<AppUserState>();
 
             // Circuit handler — monitors Blazor Server circuit lifecycle
             services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, AppCircuitHandler>();

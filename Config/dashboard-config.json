@@ -8687,7 +8687,7 @@
           },
           "query": {
             "source": "",
-            "sqlServer": "SELECT TOP 60\n  record_time AS [Time],\n  sql_cpu_utilization AS [SQL CPU %],\n  100 - system_idle - sql_cpu_utilization AS [Other CPU %]\nFROM (\n  SELECT\n    DATEADD(ms, -1 * (i.ms_ticks - rb.timestamp), GETDATE()) AS record_time,\n    rb.record.value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]','int') AS sql_cpu_utilization,\n    rb.record.value('(./Record/SchedulerMonitorEvent/SystemHealth/SystemIdle)[1]','int') AS system_idle\n  FROM sys.dm_os_ring_buffers rb\n  CROSS JOIN sys.dm_os_sys_info i\n  WHERE rb.ring_buffer_type = N'RING_BUFFER_SCHEDULER_MONITOR'\n    AND rb.record.value('(./Record/@type)[1]','varchar(50)') = 'SCHEDULER_MONITOR_SYSTEM_HEALTH_RING_BUFFER_RECORDED'\n) x\nORDER BY record_time ASC"
+            "sqlServer": "SELECT TOP 60\n  record_time AS [Time],\n  sql_cpu_utilization AS [SQL CPU %],\n  100 - system_idle - sql_cpu_utilization AS [Other CPU %]\nFROM (\n  SELECT\n    DATEADD(ms, -1 * (i.ms_ticks - rb.timestamp), GETDATE()) AS record_time,\n    CAST(rb.record AS XML).value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]','int') AS sql_cpu_utilization,\n    CAST(rb.record AS XML).value('(./Record/SchedulerMonitorEvent/SystemHealth/SystemIdle)[1]','int') AS system_idle\n  FROM sys.dm_os_ring_buffers rb\n  CROSS JOIN sys.dm_os_sys_info i\n  WHERE rb.ring_buffer_type = N'RING_BUFFER_SCHEDULER_MONITOR'\n    AND CAST(rb.record AS XML).value('(./Record/@type)[1]','varchar(50)') = 'SCHEDULER_MONITOR_SYSTEM_HEALTH_RING_BUFFER_RECORDED'\n) x\nORDER BY record_time ASC"
           },
           "defaultDatabase": "master",
           "statUnit": "",
@@ -8789,7 +8789,7 @@
           },
           "query": {
             "source": "",
-            "sqlServer": "SELECT TOP 20\n  DB_NAME(vfs.database_id) AS [Database],\n  RIGHT(mf.physical_name, CHARINDEX(N'\\', REVERSE(mf.physical_name)) - 1) AS [File],\n  CASE mf.type_desc WHEN 'ROWS' THEN 'Data' WHEN 'LOG' THEN 'Log' ELSE mf.type_desc END AS [Type],\n  CASE WHEN vfs.num_of_reads = 0 THEN 0\n       ELSE CAST(vfs.io_stall_read  / vfs.num_of_reads  AS DECIMAL(10,1)) END AS [Read ms],\n  CASE WHEN vfs.num_of_writes = 0 THEN 0\n       ELSE CAST(vfs.io_stall_write / vfs.num_of_writes AS DECIMAL(10,1)) END AS [Write ms],\n  vfs.num_of_reads  AS [Reads],\n  vfs.num_of_writes AS [Writes],\n  CAST((vfs.num_of_bytes_read  / 1048576.0) AS DECIMAL(10,1)) AS [MB Read],\n  CAST((vfs.num_of_bytes_written / 1048576.0) AS DECIMAL(10,1)) AS [MB Written]\nFROM sys.dm_io_virtual_file_stats(NULL,NULL) vfs\nJOIN sys.master_files mf ON vfs.database_id = mf.database_id AND vfs.file_id = mf.file_id\nWHERE vfs.num_of_reads + vfs.num_of_writes > 0\nORDER BY (vfs.io_stall_read + vfs.io_stall_write) DESC"
+            "sqlServer": "SELECT TOP 20\n  DB_NAME(vfs.database_id) AS [Database],\n  RIGHT(mf.physical_name, CHARINDEX(N'\\', REVERSE(mf.physical_name)) - 1) AS [File],\n  CASE mf.type_desc WHEN 'ROWS' THEN 'Data' WHEN 'LOG' THEN 'Log' ELSE mf.type_desc END AS [Type],\n  CASE WHEN vfs.num_of_reads = 0 THEN 0\n       ELSE CAST(CAST(vfs.io_stall_read AS FLOAT) / vfs.num_of_reads AS DECIMAL(10,1)) END AS [Read ms],\n  CASE WHEN vfs.num_of_writes = 0 THEN 0\n       ELSE CAST(CAST(vfs.io_stall_write AS FLOAT) / vfs.num_of_writes AS DECIMAL(10,1)) END AS [Write ms],\n  vfs.num_of_reads  AS [Reads],\n  vfs.num_of_writes AS [Writes],\n  CAST(vfs.num_of_bytes_read   / 1048576.0 AS DECIMAL(10,1)) AS [MB Read],\n  CAST(vfs.num_of_bytes_written / 1048576.0 AS DECIMAL(10,1)) AS [MB Written]\nFROM sys.dm_io_virtual_file_stats(NULL,NULL) vfs\nJOIN sys.master_files mf ON vfs.database_id = mf.database_id AND vfs.file_id = mf.file_id\nWHERE vfs.num_of_reads + vfs.num_of_writes > 0\nORDER BY vfs.io_stall_read + vfs.io_stall_write DESC"
           },
           "defaultDatabase": "master",
           "statUnit": "",
@@ -8874,7 +8874,7 @@
           },
           "query": {
             "source": "",
-            "sqlServer": "SELECT TOP 10\n    qs.query_hash AS [Query Hash],\n    qs.execution_count AS [Exec Count],\n    CONVERT(MONEY,qs.total_elapsed_time / qs.execution_count) AS [Avg Duration (ms)],\n    qs.min_elapsed_time AS [Min (ms)],\n    qs.max_elapsed_time AS [Max (ms)],\n    qs.last_execution_time AS [Last Exec],\n    LEFT(qs.sql_text, 100) AS [SQL Preview]\nFROM sys.dm_exec_query_stats qs\nCROSS APPLY sys.dm_exec_sql_text(qs.sql_handle)\nORDER BY qs.total_elapsed_time DESC"
+            "sqlServer": "SELECT TOP 10\n    qs.query_hash AS [Query Hash],\n    qs.execution_count AS [Exec Count],\n    CAST(qs.total_elapsed_time / 1000.0 / NULLIF(qs.execution_count,0) AS DECIMAL(14,1)) AS [Avg Duration (ms)],\n    CAST(qs.min_elapsed_time / 1000.0 AS DECIMAL(14,1)) AS [Min (ms)],\n    CAST(qs.max_elapsed_time / 1000.0 AS DECIMAL(14,1)) AS [Max (ms)],\n    qs.last_execution_time AS [Last Exec],\n    LEFT(st.[text], 100) AS [SQL Preview]\nFROM sys.dm_exec_query_stats qs\nCROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st\nORDER BY qs.total_elapsed_time DESC"
           },
           "defaultDatabase": "master",
           "statUnit": "",
@@ -8903,12 +8903,12 @@
         {
           "id": "queryperf.batch_requests",
           "title": "Batch Requests/sec & Compilations/sec",
-          "description": "Real-time query workload intensity — batch requests show throughput, compilations indicate plan cache pressure.",
+          "description": "Real-time query workload intensity from sys.dm_os_performance_counters — batch requests show throughput, compilations indicate plan cache pressure.",
           "enabled": true,
           "source": "",
-          "panelType": "TimeSeries",
+          "panelType": "DataGrid",
           "chartType": "Line",
-          "height": 250,
+          "height": 160,
           "refreshIntervalSeconds": 5,
           "layout": {
             "column": 1,
@@ -8917,7 +8917,7 @@
           },
           "query": {
             "source": "",
-            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    'Batch Requests/sec' AS [Series],\n    CONVERT(MONEY,sr.batch_requests_per_sec) AS [Value]\nFROM sys.dm_exec_query_stats sr\nINNER JOIN sys.dm_os_performance_counters pc WITH (NOLOCK)\n    ON pc.instance_id = sr.sql_handle\nWHERE pc.counter_name = 'Batch Requests/sec'\nUNION ALL\nSELECT\n    h.report_time,\n    'Compilations/sec',\n    CONVERT(MONEY,sr.compilation_count / NULLIF(DATEDIFF(SECOND,MIN(h2.report_time),MAX(h2.report_time)),0))\nFROM sys.dm_exec_query_stats sr\nINNER JOIN sys.dm_os_performance_counters pc WITH (NOLOCK)\n    ON pc.instance_id = sr.sql_handle\nCROSS APPLY (\n    SELECT TOP 1 report_time FROM dbo.sqlwatch_logger_snapshot_header h2 WITH (NOLOCK)\n    WHERE h2.report_time >= DATEADD(SECOND,-60,GETDATE())\n    ORDER BY h2.report_time DESC\n) h2\nWHERE pc.counter_name = 'Compilations/sec'\nORDER BY [Time]"
+            "sqlServer": "SELECT\n    GETDATE() AS [Time],\n    pc.counter_name AS [Series],\n    CAST(pc.cntr_value AS FLOAT) AS [Value]\nFROM sys.dm_os_performance_counters pc\nWHERE pc.object_name LIKE '%SQL Statistics%'\n  AND pc.counter_name IN ('Batch Requests/sec','SQL Compilations/sec','SQL Re-Compilations/sec')\nORDER BY pc.counter_name"
           },
           "defaultDatabase": "master",
           "statUnit": "",
@@ -8937,10 +8937,10 @@
         {
           "id": "queryperf.plan_cache",
           "title": "Plan Cache Statistics",
-          "description": "Real-time plan cache metrics — monitor compiled plans, memory usage, and cache efficiency.",
+          "description": "Real-time plan cache metrics — compiled plan counts, memory usage, and use frequency by plan type.",
           "enabled": true,
           "source": "",
-          "panelType": "TimeSeries",
+          "panelType": "DataGrid",
           "chartType": "Line",
           "height": 200,
           "refreshIntervalSeconds": 10,
@@ -8951,7 +8951,7 @@
           },
           "query": {
             "source": "",
-            "sqlServer": "SELECT\n    h.report_time AS [Time],\n    'Cached Plans' AS [Series],\n    COUNT(*) AS [Value]\nFROM sys.dm_exec_cached_plans cp WITH (NOLOCK)\nINNER JOIN sys.dm_os_performance_counters pc WITH (NOLOCK)\n    ON pc.instance_id = cp.plan_handle\nWHERE pc.counter_name IN ('Cache Entries','Memory Usage (KB)')\nGROUP BY h.report_time, pc.counter_name\nORDER BY [Time]"
+            "sqlServer": "SELECT\n    GETDATE() AS [Time],\n    objtype AS [Series],\n    COUNT(*) AS [Cached Plans],\n    CAST(SUM(CAST(size_in_bytes AS BIGINT)) / 1048576.0 AS DECIMAL(10,1)) AS [Size MB],\n    SUM(usecounts) AS [Use Count]\nFROM sys.dm_exec_cached_plans WITH (NOLOCK)\nGROUP BY objtype\nORDER BY COUNT(*) DESC"
           },
           "defaultDatabase": "master",
           "statUnit": "",
@@ -8985,7 +8985,7 @@
           },
           "query": {
             "source": "",
-            "sqlServer": "SELECT TOP 10\n    wait_type AS [Wait Type],\n    waiting_tasks_count AS [Waiting Tasks],\n    wait_time_ms / 1000.0 AS [Total Wait (s)],\n    signal_wait_time_ms / 1000.0 AS [Signal Wait (s)],\n    wait_stats_in_row AS [In Row Waiters]\nFROM sys.dm_os_wait_stats\nWHERE wait_type NOT IN ('BROKER_EVENTFIRE_TRIGGERED','BROKER_RECEIVE_WAITFOR','BROKER_TASK_STOP','CLR_WORKER_IDLE','DISK_IO_COMPLETION','FCB_RESTART','FCB_RETRY','ONLINE_TASK_TIMEOUT','SLEEP_TASK','SOS_SCHEDULER_YIELD','VXBRM_DISPATCHER_CONNECT_OOB','VEKTOR_DISPATCHER_CONNECT_OOB')\nORDER BY wait_time_ms DESC"
+            "sqlServer": "SELECT TOP 10\n    wait_type AS [Wait Type],\n    waiting_tasks_count AS [Waiting Tasks],\n    CAST(wait_time_ms / 1000.0 AS DECIMAL(14,2)) AS [Total Wait (s)],\n    CAST(signal_wait_time_ms / 1000.0 AS DECIMAL(14,2)) AS [Signal Wait (s)],\n    CAST((wait_time_ms - signal_wait_time_ms) / 1000.0 AS DECIMAL(14,2)) AS [Resource Wait (s)],\n    CAST(wait_time_ms * 1.0 / NULLIF(waiting_tasks_count,0) AS DECIMAL(10,2)) AS [Avg Wait ms]\nFROM sys.dm_os_wait_stats\nWHERE wait_type NOT IN (\n  'SLEEP_TASK','BROKER_TO_FLUSH','BROKER_TASK_STOP','CLR_AUTO_EVENT',\n  'DISPATCHER_QUEUE_SEMAPHORE','FT_IFTS_SCHEDULER_IDLE_WAIT',\n  'HADR_WORK_QUEUE','ONDEMAND_TASK_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH',\n  'RESOURCE_QUEUE','SERVER_IDLE_CHECK','SLEEP_DBSTARTUP','SLEEP_DBRECOVER',\n  'SLEEP_MASTERDBREADY','SLEEP_MASTERMDREADY','SLEEP_MASTERUPGRADED',\n  'SLEEP_MSDBSTARTUP','SLEEP_TEMPDBSTARTUP','SNI_HTTP_ACCEPT',\n  'SP_SERVER_DIAGNOSTICS_SLEEP','SQLTRACE_BUFFER_FLUSH','WAITFOR',\n  'XE_DISPATCHER_WAIT','XE_TIMER_EVENT','BROKER_EVENTHANDLER',\n  'CHECKPOINT_QUEUE','SQLTRACE_INCREMENTAL_FLUSH_SLEEP'\n)\n  AND wait_time_ms > 0\nORDER BY wait_time_ms DESC"
           },
           "defaultDatabase": "master",
           "statUnit": "",
@@ -9028,7 +9028,7 @@
           },
           "query": {
             "source": "",
-            "sqlServer": "SELECT\n    COUNT(*) AS [Total Queries Executed],\n    CONVERT(MONEY,AVG(total_elapsed_time)/1000) AS [Avg Duration (s)],\n    MAX(total_elapsed_time)/1000 AS [Max Duration (s)],\n    SUM(total_logical_reads)/1024/1024 AS [Total Logical Reads (GB)],\n    SUM(total_physical_reads)/1024/1024 AS [Total Physical Reads (GB)],\n    SUM(total_writes)/1024/1024 AS [Total Writes (GB)],\n    AVG(cpu_time)/1000 AS [Avg CPU Time (s)],\n    MAX(cpu_time)/1000 AS [Max CPU Time (s)],\n    SUM(blocking_session_count) AS [Blocked Queries],\n    SUM(recompile_count) AS [Recompilations]\nFROM sys.dm_exec_query_stats"
+            "sqlServer": "SELECT\n    COUNT(*) AS [Cached Query Plans],\n    CAST(AVG(total_elapsed_time) / 1000.0 AS DECIMAL(14,1)) AS [Avg Duration (ms)],\n    CAST(MAX(total_elapsed_time) / 1000.0 AS DECIMAL(14,1)) AS [Max Duration (ms)],\n    CAST(SUM(total_logical_reads) * 8.0 / 1024 / 1024 AS DECIMAL(10,2)) AS [Logical Reads (GB)],\n    CAST(SUM(total_physical_reads) * 8.0 / 1024 / 1024 AS DECIMAL(10,2)) AS [Physical Reads (GB)],\n    CAST(SUM(total_logical_writes) * 8.0 / 1024 / 1024 AS DECIMAL(10,2)) AS [Logical Writes (GB)],\n    CAST(AVG(total_worker_time) / 1000.0 AS DECIMAL(14,1)) AS [Avg CPU (ms)],\n    CAST(MAX(total_worker_time) / 1000.0 AS DECIMAL(14,1)) AS [Max CPU (ms)],\n    SUM(execution_count) AS [Total Executions]\nFROM sys.dm_exec_query_stats"
           },
           "defaultDatabase": "master",
           "statUnit": "",

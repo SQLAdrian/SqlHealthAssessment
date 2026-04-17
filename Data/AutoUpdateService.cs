@@ -34,6 +34,15 @@ namespace SqlHealthAssessment.Data
         /// <summary>True if an update has been downloaded and is waiting to be applied.</summary>
         public bool HasStagedUpdate => !string.IsNullOrEmpty(StagedUpdatePath) && File.Exists(StagedUpdatePath);
 
+        /// <summary>Cached result from the last background update check. Null if not checked yet.</summary>
+        public (bool Available, UpdateInfo? Info)? LastCheckResult { get; private set; }
+
+        /// <summary>True if a newer version was found in the last background check.</summary>
+        public bool IsUpdateAvailable => LastCheckResult?.Available == true;
+
+        /// <summary>Fires on the thread pool when a background check finds a newer version.</summary>
+        public event Action<UpdateInfo>? OnUpdateAvailable;
+
         public AutoUpdateService(ILogger<AutoUpdateService> logger)
         {
             _logger = logger;
@@ -135,6 +144,32 @@ namespace SqlHealthAssessment.Data
                 _logger.LogError(ex, "Failed to check for updates");
                 return (false, null);
             }
+        }
+
+        /// <summary>
+        /// Starts a one-shot background update check. Fires OnUpdateAvailable if a newer version is found.
+        /// Safe to call multiple times — subsequent calls are no-ops if a check is already cached.
+        /// </summary>
+        public void StartBackgroundCheck()
+        {
+            if (LastCheckResult.HasValue)
+                return; // already checked this session
+
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15)); // don't check immediately on startup
+                try
+                {
+                    var result = await CheckForUpdatesAsync();
+                    LastCheckResult = result;
+                    if (result.Available && result.Info != null)
+                        OnUpdateAvailable?.Invoke(result.Info);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Background update check failed");
+                }
+            });
         }
 
         /// <summary>

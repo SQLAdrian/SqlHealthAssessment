@@ -6,6 +6,15 @@
 @inject BPScriptService BPService
 @inject IDbConnectionFactory ConnectionFactory
 @inject NavigationManager Nav
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
+
+@if (!RbacService.HasPermission(UserState.Role, "run_scripts"))
+{
+    <div style="padding: 32px;">
+        <AccessDenied RequiredRole="Operator" Message="Best Practice scripts require Operator or Admin role." />
+    </div>
+    return;
+}
 
 <h3>Deploy Best Practice Scripts</h3>
 

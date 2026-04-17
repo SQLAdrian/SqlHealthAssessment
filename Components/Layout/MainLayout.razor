@@ -2,10 +2,12 @@
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Web
 @using SqlHealthAssessment.Components.Shared
+@using SqlHealthAssessment.Data
 @using Radzen.Blazor
 @inject SqlHealthAssessment.Data.Services.KeyboardShortcutService ShortcutSvc
 @inject SqlHealthAssessment.Data.UserSettingsService UserSettings
 @inject SqlHealthAssessment.Data.ServerConnectionManager ConnectionManager
+@inject SqlHealthAssessment.Data.AutoUpdateService AutoUpdate
 @implements IDisposable
 
 <!-- Skip link for screen readers -->
@@ -38,6 +40,24 @@
     <OnboardingWizard IsVisible="@_showOnboarding" OnComplete="OnOnboardingComplete" />
     <ReleaseNotesModal IsVisible="@_showReleaseNotes" OnClose="OnReleaseNotesClosed" />
     <ServerModeToggle />
+
+    @* ── Update available banner ── *@
+    @if (_updateAvailable && _updateInfo != null)
+    {
+        <div style="position:fixed;top:0;left:0;right:0;z-index:2000;background:var(--accent);color:#fff;
+                    display:flex;align-items:center;justify-content:center;gap:12px;
+                    padding:7px 16px;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+            <i class="fa-solid fa-circle-arrow-up"></i>
+            <span>Update available: <strong>v@(_updateInfo.Version)</strong></span>
+            <a href="/settings" style="color:#fff;font-weight:600;text-decoration:underline;"
+               @onclick="() => _updateAvailable = false">Go to Settings to update</a>
+            <button @onclick="() => _updateAvailable = false"
+                    style="background:transparent;border:none;color:#fff;cursor:pointer;margin-left:8px;font-size:16px;line-height:1;"
+                    title="Dismiss">&#x2715;</button>
+        </div>
+        <div style="height:36px;"></div>  @* spacer so content isn't hidden under the banner *@
+    }
+
     <Router AppAssembly="@typeof(MainLayout).Assembly">
     <Found Context="routeData">
         <div class="app-layout" role="main" aria-label="Main content area">
@@ -81,6 +101,8 @@
     private bool _afterFirstRender = false;
     private bool _showOnboarding    = false;
     private bool _showReleaseNotes  = false;
+    private bool _updateAvailable   = false;
+    private UpdateInfo? _updateInfo;
 
     protected override void OnInitialized()
     {
@@ -98,6 +120,10 @@
                 && UserSettings.GetShowReleaseNotesOnUpdate())
                 _showReleaseNotes = true;
         }
+
+        // Kick off a background update check; banner appears if a newer version is found
+        AutoUpdate.OnUpdateAvailable += OnUpdateFound;
+        AutoUpdate.StartBackgroundCheck();
     }
 
     private static string GetCurrentVersion()
@@ -151,7 +177,17 @@
         StateHasChanged();
     }
 
-    public void Dispose() { }
+    private void OnUpdateFound(UpdateInfo info)
+    {
+        _updateInfo      = info;
+        _updateAvailable = true;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AutoUpdate.OnUpdateAvailable -= OnUpdateFound;
+    }
 
     private async void LogErrorToConsole(Exception ex)
     {

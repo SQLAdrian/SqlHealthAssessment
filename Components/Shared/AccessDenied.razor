@@ -1,0 +1,41 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@* Inline "insufficient permissions" notice — rendered by RbacGuard when the user's role
+   does not satisfy the required permission. Keeps the page layout intact. *@
+
+<div class="rbac-denied">
+    <span class="rbac-denied-icon">🔒</span>
+    <span class="rbac-denied-text">
+        @if (!string.IsNullOrEmpty(Message))
+        {
+            @Message
+        }
+        else
+        {
+            <text>Insufficient permissions. This action requires <strong>@RequiredRole</strong> or higher.</text>
+        }
+    </span>
+</div>
+
+<style>
+    .rbac-denied {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: var(--bg-secondary, #1a1a2e);
+        border: 1px solid var(--border-warning, #664400);
+        border-radius: 4px;
+        color: var(--text-muted, #888);
+        font-size: 12px;
+        opacity: 0.85;
+    }
+    .rbac-denied-icon { font-size: 13px; }
+</style>
+
+@code {
+    /// <summary>Custom message to display. If empty, a generic message is shown.</summary>
+    [Parameter] public string Message { get; set; } = "";
+
+    /// <summary>Role name to mention in the default message (e.g. "Operator").</summary>
+    [Parameter] public string RequiredRole { get; set; } = "Operator";
+}

@@ -8,6 +8,15 @@
 @inject ILogger<ServiceManagement> Logger
 @inject ToastService Toast
 @inject AutoUpdateService UpdateService
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
+
+@if (!RbacService.HasPermission(UserState.Role, "settings"))
+{
+    <div style="padding: 32px;">
+        <AccessDenied RequiredRole="Admin" Message="Service management is restricted to Admin users." />
+    </div>
+    return;
+}
 
 <div class="settings-page" style="max-width: 900px;">
     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-microchip" style="color: var(--accent); margin-right: 8px;"></i>Service & Updates</h2>

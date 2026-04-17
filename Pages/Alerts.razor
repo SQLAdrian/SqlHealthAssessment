@@ -15,6 +15,7 @@
 @inject XEventService XEventService
 @inject IJSRuntime JS
 @inject AlertBaselineService Baseline
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
 @using System.Data
 @using Microsoft.Data.SqlClient
 @implements IDisposable
@@ -1392,6 +1393,8 @@
 
     private void AcknowledgeOne(AlertState alert)
     {
+        if (!RbacService.HasPermission(UserState.Role, "acknowledge_alerts"))
+        { Toast.ShowWarning("Insufficient permissions. Operator role required."); return; }
         Engine.AcknowledgeAlert(alert.AlertId, alert.ServerName);
         _activeAlerts = Engine.ActiveAlerts.ToList();
         _activeAlertCount = Engine.ActiveCount;
@@ -1399,6 +1402,8 @@
 
     private void AcknowledgeAll()
     {
+        if (!RbacService.HasPermission(UserState.Role, "acknowledge_alerts"))
+        { Toast.ShowWarning("Insufficient permissions. Operator role required."); return; }
         Engine.AcknowledgeAll();
         _activeAlerts = Engine.ActiveAlerts.ToList();
         _activeAlertCount = Engine.ActiveCount;

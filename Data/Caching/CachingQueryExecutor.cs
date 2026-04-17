@@ -1,6 +1,7 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -415,6 +416,79 @@ namespace SqlHealthAssessment.Data.Caching
             CancellationToken cancellationToken)
         {
             return await _inner.ExecuteQueryAsync(queryId, filter, mapper, additionalParams, cancellationToken);
+        }
+
+        // ──────────────────────── Cache pre-load ────────────────────────
+
+        /// <summary>
+        /// Reads whatever is already in SQLite for the given panels — no SQL Server roundtrip.
+        /// Returns immediately with stale data so the dashboard can render while a fresh fetch runs.
+        /// Any panel with no cached data is simply absent from the returned dictionaries.
+        /// </summary>
+        public async Task PreloadFromCacheAsync(
+            IEnumerable<SqlHealthAssessment.Data.Models.PanelDefinition> panels,
+            DashboardFilter filter,
+            ConcurrentDictionary<string, List<TimeSeriesPoint>> tsResults,
+            ConcurrentDictionary<string, StatValue> statResults,
+            ConcurrentDictionary<string, List<StatValue>> bgResults,
+            ConcurrentDictionary<string, DataTable> gridResults,
+            ConcurrentDictionary<string, List<CheckStatus>> checkResults)
+        {
+            var instanceKey = BuildInstanceKey(filter);
+
+            var tasks = panels.Select(async panel =>
+            {
+                try
+                {
+                    switch (panel.PanelType)
+                    {
+                        case "TimeSeries":
+                        {
+                            var from = filter.TimeFrom == default ? DateTime.UtcNow.AddHours(-1) : filter.TimeFrom;
+                            var to   = filter.TimeTo   == default ? DateTime.UtcNow               : filter.TimeTo;
+                            var pts = await _cache.GetTimeSeriesAsync(panel.Id, instanceKey, from, to);
+                            if (pts?.Count > 0) tsResults[panel.Id] = pts;
+                            break;
+                        }
+                        case "StatCard":
+                        case "DeltaStatCard":
+                        {
+                            var dt = await _cache.GetDataTableAsync(panel.Id, instanceKey);
+                            if (dt != null && dt.Rows.Count > 0)
+                            {
+                                // Re-use same scalar-extraction logic as LoadPanelDataAsync
+                                var row = dt.Rows[0];
+                                double val = 0;
+                                if (dt.Columns.Count > 0 && row[0] != DBNull.Value)
+                                    double.TryParse(row[0]?.ToString(), out val);
+                                statResults[panel.Id] = new StatValue { Value = val };
+                            }
+                            break;
+                        }
+                        case "BarGauge":
+                        {
+                            var bg = await _cache.GetBarGaugeAsync(panel.Id, instanceKey);
+                            if (bg?.Count > 0) bgResults[panel.Id] = bg;
+                            break;
+                        }
+                        case "DataGrid":
+                        {
+                            var dt = await _cache.GetDataTableAsync(panel.Id, instanceKey);
+                            if (dt != null) gridResults[panel.Id] = dt;
+                            break;
+                        }
+                        case "CheckStatus":
+                        {
+                            var cs = await _cache.GetCheckStatusAsync(panel.Id, instanceKey);
+                            if (cs?.Count > 0) checkResults[panel.Id] = cs;
+                            break;
+                        }
+                    }
+                }
+                catch { /* non-fatal — panel stays empty until fresh fetch */ }
+            });
+
+            await Task.WhenAll(tasks);
         }
 
         // ──────────────────────── Helpers ───────────────────────────────

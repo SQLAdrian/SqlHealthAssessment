@@ -1,10 +1,20 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/servers"
 @inject ServerConnectionManager ConnectionManager
+@inject SqlHealthAssessment.Data.Services.AppUserState UserState
 @using Microsoft.Data.SqlClient
 @using SqlHealthAssessment.Data
 @using SqlHealthAssessment.Data.Models
+@using SqlHealthAssessment.Data.Services
 
+@if (!RbacService.HasPermission(UserState.Role, "manage_servers"))
+{
+    <div style="padding: 32px;">
+        <AccessDenied RequiredRole="Admin" Message="Server management is restricted to Admin users." />
+    </div>
+}
+else
+{
 
 <div class="servers-page">
     <h2>Server Management</h2>
@@ -292,6 +302,8 @@
         </div>
     }
 </div>
+
+} @* end RBAC else *@
 
 @code {
     private List<ServerConnection> Connections = new();
