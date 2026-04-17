@@ -8,6 +8,7 @@
 @inject SqlHealthAssessment.Data.UserSettingsService UserSettings
 @inject SqlHealthAssessment.Data.ServerConnectionManager ConnectionManager
 @inject SqlHealthAssessment.Data.AutoUpdateService AutoUpdate
+@inject SqlHealthAssessment.Data.Services.NotificationChannelService ChannelService
 @implements IDisposable
 
 <!-- Skip link for screen readers -->
@@ -58,6 +59,22 @@
         <div style="height:36px;"></div>  @* spacer so content isn't hidden under the banner *@
     }
 
+    @* ── Maintenance mode banner ── *@
+    @if (_maintenanceActive)
+    {
+        <div style="position:fixed;top:@(_updateAvailable && _updateInfo != null ? "36px" : "0");left:0;right:0;z-index:1999;
+                    background:#7c5a00;color:#ffe082;
+                    display:flex;align-items:center;justify-content:center;gap:12px;
+                    padding:7px 16px;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+            <i class="fa-solid fa-wrench"></i>
+            <span><strong>Maintenance mode active</strong>@(_maintenanceUntilText)</span>
+            <a href="/alerting-config" style="color:#ffe082;font-weight:600;text-decoration:underline;">
+                End early →
+            </a>
+        </div>
+        <div style="height:36px;"></div>
+    }
+
     <Router AppAssembly="@typeof(MainLayout).Assembly">
     <Found Context="routeData">
         <div class="app-layout" role="main" aria-label="Main content area">
@@ -103,6 +120,9 @@
     private bool _showReleaseNotes  = false;
     private bool _updateAvailable   = false;
     private UpdateInfo? _updateInfo;
+    private bool _maintenanceActive = false;
+    private string _maintenanceUntilText = "";
+    private System.Timers.Timer? _maintenanceTimer;
 
     protected override void OnInitialized()
     {
@@ -124,6 +144,28 @@
         // Kick off a background update check; banner appears if a newer version is found
         AutoUpdate.OnUpdateAvailable += OnUpdateFound;
         AutoUpdate.StartBackgroundCheck();
+
+        // Poll maintenance window state every 30 seconds
+        RefreshMaintenanceState();
+        _maintenanceTimer = new System.Timers.Timer(30_000);
+        _maintenanceTimer.Elapsed += (_, _) => _ = InvokeAsync(() => { RefreshMaintenanceState(); StateHasChanged(); });
+        _maintenanceTimer.AutoReset = true;
+        _maintenanceTimer.Start();
+    }
+
+    private void RefreshMaintenanceState()
+    {
+        var windows = ChannelService.GetAlertWindows();
+        _maintenanceActive = windows.IsMaintenanceActive;
+        if (!_maintenanceActive)
+        {
+            _maintenanceUntilText = "";
+            return;
+        }
+        if (windows.IsManualMaintenanceActive && windows.MaintenanceActiveUntil.HasValue)
+            _maintenanceUntilText = $" — all alerts suppressed until {windows.MaintenanceActiveUntil.Value:HH:mm}";
+        else
+            _maintenanceUntilText = " — scheduled window";
     }
 
     private static string GetCurrentVersion()
@@ -187,6 +229,8 @@
     public void Dispose()
     {
         AutoUpdate.OnUpdateAvailable -= OnUpdateFound;
+        _maintenanceTimer?.Stop();
+        _maintenanceTimer?.Dispose();
     }
 
     private async void LogErrorToConsole(Exception ex)
