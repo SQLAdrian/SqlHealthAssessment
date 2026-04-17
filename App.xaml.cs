@@ -133,6 +133,7 @@ namespace SqlHealthAssessment
             services.AddSingleton<Data.Services.AlertDefinitionService>();
             services.AddSingleton<Data.Services.AlertTemplateService>();
             services.AddSingleton<Data.Services.AlertHistoryService>();
+            services.AddSingleton<Data.Services.AlertBaselineService>();
             services.AddSingleton<Data.Services.AlertEvaluationService>();
 
             // Scheduled Tasks
@@ -230,6 +231,13 @@ namespace SqlHealthAssessment
             // Start liveQueries maintenance timer (VACUUM + optimize, default every 4 hours)
             Services.GetService<liveQueriesMaintenanceService>()?.Start();
 
+            // Start alert baseline service (aggressive seeding for first 5 min, then hourly recompute)
+            _ = Task.Run(async () =>
+            {
+                var baseline = Services.GetService<Data.Services.AlertBaselineService>();
+                if (baseline != null) await baseline.StartAsync();
+            });
+
             // Start alert evaluation engine
             Services.GetService<Data.Services.AlertEvaluationService>()?.Start();
 
@@ -285,6 +293,25 @@ namespace SqlHealthAssessment
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to apply update on exit");
+            }
+
+            // ── Flush SQLite WAL to prevent corruption on abrupt shutdown ──
+            try
+            {
+                var cacheStore = Services?.GetService<Data.Caching.liveQueriesCacheStore>();
+                if (cacheStore != null)
+                {
+                    using var conn = cacheStore.CreateExternalConnection();
+                    conn.Open();
+                    using var wal = conn.CreateCommand();
+                    wal.CommandText = "PRAGMA wal_checkpoint(FULL);";
+                    wal.ExecuteNonQuery();
+                    Log.Debug("SQLite WAL checkpoint completed on exit");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "SQLite WAL checkpoint failed on exit");
             }
 
             // ── Explicitly stop all background services before DI dispose ──

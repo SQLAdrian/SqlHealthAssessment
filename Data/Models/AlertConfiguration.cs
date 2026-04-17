@@ -52,7 +52,7 @@ namespace SqlHealthAssessment.Data.Models
         /// When false, email is suppressed for this notification (per alert definition).
         /// Escalation notifications always send email regardless.
         /// </summary>
-        public bool SendEmail { get; set; } = true;
+        public bool SendEmail { get; set; } = false;
     }
 
     public class AlertEvaluationResult
@@ -213,6 +213,26 @@ namespace SqlHealthAssessment.Data.Models
         /// </summary>
         [JsonPropertyName("escalationAfterMinutes")]
         public int EscalationAfterMinutes { get; set; } = 30;
+
+        // ── IQR Baseline ───────────────────────────────────────────────
+
+        /// <summary>
+        /// When true, this alert participates in IQR-based dynamic baseline learning.
+        /// Set false for binary/SLA alerts (missed backups, failed jobs, blocking).
+        /// Set true for continuous metrics (CPU %, memory, PLE, wait stats).
+        /// </summary>
+        [JsonPropertyName("canBaseline")]
+        public bool CanBaseline { get; set; } = false;
+
+        /// <summary>
+        /// When true, this alert uses DMVs or features that require on-premises SQL Server
+        /// (or SQL Server on IaaS). It will be silently skipped on Azure SQL DB (EngineEdition 5)
+        /// and Azure SQL Managed Instance (EngineEdition 8).
+        /// Default false — safe to run everywhere. Mark true for alerts using sys.dm_os_*,
+        /// sys.dm_server_*, sp_configure, xp_cmdshell, etc.
+        /// </summary>
+        [JsonPropertyName("requiresOnPrem")]
+        public bool RequiresOnPrem { get; set; } = false;
 
         // ── Baseline deviation ─────────────────────────────────────────
 

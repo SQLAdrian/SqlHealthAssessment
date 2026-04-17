@@ -490,6 +490,36 @@
         </table>
     </div>
 
+    <!-- Alert Baseline -->
+    <div class="settings-group">
+        <h3>Alert Baseline</h3>
+        <div class="settings-row">
+            <label class="settings-label">
+                Enable dynamic baseline alerting
+                <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(on by default)</span>
+            </label>
+            <input type="checkbox" @bind="_alertBaselineEnabled" @bind:after="SaveBaselineSettings" />
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">
+            When enabled, the app collects metric samples for compatible alerts and computes
+            IQR-based dynamic thresholds (Median + IQR). Thresholds activate after ~10 samples
+            per alert/server pair (~5 minutes from first run). Alerts with binary outcomes
+            (missed backups, failed jobs) are never baselined.
+        </p>
+        <div class="settings-row" style="margin-top: 8px;">
+            <label class="settings-label">
+                Per-server baselines
+                <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(recommended)</span>
+            </label>
+            <input type="checkbox" @bind="_alertBaselinePerServer" @bind:after="SaveBaselineSettings"
+                   disabled="@(!_alertBaselineEnabled)" />
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">
+            When enabled, each server learns its own baseline independently.
+            When disabled, thresholds are computed across all servers combined.
+        </p>
+    </div>
+
     <!-- Notifications -->
     <div class="settings-group">
         <h3>Notifications</h3>
@@ -703,6 +733,10 @@
     private bool _autoExportVaCsv;
     private bool _autoExportVaPdf;
 
+    // Alert Baseline
+    private bool _alertBaselineEnabled;
+    private bool _alertBaselinePerServer;
+
     // Notifications
     private bool _showReleaseNotesOnUpdate;
 
@@ -726,8 +760,10 @@
         _anonymiseServerNames = UserSettings.GetAnonymiseServerNames();
         LogAnon.Enabled = _anonymiseServerNames;
         _useV2PlanIcons   = UserSettings.GetUseV2PlanIcons();
-        _noPantsMode      = UserSettings.GetNoPantsMode();
-        _experimentalMode = UserSettings.GetExperimentalMode();
+        _noPantsMode             = UserSettings.GetNoPantsMode();
+        _experimentalMode        = UserSettings.GetExperimentalMode();
+        _alertBaselineEnabled    = UserSettings.GetAlertBaselineEnabled();
+        _alertBaselinePerServer  = UserSettings.GetAlertBaselinePerServer();
         DefaultDashboardId = UserSettings.GetDefaultDashboardId();
         _zoomLevel = UserSettings.GetZoomLevel();
 
@@ -1003,6 +1039,12 @@
             _autoExportAuditCsv, _autoExportAuditJson, _autoExportAuditPdf,
             _autoExportQuickCheckCsv, _autoExportQuickCheckPdf,
             _autoExportVaCsv, _autoExportVaPdf);
+    }
+
+    private void SaveBaselineSettings()
+    {
+        UserSettings.SetAlertBaselineEnabled(_alertBaselineEnabled);
+        UserSettings.SetAlertBaselinePerServer(_alertBaselinePerServer);
     }
 
     private void SaveNotificationSettings()

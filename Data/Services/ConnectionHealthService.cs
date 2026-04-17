@@ -24,10 +24,19 @@ namespace SqlHealthAssessment.Data.Services
         private readonly ServerConnectionManager _connections;
         private readonly ILogger<ConnectionHealthService> _logger;
         private readonly ConcurrentDictionary<string, HealthEntry> _status = new(StringComparer.OrdinalIgnoreCase);
+
+        // EngineEdition 5 = Azure SQL DB, 8 = Azure SQL Managed Instance
+        // Populated during each health check cycle; used to skip unsupported DMV checks on Azure.
+        private readonly ConcurrentDictionary<string, bool> _isAzure = new(StringComparer.OrdinalIgnoreCase);
+
         private readonly System.Timers.Timer _timer;
         private bool _disposed;
 
         public event Action? OnStatusChanged;
+
+        /// <summary>Returns true if the server is Azure SQL DB or Azure SQL MI.</summary>
+        public bool IsAzureSql(string serverName)
+            => _isAzure.TryGetValue(serverName, out var v) && v;
 
         public ConnectionHealthService(ServerConnectionManager connections, ILogger<ConnectionHealthService> logger)
         {
@@ -95,6 +104,24 @@ namespace SqlHealthAssessment.Data.Services
                 using var sql = new SqlConnection(connStr);
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
                 await sql.OpenAsync(cts.Token);
+
+                // Probe EngineEdition to detect Azure SQL DB (5) or Azure SQL MI (8)
+                // Only probe once per session — skip if already cached
+                if (!_isAzure.ContainsKey(serverName))
+                {
+                    try
+                    {
+                        using var cmd = sql.CreateCommand();
+                        cmd.CommandText = "SELECT SERVERPROPERTY('EngineEdition')";
+                        cmd.CommandTimeout = 4;
+                        var edition = await cmd.ExecuteScalarAsync(cts.Token);
+                        var ee = edition is DBNull || edition == null ? 0 : Convert.ToInt32(edition);
+                        _isAzure[serverName] = ee == 5 || ee == 8;
+                        if (_isAzure[serverName])
+                            _logger.LogInformation("Azure SQL detected: {Server} (EngineEdition={E})", serverName, ee);
+                    }
+                    catch { _isAzure[serverName] = false; }
+                }
 
                 _status[serverName] = new HealthEntry(ServerStatus.Online, DateTime.UtcNow, null);
                 _logger.LogDebug("Health check OK: {Server}", serverName);

@@ -31,7 +31,8 @@ namespace SqlHealthAssessment.Data.Caching
         private static readonly HashSet<string> AllowedTables = new(StringComparer.Ordinal)
         {
             "cache_timeseries", "cache_stat", "cache_bargauge",
-            "cache_datatable", "cache_checkstatus", "cache_metadata"
+            "cache_datatable", "cache_checkstatus", "cache_metadata",
+            "alert_baseline_samples", "alert_baseline_stats"
         };
 
         private static string ValidateTableName(string table)
@@ -93,6 +94,15 @@ namespace SqlHealthAssessment.Data.Caching
         /// Safe to call multiple times (uses CREATE TABLE IF NOT EXISTS).
         /// </summary>
         public void EnsureSchema() => InitializeSchema();
+
+        /// <summary>
+        /// Creates and returns an open-able SqliteConnection to the same database file.
+        /// Used by services (e.g. AlertBaselineService) that need direct table access
+        /// without going through the cache abstraction layer.
+        /// Caller is responsible for opening and disposing the connection.
+        /// </summary>
+        public SqliteConnection CreateExternalConnection()
+            => new SqliteConnection(_connectionString);
 
         private void InitializeSchema()
         {
@@ -184,8 +194,64 @@ namespace SqlHealthAssessment.Data.Caching
                 );
                 CREATE INDEX IF NOT EXISTS idx_metadata_last_fetch
                     ON cache_metadata(last_fetch);
+
+                CREATE TABLE IF NOT EXISTS alert_baseline_samples (
+                    alert_id     TEXT NOT NULL,
+                    server_name  TEXT NOT NULL,
+                    sampled_at   TEXT NOT NULL,
+                    value        REAL NOT NULL,
+                    hour_of_day  INTEGER NOT NULL,
+                    day_of_week  INTEGER NOT NULL,
+                    fetched_at   TEXT NOT NULL,
+                    PRIMARY KEY (alert_id, server_name, sampled_at)
+                );
+                CREATE INDEX IF NOT EXISTS idx_baseline_alert_server
+                    ON alert_baseline_samples(alert_id, server_name, sampled_at);
+                CREATE INDEX IF NOT EXISTS idx_baseline_fetched_at
+                    ON alert_baseline_samples(fetched_at);
+
+                CREATE TABLE IF NOT EXISTS alert_baseline_stats (
+                    alert_id             TEXT NOT NULL,
+                    server_name          TEXT NOT NULL,
+                    sample_count         INTEGER NOT NULL,
+                    p25                  REAL NOT NULL,
+                    p50                  REAL NOT NULL,
+                    p75                  REAL NOT NULL,
+                    p95                  REAL NOT NULL,
+                    iqr                  REAL NOT NULL,
+                    threshold_warn       REAL NOT NULL,
+                    threshold_crit       REAL NOT NULL,
+                    last_computed        TEXT NOT NULL,
+                    baseline_locked      INTEGER NOT NULL DEFAULT 0,
+                    trend_slope          REAL NOT NULL DEFAULT 0,
+                    trend_r_squared      REAL NOT NULL DEFAULT 0,
+                    trend_sample_count   INTEGER NOT NULL DEFAULT 0,
+                    is_trend_warning     INTEGER NOT NULL DEFAULT 0,
+                    is_trend_critical    INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (alert_id, server_name)
+                );
             ";
             cmd.ExecuteNonQuery();
+
+            // Migrate existing databases that predate the trend-detection columns.
+            // ALTER TABLE fails if column already exists — swallow that specific error.
+            foreach (var ddl in new[]
+            {
+                "ALTER TABLE alert_baseline_stats ADD COLUMN trend_slope        REAL    NOT NULL DEFAULT 0",
+                "ALTER TABLE alert_baseline_stats ADD COLUMN trend_r_squared    REAL    NOT NULL DEFAULT 0",
+                "ALTER TABLE alert_baseline_stats ADD COLUMN trend_sample_count INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE alert_baseline_stats ADD COLUMN is_trend_warning   INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE alert_baseline_stats ADD COLUMN is_trend_critical  INTEGER NOT NULL DEFAULT 0",
+            })
+            {
+                try
+                {
+                    using var alt = conn.CreateCommand();
+                    alt.CommandText = ddl;
+                    alt.ExecuteNonQuery();
+                }
+                catch (SqliteException) { /* column already exists — expected on new DB */ }
+            }
         }
 
         // ──────────────────────── Write Operations ──────────────────────
@@ -712,10 +778,26 @@ namespace SqlHealthAssessment.Data.Caching
 
         private static async Task EvictOlderThanCore(SqliteConnection conn, string cutoff)
         {
-            var tables = new[] { "cache_timeseries", "cache_stat", "cache_bargauge",
-                                 "cache_datatable", "cache_checkstatus" };
+            // Dynamically find all user tables that have a fetched_at column
+            // so new tables (e.g. alert_baseline_samples) are covered automatically
+            var tablesWithFetchedAt = new List<string>();
+            using (var listCmd = conn.CreateCommand())
+            {
+                listCmd.CommandText = @"
+                    SELECT m.name
+                    FROM sqlite_master m
+                    JOIN pragma_table_info(m.name) c ON c.name = 'fetched_at'
+                    WHERE m.type = 'table'
+                    AND m.name NOT LIKE 'sqlite_%'
+                    AND m.name != 'cache_metadata'
+                    AND m.name != 'alert_baseline_stats'
+                    ORDER BY m.name;";
+                using var reader = await listCmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    tablesWithFetchedAt.Add(reader.GetString(0));
+            }
 
-            foreach (var table in tables)
+            foreach (var table in tablesWithFetchedAt)
             {
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"DELETE FROM {ValidateTableName(table)} WHERE fetched_at < @cutoff";
@@ -723,7 +805,7 @@ namespace SqlHealthAssessment.Data.Caching
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // Also clean metadata for queries with no remaining data
+            // Clean metadata for queries with no remaining data
             using var metaCmd = conn.CreateCommand();
             metaCmd.CommandText = "DELETE FROM cache_metadata WHERE last_fetch < @cutoff";
             metaCmd.Parameters.AddWithValue("@cutoff", cutoff);

@@ -1,32 +1,73 @@
-# SQL Health Assessment — Free SQL Server Monitoring & DBA Tool
+# LiveMonitor — Free SQL Server Monitoring for Windows DBAs
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
-[![.NET 8](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078d4.svg)](https://github.com/SQLAdrian/SqlHealthAssessment/releases)
 [![SQL Server 2016+](https://img.shields.io/badge/SQL%20Server-2016%2B-red.svg)](https://www.microsoft.com/en-us/sql-server)
 
-> Free, open-source SQL Server audit, health assessment, and performance analysis tool for Windows DBAs. v1.0.0 (2026)
-> A lightweight alternative to expensive commercial SQL monitoring tools like SolarWinds DPA, Redgate SQL Monitor, SentryOne, and Idera SQL Diagnostic Manager.
+> **Free, open-source SQL Server monitoring — no agents, no per-server licensing, single exe.**
+> A lightweight alternative to SolarWinds DPA, Redgate SQL Monitor, SentryOne, and Idera SQL Diagnostic Manager.
 
-**SQL Health Assessment** is a self-contained Windows desktop application that monitors multiple SQL Server instances in real time. It provides live dashboards, health checks, blocking chain analysis, interactive query execution plan viewing, wait-event statistics, vulnerability assessments, and comprehensive audit reports — all from a single executable with no agent installation required on your SQL Servers.
+**LiveMonitor** is a Windows desktop application (Blazor UI hosted in WPF) that monitors multiple SQL Server instances in real time. It ships as a single executable and can also run as a headless Windows Service for 24/7 monitoring with remote browser access.
 
-Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch) and [Erik Darling's PerformanceMonitor](https://github.com/erikdarlingdata/DarlingData) frameworks, it combines the best open-source SQL Server diagnostic scripts ([sp_Blitz](https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit), [sp_triage](https://sqldba.org), [MadeiraToolbox](https://github.com/MadeiraData/MadeiraToolbox), [TigerToolbox](https://github.com/microsoft/tigertoolbox)) into a single tool with a modern UI.
+No software is installed on your SQL Servers. Everything runs from your workstation or a dedicated monitoring host.
 
-### Who is this for?
+---
 
-- **SQL Server DBAs** who need a free monitoring tool that doesn't require complex infrastructure
-- **Teams running SQL Server 2016–2022** (on-premises, Azure VM, or Azure SQL Managed Instance)
-- **Consultants** who need a portable tool to quickly assess SQL Server health at client sites
-- **Organizations** looking for an open-source alternative to SolarWinds, Redgate, SentryOne, or Idera
+## Quick Start
 
-### What problems does it solve?
+> **Requires:** Windows 10 1809+ · SQL Server 2016+
+> .NET runtime and WebView2 are bundled — no prerequisites to install.
 
-- **"What's happening on my SQL Server right now?"** — Live dashboards show active sessions, blocking chains, top queries, and wait stats in real time
-- **"Why is my SQL Server slow?"** — Interactive execution plan viewer, wait statistics trends, and long-running query detection
-- **"Is my SQL Server healthy?"** — Quick Check (30 seconds) and Full Audit (comprehensive) with exportable results
-- **"Is my SQL Server secure?"** — Microsoft SQL Vulnerability Assessment with 500+ security checks
-- **"How do I monitor multiple servers?"** — Multi-server support with aggregated views and per-instance drill-down
-- **"How do I export audit results to the cloud?"** — Azure Blob Storage integration with automatic CSV upload
+```
+1. Download LiveMonitor.exe from the Releases page
+2. Run it — no installation needed
+3. Go to Servers → Add Server, enter your SQL Server name, click Test → Save
+4. Open Live Monitor (Ctrl+2) to see live sessions, wait stats, and top queries
+5. Run a Quick Check (Ctrl+Q) for an instant health snapshot
+```
+
+First time? The built-in onboarding wizard walks you through the setup in 3 steps.
+Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handles the deployment for you.
+
+---
+
+## Screenshots
+
+> 📸 **Screenshots and demo GIF coming** — [watch this space or contribute one](CONTRIBUTING.md)
+
+| Dashboard | What you see |
+|-----------|-------------|
+| Live Monitor | Active sessions, blocking chains, top CPU/IO queries, wait stats |
+| Execution Plan Viewer | Graphical plan, per-operator cost %, missing index warnings |
+| Alerting | 69 alerts with dynamic IQR baselines, 7 notification channels |
+| Quick Check | Instant health snapshot — blocking, backups, index health, security |
+| Full Audit | Deep-dive across configuration, security, performance, fragmentation |
+| Vulnerability Assessment | 500+ security checks with exportable results |
+| Diagnostics Maturity Roadmap | 5-level maturity framework across multiple servers |
+
+---
+
+## Why LiveMonitor?
+
+| | LiveMonitor | sp_Blitz | SQLWATCH | SolarWinds DPA |
+|---|---|---|---|---|
+| Cost | Free | Free | Free | $$$/ server |
+| UI | ✅ Desktop + browser | ❌ SSMS only | ✅ Grafana | ✅ Web |
+| Execution plan viewer | ✅ Interactive | ❌ | ❌ | ✅ |
+| Alerting + notifications | ✅ 7 channels | ❌ | Limited | ✅ |
+| Runs as Windows Service | ✅ | ❌ | Partial | ✅ |
+| Agent on SQL Server | ❌ Not required | ❌ | ✅ Required | ✅ Required |
+| Historical dashboards | ✅ (with SQLWATCH) | ❌ | ✅ | ✅ |
+| Azure SQL MI support | ✅ | Limited | Limited | ✅ |
+
+---
+
+## Who is this for?
+
+- **DBAs** who need a free monitoring tool without complex infrastructure
+- **Consultants** who want a portable tool to assess SQL Server health at client sites
+- **Teams on SQL Server 2016–2022** (on-premises, Azure VM, or Azure SQL Managed Instance)
+- **Organizations** looking for an open-source alternative to expensive commercial monitors
 
 ---
 
@@ -86,7 +127,7 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 - **Ephemeral session keys** — dashboard results encrypted with a per-process key (never persisted)
 - **MFA / Azure AD authentication** — supports modern auth via `Azure.Identity`
 - **Parameterised queries only** — SQL injection prevention throughout
-- **Assembly obfuscation** — ConfuserEx2 (anti-tamper, anti-debug, string encryption)
+- **Assembly obfuscation** — ConfuserEx2 (anti-tamper, anti-debug, string encryption). The source code is fully open — the obfuscation protects the compiled binary from trivial tampering, not the source. Build from source for an unobfuscated binary.
 - **Audit log** — full query-execution and user-action trail (90-day retention)
 - **Rate limiting** — configurable max queries per minute with optional UI warnings
 - **Windows Service mode** — headless deployment with Kestrel HTTPS support
@@ -104,12 +145,6 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 
 ---
 
-## Screenshots
-
-> *Screenshots coming soon — live dashboards, execution plan viewer, vulnerability assessment, and audit reports. Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).*
-
----
-
 ## Requirements
 
 | | Minimum | Recommended |
@@ -117,51 +152,40 @@ Built on the battle-tested [SQLWATCH](https://github.com/marcingminski/sqlwatch)
 | **OS** | Windows 10 (1809+) | Windows 11 / Server 2022 |
 | **RAM** | 4 GB | 8 GB |
 | **Disk** | 500 MB | 2 GB (logs + cache) |
-| **Runtime** | .NET 8.0 Desktop Runtime | (bundled installer included) |
 | **SQL Server** | SQL Server 2016 | SQL Server 2019+ |
 
-> **Note:** The application download is ~120 MB (optimized) or ~350 MB (full). See [FOOTPRINT_REDUCTION_QUICK.md](FOOTPRINT_REDUCTION_QUICK.md) for size optimization options.
+**.NET runtime and WebView2 are bundled in the download** — there is nothing to install separately. The app runs as a self-contained executable on any supported Windows version.
+
+WebView2 enhances the UI experience when available but is not required — the app falls back to Blazor Server mode automatically.
+
+> Download size is ~120 MB (optimised single-file) or ~350 MB (full with all native binaries). See [FOOTPRINT_REDUCTION_QUICK.md](FOOTPRINT_REDUCTION_QUICK.md) for size options.
 
 ### SQL Server Permissions
 
-The monitoring account needs:
-- `VIEW SERVER STATE`
-- `VIEW DATABASE STATE`
-- `db_owner` on the SQLWATCH database (or equivalent read rights)
+The monitoring account needs `VIEW SERVER STATE` and `VIEW DATABASE STATE` — standard read-only DMV access. No `sysadmin`, no agent installation on the SQL Server.
 
 ---
 
-## Quick Start
+## Installation
 
-### 1. Download
+Download the latest release from the [Releases page](https://github.com/SQLAdrian/SqlHealthAssessment/releases).
+Two options are available:
 
-Grab the latest release from the [Releases page](https://github.com/SQLAdrian/SqlHealthAssessment/releases).
-Extract the ZIP to a folder, e.g. `C:\Tools\SqlHealthAssessment`.
+- **`LiveMonitor-Setup.exe`** — guided Inno Setup installer with optional components and a "Launch now" checkbox
+- **`LiveMonitor.zip`** — extract to any folder (e.g. `C:\Tools\LiveMonitor`) and run `LiveMonitor.exe`
 
-### 2. Deploy SQLWATCH (first time only)
+Both are self-contained. No .NET runtime or WebView2 installation required.
 
-SQLWATCH is the metrics-collection layer that lives in your SQL Server.
+> **First run:** The onboarding wizard appears automatically. It walks you through adding a server, running a Quick Check, and optionally deploying SQLWATCH.
 
-**Option A — from within the app (recommended):**
-1. Launch `SqlHealthAssessment.exe`
-2. Go to **Database Deploy** in the navigation
-3. Enter your server details and click **Deploy**
+### SQLWATCH (optional — enhances historical dashboards)
 
-**Option B — manual SQL scripts:**
-```sql
--- Run in order against your target server:
--- 1. SQLWATCH_db\01_CreateSQLWATCHDB.sql
--- 2. SQLWATCH_db\02_PostSQLWATCHDBcreate.sql
-```
+LiveMonitor works immediately without SQLWATCH. Adding SQLWATCH to your SQL Server unlocks additional dashboards: Instance Overview trends, PM Health & Diagnostics, Wait Statistics history, and more.
 
-Or deploy `Dacpacs\SQLWATCH.dacpac` via SSMS (right-click Databases → Deploy Data-tier Application).
+To deploy from within the app: **Database Deploy** → enter credentials → **Deploy**.
+Manual: deploy `Dacpacs\SQLWATCH.dacpac` via SSMS or run the scripts in `SQLWATCH_db\` in order.
 
-### 3. Connect and Monitor
-
-1. Go to **Servers** → **Add Server**
-2. Enter the server name and choose Windows or SQL authentication
-3. Click **Test Connection**, then **Save**
-4. Navigate to **Live Monitor** or **Instance Overview** to start monitoring
+For SQLWATCH dashboards the monitoring account additionally needs `db_owner` on the SQLWATCH database (or equivalent read rights).
 
 ---
 

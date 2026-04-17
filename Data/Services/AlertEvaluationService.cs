@@ -24,6 +24,8 @@ namespace SqlHealthAssessment.Data.Services
         private readonly ToastService _toast;
         private readonly NotificationChannelService _channels;
         private readonly liveQueriesCacheStore _cache;
+        private readonly AlertBaselineService? _baseline;
+        private readonly ConnectionHealthService? _health;
         private readonly System.Timers.Timer _timer;
 
         // In-memory state: key = "alertId:serverName"
@@ -80,7 +82,9 @@ namespace SqlHealthAssessment.Data.Services
             ServerConnectionManager connections,
             ToastService toast,
             NotificationChannelService channels,
-            liveQueriesCacheStore cache)
+            liveQueriesCacheStore cache,
+            AlertBaselineService? baseline = null,
+            ConnectionHealthService? health = null)
         {
             _logger = logger;
             _definitions = definitions;
@@ -90,6 +94,8 @@ namespace SqlHealthAssessment.Data.Services
             _toast = toast;
             _channels = channels;
             _cache = cache;
+            _baseline = baseline;
+            _health = health;
 
             // Base timer ticks every 30 seconds; individual alert frequencies are checked inside
             _timer = new System.Timers.Timer(30_000);
@@ -463,14 +469,43 @@ namespace SqlHealthAssessment.Data.Services
 
             try
             {
+                // Skip alerts tagged as unsupported on Azure SQL DB / Managed Instance
+                if (alert.RequiresOnPrem && _health != null && _health.IsAzureSql(serverName))
+                {
+                    _logger.LogDebug("Skipping alert {AlertId} on {Server} — not supported on Azure SQL", alert.Id, LogAnon.S(serverName));
+                    return;
+                }
+
                 var value = await ExecuteAlertQueryAsync(alert, connection, serverName);
                 if (value == null) return; // query returned no data
 
+                // Record sample for IQR baseline (fire-and-forget, no latency impact)
+                _baseline?.RecordSample(alert.Id, serverName, value.Value);
+
+                // Determine fixed-threshold breach
                 var isWarning = IsThresholdBreached(value.Value, alert.Thresholds.Warning, alert.Operator);
                 var isCritical = alert.Thresholds.Critical.HasValue
                     && IsThresholdBreached(value.Value, alert.Thresholds.Critical, alert.Operator);
 
-                // Baseline deviation — also trigger if value is N% above its 7-day average
+                // IQR dynamic baseline thresholds (override fixed thresholds when baseline is ready)
+                if (!isWarning && !isCritical && _baseline != null && alert.CanBaseline)
+                {
+                    var (bWarn, bCrit) = _baseline.GetThresholds(alert.Id, serverName);
+                    if (bWarn.HasValue)
+                        isWarning  = IsThresholdBreached(value.Value, bWarn,  alert.Operator);
+                    if (bCrit.HasValue)
+                        isCritical = IsThresholdBreached(value.Value, bCrit, alert.Operator);
+                }
+
+                // Trend anomaly: rising/falling slope over rolling 72-hour window
+                if (!isWarning && !isCritical && _baseline != null && alert.CanBaseline)
+                {
+                    var (trendWarn, trendCrit) = _baseline.GetTrendSignal(alert.Id, serverName);
+                    if (trendCrit) isCritical = true;
+                    else if (trendWarn) isWarning = true;
+                }
+
+                // Legacy baseline deviation (kept for backwards compat with existing alert configs)
                 if (!isWarning && !isCritical
                     && alert.BaselineDeviationPercent > 0
                     && !string.IsNullOrEmpty(alert.BaselineQueryId))

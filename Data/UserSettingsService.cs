@@ -98,6 +98,12 @@ namespace SqlHealthAssessment.Data
             /// <summary>Maximum number of sessions to display.</summary>
             public int SessionsMaxDisplay { get; set; } = 500;
 
+            // ── Alert Baseline ──
+            /// <summary>When true, alert evaluation collects baseline samples and applies IQR-based dynamic thresholds.</summary>
+            public bool AlertBaselineEnabled { get; set; } = true;
+            /// <summary>When true, baseline thresholds are computed per-server rather than globally across all servers.</summary>
+            public bool AlertBaselinePerServer { get; set; } = true;
+
             // ── Experimental Mode ──
             /// <summary>When true, shows experimental/preview features that are not yet production-ready.</summary>
             public bool ExperimentalMode { get; set; } = false;
@@ -321,6 +327,23 @@ namespace SqlHealthAssessment.Data
 
         /// <summary>Fired when no-pants mode is toggled so dashboard components can show/hide dangerous controls.</summary>
         public event Action<bool>? OnNoPantsModeChanged;
+
+        // ── Alert Baseline ──
+        public bool GetAlertBaselineEnabled() { lock (_lock) return _settings.AlertBaselineEnabled; }
+        public void SetAlertBaselineEnabled(bool enabled)
+        {
+            lock (_lock) _settings.AlertBaselineEnabled = enabled;
+            SaveSettings();
+            OnAlertBaselineEnabledChanged?.Invoke(enabled);
+        }
+        public event Action<bool>? OnAlertBaselineEnabledChanged;
+
+        public bool GetAlertBaselinePerServer() { lock (_lock) return _settings.AlertBaselinePerServer; }
+        public void SetAlertBaselinePerServer(bool enabled)
+        {
+            lock (_lock) _settings.AlertBaselinePerServer = enabled;
+            SaveSettings();
+        }
 
         // ── Experimental Mode ──
         public bool GetExperimentalMode() { lock (_lock) return _settings.ExperimentalMode; }

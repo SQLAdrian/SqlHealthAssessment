@@ -54,6 +54,13 @@ namespace SqlHealthAssessment.Data.Services
         bool GetNoPantsDisclaimerAccepted();
         void SetNoPantsDisclaimerAccepted(bool accepted);
 
+        bool GetAlertBaselineEnabled();
+        void SetAlertBaselineEnabled(bool enabled);
+        event Action<bool>? OnAlertBaselineEnabledChanged;
+
+        bool GetAlertBaselinePerServer();
+        void SetAlertBaselinePerServer(bool enabled);
+
         bool GetExperimentalMode();
         void SetExperimentalMode(bool enabled);
 
