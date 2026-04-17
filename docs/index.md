@@ -143,6 +143,63 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
 
 ---
 
+<div class="section-label">// health checks &amp; compliance coverage</div>
+
+<style>
+  .check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+                gap: 0.8rem; margin: 1rem 0 1.5rem; }
+  .check-card { border: 1px solid #1e3a1e; border-radius: 6px; padding: 0.9rem 1rem;
+                background: #050f05; }
+  .check-card .count { font-size: 1.6rem; font-weight: bold; color: #00ff00;
+                       font-family: monospace; line-height: 1; }
+  .check-card .label { font-size: 0.8rem; color: #aaa; margin-top: 0.25rem; }
+  .check-card .detail { font-size: 0.75rem; color: #555; margin-top: 0.4rem; line-height: 1.4; }
+  .source-list { font-size: 0.82rem; color: #aaa; margin: 0.5rem 0 1.5rem;
+                 padding-left: 1.2rem; line-height: 1.8; }
+  .source-list li { margin: 0; }
+  .source-list a { color: #00cc00; }
+</style>
+
+**472 checks** drawn from 9 industry sources, covering security hardening, performance best practices, HA/DR readiness, and configuration hygiene.
+
+<div class="check-grid">
+  <div class="check-card">
+    <div class="count">240</div>
+    <div class="label">Security &amp; Vulnerability</div>
+    <div class="detail">Authentication, authorisation, encryption, surface area, weak passwords, auditing, data protection</div>
+  </div>
+  <div class="check-card">
+    <div class="count">205</div>
+    <div class="label">Performance</div>
+    <div class="detail">Query optimiser, plan cache, CPU/memory pressure, TempDB, statistics, index health, wait stats</div>
+  </div>
+  <div class="check-card">
+    <div class="count">178</div>
+    <div class="label">Configuration</div>
+    <div class="detail">Instance config, trace flags, database settings, NUMA, SQL Agent, service accounts</div>
+  </div>
+  <div class="check-card">
+    <div class="count">40</div>
+    <div class="label">HA / Backup / Recovery</div>
+    <div class="detail">Availability Groups, backup strategy, recovery model, backup verification, immutable backups</div>
+  </div>
+</div>
+
+**Sources &amp; frameworks:**
+
+<ul class="source-list">
+  <li><strong>Microsoft SQL Assessment API</strong> (220 checks) — the official Microsoft recommended ruleset for SQL Server</li>
+  <li><strong>Microsoft Learn</strong> (96 checks) — documented best practices from Microsoft product documentation</li>
+  <li><strong><a href="https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit">Brent Ozar / sp_Blitz</a></strong> (~71 checks) — community-validated checks from the SQL Server First Responder Kit</li>
+  <li><strong>Microsoft SQL Assessment Plus</strong> (33 checks) — extended ruleset for enterprise configurations</li>
+  <li><strong><a href="https://www.sqlskills.com">SQLSkills</a></strong> (14 checks) — checks derived from Paul Randal and Kimberly Tripp's SQL Server guidance</li>
+  <li><strong>CIS Benchmark for SQL Server</strong> (6 checks) — Center for Internet Security hardening rules (TRUSTWORTHY, BUILTIN\Administrators, CONTROL SERVER)</li>
+</ul>
+
+> Checks are evaluated read-only against live DMVs — nothing is written to your SQL Server.
+
+---
+
 <div class="section-label">// how it compares</div>
 
 <table class="compare-table">
@@ -153,6 +210,8 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
       <th>sp_Blitz</th>
       <th>SQLWATCH</th>
       <th>SolarWinds DPA</th>
+      <th>Redgate SQL Monitor</th>
+      <th>Idera SQL DM</th>
     </tr>
   </thead>
   <tbody>
@@ -162,6 +221,8 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
       <td class="yes">Free</td>
       <td class="yes">Free</td>
       <td class="no">$$$/server</td>
+      <td class="no">$$$/server</td>
+      <td class="no">$$$/server</td>
     </tr>
     <tr>
       <td>Desktop UI</td>
@@ -169,12 +230,16 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
       <td class="no">SSMS only</td>
       <td class="yes">✓ Grafana</td>
       <td class="yes">✓ Web</td>
+      <td class="yes">✓ Web</td>
+      <td class="yes">✓ Desktop</td>
     </tr>
     <tr>
       <td>Execution plan viewer</td>
       <td class="yes">✓ Interactive</td>
       <td class="no">✗</td>
       <td class="no">✗</td>
+      <td class="yes">✓</td>
+      <td class="yes">✓</td>
       <td class="yes">✓</td>
     </tr>
     <tr>
@@ -183,12 +248,34 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
       <td class="no">✗</td>
       <td>Limited</td>
       <td class="yes">✓</td>
+      <td class="yes">✓</td>
+      <td class="yes">✓</td>
+    </tr>
+    <tr>
+      <td>Vulnerability assessment</td>
+      <td class="yes">✓ 472 checks</td>
+      <td class="yes">~250 checks</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td>Limited</td>
+      <td>Limited</td>
+    </tr>
+    <tr>
+      <td>CIS Benchmark checks</td>
+      <td class="yes">✓</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
     </tr>
     <tr>
       <td>Runs as Windows Service</td>
       <td class="yes">✓</td>
       <td class="no">✗</td>
       <td>Partial</td>
+      <td class="yes">✓</td>
+      <td class="yes">✓</td>
       <td class="yes">✓</td>
     </tr>
     <tr>
@@ -197,13 +284,8 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
       <td class="yes">Not required</td>
       <td class="no">Required</td>
       <td class="no">Required</td>
-    </tr>
-    <tr>
-      <td>Vulnerability assessment</td>
-      <td class="yes">✓ 500+ checks</td>
-      <td>Partial</td>
-      <td class="no">✗</td>
-      <td class="yes">✓</td>
+      <td class="no">Required</td>
+      <td class="no">Required</td>
     </tr>
     <tr>
       <td>Azure SQL MI support</td>
@@ -211,9 +293,34 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
       <td>Limited</td>
       <td>Limited</td>
       <td class="yes">✓</td>
+      <td class="yes">✓</td>
+      <td class="yes">✓</td>
+    </tr>
+    <tr>
+      <td>Maturity roadmap</td>
+      <td class="yes">✓ 5-level</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+    </tr>
+    <tr>
+      <td>Open source</td>
+      <td class="yes">✓ GPL v3</td>
+      <td class="yes">✓ MIT</td>
+      <td class="yes">✓ Apache 2</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
+      <td class="no">✗</td>
     </tr>
   </tbody>
 </table>
+
+<p style="font-size:0.75rem;color:#444;margin-top:-0.5rem;">
+  sp_Blitz check count per Brent Ozar Unlimited documentation (~250 T-SQL health checks).
+  Commercial tool feature claims based on publicly available documentation; verify current capabilities before purchase.
+</p>
 
 ---
 
