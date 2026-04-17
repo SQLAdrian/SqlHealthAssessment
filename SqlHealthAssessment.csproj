@@ -18,6 +18,7 @@
     <!-- Only include English satellite resource assemblies — prevents NuGet packages from copying 14+ language folders -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <ApplicationIcon>SQLHealthAssessment.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Title>SQL Health Assessment</Title>
     <Authors>Adrian Sullivn</Authors>
     <Description>An Enterprise grade SQL health check assessment tool. This tool will generate diagnostic outputs for a comprehensive SQL health audit. Incorporating SQLWATCH for database metrics.</Description>
