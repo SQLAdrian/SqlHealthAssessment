@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'          # triggers on v0.85.2, v1.0.0, etc.
+      - 'v[0-9]+.[0-9]+.[0-9]'        # release tags only: v0.85.2, v1.0.0
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'     # pre-release: v1.0.0-beta, v1.0.0-rc1
+      # excludes build tags like v0.85.2.1168 pushed by increment-build.ps1
 
 env:
   DOTNET_VERSION: '8.0.x'

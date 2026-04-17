@@ -256,6 +256,28 @@ namespace SqlHealthAssessment
             auditLog?.LogApplicationStart();
             Log.Information("Application started successfully");
 
+            // Pre-warm Live Monitor session data so the page loads instantly
+            // Fires on startup (if connections exist) and whenever connections change
+            var sessionSvc = Services.GetService<SessionDataService>();
+            var connManager = Services.GetService<ServerConnectionManager>();
+            if (sessionSvc != null && connManager != null)
+            {
+                void TriggerPrefetch()
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(2000); // brief delay — let connection pool warm up first
+                        await sessionSvc.PrefetchAsync();
+                    });
+                }
+
+                connManager.OnConnectionChanged += TriggerPrefetch;
+
+                // Prefetch now if we already have connections
+                if (connManager.GetConnections().Any())
+                    TriggerPrefetch();
+            }
+
             // Ensure liveQueries tables exist for all panels on startup (best-effort, non-blocking)
             _ = Task.Run(async () =>
             {

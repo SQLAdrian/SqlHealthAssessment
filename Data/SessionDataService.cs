@@ -1,7 +1,9 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using SqlHealthAssessment.Data.Models;
@@ -15,10 +17,18 @@ namespace SqlHealthAssessment.Data
     /// Real-time session data service that queries sys.dm_exec_sessions and
     /// sys.dm_exec_requests directly against the currently selected SQL Server.
     /// This bypasses CachingQueryExecutor — sessions are always live, never cached.
+    /// Prefetch cache: unfiltered results are pre-warmed so the Live Monitor page
+    /// loads instantly instead of waiting for the first SQL round-trip.
     /// </summary>
     public class SessionDataService
     {
         private readonly IDbConnectionFactory _connectionFactory;
+
+        // Prefetch cache — keyed by server name (empty string = default connection).
+        // Stores the last unfiltered result and its age. Max 60s stale before ignored.
+        private readonly ConcurrentDictionary<string, (List<SessionInfo> Sessions, DateTime FetchedAt)> _prefetchCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> _prefetchLocks = new(StringComparer.OrdinalIgnoreCase);
+        private const int PrefetchMaxAgeSeconds = 60;
 
         private string BuildLiveSessionsQuery(int topCount, bool hideSleeping, bool onlyBlocked, bool hideLowIO, string searchText = "")
         {
@@ -71,7 +81,33 @@ ORDER BY s.cpu_time + s.reads DESC";
         }
 
         /// <summary>
+        /// Pre-warms the session cache for the given server so the first page load is instant.
+        /// Safe to call fire-and-forget. No-ops if a prefetch is already in progress for this server.
+        /// </summary>
+        public async Task PrefetchAsync(string serverName = "")
+        {
+            var lockObj = _prefetchLocks.GetOrAdd(serverName, _ => new SemaphoreSlim(1, 1));
+            if (!await lockObj.WaitAsync(0))
+                return; // already prefetching — skip
+
+            try
+            {
+                var sessions = await FetchSessionsAsync(100, false, false, false, "");
+                _prefetchCache[serverName] = (sessions, DateTime.UtcNow);
+            }
+            catch
+            {
+                // Prefetch failures are silent — page will just do a live fetch
+            }
+            finally
+            {
+                lockObj.Release();
+            }
+        }
+
+        /// <summary>
         /// Fetches all live user sessions from the currently connected SQL Server instance.
+        /// Returns prefetched data immediately (if fresh) and kicks off a background refresh.
         /// Uses master database for live session DMVs which are server-scoped.
         /// ENHANCEMENT: Added server-side filtering, memory usage, row count, and search.
         /// </summary>
@@ -81,6 +117,23 @@ ORDER BY s.cpu_time + s.reads DESC";
             bool onlyBlocked = false,
             bool hideLowIO = false,
             string searchText = "")
+        {
+            // For the default unfiltered query, return cached data instantly if fresh,
+            // then schedule a background refresh to update the cache for next time.
+            bool isDefaultQuery = !hideSleeping && !onlyBlocked && !hideLowIO && string.IsNullOrEmpty(searchText) && topCount == 100;
+            if (isDefaultQuery && _prefetchCache.TryGetValue("", out var cached)
+                && (DateTime.UtcNow - cached.FetchedAt).TotalSeconds <= PrefetchMaxAgeSeconds)
+            {
+                // Return cached data immediately; refresh in background for next call
+                _ = Task.Run(async () => await PrefetchAsync(""));
+                return cached.Sessions;
+            }
+
+            return await FetchSessionsAsync(topCount, hideSleeping, onlyBlocked, hideLowIO, searchText);
+        }
+
+        private async Task<List<SessionInfo>> FetchSessionsAsync(
+            int topCount, bool hideSleeping, bool onlyBlocked, bool hideLowIO, string searchText)
         {
             var sessions = new List<SessionInfo>();
 
