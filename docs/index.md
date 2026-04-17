@@ -79,6 +79,12 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
 
 ---
 
+<div class="section-label">// demo</div>
+
+<div style="text-align:center;margin:1rem 0 2rem;">
+  <img src="demo.gif" alt="SQL Health Assessment — live demo" style="max-width:100%;border-radius:8px;border:1px solid #333;">
+</div>
+
 <div class="section-label">// screenshots</div>
 
 <div class="screenshot-row">

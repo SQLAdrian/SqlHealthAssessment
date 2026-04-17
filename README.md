@@ -31,19 +31,20 @@ Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handle
 
 ---
 
+## Demo
+
+![SQL Health Assessment demo](docs/demo.gif)
+
 ## Screenshots
 
-> 📸 **Screenshots and demo GIF coming** — [watch this space or contribute one](CONTRIBUTING.md)
+| | |
+|---|---|
+| ![Add Server](docs/screenshots/1-addserver.jpg) | ![Live Sessions](docs/screenshots/4-live-sessions.jpg) |
+| ![Instance Overview](docs/screenshots/6-instance-overview.jpg) | ![Alerting](docs/screenshots/14-alerting.jpg) |
+| ![Query Plan Viewer](docs/screenshots/15-query-plan-viewer.jpg) | ![Maturity Roadmap](docs/screenshots/13-maturity-roadmap.jpg) |
+| ![Environment Map](docs/screenshots/7-environment-map.jpg) | ![Vulnerability Assessment](docs/screenshots/10-microsoft-sql-vulnerability-assessment.jpg) |
 
-| Dashboard | What you see |
-|-----------|-------------|
-| Live Monitor | Active sessions, blocking chains, top CPU/IO queries, wait stats |
-| Execution Plan Viewer | Graphical plan, per-operator cost %, missing index warnings |
-| Alerting | 69 alerts with dynamic IQR baselines, 7 notification channels |
-| Quick Check | Instant health snapshot — blocking, backups, index health, security |
-| Full Audit | Deep-dive across configuration, security, performance, fragmentation |
-| Vulnerability Assessment | 500+ security checks with exportable results |
-| Diagnostics Maturity Roadmap | 5-level maturity framework across multiple servers |
+[See all 16 screenshots →](https://sqladrian.github.io/SqlHealthAssessment/)
 
 ---
 
