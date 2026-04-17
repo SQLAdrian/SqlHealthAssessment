@@ -5,6 +5,8 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
+
+#pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 namespace SqlHealthAssessment.Data
 {
     /// <summary>
@@ -203,3 +205,4 @@ namespace SqlHealthAssessment.Data
         }
     }
 }
+#pragma warning restore CA1416

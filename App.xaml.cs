@@ -11,6 +11,8 @@ using SqlHealthAssessment.Data;
 using SqlHealthAssessment.Data.Caching;
 using SqlHealthAssessment.Data.Models;
 
+#pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
+
 namespace SqlHealthAssessment
 {
     public partial class App : Application

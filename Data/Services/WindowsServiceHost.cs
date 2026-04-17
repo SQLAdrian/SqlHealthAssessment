@@ -22,6 +22,8 @@ using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
 
+
+#pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 namespace SqlHealthAssessment.Data.Services
 {
     /// <summary>
@@ -483,3 +485,4 @@ namespace SqlHealthAssessment.Data.Services
         #endregion
     }
 }
+#pragma warning restore CA1416

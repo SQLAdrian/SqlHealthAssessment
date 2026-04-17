@@ -9,6 +9,8 @@ using SqlHealthAssessment.Data;
 using SqlHealthAssessment.Data.Services;
 using System.Windows.Threading;
 
+
+#pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 namespace SqlHealthAssessment
 {
     public partial class MainWindow : Window
@@ -634,3 +636,4 @@ namespace SqlHealthAssessment
         }
     }
 }
+#pragma warning restore CA1416

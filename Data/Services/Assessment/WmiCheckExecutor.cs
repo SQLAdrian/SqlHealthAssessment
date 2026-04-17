@@ -6,6 +6,8 @@ using System.Management;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
+
+#pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 namespace SqlHealthAssessment.Data.Services.Assessment
 {
     /// <summary>
@@ -61,3 +63,4 @@ namespace SqlHealthAssessment.Data.Services.Assessment
         }
     }
 }
+#pragma warning restore CA1416
