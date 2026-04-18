@@ -55,7 +55,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!-- Exclude orphaned scratch projects from compilation -->
+  <!-- Exclude orphaned scratch projects and research artefacts from compilation -->
   <ItemGroup>
     <Compile Remove="CheckValidator\**" />
     <Content Remove="CheckValidator\**" />
@@ -65,6 +65,15 @@
     <Content Remove="CheckMerger\**" />
     <EmbeddedResource Remove="CheckMerger\**" />
     <None Remove="CheckMerger\**" />
+    <!-- research_output: never built, tested, published, or copied to bin -->
+    <Compile Remove="research_output\**" />
+    <Content Remove="research_output\**" />
+    <EmbeddedResource Remove="research_output\**" />
+    <None Remove="research_output\**" />
+    <Compile Remove="research_logs\**" />
+    <Content Remove="research_logs\**" />
+    <EmbeddedResource Remove="research_logs\**" />
+    <None Remove="research_logs\**" />
   </ItemGroup>
 
   <!-- PerformanceStudio: SQL execution plan analyzer by Erik Darling (git submodule) -->
