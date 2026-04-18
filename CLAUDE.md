@@ -44,6 +44,14 @@ Close the running exe first (file lock).
 - Maturity roadmap: `/diagnostics-roadmap` maps 489 sql-checks → 5 levels via QuickCheck
 - Debug logging: UserSettingsService toggle flips `LoggingLevelSwitch` at runtime
 
+## Model / thinking level
+Flag if current model seems mismatched — one line only, no interruption:
+- **Sonnet default** — routine tasks: file edits, rename, grep, boilerplate, test writing, CI fixes.
+- **Sonnet + extended thinking** — ICheckRunner budget logic, AuditLog HMAC chain, concurrency, security primitives.
+- **Opus** — gate reviews (Wk 2/4/6/8), architectural decisions that conflict with `.ignore/OPUS_ANALYSIS_COMPLETE_*` or `memory/project_sqltriage_v1_lockin.md`, new scope proposals.
+
+**Trigger:** if a task touches >3 interdependent services, changes a locked decision (see lock-in memory), or involves security-critical code — note "this may warrant Opus" once and continue.
+
 ## Don't
 - Use Tailwind (CSS variable design system is authoritative)
 - Bulk-restyle RDL (expression-bound styles make it futile)
