@@ -1,7 +1,7 @@
 <!-- In the name of God, the Merciful, the Compassionate -->
 <!-- Bismillah ar-Rahman ar-Raheem -->
 
-# Contributing to SQL Health Assessment
+# Contributing to SQLTriage
 
 Thank you for your interest in contributing! This project is a free tool for the SQL Server DBA community, and all forms of contribution are valued.
 
@@ -23,10 +23,10 @@ Thank you for your interest in contributing! This project is a free tool for the
 
 Before opening an issue, please:
 
-1. Search [existing issues](https://github.com/SQLAdrian/SqlHealthAssessment/issues) to avoid duplicates.
+1. Search [existing issues](https://github.com/SQLAdrian/SQLTriage/issues) to avoid duplicates.
 2. Reproduce against the latest release if possible.
 3. Include:
-   - SQL Health Assessment version (shown in the About page)
+   - SQLTriage version (shown in the About page)
    - SQL Server version(s) being monitored
    - Windows version
    - Steps to reproduce
@@ -49,12 +49,12 @@ Before opening an issue, please:
 ### Build
 
 ```bash
-git clone https://github.com/SQLAdrian/SqlHealthAssessment.git
-cd SqlHealthAssessment
-dotnet build SqlHealthAssessment.sln
+git clone https://github.com/SQLAdrian/SQLTriage.git
+cd SQLTriage
+dotnet build SQLTriage.sln
 ```
 
-Or open `SqlHealthAssessment.sln` in Visual Studio and press `F5`.
+Or open `SQLTriage.sln` in Visual Studio and press `F5`.
 
 ### Configuration for Local Development
 
@@ -63,7 +63,7 @@ Copy or edit `appsettings.json` to point at your local SQL Server:
 ```json
 {
   "ConnectionStrings": {
-    "SqlServer": "Server=.;Database=SQLWATCH;Integrated Security=true;Application Name=SqlHealthAssessment;"
+    "SqlServer": "Server=.;Database=SQLWATCH;Integrated Security=true;Application Name=SQLTriage;"
   }
 }
 ```

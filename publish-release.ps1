@@ -40,7 +40,7 @@ if ($DryRun) {
 }
 
 Write-Host "Publishing Release build..." -ForegroundColor Green
-dotnet publish SqlHealthAssessment.csproj -c Release -r win-x64 -o $publishDir
+dotnet publish SQLTriage.csproj -c Release -r win-x64 -o $publishDir
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: dotnet publish failed." -ForegroundColor Red
     exit 1
@@ -56,7 +56,7 @@ $releaseName = "v$version (Build $buildNumber)"
 Write-Host "  Published build: $buildNumber" -ForegroundColor Cyan
 
 # ── Locate ZIP (created by csproj CreateReleaseZip target) ────────────
-$zipName = "SqlHealthAssessment-v$version-build$buildNumber-win-x64.zip"
+$zipName = "SQLTriage-v$version-build$buildNumber-win-x64.zip"
 $zipPath = "release\$zipName"
 
 if (-not (Test-Path $zipPath)) {
@@ -121,7 +121,7 @@ No .NET or WebView2 installation required — everything is bundled.
 
 ### Install — Option B: ZIP (portable / shared installs)
 Download and extract ``$zipName`` to any folder (e.g. ``C:\Tools\LiveMonitor``).
-Run ``SqlHealthAssessment.exe``. No installer needed.
+Run ``SQLTriage.exe``. No installer needed.
 
 ### Update
 Existing installations will detect this release automatically via the in-app updater.
@@ -148,4 +148,4 @@ Write-Host "Release created successfully!" -ForegroundColor Green
 Write-Host "  Tag:     $tag" -ForegroundColor Cyan
 Write-Host "  ZIP:     $zipName" -ForegroundColor Cyan
 if ($setupPath) { Write-Host "  Setup:   $setupName" -ForegroundColor Cyan }
-Write-Host "  URL:     https://github.com/SQLAdrian/SqlHealthAssessment/releases/tag/$tag" -ForegroundColor Cyan
+Write-Host "  URL:     https://github.com/SQLAdrian/SQLTriage/releases/tag/$tag" -ForegroundColor Cyan

@@ -57,9 +57,9 @@ if (-not $SkipObfuscation) {
         # Run ConfuserEx on the published assembly
         & $confuserCli.Source (Join-Path $projectDir "confuser.crproj")
 
-        if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $protectedDir "SqlHealthAssessment.dll"))) {
+        if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $protectedDir "SQLTriage.dll"))) {
             # Replace the published DLL with the protected one
-            Copy-Item (Join-Path $protectedDir "SqlHealthAssessment.dll") (Join-Path $publishDir "SqlHealthAssessment.dll") -Force
+            Copy-Item (Join-Path $protectedDir "SQLTriage.dll") (Join-Path $publishDir "SQLTriage.dll") -Force
             Write-Host "Assembly protected successfully." -ForegroundColor Green
         } else {
             Write-Host "WARNING: ConfuserEx failed. Proceeding with unprotected assembly." -ForegroundColor Yellow
@@ -78,7 +78,7 @@ Write-Host "`n[4/4] Creating release ZIP..." -ForegroundColor Yellow
 $versionJson = Get-Content (Join-Path $projectDir "Config\version.json") | ConvertFrom-Json
 $version = $versionJson.version
 $build = $versionJson.buildNumber
-$zipName = "SqlHealthAssessment-v$version-build$build-win-x64.zip"
+$zipName = "SQLTriage-v$version-build$build-win-x64.zip"
 
 if (-not (Test-Path $releaseDir)) { New-Item $releaseDir -ItemType Directory | Out-Null }
 $zipPath = Join-Path $releaseDir $zipName

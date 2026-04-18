@@ -1,18 +1,18 @@
 # optimize-footprint.ps1
 # Reduces application footprint from ~350 MB to ~120 MB
 
-Write-Host "SQL Health Assessment - Footprint Optimization" -ForegroundColor Cyan
+Write-Host "SQLTriage - Footprint Optimization" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Backup .csproj
 Write-Host "[1/5] Backing up .csproj..." -ForegroundColor Yellow
-Copy-Item "SqlHealthAssessment.csproj" "SqlHealthAssessment.csproj.backup" -Force
+Copy-Item "SQLTriage.csproj" "SQLTriage.csproj.backup" -Force
 Write-Host "  ✓ Backup created" -ForegroundColor Green
 
 # 2. Update .csproj
 Write-Host "[2/5] Optimizing .csproj..." -ForegroundColor Yellow
-$csproj = Get-Content "SqlHealthAssessment.csproj" -Raw
+$csproj = Get-Content "SQLTriage.csproj" -Raw
 
 # Remove unused packages
 $csproj = $csproj -replace '<PackageReference Include="ReportViewerCore\.NETCore"[^>]*/>(\r?\n)?',''
@@ -37,7 +37,7 @@ $newReleaseConfig = @'
 '@
 
 $csproj = $csproj -replace '(?s)<!-- Release Build Optimizations -->.*?</PropertyGroup>', $newReleaseConfig
-Set-Content "SqlHealthAssessment.csproj" $csproj -NoNewline
+Set-Content "SQLTriage.csproj" $csproj -NoNewline
 Write-Host "  ✓ Removed unused packages" -ForegroundColor Green
 Write-Host "  ✓ Enabled trimming and single-file publish" -ForegroundColor Green
 
@@ -90,6 +90,6 @@ if ($LASTEXITCODE -eq 0) {
 } else {
     Write-Host "  ✗ Build failed" -ForegroundColor Red
     Write-Host "  Restoring backup..." -ForegroundColor Yellow
-    Copy-Item "SqlHealthAssessment.csproj.backup" "SqlHealthAssessment.csproj" -Force
+    Copy-Item "SQLTriage.csproj.backup" "SQLTriage.csproj" -Force
     Write-Host "  ✓ Backup restored" -ForegroundColor Green
 }

@@ -1,5 +1,5 @@
 <Project baseDir="." outputDir=".\publish-protected" xmlns="http://confuser.codeplex.com">
-  <!-- ConfuserEx2 protection profile for SQL Health Assessment -->
+  <!-- ConfuserEx2 protection profile for SQLTriage -->
   <!-- Run: ConfuserEx.CLI.exe confuser.crproj -->
 
   <Rule pattern="true" inherit="false">
@@ -41,5 +41,5 @@
   </Rule>
 
   <!-- Protect the main assembly -->
-  <Module path="publish\SqlHealthAssessment.dll" />
+   <Module path="publish\SQLTriage.dll" />
 </Project>

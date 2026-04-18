@@ -21,7 +21,7 @@ if (-not $Version) {
     }
 }
 
-Write-Host "Packaging SqlHealthAssessment v$Version for GitHub Release..." -ForegroundColor Cyan
+Write-Host "Packaging SQLTriage v$Version for GitHub Release..." -ForegroundColor Cyan
 
 # Create releases directory if it doesn't exist
 if (-not (Test-Path $outputDir)) {
@@ -36,7 +36,7 @@ if (-not (Test-Path $publishDir)) {
 }
 
 # Create zip file
-$zipName = "SqlHealthAssessment-v$Version-win-x64.zip"
+$zipName = "SQLTriage-v$Version-win-x64.zip"
 $zipPath = Join-Path $outputDir $zipName
 
 Write-Host "Creating package: $zipName" -ForegroundColor Green
@@ -54,8 +54,8 @@ Write-Host "Package created successfully: $([math]::Round($zipSize, 2)) MB" -For
 Write-Host "Location: $zipPath" -ForegroundColor Cyan
 
 Write-Host "`nNext steps:" -ForegroundColor Yellow
-Write-Host "1. Go to: https://github.com/SQLAdrian/SqlHealthAssessment/releases/new" -ForegroundColor White
+Write-Host "1. Go to: https://github.com/SQLAdrian/SQLTriage/releases/new" -ForegroundColor White
 Write-Host "2. Tag version: v$Version" -ForegroundColor White
-Write-Host "3. Release title: SqlHealthAssessment v$Version" -ForegroundColor White
+Write-Host "3. Release title: SQLTriage v$Version" -ForegroundColor White
 Write-Host "4. Upload: $zipPath" -ForegroundColor White
 Write-Host "5. Add release notes and publish" -ForegroundColor White

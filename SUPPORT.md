@@ -36,8 +36,8 @@
 
 ### Community Support
 
-- **GitHub Issues**: [Report bugs or request features](https://github.com/SQLAdrian/SqlHealthAssessment/issues)
-- **Discussions**: [Ask questions and share ideas](https://github.com/SQLAdrian/SqlHealthAssessment/discussions)
+- **GitHub Issues**: [Report bugs or request features](https://github.com/SQLAdrian/SQLTriage/issues)
+- **Discussions**: [Ask questions and share ideas](https://github.com/SQLAdrian/SQLTriage/discussions)
 
 ### Professional Support
 

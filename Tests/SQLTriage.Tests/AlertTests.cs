@@ -1,9 +1,9 @@
 /* In the name of God, the Merciful, the Compassionate */
 
-using SqlHealthAssessment.Data.Models;
-using SqlHealthAssessment.Data.Services;
+using SQLTriage.Data.Models;
+using SQLTriage.Data.Services;
 
-namespace SqlHealthAssessment.Tests;
+namespace SQLTriage.Tests;
 
 // ── AlertDefinition model tests ──────────────────────────────────────────────
 

@@ -1,12 +1,12 @@
 @echo off
-REM Build script for SQL Health Assessment - Framework-Dependent (Smallest)
+REM Build script for SQLTriage - Framework-Dependent (Smallest)
 REM Requires .NET 8 Desktop Runtime on target machines
 REM Expected size: 35-40 MB
 
-echo Building SQL Health Assessment (Framework-Dependent)...
+echo Building SQLTriage (Framework-Dependent)...
 echo.
 
-dotnet publish SqlHealthAssessment.csproj ^
+dotnet publish SQLTriage.csproj ^
   -c Release ^
   -r win-x64 ^
   --self-contained false ^

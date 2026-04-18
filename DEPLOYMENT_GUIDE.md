@@ -1,7 +1,7 @@
 <!-- In the name of God, the Merciful, the Compassionate -->
 <!-- Bismillah ar-Rahman ar-Raheem -->
 
-# SQL Health Assessment - Deployment Guide
+# SQLTriage - Deployment Guide
 
 ## System Requirements
 
@@ -25,25 +25,25 @@
 ### Method 1: Standalone Executable (Recommended for Quick Start)
 
 1. **Download** the latest release from GitHub
-2. **Extract** the ZIP file to a folder (e.g., `C:\Program Files\SqlHealthAssessment`)
-3. **Run** `SqlHealthAssessment.exe`
+2. **Extract** the ZIP file to a folder (e.g., `C:\Program Files\SQLTriage`)
+3. **Run** `SQLTriage.exe`
 4. **Configure** connection string on first launch
 
 ### Method 2: MSI Installer (Enterprise Deployment)
 
-1. **Download** `SqlHealthAssessment.msi`
+1. **Download** `SQLTriage.msi`
 2. **Run** the installer with administrator privileges
 3. **Follow** the installation wizard
 4. **Configure** during installation or post-install
 
 **Silent Install:**
 ```cmd
-msiexec /i SqlHealthAssessment.msi /quiet /qn /norestart
+msiexec /i SQLTriage.msi /quiet /qn /norestart
 ```
 
 **Silent Install with Custom Path:**
 ```cmd
-msiexec /i SqlHealthAssessment.msi INSTALLDIR="C:\CustomPath" /quiet /qn /norestart
+msiexec /i SQLTriage.msi INSTALLDIR="C:\CustomPath" /quiet /qn /norestart
 ```
 
 ---
@@ -98,7 +98,7 @@ msiexec /i SqlHealthAssessment.msi INSTALLDIR="C:\CustomPath" /quiet /qn /norest
   "Logging": {
     "LogLevel": {
       "Default": "Information",
-      "SqlHealthAssessment": "Debug"
+      "SQLTriage": "Debug"
     }
   }
 }
@@ -149,7 +149,7 @@ The application requires the SQLWATCH database on the target SQL Server.
 ### Group Policy Deployment
 
 1. **Create** a GPO for software installation
-2. **Add** `SqlHealthAssessment.msi` to the package
+2. **Add** `SQLTriage.msi` to the package
 3. **Configure** installation options
 4. **Link** GPO to target OUs
 5. **Force** update: `gpupdate /force`
@@ -172,7 +172,7 @@ The application requires the SQLWATCH database on the target SQL Server.
 
 **Option 1: Shared Configuration File**
 ```cmd
-mklink "C:\Program Files\SqlHealthAssessment\appsettings.json" "\\server\share\config\appsettings.json"
+mklink "C:\Program Files\SQLTriage\appsettings.json" "\\server\share\config\appsettings.json"
 ```
 
 **Option 2: Environment Variables**
@@ -188,15 +188,15 @@ setx SQLHEALTH_CONNECTIONSTRING "Server=PROD;Database=SQLWATCH;Integrated Securi
 
 Run the encryption utility:
 ```cmd
-SqlHealthAssessment.exe --encrypt-config
+SQLTriage.exe --encrypt-config
 ```
 
 ### 2. File System Permissions
 
 Restrict access to application folder:
 ```cmd
-icacls "C:\Program Files\SqlHealthAssessment" /grant "Domain Users:(RX)" /T
-icacls "C:\Program Files\SqlHealthAssessment\appsettings.json" /grant "Administrators:(F)"
+icacls "C:\Program Files\SQLTriage" /grant "Domain Users:(RX)" /T
+icacls "C:\Program Files\SQLTriage\appsettings.json" /grant "Administrators:(F)"
 ```
 
 ### 3. Audit Logging
@@ -292,7 +292,7 @@ Logs automatically rotate daily. Retention:
 
 **Manual Cleanup:**
 ```cmd
-forfiles /p "C:\Program Files\SqlHealthAssessment\logs" /s /m *.log /d -30 /c "cmd /c del @path"
+forfiles /p "C:\Program Files\SQLTriage\logs" /s /m *.log /d -30 /c "cmd /c del @path"
 ```
 
 ### Database Maintenance
@@ -329,29 +329,29 @@ forfiles /p "C:\Program Files\SqlHealthAssessment\logs" /s /m *.log /d -30 /c "c
 
 **Configuration:**
 ```cmd
-xcopy "C:\Program Files\SqlHealthAssessment\*.json" "\\backup\sqlhealth\config\" /Y
+xcopy "C:\Program Files\SQLTriage\*.json" "\\backup\sqlhealth\config\" /Y
 ```
 
 **Audit Logs:**
 ```cmd
-xcopy "C:\Program Files\SqlHealthAssessment\audit-logs\*" "\\backup\sqlhealth\audit\" /S /Y
+xcopy "C:\Program Files\SQLTriage\audit-logs\*" "\\backup\sqlhealth\audit\" /S /Y
 ```
 
 **SQLite Cache:**
 ```cmd
-copy "C:\Program Files\SqlHealthAssessment\SqlHealthAssessment.db" "\\backup\sqlhealth\cache\"
+copy "C:\Program Files\SQLTriage\SQLTriage.db" "\\backup\sqlhealth\cache\"
 ```
 
 ### Recovery
 
 **Restore Configuration:**
 ```cmd
-xcopy "\\backup\sqlhealth\config\*.json" "C:\Program Files\SqlHealthAssessment\" /Y
+xcopy "\\backup\sqlhealth\config\*.json" "C:\Program Files\SQLTriage\" /Y
 ```
 
 **Restore Audit Logs:**
 ```cmd
-xcopy "\\backup\sqlhealth\audit\*" "C:\Program Files\SqlHealthAssessment\audit-logs\" /S /Y
+xcopy "\\backup\sqlhealth\audit\*" "C:\Program Files\SQLTriage\audit-logs\" /S /Y
 ```
 
 ---
@@ -362,7 +362,7 @@ xcopy "\\backup\sqlhealth\audit\*" "C:\Program Files\SqlHealthAssessment\audit-l
 
 **GUI:**
 1. Control Panel → Programs and Features
-2. Select "SQL Health Assessment"
+2. Select "SQLTriage"
 3. Click Uninstall
 
 **Silent:**
@@ -379,8 +379,8 @@ msiexec /x {PRODUCT_CODE} /quiet /qn /norestart
 
 **Clean Uninstall:**
 ```cmd
-rd /s /q "C:\Program Files\SqlHealthAssessment"
-rd /s /q "%APPDATA%\SqlHealthAssessment"
+rd /s /q "C:\Program Files\SQLTriage"
+rd /s /q "%APPDATA%\SQLTriage"
 ```
 
 ---
@@ -397,7 +397,7 @@ rd /s /q "%APPDATA%\SqlHealthAssessment"
 - **Audit:** `audit-logs\audit-YYYY-MM-DD.jsonl`
 
 ### Getting Help
-- GitHub Issues: https://github.com/SQLAdrian/SqlHealthAssessment/issues
+- GitHub Issues: https://github.com/SQLAdrian/SQLTriage/issues
 
 ---
 
@@ -407,7 +407,7 @@ rd /s /q "%APPDATA%\SqlHealthAssessment"
 
 **Inbound (if hosting web interface):**
 ```cmd
-netsh advfirewall firewall add rule name="SQL Health Assessment" dir=in action=allow protocol=TCP localport=5000
+netsh advfirewall firewall add rule name="SQLTriage" dir=in action=allow protocol=TCP localport=5000
 ```
 
 **Outbound (SQL Server):**
@@ -419,29 +419,29 @@ netsh advfirewall firewall add rule name="SQL Server" dir=out action=allow proto
 
 **Installation Path:**
 ```
-HKEY_LOCAL_MACHINE\SOFTWARE\SqlHealthAssessment
+HKEY_LOCAL_MACHINE\SOFTWARE\SQLTriage
 ```
 
 **User Settings:**
 ```
-HKEY_CURRENT_USER\SOFTWARE\SqlHealthAssessment
+HKEY_CURRENT_USER\SOFTWARE\SQLTriage
 ```
 
 ### File Locations
 
 | Item | Location |
 |------|----------|
-| Executable | `C:\Program Files\SqlHealthAssessment\SqlHealthAssessment.exe` |
-| Configuration | `C:\Program Files\SqlHealthAssessment\appsettings.json` |
-| Dashboard Config | `C:\Program Files\SqlHealthAssessment\dashboard-config.json` |
-| Logs | `C:\Program Files\SqlHealthAssessment\logs\` |
-| Audit Logs | `C:\Program Files\SqlHealthAssessment\audit-logs\` |
-| Cache | `C:\Program Files\SqlHealthAssessment\SqlHealthAssessment.db` |
-| User Settings | `C:\Program Files\SqlHealthAssessment\user-settings.json` |
+| Executable | `C:\Program Files\SQLTriage\SQLTriage.exe` |
+| Configuration | `C:\Program Files\SQLTriage\appsettings.json` |
+| Dashboard Config | `C:\Program Files\SQLTriage\dashboard-config.json` |
+| Logs | `C:\Program Files\SQLTriage\logs\` |
+| Audit Logs | `C:\Program Files\SQLTriage\audit-logs\` |
+| Cache | `C:\Program Files\SQLTriage\SQLTriage.db` |
+| User Settings | `C:\Program Files\SQLTriage\user-settings.json` |
 
 ---
 
 **Document Version:** 1.0
 **Last Updated:** 2026-03-23
-**Applies To:** SQL Health Assessment v0.79.0+
+**Applies To:** SQLTriage v0.79.0+
 

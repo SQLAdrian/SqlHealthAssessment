@@ -1,8 +1,8 @@
 /* In the name of God, the Merciful, the Compassionate */
 
-using SqlHealthAssessment.Data;
+using SQLTriage.Data;
 
-namespace SqlHealthAssessment.Tests;
+namespace SQLTriage.Tests;
 
 public class CredentialProtectorTests
 {

@@ -1,9 +1,9 @@
 /* In the name of God, the Merciful, the Compassionate */
 
-using SqlHealthAssessment.Data.Models;
-using SqlHealthAssessment.Data.Services;
+using SQLTriage.Data.Models;
+using SQLTriage.Data.Services;
 
-namespace SqlHealthAssessment.Tests;
+namespace SQLTriage.Tests;
 
 // ── VulnerabilityAssessmentStateService tests ─────────────────────────────────
 
@@ -159,14 +159,14 @@ public class ServerConnectionTests
     [Fact]
     public void ServerConnection_DefaultHasSqlWatch_IsFalse()
     {
-        var conn = new SqlHealthAssessment.Data.Models.ServerConnection();
+        var conn = new SQLTriage.Data.Models.ServerConnection();
         Assert.False(conn.HasSqlWatch);
     }
 
     [Fact]
     public void ServerConnection_GetServerList_SingleServer()
     {
-        var conn = new SqlHealthAssessment.Data.Models.ServerConnection
+        var conn = new SQLTriage.Data.Models.ServerConnection
         {
             ServerNames = "SQLSRV01"
         };
@@ -178,7 +178,7 @@ public class ServerConnectionTests
     [Fact]
     public void ServerConnection_GetServerList_MultipleServers()
     {
-        var conn = new SqlHealthAssessment.Data.Models.ServerConnection
+        var conn = new SQLTriage.Data.Models.ServerConnection
         {
             ServerNames = "SQLSRV01,SQLSRV02,SQLSRV03"
         };
@@ -191,7 +191,7 @@ public class ServerConnectionTests
     [Fact]
     public void ServerConnection_GetServerList_TrimsWhitespace()
     {
-        var conn = new SqlHealthAssessment.Data.Models.ServerConnection
+        var conn = new SQLTriage.Data.Models.ServerConnection
         {
             ServerNames = " SQLSRV01 , SQLSRV02 "
         };
@@ -203,7 +203,7 @@ public class ServerConnectionTests
     [Fact]
     public void ServerConnection_GetConnectionString_ContainsServerName()
     {
-        var conn = new SqlHealthAssessment.Data.Models.ServerConnection
+        var conn = new SQLTriage.Data.Models.ServerConnection
         {
             ServerNames = "SQLSRV01",
             UseWindowsAuthentication = true
@@ -216,14 +216,14 @@ public class ServerConnectionTests
     [Fact]
     public void ServerConnection_AuthenticationDisplay_Windows()
     {
-        var conn = new SqlHealthAssessment.Data.Models.ServerConnection { UseWindowsAuthentication = true };
+        var conn = new SQLTriage.Data.Models.ServerConnection { UseWindowsAuthentication = true };
         Assert.Contains("Windows", conn.AuthenticationDisplay);
     }
 
     [Fact]
     public void ServerConnection_AuthenticationDisplay_SQL()
     {
-        var conn = new SqlHealthAssessment.Data.Models.ServerConnection
+        var conn = new SQLTriage.Data.Models.ServerConnection
         {
             UseWindowsAuthentication = false,
             Username = "sa"

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://sqladrian.github.io/SqlHealthAssessment/sitemap.xml
+Sitemap: https://sqladrian.github.io/SQLTriage/sitemap.xml

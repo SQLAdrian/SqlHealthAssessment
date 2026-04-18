@@ -1,6 +1,6 @@
 /* In the name of God, the Merciful, the Compassionate */
 
-// Fixed VS Code-inspired dark theme for SqlHealthAssessment
+// Fixed VS Code-inspired dark theme for SQLTriage
 // Themes have been disabled to ensure consistent readability
 
 // Apply fixed dark theme on startup

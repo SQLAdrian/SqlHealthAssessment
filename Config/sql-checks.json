@@ -12177,7 +12177,7 @@
   {
     "SqlQuery": "SELECT CASE WHEN EXISTS (SELECT 1 FROM sys.dm_os_waiting_tasks wt WHERE wt.blocking_session_id > 0) THEN 1 ELSE 0 END",
     "Id": "LIVE_001",
-    "Source": "LiveMonitor",
+    "Source": "SQLTriage",
     "Name": "Blocking Detected",
     "Priority": 10,
     "Severity": "Warning",

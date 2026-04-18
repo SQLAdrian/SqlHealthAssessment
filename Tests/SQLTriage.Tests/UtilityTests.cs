@@ -1,9 +1,9 @@
 /* In the name of God, the Merciful, the Compassionate */
 
-using SqlHealthAssessment.Data;
-using SqlHealthAssessment.Data.Models;
+using SQLTriage.Data;
+using SQLTriage.Data.Models;
 
-namespace SqlHealthAssessment.Tests;
+namespace SQLTriage.Tests;
 
 // ── LogAnon tests ─────────────────────────────────────────────────────────────
 

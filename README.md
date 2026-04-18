@@ -1,18 +1,18 @@
 <!-- In the name of God, the Merciful, the Compassionate -->
 <!-- Bismillah ar-Rahman ar-Raheem -->
 
-# LiveMonitor — Free SQL Server Monitoring for Windows DBAs
+# SQLTriage — Free SQL Server Monitoring for Windows DBAs
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078d4.svg)](https://github.com/SQLAdrian/SqlHealthAssessment/releases)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078d4.svg)](https://github.com/SQLAdrian/SQLTriage/releases)
 [![SQL Server 2016+](https://img.shields.io/badge/SQL%20Server-2016%2B-red.svg)](https://www.microsoft.com/en-us/sql-server)
-[![Version](https://img.shields.io/badge/version-0.85.2-blue.svg)](https://github.com/SQLAdrian/SqlHealthAssessment/releases/latest)
+[![Version](https://img.shields.io/badge/version-0.85.2-blue.svg)](https://github.com/SQLAdrian/SQLTriage/releases/latest)
 [![Contributors: Human+AI](https://img.shields.io/badge/contributors-human_%2B_ai-FF6B6B?style=flat-square)](CONTRIBUTORS.md)
 
 > **Free, open-source SQL Server monitoring — no agents, no per-server licensing, single exe.**
 > A lightweight alternative to SolarWinds DPA, Redgate SQL Monitor, SentryOne, and Idera SQL Diagnostic Manager.
 
-**LiveMonitor** (formerly *SQL Health Assessment*) is a Windows desktop application (Blazor UI hosted in WPF) that monitors multiple SQL Server instances in real time. It ships as a single executable and can also run as a headless Windows Service for 24/7 monitoring with remote browser access.
+**SQLTriage** (formerly *SQLTriage*) is a Windows desktop application (Blazor UI hosted in WPF) that monitors multiple SQL Server instances in real time. It ships as a single executable and can also run as a headless Windows Service for 24/7 monitoring with remote browser access.
 
 No software is installed on your SQL Servers. Everything runs from your workstation or a dedicated monitoring host.
 
@@ -26,7 +26,7 @@ No software is installed on your SQL Servers. Everything runs from your workstat
 > .NET runtime and WebView2 are bundled — no prerequisites to install.
 
 ```
-1. Download LiveMonitor.exe from the Releases page
+1. Download SQLTriage.exe from the Releases page
 2. Run it — no installation needed
 3. Go to Servers → Add Server, enter your SQL Server name, click Test → Save
 4. Open Live Monitor (Ctrl+2) to see live sessions, wait stats, and top queries
@@ -42,7 +42,7 @@ Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handle
 
 ## Demo
 
-![SQL Health Assessment demo](docs/demo.gif)
+![SQLTriage demo](docs/demo.gif)
 
 ## Screenshots
 
@@ -53,13 +53,13 @@ Need SQLWATCH for historical dashboards? Go to **Database Deploy** — it handle
 | ![Query Plan Viewer](docs/screenshots/15-query-plan-viewer.jpg) | ![Maturity Roadmap](docs/screenshots/13-maturity-roadmap.jpg) |
 | ![Environment Map](docs/screenshots/7-environment-map.jpg) | ![Vulnerability Assessment](docs/screenshots/10-microsoft-sql-vulnerability-assessment.jpg) |
 
-[See all 16 screenshots →](https://sqladrian.github.io/SqlHealthAssessment/)
+[See all 16 screenshots →](https://sqladrian.github.io/SQLTriage/)
 
 ---
 
-## Why LiveMonitor?
+## Why SQLTriage?
 
-| | LiveMonitor | sp_Blitz | SQLWATCH | SolarWinds DPA |
+| | SQLTriage | sp_Blitz | SQLWATCH | SolarWinds DPA |
 |---|---|---|---|---|
 | Cost | Free | Free | Free | $$$/ server |
 | UI | ✅ Desktop + browser | ❌ SSMS only | ✅ Grafana | ✅ Web |
@@ -182,11 +182,11 @@ The monitoring account needs `VIEW SERVER STATE` and `VIEW DATABASE STATE` — s
 
 ## Installation
 
-Download the latest release from the [Releases page](https://github.com/SQLAdrian/SqlHealthAssessment/releases).
+Download the latest release from the [Releases page](https://github.com/SQLAdrian/SQLTriage/releases).
 Two options are available:
 
-- **`LiveMonitor-Setup.exe`** — guided Inno Setup installer with optional components and a "Launch now" checkbox
-- **`LiveMonitor.zip`** — extract to any folder (e.g. `C:\Tools\LiveMonitor`) and run `LiveMonitor.exe`
+- **`SQLTriage-Setup.exe`** — guided Inno Setup installer with optional components and a "Launch now" checkbox
+- **`SQLTriage.zip`** — extract to any folder (e.g. `C:\Tools\SQLTriage`) and run `SQLTriage.exe`
 
 Both are self-contained. No .NET runtime or WebView2 installation required.
 
@@ -194,7 +194,7 @@ Both are self-contained. No .NET runtime or WebView2 installation required.
 
 ### SQLWATCH (optional — enhances historical dashboards)
 
-LiveMonitor works immediately without SQLWATCH. Adding SQLWATCH to your SQL Server unlocks additional dashboards: Instance Overview trends, PM Health & Diagnostics, Wait Statistics history, and more.
+SQLTriage works immediately without SQLWATCH. Adding SQLWATCH to your SQL Server unlocks additional dashboards: Instance Overview trends, PM Health & Diagnostics, Wait Statistics history, and more.
 
 To deploy from within the app: **Database Deploy** → enter credentials → **Deploy**.
 Manual: deploy `Dacpacs\SQLWATCH.dacpac` via SSMS or run the scripts in `SQLWATCH_db\` in order.
@@ -362,14 +362,14 @@ A: No agent is needed on the SQL Server. The app connects remotely via standard 
 **Q: Is this production-ready?**
 A: Yes — current version is 0.85.2, actively used in production environments. The version will reach 1.0 once the installer, RBAC, and documentation are complete. See [CHANGELOG.md](CHANGELOG.md) for stability notes.
 
-**Q: What's the difference between "LiveMonitor" and "SQL Health Assessment"?**
-A: LiveMonitor is the product name. SQL Health Assessment is the internal project/repo name. Both refer to the same tool — the branding is being unified under LiveMonitor.
+**Q: What's the difference between "SQLTriage" and "SQLTriage"?**
+A: SQLTriage is the product name. SQLTriage is the internal project/repo name. Both refer to the same tool — the branding is being unified under SQLTriage.
 
 **Q: Can I monitor Azure SQL Database or Azure SQL Managed Instance?**
 A: Azure SQL Managed Instance is supported. Azure SQL Database (PaaS) has limited support — some DMV-based checks require server-level permissions not available in PaaS.
 
 **Q: Is this a replacement for SSMS (SQL Server Management Studio)?**
-A: No — it complements SSMS. LiveMonitor focuses on monitoring, health checks, and performance analysis. Use SSMS for query authoring, schema management, and administration tasks.
+A: No — it complements SSMS. SQLTriage focuses on monitoring, health checks, and performance analysis. Use SSMS for query authoring, schema management, and administration tasks.
 
 **Q: Can I run this as a Windows Service for 24/7 monitoring?**
 A: Yes — the app supports headless Windows Service mode with Kestrel HTTPS for remote dashboard access. Go to Service Management to install/uninstall (UAC prompt triggers automatically if needed).
@@ -378,16 +378,16 @@ A: Yes — the app supports headless Windows Service mode with Kestrel HTTPS for
 A: Yes — all passwords are encrypted using AES-256-GCM with a machine-scoped DPAPI key. Credentials are tied to the machine and cannot be decrypted on another computer.
 
 **Q: How does this compare to commercial tools like SolarWinds DPA or Redgate SQL Monitor?**
-A: LiveMonitor is free and open-source with no licensing costs. It covers core monitoring, health checks, execution plans, and wait stats. Commercial tools may offer deeper historical trending, mobile apps, or cloud-hosted dashboards, but this tool handles the majority of day-to-day DBA monitoring needs.
+A: SQLTriage is free and open-source with no licensing costs. It covers core monitoring, health checks, execution plans, and wait stats. Commercial tools may offer deeper historical trending, mobile apps, or cloud-hosted dashboards, but this tool handles the majority of day-to-day DBA monitoring needs.
 
 **Q: Something is wrong — how do I get help?**
-A: Use the **Report / Feedback** button in the app sidebar, or open a [GitHub Issue](https://github.com/SQLAdrian/SqlHealthAssessment/issues). For email support: [adrian@sqldba.org](mailto:adrian@sqldba.org).
+A: Use the **Report / Feedback** button in the app sidebar, or open a [GitHub Issue](https://github.com/SQLAdrian/SQLTriage/issues). For email support: [adrian@sqldba.org](mailto:adrian@sqldba.org).
 
 ---
 
 ## License
 
-SQL Health Assessment is released under the [GNU General Public License v3.0](LICENSE.txt).
+SQLTriage is released under the [GNU General Public License v3.0](LICENSE.txt).
 
 You are free to use, modify, and distribute this software under the terms of the GPL v3.
 

@@ -3,7 +3,7 @@
 
 ---
 layout: default
-title: LiveMonitor — Free SQL Server Monitoring
+title: SQLTriage — Free SQL Server Monitoring
 ---
 
 <style>
@@ -58,11 +58,11 @@ title: LiveMonitor — Free SQL Server Monitoring
 </style>
 
 <div class="hero">
-  <h1>&gt; LiveMonitor_</h1>
+  <h1>&gt; SQLTriage_</h1>
   <div class="sub">Free SQL Server monitoring for Windows DBAs.<br>
   No agents. No per-server licensing. Single exe.</div>
-  <a class="btn" href="https://github.com/SQLAdrian/SqlHealthAssessment/releases">⬇ Download</a>
-  <a class="btn ghost" href="https://github.com/SQLAdrian/SqlHealthAssessment">GitHub Repo</a>
+  <a class="btn" href="https://github.com/SQLAdrian/SQLTriage/releases">⬇ Download</a>
+  <a class="btn ghost" href="https://github.com/SQLAdrian/SQLTriage">GitHub Repo</a>
 </div>
 
 <div class="badge-row">
@@ -71,14 +71,14 @@ title: LiveMonitor — Free SQL Server Monitoring
   <img src="https://img.shields.io/badge/SQL%20Server-2016%2B-CC2927?style=flat-square" alt="SQL Server 2016+">
   <img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="GPL v3">
   <img src="https://img.shields.io/badge/Price-Free-00ff00?style=flat-square&labelColor=000" alt="Free">
-  <img src="https://github.com/SQLAdrian/SqlHealthAssessment/actions/workflows/codeql.yml/badge.svg?style=flat-square" alt="CodeQL">
+  <img src="https://github.com/SQLAdrian/SQLTriage/actions/workflows/codeql.yml/badge.svg?style=flat-square" alt="CodeQL">
 </div>
 
 ---
 
 <div class="section-label">// what it is</div>
 
-**LiveMonitor** is a Windows desktop application — Blazor UI running inside WPF — that monitors multiple SQL Server instances in real time. It also runs as a headless **Windows Service** for 24/7 monitoring with remote browser access.
+**SQLTriage** is a Windows desktop application — Blazor UI running inside WPF — that monitors multiple SQL Server instances in real time. It also runs as a headless **Windows Service** for 24/7 monitoring with remote browser access.
 
 No software is installed on your SQL Servers. Everything runs from a single exe on your workstation or a dedicated monitoring host. .NET runtime and WebView2 are bundled — nothing to install separately.
 
@@ -87,7 +87,7 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
 <div class="section-label">// demo</div>
 
 <div style="text-align:center;margin:1rem 0 2rem;">
-  <img src="demo.gif" alt="SQL Health Assessment — live demo" style="max-width:100%;border-radius:8px;border:1px solid #333;">
+  <img src="demo.gif" alt="SQLTriage — live demo" style="max-width:100%;border-radius:8px;border:1px solid #333;">
 </div>
 
 <div class="section-label">// screenshots</div>
@@ -275,7 +275,7 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
   <thead>
     <tr>
       <th></th>
-      <th>LiveMonitor</th>
+      <th>SQLTriage</th>
       <th>sp_Blitz</th>
       <th>SQLWATCH</th>
       <th>SolarWinds DPA</th>
@@ -423,21 +423,21 @@ No software is installed on your SQL Servers. Everything runs from a single exe 
 
 <div class="dl-grid">
   <div class="dl-card">
-    <h3>⬇ LiveMonitor-Setup.exe</h3>
+    <h3>⬇ SQLTriage-Setup.exe</h3>
     <p>Guided installer. Start menu shortcut, optional Windows Service install, upgrade detection, "Launch now" on finish. Recommended for most users.</p>
-    <a href="https://github.com/SQLAdrian/SqlHealthAssessment/releases/latest">Download from Releases →</a>
+    <a href="https://github.com/SQLAdrian/SQLTriage/releases/latest">Download from Releases →</a>
   </div>
   <div class="dl-card">
-    <h3>📦 LiveMonitor.zip</h3>
-    <p>Extract to any folder (e.g. <code>C:\Tools\LiveMonitor</code>) and run <code>LiveMonitor.exe</code>. No installation required. Good for air-gapped or portable use.</p>
-    <a href="https://github.com/SQLAdrian/SqlHealthAssessment/releases/latest">Download from Releases →</a>
+    <h3>📦 SQLTriage.zip</h3>
+    <p>Extract to any folder (e.g. <code>C:\Tools\SQLTriage</code>) and run <code>SQLTriage.exe</code>. No installation required. Good for air-gapped or portable use.</p>
+    <a href="https://github.com/SQLAdrian/SQLTriage/releases/latest">Download from Releases →</a>
   </div>
 </div>
 
 <div class="section-label">// quick start</div>
 
 <ol class="qs">
-  <li>Download from the <a href="https://github.com/SQLAdrian/SqlHealthAssessment/releases/latest">Releases page</a> — Setup.exe or ZIP</li>
+  <li>Download from the <a href="https://github.com/SQLAdrian/SQLTriage/releases/latest">Releases page</a> — Setup.exe or ZIP</li>
   <li>Run it — no prerequisites to install separately</li>
   <li>Go to <strong>Servers → Add Server</strong>, enter your SQL Server name, click <strong>Test → Save</strong></li>
   <li>Open <strong>Live Monitor</strong> <kbd>Ctrl+2</kbd> to see live sessions, wait stats, and top queries</li>
@@ -471,14 +471,14 @@ The built-in onboarding wizard guides you through the setup on first run. SQLWAT
 
 <div class="section-label">// get involved</div>
 
-- [Report a bug](https://github.com/SQLAdrian/SqlHealthAssessment/issues/new?template=bug_report.md)
-- [Request a feature](https://github.com/SQLAdrian/SqlHealthAssessment/issues/new?template=feature_request.md)
-- [Read the deployment guide](https://github.com/SQLAdrian/SqlHealthAssessment/blob/main/DEPLOYMENT_GUIDE.md)
-- [Contributing](https://github.com/SQLAdrian/SqlHealthAssessment/blob/main/CONTRIBUTING.md)
+- [Report a bug](https://github.com/SQLAdrian/SQLTriage/issues/new?template=bug_report.md)
+- [Request a feature](https://github.com/SQLAdrian/SQLTriage/issues/new?template=feature_request.md)
+- [Read the deployment guide](https://github.com/SQLAdrian/SQLTriage/blob/main/DEPLOYMENT_GUIDE.md)
+- [Contributing](https://github.com/SQLAdrian/SQLTriage/blob/main/CONTRIBUTING.md)
 
-Released under the [GNU General Public License v3.0](https://github.com/SQLAdrian/SqlHealthAssessment/blob/main/LICENSE.txt).
+Released under the [GNU General Public License v3.0](https://github.com/SQLAdrian/SQLTriage/blob/main/LICENSE.txt).
 
 <footer class="site-footer">
-  LiveMonitor · Free SQL Server monitoring · Built by a DBA, for DBAs
+  SQLTriage · Free SQL Server monitoring · Built by a DBA, for DBAs
 </footer>
 

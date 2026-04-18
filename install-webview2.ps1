@@ -5,7 +5,7 @@
     
 .DESCRIPTION
     This script downloads and installs the Microsoft Edge WebView2 Runtime,
-    which is required for the SQL Health Assessment application to run.
+    which is required for the SQLTriage application to run.
     
     Supports:
     - Windows Server 2016 (Version 1607)
@@ -29,7 +29,7 @@
     .\install-webview2.ps1 -Silent -Force
 
 .NOTES
-    Author: SQL Health Assessment Team
+    Author: SQLTriage Team
     Version: 1.0.0
     Required OS: Windows Server 2016 or later, Windows 10 1809 or later
 #>
@@ -213,7 +213,7 @@ try {
         }
         
         Write-Host ""
-        Write-Host "You can now run the SQL Health Assessment application." -ForegroundColor Cyan
+        Write-Host "You can now run the SQLTriage application." -ForegroundColor Cyan
         exit 0
     }
     else {

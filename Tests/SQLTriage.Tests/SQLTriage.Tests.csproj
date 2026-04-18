@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\SqlHealthAssessment.csproj" />
+    <ProjectReference Include="..\..\SQLTriage.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -11,7 +11,7 @@ function setupIntersectionObserver(panelId) {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 // Load the panel
-                DotNet.invokeMethodAsync('SqlHealthAssessment', 'LoadOnVisible', panelId)
+                DotNet.invokeMethodAsync('SQLTriage', 'LoadOnVisible', panelId)
                     .then(() => observer.disconnect());
             }
         });

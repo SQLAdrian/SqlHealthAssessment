@@ -1,12 +1,12 @@
 @echo off
-REM Build script for SQL Health Assessment - Self-Contained Optimized
+REM Build script for SQLTriage - Self-Contained Optimized
 REM No runtime dependencies required
 REM Expected size: 100-120 MB
 
-echo Building SQL Health Assessment (Self-Contained Optimized)...
+echo Building SQLTriage (Self-Contained Optimized)...
 echo.
 
-dotnet publish SqlHealthAssessment.csproj ^
+dotnet publish SQLTriage.csproj ^
   -c Release ^
   -r win-x64 ^
   --self-contained true ^

@@ -3,7 +3,7 @@ REM DeployPublish.bat - Publishes the application to the .\publish folder
 REM Usage: Run this script from the project root directory
 
 echo ========================================
-echo SqlHealthAssessment Deploy Script
+echo SQLTriage Deploy Script
 echo ========================================
 echo.
 
@@ -31,12 +31,12 @@ echo.
 
 REM Step 2: Restore and publish the application
 echo [2/4] Restoring and publishing application...
-dotnet restore SqlHealthAssessment.csproj -r win-x64
+dotnet restore SQLTriage.csproj -r win-x64
 if errorlevel 1 (
     echo ERROR: Restore failed!
     exit /b 1
 )
-dotnet publish SqlHealthAssessment.csproj -c Release -r win-x64 --self-contained true -o ./publish
+dotnet publish SQLTriage.csproj -c Release -r win-x64 --self-contained true -o ./publish
 if errorlevel 1 (
     echo ERROR: Publish failed!
     exit /b 1
@@ -59,7 +59,7 @@ echo ========================================
 echo.
 echo To run the application:
 echo   cd publish
-echo   SqlHealthAssessment.exe
+echo   SQLTriage.exe
 echo.
 
 REM Optional: List the final structure
