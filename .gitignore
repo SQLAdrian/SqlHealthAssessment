@@ -423,8 +423,14 @@ failed/
 in_progress/
 input/
 unknown/
-Output/
-Data/
+# Runtime data dirs (cache, logs) — ignore everything under Data/
+Data/*/
+# But keep source code files under Data/ (services, models, etc.)
+!Data/**/*.cs
+!Data/**/*.csproj
+!Data/Services/
+!Data/Models/
+!Data/Caching/
 # Ignore test build output but keep the test project source
 Tests/**/obj/
 Tests/**/bin/
