@@ -304,11 +304,11 @@
                     {
                         if (panel.PanelType == "CheckStatus" && _checkResults.TryGetValue(panel.Id, out var checks))
                         {
-                            <DynamicPanel Panel="panel" CheckData="checks" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                            <DynamicPanel Panel="panel" CheckData="checks" TimezoneOffsetHours="@TimezoneOffsetHours" IsCached="_cachedPanelIds.ContainsKey(panel.Id)" />
                         }
                         else if ((panel.PanelType == "StatCard" || panel.PanelType == "DeltaStatCard") && _statResults.TryGetValue(panel.Id, out var stat))
                         {
-                            <DynamicPanel Panel="panel" StatData="stat" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                            <DynamicPanel Panel="panel" StatData="stat" TimezoneOffsetHours="@TimezoneOffsetHours" IsCached="_cachedPanelIds.ContainsKey(panel.Id)" />
                         }
                     }
                 </div>
@@ -324,7 +324,8 @@
                         {
                             <DynamicPanel Panel="panel" GridData="grid" TimezoneOffsetHours="@TimezoneOffsetHours"
                                           ConnectionId="@ConnectionManager.CurrentServer?.Id"
-                                          DatabaseName="@ConnectionManager.CurrentServer?.Database" />
+                                          DatabaseName="@ConnectionManager.CurrentServer?.Database"
+                                          IsCached="_cachedPanelIds.ContainsKey(panel.Id)" />
                         }
                     }
                 </div>
@@ -339,7 +340,7 @@
                     {
                         <div class="chart-grid-item" style="position: relative;">
                             <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
-                            <DynamicPanel Panel="panel" BarGaugeData="gaugeData" TimezoneOffsetHours="@TimezoneOffsetHours" />
+                            <DynamicPanel Panel="panel" BarGaugeData="gaugeData" TimezoneOffsetHours="@TimezoneOffsetHours" IsCached="_cachedPanelIds.ContainsKey(panel.Id)" />
                         </div>
                     }
                 }
@@ -360,7 +361,8 @@
                                           BaselineData="@(_showBaseline && _baselineResults.TryGetValue(_maximizedPanel.Id, out var mbl) ? mbl : null)"
                                           GridData="@(_gridResults.TryGetValue(_maximizedPanel.Id, out var mgd) ? mgd : null)"
                                           BarGaugeData="@(_barGaugeResults.TryGetValue(_maximizedPanel.Id, out var mbg) ? mbg : null)"
-                                          TimezoneOffsetHours="@TimezoneOffsetHours" />
+                                          TimezoneOffsetHours="@TimezoneOffsetHours"
+                                          IsCached="_cachedPanelIds.ContainsKey(_maximizedPanel.Id)" />
                         </div>
                     </div>
                 </div>
@@ -421,6 +423,9 @@
     private ConcurrentDictionary<string, string> _panelErrors = new();
     private ConcurrentDictionary<string, List<TimeSeriesPoint>> _baselineResults = new();
     private bool _showBaseline = false;
+
+    // Track which panels are currently showing cached data (from preload)
+    private ConcurrentDictionary<string, bool> _cachedPanelIds = new();
 
     // Cached panel lists to avoid repeated LINQ on each render
     private List<PanelDefinition>? _enabledPanelsCache;
@@ -957,6 +962,18 @@
         var hasAny = tsResults.Any() || statResults.Any() || bgResults.Any() || gridResults.Any() || checkResults.Any();
         if (!hasAny) return;
 
+        // Track which panels are being served from cache (preload hit)
+        _cachedPanelIds.Clear();
+        foreach (var panel in panels)
+        {
+            if (tsResults.ContainsKey(panel.Id) || statResults.ContainsKey(panel.Id) ||
+                bgResults.ContainsKey(panel.Id) || gridResults.ContainsKey(panel.Id) ||
+                checkResults.ContainsKey(panel.Id))
+            {
+                _cachedPanelIds[panel.Id] = true;
+            }
+        }
+
         _timeSeriesResults = tsResults;
         _statResults       = statResults;
         _barGaugeResults   = bgResults;
@@ -1240,11 +1257,14 @@
                     break;
                     
                 default:
-                    Logger.LogWarning("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Unknown panel type: {PanelType}", 
+                    Logger.LogWarning("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Unknown panel type: {PanelType}",
                         DashboardId, panel.Id, panel.PanelType);
                     break;
             }
-            
+
+            // Panel finished loading — no longer showing cached data for this panel
+            _cachedPanelIds.TryRemove(panel.Id, out _);
+
             var elapsed = DateTime.Now - panelDebugStart;
             Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Completed successfully in {ElapsedMs}ms", 
                 DashboardId, panel.Id, elapsed.TotalMilliseconds);
@@ -1280,6 +1300,7 @@
             builder.AddAttribute(1, "Panel", panel);
             builder.AddAttribute(2, "CheckData", checks);
             builder.AddAttribute(3, "TimezoneOffsetHours", TimezoneOffsetHours);
+            builder.AddAttribute(4, "IsCached", _cachedPanelIds.ContainsKey(panel.Id));
             builder.CloseComponent();
         }
         else if ((panel.PanelType == "StatCard" || panel.PanelType == "DeltaStatCard") && _statResults.TryGetValue(panel.Id, out var stat))
@@ -1288,6 +1309,7 @@
             builder.AddAttribute(1, "Panel", panel);
             builder.AddAttribute(2, "StatData", stat);
             builder.AddAttribute(3, "TimezoneOffsetHours", TimezoneOffsetHours);
+            builder.AddAttribute(4, "IsCached", _cachedPanelIds.ContainsKey(panel.Id));
             builder.CloseComponent();
         }
         else if (panel.PanelType == "BarGauge" && _barGaugeResults.TryGetValue(panel.Id, out var gauge))
@@ -1296,6 +1318,7 @@
             builder.AddAttribute(1, "Panel", panel);
             builder.AddAttribute(2, "BarGaugeData", gauge);
             builder.AddAttribute(3, "TimezoneOffsetHours", TimezoneOffsetHours);
+            builder.AddAttribute(4, "IsCached", _cachedPanelIds.ContainsKey(panel.Id));
             builder.CloseComponent();
         }
         else
@@ -1308,6 +1331,7 @@
                 builder.AddAttribute(3, "TimeSeriesData", ts);
             else if (_gridResults.TryGetValue(panel.Id, out var grid))
                 builder.AddAttribute(3, "GridData", grid);
+            builder.AddAttribute(4, "IsCached", _cachedPanelIds.ContainsKey(panel.Id));
             builder.CloseComponent();
         }
     };
@@ -1367,6 +1391,7 @@
         else if ((panel.PanelType == "Donut" || panel.PanelType == "HorizontalBar") && _barGaugeResults.TryGetValue(panel.Id, out var chartData))
             builder.AddAttribute(4, "BarGaugeData", chartData);
 
+        builder.AddAttribute(15, "IsCached", _cachedPanelIds.ContainsKey(panel.Id));
         builder.CloseComponent();
     };
 

@@ -85,3 +85,33 @@ tools/
 # Archive folder (historical docs — read on explicit request only)
 .ignore/archive/
 
+# Planning docs — read on demand only (not via auto-load)
+.ignore/SQLTriage_PRD.md
+.ignore/SQLTriage_Release_Checklist.md
+.ignore/SQLTriage_Strategic_Blueprint.md
+.ignore/DEVELOPMENT_STRATEGY.md
+.ignore/WORKFILE_remaining.md
+.ignore/OPUS_ANALYSIS_COMPLETE_*.md
+.ignore/OPUS_MEGA_PROMPT_COMPLETE.md
+.ignore/PRE-MORTEM_*.md
+.ignore/DECISIONS/
+.ignore/review/
+
+# Submodules — large, read only when plan viewer work is active
+lib/PerformanceStudio/
+
+# SQL (Adrian owns SQL — do not auto-search)
+*.sql
+*.sqlplan
+*.dacpac.xml
+
+# Generated/cached
+BPScripts/Ignore/
+Deploy/
+!Deploy/installer/
+
+# Test fixtures
+Tests/**/TestData/
+Tests/**/Fixtures/
+
+

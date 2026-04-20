@@ -7,6 +7,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ScheduledTaskDefinitionService.Class — loads and persists scheduled task definitions from JSON
     public class ScheduledTaskDefinitionService
     {
         private readonly ILogger<ScheduledTaskDefinitionService> _logger;

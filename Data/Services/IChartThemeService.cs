@@ -1,10 +1,10 @@
-<!-- In the name of God, the Merciful, the Compassionate -->
-<!-- Bismillah ar-Rahman ar-Raheem -->
+/* In the name of God, the Merciful, the Compassionate */
 
 using SQLTriage.Data;
 
 namespace SQLTriage.Data.Services;
 
+// BM:IChartThemeService.Class — contract for theme colour palette and change notifications
 /// <summary>
 /// Contract for theme colour palette and change notifications.
 /// </summary>

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ForecastService.Class — linear regression forecasting for time-series metrics
     /// <summary>
     /// Provides linear regression-based forecasting for time-series metrics.
     /// Uses cached historical data to predict when thresholds will be breached.

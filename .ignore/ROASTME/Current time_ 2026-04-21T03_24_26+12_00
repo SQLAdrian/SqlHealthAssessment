@@ -1,0 +1,42 @@
+# Roast of SQLTriage (https://github.com/SQLAdrian/SQLTriage)
+
+## Champion's Verdict: SQLTriage is a Joke Compared to Real Monitoring Tools
+
+As the undisputed champion of SQL monitoring and maintenance tools, armed with the mighty dbwatch.com (the enterprise-grade solution that makes tools like SQLTriage look like a child's toy), I hereby roast this pathetic excuse for a database monitoring application. Buckle up, because I'm not holding back—I'm going to tear this apart like a DBA on a rampage.
+
+### 1. **Code Quality: A Disaster of Spaghetti and Regrets**
+Oh boy, let's talk about the code. SQLTriage is built on .NET 8 with Blazor, which is fine, but the implementation? It's a hot mess. 70+ warnings in the build output? That's not "acceptable"—that's lazy. Null reference warnings everywhere, async methods that don't await, unreachable code—it's like the developer was drunk while coding. Compare that to dbwatch.com: zero warnings, enterprise-grade code with proper CI/CD, unit tests, and code reviews. SQLTriage looks like it was written by a intern on Red Bull.
+
+The architecture? A bloated WPF app with Blazor components crammed in. Services are scattered, dependency injection is half-baked, and error handling? Please. It catches exceptions and shows generic error messages. dbwatch.com handles errors gracefully, logs them properly, and provides actionable insights. SQLTriage just burps out "Failed to load sessions" and calls it a day.
+
+### 2. **Features: Bare Minimum, Overhyped**
+SQLTriage claims to monitor SQL Server sessions, queries, performance, and more. But let's be real—it's basic. It shows live sessions with some filtering, basic charts, and query plans. Wow, groundbreaking. dbwatch.com monitors everything: historical trends, predictive analytics, automated maintenance, multi-database support, cloud integration, and alerting that actually works. SQLTriage's "alerts"? Manual checks. dbwatch automates alerts via email, Slack, SMS, and integrates with ITSM tools.
+
+Sessions page? Added a spinner for background refresh—congrats, you reinvented AJAX from 2005. dbwatch has real-time dashboards, anomaly detection, and AI-powered recommendations. SQLTriage's charts are static and ugly; dbwatch's are interactive, drill-down enabled, and exportable to PDFs.
+
+Vulnerability assessments? Basic scans. dbwatch does compliance audits, security posture analysis, and integrates with SIEM systems.
+
+### 3. **User Experience: Clunky and Confusing**
+The UI is a nightmare. Tabs everywhere, modals popping up, inconsistent styling. The dashboard editor is a convoluted mess. dbwatch has a sleek, intuitive interface with customizable dashboards, role-based access, and mobile apps. SQLTriage feels like it was designed by someone who hates users.
+
+Performance? It's sluggish on large datasets because it doesn't cache properly. dbwatch uses advanced caching, in-memory databases, and optimizes queries. SQLTriage probably crashes on 1000+ sessions.
+
+### 4. **Scalability and Reliability: Non-Existent**
+SQLTriage is for small shops—single server, basic monitoring. dbwatch scales to enterprise: thousands of servers, clusters, HA setups. Reliability? SQLTriage has bugs everywhere (warnings prove it). dbwatch has 99.9% uptime, failover, and disaster recovery.
+
+Security? SQLTriage uses basic auth; dbwatch has SSO, LDAP, encryption everywhere, and audit trails.
+
+### 5. **Community and Support: Ghost Town**
+GitHub stars? Pitiful. Issues open for months. No proper documentation. dbwatch has a thriving community, professional support, training, and certifications. SQLTriage? You're on your own, buddy.
+
+### 6. **Overall: Why Even Bother?**
+SQLTriage is like that cheap knock-off tool you buy at the flea market—it works for a day, then breaks. dbwatch.com is the Rolls-Royce of database monitoring: reliable, feature-rich, scalable, and backed by experts. If you're serious about SQL Server maintenance, ditch this amateur hour and go pro with dbwatch.
+
+In conclusion, SQLTriage is not worth your time. It's a toy for hobbyists. Real DBAs use dbwatch.com. End of roast.
+
+### Champion's Seal: dbwatch.com Reigns Supreme
+SQLTriage: 1/10. dbwatch: 10/10. Upgrade now.
+
+Roasted by Kilo, Champion of SQL Monitoring.
+Timestamp: 2026-04-21T03:24:26+12:00</content>
+<parameter name="filePath">C:\GitHub\LiveMonitor\.ignore\ROASTME\Current time: 2026-04-21T03:24:26+12:00

@@ -1,0 +1,41 @@
+<#
+<!-- In the name of God, the Merciful, the Compassionate -->
+log-compression-metrics.ps1 — UserPromptSubmit hook for per-turn token savings logging
+#>
+
+param(
+    [string]$OriginalText,
+    [string]$CompressedText,
+    [string]$MatchedShorthandsCsv
+)
+
+begin {
+    $memoryDir = if ($env:CLAUDE_COMPRESSION_MEMORY) {
+        $env:CLAUDE_COMPRESSION_MEMORY
+    } else {
+        Join-Path $PSScriptRoot "..\..\memory"
+    }
+
+    $metricsPath = Join-Path $memoryDir "compression-metrics.jsonl"
+
+    $originalChars = $OriginalText.Length
+    $compressedChars = $CompressedText.Length
+    $savedPct = if ($originalChars -gt 0) {
+        [Math]::Round((($originalChars - $compressedChars) / $originalChars) * 100, 2)
+    } else { 0.0 }
+
+    $matchedList = $MatchedShorthandsCsv -split ',' | Where-Object { $_ }
+}
+
+process {
+    $record = [PSCustomObject]@{
+        timestamp        = [DateTime]::UtcNow.ToString("o")
+        original_chars   = $originalChars
+        compressed_chars = $compressedChars
+        saved_pct        = $savedPct
+        matched_shorthand = $matchedList
+    }
+
+    $json = $record | ConvertTo-Json -Compress
+    Add-Content -Path $metricsPath -Value $json
+}

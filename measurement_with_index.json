@@ -1,0 +1,17 @@
+{
+  "project": "LiveMonitor",
+  "mode": "with_index",
+  "files_read": 4,
+  "files_list": [
+    ".claude\\docs\\README.md",
+    ".claude\\docs\\services-index.md",
+    "_Imports.razor",
+    "App.xaml"
+  ],
+  "prompt_tokens": 3073,
+  "completion_tokens": 1583,
+  "total_tokens": 4656,
+  "time_seconds": 28.4,
+  "accuracy": "3/5 (citations + accuracy)",
+  "response": "### 1. Key Services/Modules\nFrom services-index.md: ...\n\n*   **AdminAuthService.cs** - PBKDF2-SHA256 admin authentication with rate limiting and lockout.\n    *   Primary Method: `HashPassword` (or `IsLockedOut`, depending on use case)\n*   **AlertEvaluationService.cs** - Timer-based alert engine (30s tick); executes queries, manages state machine, dispatches notifications.\n    *   Primary Method: `EvaluateAllAsync`\n*   **PowerShellService.cs** - Executes PowerShell locally (pwsh.exe or powershell"
+}

@@ -9,6 +9,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:PrintService.Class — exports current page to PDF via WebView2 or browser print
     /// <summary>
     /// Wraps CoreWebView2.PrintToPdfAsync to export the current page as a multi-page PDF,
     /// respecting @media print CSS rules.  Saves to .\output\ automatically.

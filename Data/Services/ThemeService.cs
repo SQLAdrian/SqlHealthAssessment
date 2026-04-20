@@ -2,6 +2,7 @@
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ThemeService.Class — broadcasts Radzen UI theme changes across the component tree
     /// <summary>
     /// Broadcasts Radzen UI theme changes across the component tree.
     /// </summary>

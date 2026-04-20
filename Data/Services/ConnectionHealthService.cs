@@ -11,6 +11,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ConnectionHealthService.Class — background pinger for server connection health status
     /// <summary>
     /// Background singleton that pings each enabled server connection every 30 seconds
     /// and exposes a live up/down status dictionary for use in NavMenu and Dashboard.

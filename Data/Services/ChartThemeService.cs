@@ -1,10 +1,10 @@
-<!-- In the name of God, the Merciful, the Compassionate -->
-<!-- Bismillah ar-Rahman ar-Raheem -->
+/* In the name of God, the Merciful, the Compassionate */
 
 using SQLTriage.Data.Services;
 
 namespace SQLTriage.Data;
 
+// BM:ChartThemeService.Class — provides ApexCharts colour palettes for each UI theme
 /// <summary>
 /// Provides ApexCharts colour palettes for each UI theme, and synchronises
 /// theme changes to chart components via an event bus.

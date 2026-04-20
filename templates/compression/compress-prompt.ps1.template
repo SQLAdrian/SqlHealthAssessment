@@ -1,0 +1,63 @@
+<#
+<!-- In the name of God, the Merciful, the Compassionate -->
+compress-prompt.ps1 — expands shorthands before sending user input to LLM
+#>
+
+param(
+    [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+    [string]$InputText
+)
+
+begin {
+    # Resolve memory directory: env var overrides project-relative
+    $memoryDir = if ($env:CLAUDE_COMPRESSION_MEMORY) {
+        $env:CLAUDE_COMPRESSION_MEMORY
+    } else {
+        Join-Path $PSScriptRoot "..\..\memory"
+    }
+
+    $sessionVocabPath = Join-Path $memoryDir "session_vocab.md"
+    $stableVocabPath  = Join-Path $memoryDir "vocab_stable.md"
+
+    function Get-Vocabulary {
+        param([string]$Path)
+        if (-not (Test-Path $Path)) { return @() }
+        $content = Get-Content $Path -Raw
+        # Parse markdown table rows after the header separator
+        $rows = $content -split "`n" | Select-String -Pattern '^\|.*\|.*\|.*\|.*\|$'
+        foreach ($row in $rows) {
+            $cells = ($row -split '\|').Trim()
+            if ($cells.Count -ge 4 -and $cells[0] -notmatch '^--+$') {
+                [PSCustomObject]@{
+                    Shorthand = $cells[0]
+                    FullPhrase = $cells[1]
+                }
+            }
+        }
+    }
+
+    $allVocab = @()
+    if (Test-Path $sessionVocabPath) {
+        $allVocab += Get-Vocabulary $sessionVocabPath
+    }
+    if (Test-Path $stableVocabPath) {
+        $allVocab += Get-Vocabulary $stableVocabPath
+    }
+}
+
+process {
+    $expanded = $InputText
+
+    foreach ($entry in $allVocab) {
+        $pattern = "\b([^`]*)($($entry.Shorthand))([^`]*)\b"
+        # Case-insensitive replacement; preserve backticks by skipping them
+        $expanded = [Regex]::Replace(
+            $expanded,
+            $pattern,
+            { param($m) $m.Value -replace "\b$($entry.Shorthand)\b", $entry.FullPhrase },
+            'IgnoreCase'
+        )
+    }
+
+    $expanded
+}

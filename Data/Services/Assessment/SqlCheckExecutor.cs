@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services.Assessment
 {
+    // BM:SqlCheckExecutor.Class — executes SQL assessment checks against an open SqlConnection
     /// <summary>
     /// Executes SQL-based assessment checks against an open SqlConnection.
     /// Returns whether the check found issues (failed) or passed.

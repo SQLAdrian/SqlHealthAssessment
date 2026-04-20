@@ -4,6 +4,7 @@ using System.Collections.Generic;
 
 namespace SQLTriage.Data.Services.Assessment
 {
+    // BM:CheckExecutionResult.Class — result returned by each assessment check executor
     /// <summary>
     /// Result returned by each executor (Sql, PowerShell, Wmi, Registry).
     /// Carries the pass/fail state and the list of individual assessment results.

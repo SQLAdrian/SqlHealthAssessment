@@ -1,38 +1,41 @@
 /* In the name of God, the Merciful, the Compassionate */
 
-// Fixed VS Code-inspired dark theme for SQLTriage
-// Themes have been disabled to ensure consistent readability
+// Theme system for SQLTriage — sets data-theme on <html>; all colour/personality
+// variables are defined in app.css under [data-theme="..."] blocks.
+// DO NOT use root.style.setProperty here — inline styles override attribute selectors.
 
-// Apply fixed dark theme on startup
-function loadSavedTheme() {
-    // Fixed VS Code-inspired theme - no user selection
-    const root = document.documentElement;
-    root.style.setProperty('--bg-primary', '#1e1e1e');
-    root.style.setProperty('--bg-secondary', '#252526');
-    root.style.setProperty('--bg-panel', '#2d2d30');
-    root.style.setProperty('--bg-hover', '#37373d');
-    root.style.setProperty('--text-primary', '#cccccc');
-    root.style.setProperty('--text-secondary', '#9d9d9d');
-    root.style.setProperty('--text-muted', '#6a6a6a');
-    root.style.setProperty('--border', '#3e3e42');
-    root.style.setProperty('--accent', '#007acc');
-    root.style.setProperty('--green', '#4ec9b0');
-    root.style.setProperty('--orange', '#ce9178');
-    root.style.setProperty('--red', '#f44747');
-    root.style.setProperty('--purple', '#c586c0');
-    root.style.setProperty('--yellow', '#dcdcaa');
-    
-    // Set body background
-    document.body.style.background = '#1e1e1e';
-    document.body.style.backgroundImage = 'none';
-}
+var VALID_THEMES = ['default', 'rolls-royce', 'amg'];
+var DEFAULT_THEME = 'default';
+var STORAGE_KEY = 'sqltriage-theme';
 
-// Disabled theme functions (kept for compatibility)
 function applyTheme(themeName) {
-    // Themes disabled - always use fixed dark theme
-    loadSavedTheme();
+    var theme = VALID_THEMES.indexOf(themeName) >= 0 ? themeName : DEFAULT_THEME;
+    document.documentElement.setAttribute('data-theme', theme);
+    // Clear any legacy inline property overrides that would win over attribute selectors
+    document.documentElement.style.removeProperty('--bg-primary');
+    document.documentElement.style.removeProperty('--bg-secondary');
+    document.documentElement.style.removeProperty('--bg-panel');
+    document.documentElement.style.removeProperty('--bg-hover');
+    document.documentElement.style.removeProperty('--text-primary');
+    document.documentElement.style.removeProperty('--text-secondary');
+    document.documentElement.style.removeProperty('--text-muted');
+    document.documentElement.style.removeProperty('--border');
+    document.documentElement.style.removeProperty('--accent');
+    document.documentElement.style.removeProperty('--green');
+    document.documentElement.style.removeProperty('--orange');
+    document.documentElement.style.removeProperty('--red');
+    document.documentElement.style.removeProperty('--purple');
+    document.documentElement.style.removeProperty('--yellow');
+    document.body.style.removeProperty('background');
+    document.body.style.removeProperty('background-image');
+    try { localStorage.setItem(STORAGE_KEY, theme); } catch(e) {}
 }
 
-// Make available globally
+function loadSavedTheme() {
+    var saved;
+    try { saved = localStorage.getItem(STORAGE_KEY); } catch(e) {}
+    applyTheme(saved || DEFAULT_THEME);
+}
+
 window.loadSavedTheme = loadSavedTheme;
 window.applyTheme = applyTheme;

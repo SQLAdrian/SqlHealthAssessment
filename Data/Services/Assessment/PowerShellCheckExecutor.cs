@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services.Assessment
 {
+    // BM:PowerShellCheckExecutor.Class — executes PowerShell-based assessment checks
     /// <summary>
     /// Executes PowerShell-based assessment checks via powershell.exe.
     /// </summary>

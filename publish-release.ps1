@@ -68,10 +68,10 @@ if (-not (Test-Path $zipPath)) {
 $zipSize = (Get-Item $zipPath).Length / 1MB
 Write-Host "  ZIP: $zipName ($([math]::Round($zipSize, 1)) MB)" -ForegroundColor Cyan
 
-# ── Locate Inno Setup installer (compiled by csproj BuildInstaller target) ──
-# The csproj BuildInstaller target runs iscc automatically during dotnet publish.
-$setupName = "LiveMonitor-v$version-build$buildNumber-Setup.exe"
-$setupPath = "release\$setupName"
+ # ── Locate Inno Setup installer (compiled by csproj BuildInstaller target) ──
+ # The csproj BuildInstaller target runs iscc automatically during dotnet publish.
+ $setupName = "SQLTriage-v$version-build$buildNumber-Setup.exe"
+ $setupPath = "release\$setupName"
 
 if (Test-Path $setupPath) {
     $setupSize = (Get-Item $setupPath).Length / 1MB
@@ -110,18 +110,18 @@ if ($lastTag) {
     $commitLog = git log -20 --oneline --no-merges 2>$null
 }
 
-$releaseNotes = @"
-## SQL Health Assessment $releaseName
+ $releaseNotes = @"
+ ## SQLTriage $releaseName
 
-### Changes
+ ### Changes
 $($commitLog | ForEach-Object { "- $_" } | Out-String)
 ### Install — Option A: Installer (recommended)
 Download ``$setupName`` and run it. Adds a Start Menu entry, desktop shortcut, and uninstaller.
 No .NET or WebView2 installation required — everything is bundled.
 
 ### Install — Option B: ZIP (portable / shared installs)
-Download and extract ``$zipName`` to any folder (e.g. ``C:\Tools\LiveMonitor``).
-Run ``SQLTriage.exe``. No installer needed.
+ Download and extract ``$zipName`` to any folder (e.g. ``C:\Tools\SQLTriage``).
+ Run ``SQLTriage.exe``. No installer needed.
 
 ### Update
 Existing installations will detect this release automatically via the in-app updater.

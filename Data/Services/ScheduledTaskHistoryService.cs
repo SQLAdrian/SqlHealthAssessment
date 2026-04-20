@@ -7,6 +7,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ScheduledTaskHistoryService.Class — persists task execution history to SQLite DB
     public class ScheduledTaskHistoryService : IDisposable
     {
         private readonly ILogger<ScheduledTaskHistoryService> _logger;

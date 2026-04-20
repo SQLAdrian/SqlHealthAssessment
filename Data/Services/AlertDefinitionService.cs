@@ -7,6 +7,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:AlertDefinitionService.Class — loads, caches, and persists alert definitions from JSON
     /// <summary>
     /// Loads, caches, and persists alert definitions from Config/alert-definitions.json.
     /// Provides lookup by ID/category and CRUD for user overrides (enable/disable, thresholds).

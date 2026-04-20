@@ -7,6 +7,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:AlertHistoryService.Class — persists alert history to a local SQLite database
     /// <summary>
     /// Persists alert history to a local SQLite database (alert-history.db).
     /// Supports insert, update, query by date range, and automatic purge of records older than retention period.

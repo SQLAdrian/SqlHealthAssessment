@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ProductionReadinessGate.Class — enforces v1.x production security requirements
     /// <summary>
     /// Checks whether the application has reached production readiness (v1.x+)
     /// and enforces security requirements for that milestone:

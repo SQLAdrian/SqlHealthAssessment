@@ -10,6 +10,7 @@ using Serilog.Core;
 using SQLTriage.Data;
 using SQLTriage.Data.Caching;
 using SQLTriage.Data.Models;
+using SQLTriage.Data.Services;
 
 #pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 
@@ -194,6 +195,8 @@ namespace SQLTriage
             services.AddSingleton<CachingQueryExecutor>();
             services.AddSingleton<CacheEvictionService>();
             services.AddSingleton<liveQueriesMaintenanceService>();
+            services.AddSingleton<CacheMetricsService>();
+            services.AddSingleton<CacheMetricsService>();
 
             Services = services.BuildServiceProvider();
 

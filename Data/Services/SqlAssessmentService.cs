@@ -11,6 +11,7 @@ using System.Text.Json;
 
 namespace SQLTriage.Data.Services;
 
+// BM:SqlAssessmentService.Class — runs SQL Vulnerability Assessment using Microsoft Assessment API
 /// <summary>
 /// Service for running SQL Vulnerability Assessment using Microsoft SQL Assessment API
 /// Uses AssessmentEngine with ruleset.json for full check coverage

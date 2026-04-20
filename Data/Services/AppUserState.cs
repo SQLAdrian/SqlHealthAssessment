@@ -7,6 +7,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:AppUserState.Class — holds the current user's role for the duration of a Blazor circuit
     /// <summary>
     /// Scoped service that holds the current user's role for the duration of a Blazor circuit.
     ///

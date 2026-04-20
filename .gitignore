@@ -431,15 +431,18 @@ Data/*/
 !Data/Services/
 !Data/Models/
 !Data/Caching/
-# Ignore test build output but keep the test project source
+# Ignore all test build output
 Tests/**/obj/
 Tests/**/bin/
-Tests/*.Tests/obj/
-Tests/*.Tests/bin/
-# Keep test project source files
-!Tests/SQLTriage.Tests/
-!Tests/SQLTriage.Tests/**
-# Re-ignore build output within the test project
-Tests/SQLTriage.Tests/obj/
-Tests/SQLTriage.Tests/bin/
+# Keep test project source files only — explicit extensions so bin/obj dirs stay ignored above
+
+!Tests/SQLTriage.Tests/*.csproj
+!Tests/SQLTriage.Tests/*.cs
+!Tests/SQLTriage.Tests/**/*.cs
+!Tests/SQLTriage.Tests/**/*.json
+!Tests/SQLTriage.Tests/**/*.resx
+!Tests/SQLTriage.Tests/**/*.config
+
+Tests/SQLTriage.Tests/bin/*
+LiveMonitor/.claude/*
 

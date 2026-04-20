@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ProcessGuard.Class — enterprise process integrity guard for debugger and tampering detection
     /// <summary>
     /// Enterprise process integrity guard. Monitors the process for:
     ///   - Debugger attachment (managed and native)

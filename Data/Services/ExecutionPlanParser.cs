@@ -6,8 +6,6 @@ using System.Xml.Linq;
 
 namespace SQLTriage.Data.Services;
 
-// ── Data contracts ────────────────────────────────────────────────────────────
-
 public class PlanGraph
 {
     [JsonPropertyName("nodes")] public List<PlanNode> Nodes { get; set; } = [];

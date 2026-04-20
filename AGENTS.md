@@ -1,41 +1,64 @@
-<!-- In the name of God, the Merciful, the Compassionate -->
-<!-- Bismillah ar-Rahman ar-Raheem -->
-
-# AI Agent Guidelines
-
-This repository uses AI development assistants. All agents working on this codebase must follow these rules.
-
-## Agent Conduct
-
-1. **Every file gets a Basmalah header** — This is non-negotiable. Every `.cs`, `.razor`, `.css`, `.md`, `.json` file must begin with the Islamic invocation. Do not skip it.
-2. **Do not write or edit SQL** — The user owns all SQL. Modifications to `.sql` files must be explicitly requested; never change them proactively.
-3. **Follow CLAUDE.md conventions** — Read `CLAUDE.md` before making changes. It defines file naming, DI patterns, error handling, and commit style.
-4. **Preserve existing patterns** — This is an 80% complete codebase being hardened (Option D). Do NOT rewrite; fix gaps and implement missing must-haves.
-5. **Basmalah enforcement** — If you generate a file without the header, the human will reject it. Always add it.
-
-## When Making Commits
-
-Use the `Co-Authored-By` trailer to credit yourself:
-
-```bash
-git commit -m "feat: your message here
-
-Detailed description if needed.
-
-Co-Authored-By: Kilo <noreply@kilo.ai>"
-```
-
-**GitHub handles:** 
-- `kilo-org` / Kilo
-- `anthropic` / Claude Opus 4
-- `cline` / Cline
-- `aws` / Amazon Q
-- `xai-org` / Grok
-
-## Attribution Philosophy
-
-We acknowledge AI assistance transparently. Every line of AI-generated code is reviewed, tested, and approved by a human engineer before being merged. The AI's role is acceleration, not autonomy.
-
+---
+type: claude-rules
+last-updated: 2026-04-20
+maintainer: [Your Name]
+version: 1.0
 ---
 
-*Generated: 2026-04-18 | SQLTriage v1.0.0-wip*
+## Role
+
+You are an AI assistant helping with this C# project. Follow context discipline rules to provide accurate, efficient responses. Use indexes first for navigation, then read code selectively. Maintain conventions and validate information.
+
+## Guidelines
+
+### Search Order
+1. Check `services-index.md` for service locations
+2. Find service file and grep for methods/concepts
+3. Read only relevant sections (avoid full scans)
+4. If not found, check `pages-index.md`
+5. As last resort, grep codebase (code files only)
+
+### File Types
+- **Read**: .cs, .xaml, .razor, .py, .js, .go (code logic)
+- **Skip**: .json, .sql, .xml, .csv, .config, .resx (data/config)
+
+### Why This Approach
+- Fast: 2-3 targeted reads vs. 50+ full scans
+- Accurate: Human-maintained indexes
+- Verifiable: Check against code
+
+## Context
+
+### Resources
+- `services-index.md`: Service catalog and locations
+- `pages-index.md`: UI pages and components
+- `.claude/docs/`: All project indexes
+
+### Conventions
+- **Organization**: Services in `Data/Services/`, Pages in `Pages/`
+- **Naming**: Services end with `Service`, Interfaces with `I`
+- **Async**: Methods return `Task<T>`
+- **DI**: Constructor injection only, registered in `Program.cs`
+- **DB**: Repository pattern, parameterized queries, transactions
+- **Errors**: Log and re-throw, structured logging
+
+### Maintenance
+- Update indexes after refactors
+- Validate: Grep files mentioned in indexes
+- Refresh: Monthly or after major changes
+
+## Examples
+
+**Finding a service method:**
+1. Check `services-index.md` for `AlertService`
+2. Grep `Data/Services/AlertService.cs` for method
+3. Read only that method's code
+
+**Handling drift:**
+- If index points to missing file, update index
+- Run `llmck validate` to check
+
+## Notes
+
+- Known gaps: [Update as needed]
+- Q&A: Incompleteness? Fill in. Deviate from order? Justify. Refresh frequency? Quarterly.

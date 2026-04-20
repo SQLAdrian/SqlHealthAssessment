@@ -1,0 +1,50 @@
+<!-- In the name of God, the Merciful, the Compassionate -->
+<!-- CLAUDE.md compression block — paste this into your project's CLAUDE.md -->
+
+## Input compression vocab (self-learning)
+
+**Session-start banner:** the `compress-prompt` hook sets a one-shot banner instruction on the first turn of each session (inside `<compression-banner>` or `<vocab-context>` tags). If you see that instruction, prepend the requested `⟨compression: ACTIVE · vocab=N · ...⟩` line to your FIRST reply in the session — it's how the user confirms the pipeline is live without interrogating you. After that first turn, stop emitting it.
+
+Read `memory/session_vocab.md` at session start. When you see shorthand in user input:
+1. Expand it using the active dict before reasoning.
+2. After each turn where you expanded a shorthand, increment "Uses this session" for that row.
+3. If a long phrase (≥15 chars) appears ≥3 times in this conversation, add a row under "Proposed" with a 2-3 char abbreviation you believe tokenizes to 1-2 BPE tokens.
+4. If a "Proposed" entry hits 3 uses, move it to "Active" and reset counter to 0.
+5. On /compact or session end: increment `Sessions used` in `vocab_stable.md` for any active entry used this session. If it hits 5 sessions, move it to `vocab_stable.md` with today's date as "Locked since".
+6. Prune: remove active entries with 0 uses for 10 consecutive sessions. Max 50 rows total in session_vocab.md.
+
+## Output shorthand (narration only — NOT final answers)
+
+You MAY compress these using the same vocab:
+- Progress updates between tool calls ("reading USS for nxt on wl...")
+- Status narration ("checking QP")
+- Thinking/reasoning you emit before a conclusion
+
+You MUST write in full English for:
+- The final prose answer to the user (the last block before you stop)
+- Explanations the user must act on (instructions, warnings, confirmations)
+- Any output a user will copy or share
+
+Rule of thumb: if you're narrating your own work → shorthand. If you're answering the user → English.
+
+## Hard exclusions — NEVER use shorthand in:
+
+- Edit / Write tool `content` or `new_string` parameters (file contents)
+- Bash tool `command` parameter (shell execution)
+- Git commit messages
+- Grep / Glob pattern parameters
+- Any tool input that flows to disk, shell, or a remote system
+- Anything inside backticks anywhere
+- File paths, identifiers, SQL, JSON, error messages
+
+A `validate-no-shorthand` PreToolUse hook enforces this. If you write shorthand into a tool call, the call is blocked and you must expand and retry in English. Don't fight the validator — it's there to prevent breaking your code.
+
+Rule: shorthand lives in the conversation stream. It must never enter a tool call's arguments.
+
+### Memory location discovery
+
+Hooks resolve memory file paths in this order:
+1. **`$env:CLAUDE_COMPRESSION_MEMORY`** — set this environment variable to point to any directory (e.g., `%APPDATA%\Claude\memory\LiveMonitor`). Use when you want memory outside the project tree.
+2. **`<project_root>/memory/`** — default project-relative location.
+
+This means any LLM can discover the memory location by reading `CLAUDE.md` (this section) and, if needed, checking the environment. The env var makes the system portable across folder structures without editing hook scripts.

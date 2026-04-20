@@ -9,6 +9,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:AlertTemplateService.Class — loads and renders email/notification alert templates
     public class AlertTemplateService
     {
         private readonly ILogger<AlertTemplateService> _logger;

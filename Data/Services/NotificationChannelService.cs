@@ -13,6 +13,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:NotificationChannelService.Class — dispatches alerts via SMTP, Teams, Slack, webhook
     /// <summary>
     /// Dispatches alert notifications via configured outbound channels (SMTP email, Teams webhook).
     /// Configuration is persisted to Config/notification-channels.json with credentials encrypted

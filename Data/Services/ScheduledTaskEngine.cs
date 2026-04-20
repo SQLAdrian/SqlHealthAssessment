@@ -11,6 +11,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ScheduledTaskEngine.Class — evaluates and executes scheduled tasks on timer
     public class ScheduledTaskEngine : IDisposable
     {
         private readonly ILogger<ScheduledTaskEngine> _logger;

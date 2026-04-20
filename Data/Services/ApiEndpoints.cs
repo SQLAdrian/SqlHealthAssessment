@@ -11,6 +11,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ApiEndpoints.Class — registers REST API endpoints for RMM/PSA integration
     /// <summary>
     /// Registers REST API endpoints on the Kestrel server started by ServerModeService.
     /// Designed for RMM/PSA integration (ConnectWise, Datto, Autotask, etc.).

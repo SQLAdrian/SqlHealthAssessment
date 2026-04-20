@@ -99,6 +99,12 @@ namespace SQLTriage.Data
             /// <summary>Maximum number of sessions to display.</summary>
             public int SessionsMaxDisplay { get; set; } = 500;
 
+            // ── Query Concurrency ──
+            /// <summary>Maximum concurrent heavy queries (TimeSeries panels). Default 5. Range 1-20.</summary>
+            public int MaxHeavyConcurrent { get; set; } = 5;
+            /// <summary>Maximum concurrent light queries (StatCard, BarGauge, CheckStatus, DataGrid). Default 10. Range 2-50.</summary>
+            public int MaxLightConcurrent { get; set; } = 10;
+
             // ── Cache ──
             /// <summary>Maximum data points returned per chart series from the SQLite cache. Lower = less memory, faster render.</summary>
             public int ChartDataPointCap { get; set; } = 2000;
@@ -432,6 +438,12 @@ namespace SQLTriage.Data
 
         public int GetChartDataPointCap() { lock (_lock) return _settings.ChartDataPointCap; }
         public void SetChartDataPointCap(int cap) { lock (_lock) _settings.ChartDataPointCap = Math.Clamp(cap, 500, 10000); SaveSettings(); }
+
+        public int GetMaxHeavyConcurrent() { lock (_lock) return _settings.MaxHeavyConcurrent; }
+        public void SetMaxHeavyConcurrent(int limit) { lock (_lock) _settings.MaxHeavyConcurrent = Math.Clamp(limit, 1, 30); SaveSettings(); }
+
+        public int GetMaxLightConcurrent() { lock (_lock) return _settings.MaxLightConcurrent; }
+        public void SetMaxLightConcurrent(int limit) { lock (_lock) _settings.MaxLightConcurrent = Math.Clamp(limit, 2, 50); SaveSettings(); }
 
         public string? GetUpdateProxyUrl() { lock (_lock) return _settings.UpdateProxyUrl; }
         public void SetUpdateProxyUrl(string? url) { lock (_lock) _settings.UpdateProxyUrl = string.IsNullOrWhiteSpace(url) ? null : url.Trim(); SaveSettings(); }

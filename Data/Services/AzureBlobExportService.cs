@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:AzureBlobExportService.Class — exports CSV data to Azure Blob Storage
     /// <summary>
     /// Exports query results and assessment data as CSV files to Azure Blob Storage.
     /// Supports connection string and SAS token authentication.

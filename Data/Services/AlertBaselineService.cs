@@ -14,6 +14,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:AlertBaselineService.Class — collects alert samples and computes IQR-based dynamic thresholds
     /// <summary>
     /// Collects alert metric samples and computes per-server IQR-based dynamic thresholds.
     ///

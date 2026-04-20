@@ -6,6 +6,7 @@ using System.Data;
 
 namespace SQLTriage.Data.Services;
 
+// BM:XEventService.Class — manages Extended Events sessions and monitoring
 /// <summary>
 /// Service for managing Extended Events sessions and monitoring
 /// </summary>

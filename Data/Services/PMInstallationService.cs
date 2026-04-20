@@ -18,6 +18,7 @@ using Microsoft.Data.SqlClient;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:PMInstallationService.Class — Performance Monitor database installation and upgrade
     public class PMInstallationProgress
     {
         public string Message { get; set; } = string.Empty;

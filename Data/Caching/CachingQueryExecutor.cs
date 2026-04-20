@@ -47,6 +47,36 @@ namespace SQLTriage.Data.Caching
         /// </summary>
         public DateTime? LastSuccessfulFetch => _stateTracker.LastSuccessfulFetch;
 
+        // ── Telemetry: query source counts (thread-safe) ──────────────────────
+        private int _totalQueries;
+        private int _freshHits;
+        private int _cacheHits;
+
+        /// <summary>Total query executions across all panels since last reset.</summary>
+        public int TotalQueries => _totalQueries;
+
+        /// <summary>Number of queries that succeeded against SQL Server (fresh data).</summary>
+        public int FreshHits => _freshHits;
+
+        /// <summary>Number of queries served from cache due to SQL failure or delta mode.</summary>
+        public int CacheHits => _cacheHits;
+
+        /// <summary>Resets all telemetry counters to zero. Call at start of dashboard load cycle.</summary>
+        public void ResetMetrics()
+        {
+            Interlocked.Exchange(ref _totalQueries, 0);
+            Interlocked.Exchange(ref _freshHits, 0);
+            Interlocked.Exchange(ref _cacheHits, 0);
+        }
+
+        /// <summary>
+        /// Returns a snapshot of current metrics for logging/display.
+        /// </summary>
+        public (int total, int fresh, int cached) GetMetrics() =>
+            (Interlocked.CompareExchange(ref _totalQueries, 0, 0),
+             Interlocked.CompareExchange(ref _freshHits, 0, 0),
+             Interlocked.CompareExchange(ref _cacheHits, 0, 0));
+
         public CachingQueryExecutor(
             QueryExecutor inner,
             liveQueriesCacheStore cache,
@@ -122,7 +152,7 @@ namespace SQLTriage.Data.Caching
         /// <summary>
         /// Cached version of <see cref="QueryExecutor.ExecuteQueryAsync(string, DashboardFilter, Dictionary{string, object}?, CancellationToken)"/>.
         /// Used by StatCard, DataGrid, and TextCard panels.
-        /// Strategy: try SQL Server, cache result, fall back to cache on failure.
+        /// Strategy: try SQL Server, cache result, fall back to cached value on SQL Server failure.
         /// </summary>
         public async Task<DataTable> ExecuteQueryAsync(
             string queryId,
@@ -130,6 +160,7 @@ namespace SQLTriage.Data.Caching
             Dictionary<string, object>? additionalParams = null,
             CancellationToken cancellationToken = default)
         {
+            Interlocked.Increment(ref _totalQueries);
             var instanceKey = BuildInstanceKey(filter);
 
             try
@@ -137,6 +168,7 @@ namespace SQLTriage.Data.Caching
                 // Always try SQL Server first for DataTable queries (StatCard, DataGrid, TextCard)
                 var result = await _inner.ExecuteQueryAsync(queryId, filter, additionalParams, cancellationToken);
                 _stateTracker.RecordSuccess();
+                Interlocked.Increment(ref _freshHits);
 
                 // Cache the result for offline fallback
                 await _cache.UpsertDataTableAsync(queryId, instanceKey, result, DateTime.UtcNow);
@@ -155,9 +187,12 @@ namespace SQLTriage.Data.Caching
 
                 var cached = await _cache.GetDataTableAsync(queryId, instanceKey);
                 if (cached != null)
+                {
+                    Interlocked.Increment(ref _cacheHits);
                     return cached;
+                }
 
-                throw QueryExecutor.ScrubException(ex); // Scrub credentials before propagating
+                throw QueryExecutor.ScrubException(ex);
             }
         }
 
@@ -221,11 +256,13 @@ namespace SQLTriage.Data.Caching
             Func<IDataReader, T> mapper,
             CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _totalQueries);
             var lastFetch = await _cache.GetLastFetchTimeAsync(queryId, instanceKey);
 
             if (lastFetch == null)
             {
-                // First fetch ever for this query+instance — full load
+                // First fetch ever for this query+instance — full load (fresh)
+                Interlocked.Increment(ref _freshHits);
                 return await FullFetchTimeSeriesAsync(queryId, filter, instanceKey, mapper, cancellationToken);
             }
 
@@ -244,6 +281,7 @@ namespace SQLTriage.Data.Caching
 
                 var deltaRows = await _inner.ExecuteQueryAsync(queryId, deltaFilter, mapper, null, cancellationToken);
                 _stateTracker.RecordSuccess();
+                Interlocked.Increment(ref _freshHits);
 
                 // Convert to TimeSeriesPoint for cache storage
                 if (deltaRows.Count > 0 && deltaRows is List<TimeSeriesPoint> tsPoints)
@@ -271,10 +309,12 @@ namespace SQLTriage.Data.Caching
 
             if (cachedRows.Count > 0 && typeof(T) == typeof(TimeSeriesPoint))
             {
+                Interlocked.Increment(ref _cacheHits);
                 return (List<T>)(object)cachedRows;
             }
 
             // Cache is empty and SQL Server is down — return empty list
+            // (No hit counted; query executed but failed and no data available)
             return new List<T>();
         }
 
@@ -292,6 +332,7 @@ namespace SQLTriage.Data.Caching
             {
                 var rows = await _inner.ExecuteQueryAsync(queryId, filter, mapper, null, cancellationToken);
                 _stateTracker.RecordSuccess();
+                Interlocked.Increment(ref _freshHits);
 
                 // Cache the results
                 if (rows is List<TimeSeriesPoint> tsPoints && tsPoints.Count > 0)
@@ -314,6 +355,7 @@ namespace SQLTriage.Data.Caching
                 var cached = await _cache.GetTimeSeriesAsync(queryId, instanceKey, filter.TimeFrom, filter.TimeTo);
                 if (cached.Count > 0 && typeof(T) == typeof(TimeSeriesPoint))
                 {
+                    Interlocked.Increment(ref _cacheHits);
                     return (List<T>)(object)cached;
                 }
 
@@ -330,10 +372,12 @@ namespace SQLTriage.Data.Caching
             Func<IDataReader, T> mapper,
             CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _totalQueries);
             try
             {
                 var rows = await _inner.ExecuteQueryAsync(queryId, filter, mapper, null, cancellationToken);
                 _stateTracker.RecordSuccess();
+                Interlocked.Increment(ref _freshHits);
 
                 // Cache for offline fallback
                 if (rows is List<StatValue> statRows)
@@ -348,17 +392,19 @@ namespace SQLTriage.Data.Caching
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
+                // SQL Server failed — try serving from cache
                 _stateTracker.RecordFailure();
 
                 var cached = await _cache.GetBarGaugeAsync(queryId, instanceKey);
-                if (cached.Count > 0 && typeof(T) == typeof(StatValue))
+                if (cached != null)
                 {
+                    Interlocked.Increment(ref _cacheHits);
                     return (List<T>)(object)cached;
                 }
 
-                throw QueryExecutor.ScrubException(ex);
+                throw;
             }
         }
 
@@ -371,10 +417,12 @@ namespace SQLTriage.Data.Caching
             Func<IDataReader, T> mapper,
             CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _totalQueries);
             try
             {
                 var rows = await _inner.ExecuteQueryAsync(queryId, filter, mapper, null, cancellationToken);
                 _stateTracker.RecordSuccess();
+                Interlocked.Increment(ref _freshHits);
 
                 // Cache for offline fallback
                 if (rows is List<CheckStatus> checkRows)
@@ -391,11 +439,13 @@ namespace SQLTriage.Data.Caching
             }
             catch (Exception ex)
             {
+                // SQL Server failed — try serving from cache
                 _stateTracker.RecordFailure();
 
                 var cached = await _cache.GetCheckStatusAsync(queryId, instanceKey);
                 if (cached.Count > 0 && typeof(T) == typeof(CheckStatus))
                 {
+                    Interlocked.Increment(ref _cacheHits);
                     return (List<T>)(object)cached;
                 }
 
@@ -415,6 +465,8 @@ namespace SQLTriage.Data.Caching
             Dictionary<string, object>? additionalParams,
             CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _totalQueries);
+            Interlocked.Increment(ref _freshHits);
             return await _inner.ExecuteQueryAsync(queryId, filter, mapper, additionalParams, cancellationToken);
         }
 

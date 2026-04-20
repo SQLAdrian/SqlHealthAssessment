@@ -7,6 +7,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ReportPageConfigService.Class — loads and persists report page section layouts from JSON
     /// <summary>
     /// Loads and persists per-page report-section layout from Config/report-pages.json.
     /// Creates a seeded default file on first run covering the three main audit pages.

@@ -9,12 +9,13 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
-    /// <summary>
-    /// Timer-based engine that periodically evaluates alert definitions against all configured servers.
-    /// Runs each alert's T-SQL query, compares the result to thresholds, manages the state machine
-    /// (Active → Acknowledged → Resolved), and dispatches notifications via AlertingService.
-    /// </summary>
-    public class AlertEvaluationService : IDisposable
+     /// <summary>
+     /// Timer-based engine that periodically evaluates alert definitions against all configured servers.
+     /// Runs each alert's T-SQL query, compares the result to thresholds, manages the state machine
+     /// (Active → Acknowledged → Resolved), and dispatches notifications via AlertingService.
+     /// </summary>
+     // BM:AlertEvaluationService.Class — timer-based alert engine
+     public class AlertEvaluationService : IDisposable
     {
         private readonly ILogger<AlertEvaluationService> _logger;
         private readonly AlertDefinitionService _definitions;

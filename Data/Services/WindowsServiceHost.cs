@@ -26,6 +26,7 @@ using System.Threading.Tasks;
 #pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 namespace SQLTriage.Data.Services
 {
+    // BM:WindowsServiceHost.Class — runs the Blazor Server UI as a headless Windows Service
     /// <summary>
     /// Runs the Blazor Server UI as a headless Windows Service (no WPF).
     /// Shares the same service registration as the WPF app.

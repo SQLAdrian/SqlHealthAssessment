@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 #pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 namespace SQLTriage.Data.Services.Assessment
 {
+    // BM:RegistryCheckExecutor.Class — executes Registry-based assessment checks
     /// <summary>
     /// Executes Registry-based assessment checks via Microsoft.Win32.Registry.
     /// </summary>

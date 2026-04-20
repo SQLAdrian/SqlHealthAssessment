@@ -1,20 +1,20 @@
 {
     "version":  "0.85.2",
-    "buildNumber":  1179,
-    "buildDate":  "2026-04-19",
+    "buildNumber":  1217,
+    "buildDate":  "2026-04-21",
     "releaseType":  "Production",
     "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SQLTriage/releases/latest",
     "whatsnew":  [
-                     "Live Sessions: blocking-chain lines now render correctly with arrowheads and a blocking banner",
-                     "Live Sessions: blocking lines moved to MarkupString path with InvariantCulture coords — fixes locale-specific rendering failure",
-                     "Alerting: ag_listener_offline query fixed — bad listener_id join replaced with ip_address+port join via availability_group_listener_ip_addresses",
-                     "Alert definitions: all 80 alerts now carry uniform schema (alwaysAlert, primaryChannel, escalation fields, etc.)",
-                     "Alert edit modal: channel dropdowns populated from enabled channels; alwaysAlert/sendEmail/escalate always visible",
-                     "Alert Templates tab: per-channel template editors with token reference, Reset to Default, full HTML email support",
-                     "AutoUpdate: version comparison now handles GitHub tag format v0.85.2-build1046 correctly",
-                     "Query Plan: stored procedure plans (StmtCond WHILE/IF) now parse correctly — condition plan shown, body statements as separate tabs",
-                     "Query Plan: null-safety fix for fallback parent-selection path in ParseAll",
-                     "Alerting: xp_readerrorlog datetime params pre-declared as variables — fixes \u0027Incorrect syntax near MINUTE\u0027 on every poll cycle",
-                     "Alerting: deadlock count fast-path — NVARCHAR LIKE pre-check skips full XML cast when no deadlocks in ring buffer; timeout raised to 30s"
+                     "Performance: Added cache hit-rate telemetry — per-dashboard counters (fresh vs cached) now logged and persisted for historical analysis",
+                     "Settings: New Cache Performance panel shows current session, last 24h, and last 7d cache hit rates",
+                     "Settings: Configurable query concurrency sliders (Heavy TimeSeries, Light Stat/Grid) — adjust to match server capacity",
+                     "Dashboard: Panels now display a subtle \"Cached\" badge during preload, so users see when data is from cache vs fresh",
+                     "Dashboard: Preload-from-cache now tracks which panels are stale; badge clears as fresh data arrives",
+                     "Metrics: New CacheMetricsService stores retrieval history in SQLite for trend analysis",
+                     "Engine: CachingQueryExecutor instrumented with thread-safe counters (total, fresh, cache hits)",
+                     "Throttling: QueryThrottleService reads limits from UserSettings and supports runtime UpdateLimits()",
+                     "UX: Fixed ScheduledTasks page API mismatches (GetConnections, ExecuteQueryAsync, ServerNames property)",
+                     "UX: Fixed DynamicPanel markup structure and added IsCached parameter propagation",
+                     "Release: Updated publish-release.ps1 naming from LiveMonitor to SQLTriage throughout"
                  ]
 }

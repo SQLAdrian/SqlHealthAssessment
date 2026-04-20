@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:SqlWatchDeploymentService.Class — deploys SQLWATCH database from DACPAC/SQL scripts
     public class SqlWatchDeploymentService
     {
         private readonly string _connectionString;

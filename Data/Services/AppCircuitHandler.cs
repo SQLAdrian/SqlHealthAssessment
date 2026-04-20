@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:AppCircuitHandler.Class — monitors Blazor Server circuit lifecycle for diagnostics
     /// <summary>
     /// Monitors Blazor Server circuit lifecycle for diagnostics and cleanup.
     /// Logs when circuits connect/disconnect so server-mode stability can be audited.

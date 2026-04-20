@@ -5,6 +5,7 @@ using SQLTriage.Data;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:IUserSettingsService.Class — user settings persistence abstraction
     /// <summary>
     /// Abstraction over UserSettingsService — enables testing and future alternative implementations.
     /// </summary>
@@ -88,5 +89,6 @@ namespace SQLTriage.Data.Services
         event Action<bool>? OnNoPantsModeChanged;
         event Action<bool>? OnExperimentalModeChanged;
         event Action<bool>? OnShowMaturityRoadmapChanged;
+        event Action<string>? OnSelectedThemeChanged;
     }
 }

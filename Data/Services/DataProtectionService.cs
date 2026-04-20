@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:DataProtectionService.Class — enterprise-grade in-memory AES-256-GCM data protection
     /// <summary>
     /// Enterprise-grade in-memory data protection for sensitive dashboard data.
     /// Encrypts query results, connection strings, and cached data using AES-256-GCM.

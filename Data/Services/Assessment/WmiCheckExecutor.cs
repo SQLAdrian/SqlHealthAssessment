@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 #pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
 namespace SQLTriage.Data.Services.Assessment
 {
+    // BM:WmiCheckExecutor.Class — executes WMI-based assessment checks
     /// <summary>
     /// Executes WMI-based assessment checks via ManagementObjectSearcher.
     /// </summary>

@@ -6,6 +6,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:IPrintService.Class — abstraction over PrintService for testing and server mode
     /// <summary>
     /// Abstraction over PrintService — enables testing and server-mode fallback without WebView2 dependency.
     /// </summary>

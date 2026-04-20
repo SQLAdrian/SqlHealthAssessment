@@ -26,6 +26,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:ServerModeService.Class — manages a Blazor Server (Kestrel) host for browser access
     /// <summary>
     /// Manages a Blazor Server (Kestrel) host that serves the same UI via browser.
     /// Toggle on/off at runtime — shares all singleton services with the WPF host.

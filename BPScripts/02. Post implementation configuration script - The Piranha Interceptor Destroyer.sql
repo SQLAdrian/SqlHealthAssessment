@@ -196,6 +196,7 @@ BEGIN
 	INSERT  INTO master.dbo.DBA_SYS_DATABASE_FILES
 	SELECT GETDATE() [Timestamp], DB_NAME(dbid) AS [DB], *
 	FROM sys.sysaltfiles SF
+	WHERE dbid < 32000
 END
 
 
@@ -632,7 +633,7 @@ DECLARE @Databases TABLE
 	, NULL
 	,DS.[TotalIO]
 	, DS.[Rank]
-	, CASE WHEN db.database_id <= 4 THEN 1 ELSE 0 END
+	, CASE WHEN db.database_id < 4 THEN 1 ELSE 0 END
 	, db.is_auto_close_on
 	, db.is_auto_shrink_on
 	, db.is_auto_create_stats_on
@@ -655,7 +656,7 @@ DECLARE @Databases TABLE
 		GROUP BY Name, d.database_id
 	) DS on DS.database_id = db.database_id
 	WHERE 1 =1 
-	 AND 1=1/*db.database_id > 4*/ 
+	 AND db.database_id > 4
 	 AND db.user_access = 0 
 	 AND db.State = 0 
 	
@@ -964,9 +965,12 @@ BEGIN
     RAISERROR('WARNING: Power Plan is not set to High Performance (8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c)', 10, 1) WITH NOWAIT;
     RAISERROR('      Current: %s - This can significantly impact SQL Server performance', 10, 1, @PowerPlan) WITH NOWAIT;
 END
+
+/*
 /* blocked process threshold: fires the blocked_process_report event when a session
    is blocked for >= N seconds. Must be set BEFORE creating the XEvent session.
    Default is 0 (disabled). 5 seconds is the standard starting point. */
+   
 EXEC sys.sp_configure N'show advanced options', N'1'
 RECONFIGURE WITH OVERRIDE
 EXEC sys.sp_configure N'blocked process threshold (s)', N'5'
@@ -974,7 +978,7 @@ RECONFIGURE WITH OVERRIDE
 RAISERROR ('Action: Set blocked process threshold to 5 seconds', 0, 1) WITH NOWAIT;
 EXEC sys.sp_configure N'show advanced options', N'0'
 RECONFIGURE WITH OVERRIDE
-
+*/
 
 
 
@@ -1694,7 +1698,8 @@ RAISERROR ('Action: Set jobhistory to 100k, rows per job 1k',0,1) WITH NOWAIT;
 /*Check if server version > SQL 2008R2*/
 DECLARE @SQLVersion INT
 SELECT @SQLVersion = @@MicrosoftVersion / 0x01000000  OPTION (RECOMPILE)-- Get major version
-
+IF @ForChangeControl = 0
+BEGIN
 IF @SQLVersion >= 10
 BEGIN
 	BEGIN TRY
@@ -1721,6 +1726,7 @@ IF CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff) >= 10
 EXEC sys.sp_configure N'optimize for ad hoc workloads', N'1'
 RECONFIGURE WITH OVERRIDE
 RAISERROR ('Action: Set optimize for ad hoc',0,1) WITH NOWAIT;
+END
 
 /*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1734,6 +1740,7 @@ RAISERROR ('Action: Set optimize for ad hoc',0,1) WITH NOWAIT;
 /* MAXDOP: cap at 8, use half physical cores, never exceed NUMA node size.
    Default 0 causes full-server parallelism storms on OLTP workloads.
    Adjust @TargetMAXDOP before running if you know the workload profile. */
+
 DECLARE @PhysicalCores     INT
 DECLARE @NumaNodes         INT
 DECLARE @CoresPerNuma      INT
@@ -1776,8 +1783,11 @@ RAISERROR (@MaxDOPMsg, 0, 1) WITH NOWAIT;
 
 /* Cost threshold for parallelism: default 5 is far too low.
    50 is a widely accepted starting point for mixed OLTP. Adjust per workload. */
-EXEC sys.sp_configure N'cost threshold for parallelism', N'50'
-RECONFIGURE WITH OVERRIDE
+IF @ForChangeControl = 0
+BEGIN
+	EXEC sys.sp_configure N'cost threshold for parallelism', N'50'
+	RECONFIGURE WITH OVERRIDE
+END
 RAISERROR ('Action: Set cost threshold for parallelism to 50', 0, 1) WITH NOWAIT;
 
 /*
@@ -1835,6 +1845,8 @@ ELSE
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
+
+/*
 /* Disable features that expand attack surface. Enable only what your apps require. */
 EXEC sys.sp_configure N'Ole Automation Procedures', N'0'
 RECONFIGURE WITH OVERRIDE
@@ -1860,7 +1872,7 @@ END
    not dependent on whether SQL Mail XPs exists (removed in SQL 2022+). */
 EXEC sys.sp_configure N'show advanced options', N'0'
 RECONFIGURE WITH OVERRIDE
-
+*/
 
 /*Configure memory
 BATCH_MODE_ON_ROWSTORE
@@ -2535,8 +2547,8 @@ BEGIN
 	SELECT 13056, 1, 1, 16, 99, 1, 1, 'enable detailed memory grant feedback for index rebuilds'
 	UNION ALL
 	SELECT 1766, 1, 1 , 16, 99, 1, 1, 'enable large page allocations for batch mode'
-	UNION ALL
-	SELECT 9453, 1, 1, 16, 99, 1, 1, 'disable batch mode execution for serialized plans'
+	--UNION ALL
+	--SELECT 9453, 1, 1, 16, 99, 1, 1, 'disable batch mode execution for serialized plans'
 END
 
 --good ideas?
@@ -2686,8 +2698,11 @@ RAISERROR('!! Manual - Disable these traceflags in startup', 0, 1, '') WITH NOWA
 				   FOR XML PATH(''), TYPE).value('.','varchar(max)')
 				  ,1,1,'') + ', -1);'
 
-	IF @DebugLevel = 0 
-	EXECUTE (@SQLCMD);
+	--IF @DebugLevel = 0 
+	IF @ForChangeControl = 1
+		PRINT @SQLCMD
+	IF @ForChangeControl = 0
+		EXECUTE (@SQLCMD);
 	RAISERROR('Manual - Disable TFs Command: "%s"', 0, 1, @SQLCMD) WITH NOWAIT;
 END
 
@@ -2704,13 +2719,20 @@ BEGIN
     WHERE  enable = 1
 	AND WorthImplementing = 1
     ORDER BY TF
-	SET @SQLCMD = 'DBCC TRACEON(' + @traceflagtodo + ', -1);'
+	
     
 	--PRINT 11111
-	PRINT @SQLCMD
+	IF @ForChangeControl = 1
+	BEGIN
+		SET @SQLCMD = 'Action required: DBCC TRACEON(' + @traceflagtodo + ', -1);'
+		PRINT @SQLCMD
+	END
 
-	IF @DebugLevel = 0 
+	IF @ForChangeControl = 0
+	BEGIN
+		SET @SQLCMD = 'DBCC TRACEON(' + @traceflagtodo + ', -1);'
 		EXECUTE (@SQLCMD);
+	END
 
 	DELETE 
 	FROM @TraceFlags

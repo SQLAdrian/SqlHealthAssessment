@@ -1,0 +1,59 @@
+<#
+<!-- In the name of God, the Merciful, the Compassionate -->
+validate-no-shorthand.ps1 — PreToolUse validator blocking un-backticked shorthands
+#>
+
+param(
+    [string]$ToolName,
+    [string]$ArgumentsJson
+)
+
+begin {
+    $memoryDir = if ($env:CLAUDE_COMPRESSION_MEMORY) {
+        $env:CLAUDE_COMPRESSION_MEMORY
+    } else {
+        Join-Path $PSScriptRoot "..\..\memory"
+    }
+
+    $sessionVocabPath = Join-Path $memoryDir "session_vocab.md"
+    $stableVocabPath  = Join-Path $memoryDir "vocab_stable.md"
+
+    function Get-Shorthands {
+        param([string]$Path)
+        if (-not (Test-Path $Path)) { return @() }
+        $content = Get-Content $Path -Raw
+        $shorthands = @()
+        foreach ($line in $content -split "`n") {
+            if ($line -match '^\|\s*([a-zA-Z0-9]+)\s*\|') {
+                $shorthands += $matches[1]
+            }
+        }
+        return $shorthands
+    }
+
+    $shorthandList = @()
+    $shorthandList += Get-Shorthands $sessionVocabPath
+    $shorthandList += Get-Shorthands $stableVocabPath
+    $shorthandList = $shorthandList | Select-Object -Unique
+}
+
+process {
+    # Only validate Edit/Write/Bash/Grep/Glob/NotebookEdit calls
+    $blockedTools = @('Edit', 'Write', 'Bash', 'Grep', 'Glob', 'NotebookEdit')
+    if ($blockedTools -notcontains $ToolName) {
+        exit 0
+    }
+
+    # Flatten arguments to a single string for scanning
+    $argString = $ArgumentsJson
+
+    foreach ($token in $shorthandList) {
+        # Look for un-backticked occurrences
+        if ($argString -match "(?<!`)\b$token\b") {
+            Write-Error "PreToolUse validation FAILED: shorthand '$token' detected in $ToolName arguments (must be backticked or expanded)."
+            exit 1
+        }
+    }
+
+    exit 0
+}

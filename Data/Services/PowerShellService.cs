@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:PowerShellService.Class — executes local PowerShell commands and captures output
     /// <summary>
     /// Executes PowerShell commands locally and captures output.
     /// Uses pwsh.exe (PS 7+) with fallback to powershell.exe (Windows PS 5.1).

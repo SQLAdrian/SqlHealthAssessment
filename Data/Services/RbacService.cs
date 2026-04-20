@@ -7,6 +7,7 @@ using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
+    // BM:RbacService.Class — role-based access control for users and OAuth providers
     /// <summary>
     /// Role-based access control service. Manages user-role mappings and OAuth
     /// provider configuration. Persists to Config/rbac-config.json and Config/rbac-users.json.

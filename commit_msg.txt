@@ -1,0 +1,26 @@
+feat(compression): expand session vocabulary to 50 domain-specific entries
+
+Add 40 new abbreviations covering:
+- Services: ServerModeService, AlertEvaluation/Definition/History/Baseline services,
+  NotificationChannelService, ScheduledTask* services, ReportPageConfigService,
+  AzureBlobExport, SqlAssessment, SqlWatchDeployment, WindowsServiceHost,
+  ExecutionPlanParser, HealthCheck, AppCircuitHandler, CheckExecution,
+  DashboardConfig, FullAudit, VulnerabilityAssessment, XEvent, CacheEviction
+- SQL DMVs: sys.dm_exec_sessions/requests/query_stats/query_plan/connections,
+  sys.dm_os_wait_stats, sys.dm_exec_cached_plans, sys.dm_tran_active_transactions,
+  sys.dm_db_index_usage_stats, sys.dm_db_missing_index_details,
+  sys.dm_exec_query_memory_grants, sys.dm_os_performance_counters
+- SQLWATCH procedures: usp_sqlwatch_logger_performance, usp_sqlwatch_logger_requests_and_sessions,
+  usp_sqlwatch_logger_xes_blockers, usp_sqlwatch_internal_add_performance_counter
+- Misc: sp_WhoIsActive, dashboard-config.json
+
+Measured results on real prompts:
+- "what is next on the worklist for UserSettingsService": 59.6% reduction
+- "Run ServerModeService health check...": 54.7% reduction  
+- "Execute dbo.usp_sqlwatch_logger_performance...": 69.6% reduction
+- Aggregate 9-turn mean: 8.4% (domain prompts hit 50-70%)
+
+Ideal vocab size for 50% sustained savings: 40-60 entries of long (>12 char),
+high-frequency domain phrases with 30-40% phrase density in prompts.
+
+Co-Authored-By: Kilo <noreply@kilo.ai>

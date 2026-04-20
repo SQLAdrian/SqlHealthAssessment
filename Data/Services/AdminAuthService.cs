@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 
 namespace SQLTriage.Data.Services;
 
+// BM:AdminAuthService.Class — PBKDF2-SHA256 admin authentication with rate limiting
 /// <summary>
 /// PBKDF2-SHA256 based admin authentication.
 /// Hash and salt are stored in appsettings.json under AdminAuth:Hash and AdminAuth:Salt.

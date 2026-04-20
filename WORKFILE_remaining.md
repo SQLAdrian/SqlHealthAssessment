@@ -1,7 +1,13 @@
-# LiveMonitor — Remaining Work
+# SQLTriage — Remaining Work
+
+> **Diagnostic Philosophy:** Diagnose deeply → Export thoroughly → Decide manually
+>
+> SQLTriage is a diagnostic superset (deep-dive analysis tool), not a monitoring platform (operational automation). We enrich findings, provide prescriptive guidance, and export evidence packages — but DBA retains agency to decide and act. This differentiates from dbWatch's "Monitor → Alert → Automate → Report" closed-loop model.
+
+**Critical Gap Type — Presentation Layer:** Many diagnostic capabilities already exist in the codebase (SQL checks, baseline calculations, health scoring) but are **not exposed in the UI**. These are **visibility gaps**, not engine gaps. Priority 0 is making the existing diagnostic data **obvious** to users.
 
 **Repo:** SQLAdrian/SqlHealthAssessment  
-**Current version:** 0.85.2 (build 1177)  
+**Current version:** 0.85.2 (build 1197)  
 **Stack:** Blazor Hybrid WPF (.NET 8, net8.0-windows), single-exe, SQLite cache, Serilog  
 **Key paths:** `Pages/` (37 .razor pages), `Data/Services/`, `Components/Shared/`, `Data/Caching/`  
 **Do not touch:** SQL queries (user owns SQL), `.claude/docs/` for CSS patterns, `app.css` (7500 lines — grep don't read)
@@ -33,6 +39,7 @@
 #### 1. Background refresh thread + "Refresh now" spinner
 **File:** `Pages/Sessions.razor`  
 **Problem:** `LoadSessions()` sets `IsLoading = true` which blanks the whole table. Data fetch should happen on a background thread with the old data still visible; only swap the table when new data arrives.  
+**Diagnostic value:** Keeps context during refresh — DBA can continue analyzing sessions while data updates in background. Spinner provides feedback without disruption.  
 **How:**
 1. Add `_backgroundSessions List<SessionInfo>` field alongside `AllSessions`
 2. In `LoadSessions()`, remove `IsLoading = true` at the top. Fetch into a local `newSessions` variable
@@ -54,6 +61,7 @@
 #### 2. Rate-limit status bar badge
 **Files:** `Data/RateLimiter.cs`, `Components/Layout/NavMenu.razor` (or `MainLayout.razor`)  
 **Problem:** `RateLimiter` is defined but not registered in DI and not shown anywhere.  
+**Diagnostic value:** Visual feedback when query throttling activates — prevents user from thinking queries are slow when they're actually being rate-limited. Part of transparent diagnostic environment.  
 **How:**
 1. Register `RateLimiter` as singleton in `App.xaml.cs`:
    ```csharp
@@ -81,6 +89,7 @@
 #### 3. Dashboard JSON schema validation — inline error + Reset to default
 **Files:** `Pages/DashboardEditor.razor`, `Data/Services/DashboardConfigService.cs`  
 **Problem:** If `dashboard-config.json` gets malformed, the app silently fails or throws. No inline validation in the editor.  
+**Diagnostic value:** Prevents configuration corruption from breaking diagnostic dashboards — keeps analysis environment stable.  
 **How:**
 1. In `DashboardConfigService`, add a `Validate(string json)` method that:
    - Tries `JsonSerializer.Deserialize<DashboardConfig>(json)`
@@ -96,6 +105,7 @@
 #### 4. PDF/Excel export for tabular audit results
 **Files:** `Pages/FullAudit.razor`, `Pages/VulnerabilityAssessment.razor`, `Data/Services/PrintService.cs`  
 **Problem:** PDF export exists via `PrintService` for some pages. Excel export is missing entirely.  
+**Diagnostic value:** Exports enable thorough offline analysis, sharing with colleagues, archiving for compliance, and importing into external tools (Excel, Power BI). Fulfills "Export thoroughly" mantra.  
 **How for Excel (no new NuGet required — use CSV as Excel-compatible output):**
 1. Add a `ExportToExcelAsync(DataTable data, string fileName)` helper in a new `ExcelExportService.cs` or inline in the page
 2. Use `CsvHelper` (already in project? check) or write a simple TSV/CSV writer
@@ -154,6 +164,7 @@
 #### 8. SQL Server CPU & Latency Benchmark (Item 15) - FOR NEXT PHASE. SKIP FOR NOW
 **Context:** Initial SQL at `C:/temp/proc_stats_enriched.sql`  
 **File to create:** `Data/Services/BenchmarkService.cs`, new page `Pages/Benchmark.razor`  
+**Diagnostic value:** Quantitative performance benchmarking across servers — identifies hardware/VM bottlenecks, hypervisor contention, cross-instance performance differences. Adds objective metrics to subjective "wait stats" analysis.  
 **How:**
 1. The SQL benchmark runs inside SQL Server — it's safe read-only DMV queries plus arithmetic
 2. Add the benchmark queries to `Data/Services/BenchmarkService.cs` with a `RunBenchmarkAsync(string serverName)` method
@@ -173,6 +184,7 @@
 
 #### 9. Documentation Generator + Installation Helper  - FOR NEXT PHASE. SKIP FOR NOW
 **Status:** Design phase — user has docx templates as reference  
+**Diagnostic value:** Auto-generates comprehensive server documentation (configuration, security, performance) from live diagnostics — saves hours of manual inventory. Installation helper provides pre-deployment checklist.  
 **Planned pages:** `/documentation` (generate SQL Server state docs from live DMV data), `/installation-helper` (guided hardening steps)  
 **Approach:**
 1. Start by looking at the docx templates to understand what data is needed
@@ -184,6 +196,7 @@
 ---
 
 #### 10. Code Signing (Item 20) — USER ACTION REQUIRED  - FOR NEXT PHASE. SKIP FOR NOW
+**Rationale:** Builds trust in diagnostic tool — ensures users the executable hasn't been tampered with. Critical for tool that inspects production databases.
 **Status:** Workflow is written and waiting. User needs to buy the cert.  
 **Steps:**
 1. Buy Certum OV cert at certum.eu (~$60/yr, individual validation, 1–3 days)
@@ -200,12 +213,13 @@
 ---
 
 #### 11. Public release posting plan
+**Rationale:** Position SQLTriage as diagnostic specialist, not general monitor. Emphasize unique differentiators: no-agent, interactive plans, offline-capable, Windows-native.
 **When ready** (after screenshots/GIF and code signing):  
-- **r/SQLServer**: title "I built a free SQL Server monitoring tool for Windows DBAs — feedback welcome"
-- **r/sysadmin**: focus on the Windows Service mode + alerting + no-agent angle
-- **SQLServerCentral.com**: submit an article, not just a link — they prefer content
-- **dev.to**: technical post about the Blazor Hybrid WPF architecture (unusual stack, good engagement)
-- **Hacker News Show HN**: brief, technical, honest about current state
+- **r/SQLServer**: Title "SQLTriage — Deep diagnostic tool for SQL Server (free, no agents, interactive plans)" — focus on query plan viewer, blocking chains, VA findings export.
+- **r/sysadmin**: Emphasize Windows Service mode + no network footprint + portable single-exe.
+- **SQLServerCentral.com**: Article titled "Why I Built a Diagnostic-First SQL Server Tool" — contrasts with monitoring platforms; explains "Diagnose deeply → Export thoroughly → Decide manually" philosophy.
+- **dev.to**: Technical deep-dive on Blazor Hybrid WPF (unusual combination) + SQLite cache strategy + interactive SVG plan rendering.
+- **Hacker News Show HN**: "SQLTriage: Desktop SQL Server diagnostic tool with interactive execution plans, blocking analysis, and vulnerability assessment — no agents, MIT license" — be honest about scope (SQL Server only), highlight open-source.
 
 ---
 
@@ -322,6 +336,21 @@ Manual maintenance: set `config.MaintenanceActiveUntil = DateTime.Now.AddMinutes
 
 ---
 
+## Competitive Context: dbWatch Comparison
+
+**Philosophical Split:**
+| Aspect | dbWatch | SQLTriage (target) |
+|--------|---------|-------------------|
+| Core model | Monitor → Alert → Automate → Report (closed loop) | Diagnose deeply → Export thoroughly → Decide manually (open loop) |
+| Action | Automated jobs, scheduled reports, threshold alerts | Prescriptive guidance, manual trigger, user agency |
+| Value prop | Operational efficiency (save DBA time via automation) | Diagnostic depth (find root cause faster with richer data) |
+| Target user | Enterprise DBA teams managing hundreds of instances | Windows DBA/consultant diagnosing specific issues |
+| Deployment | Server-agent, multi-platform | Single-exe desktop, SQL Server only |
+
+**Implication for development:** We can match/exceed dbWatch on diagnostic richness (history, forensics, compliance evidence) while deliberately not building the automation layer. This is a feature, not a gap.
+
+---
+
 ## WHAT GOOD OUTPUT LOOKS LIKE
 
 For each coding task above:
@@ -339,41 +368,76 @@ For each coding task above:
 ## New Tasks from Grok Audits (SQLTriage Revival)
 
 ### Repo Hygiene (Today)
+**Rationale:** Clean project identity before public launch. Diagnostic tools need professional presentation to be taken seriously.
 - Move all "scar" files (MEMORY_LEAK_STATUS.md, FOOTPRINT_REDUCTION_GUIDE.md, LOG_ISSUES_ANALYSIS.md, DACPAC_REMOVAL_SUMMARY.md, REFACTORING_RECOMMENDATIONS.md, UI_MODERNIZATION_PLAN.md, PROJECT_GAP_ANALYSIS.md) to `.ignore/ROASTME/` or `/docs/internal/`.
 - Update project/solution names from "SqlHealthAssessment" to "SQLTriage" consistently in .csproj, .sln, and code.
 
 ### README Rewrite (Today)
+**Rationale:** First impression establishes diagnostic positioning — "deep analysis, your decisions" — vs. dbWatch's automation message. Include dbWatch comparison table with "diagnostic-only" vs. "operational platform" distinction.
 - Replace README.md with polished version: Hero section with badges, embedded screenshots grid (16 images), complete comparison table (add dbwatch column), Loom demo link, remove self-references.
 - Upload screenshots to `/screenshots/` folder and embed in README.
+**Diagnostic branding emphasis:** "No agents, no cloud, no automation — just deep SQL Server diagnostics on your machine."
 
 ### Marketing Boost (This Week)
+**Rationale:** Attract SQL Server community by highlighting unique value: desktop app with interactive plan viewer, blocking kill, and no agent footprint.
 - Add repo topics: sql-server-monitoring, dba-tools, performance-tuning, blazor-wpf, open-source-sql.
 - Record 60-90s Loom demo of interactive plan viewer V2 + blocking kill + Quick Check.
 - Add badges: .NET 8 • Blazor • No Agent • GPL-3.0.
+**Messaging note:** Frame as "DBA's pocket diagnostic tool" — like a stethoscope, not a robotic surgeon.
 
 ### Feature Additions (v0.86 Prep)
-- **Scheduled Maintenance Operations**: Add `Pages/MaintenanceScheduler.razor` for cron jobs (index rebuild, stats update, CHECKDB, backups) targeting connected servers. Use Quartz.NET for scheduling.
-- **Management Templates**: Add `Pages/ManagementTemplates.razor` with predefined templates (performance, security, maintenance) as JSON/YAML in `templates/`. Allow apply/customize/export.
+- **Maintenance Recommendation Engine** (reframed from "Scheduled Maintenance Operations"): Add `Pages/MaintenanceAdvisor.razor` — analyzes index fragmentation, outdated stats, missing indexes, integrity issues → generates **review-ready T-SQL scripts** (REBUILD/REORGANIZE/UPDATE STATISTICS/DBCC). User reviews and executes manually. **No automation** — diagnostic output only. Uses Quartz.NET only if user wants scheduled generation (see item 369). Philosophy: Diagnose maintenance needs → Export fix scripts → Manual review/execute.
+- **Management Templates** (reframed as Diagnostic Templates): Add `Pages/TemplateLibrary.razor` with predefined diagnostic templates (Wait Stats analysis, Blocking investigation, Performance baseline, Security audit) as JSON in `templates/`. Templates define: which queries to run, how to render results, what thresholds to apply. Allows apply/customize/export. Philosophy: "Diagnose with expert guidance" — templates encode diagnostic workflows, not automated actions.
 
 ### Positioning Shift
-- Stop "lightweight alternative" — position as "Portable, no-agent desktop monitoring weapon for DBAs and consultants — single exe, service mode, real interactive plans."
+**Core message:** SQLTriage is a **diagnostic tool**, not a monitoring platform. Competes with dbWatch by going deep on SQL Server internals, not broad on automation. Users choose SQLTriage when they need to **investigate** (blocking, plan analysis, security findings), not when they need to **respond** (alerts, scheduled jobs). This justifies single-platform focus (SQL Server depth > multi-platform breadth).
+- Stop "lightweight alternative" — position as "Portable, no-agent desktop diagnostic weapon for SQL Server DBAs — single exe, service mode, real interactive plans, no automation overhead."
 
 ### Critical Strategic Gaps (From Feedback)
-1. **Automated Maintenance Execution** (HIGH): Add MaintenanceJobService with template library for backups, index rebuilds, DBCC, integrity checks. Prioritization: HIGH. Effort: 2-3 weeks.
-2. **Historical Performance Repository** (HIGH): Extend SQLite for aggregated metrics, time-series rollups (hourly/daily summaries). Prioritization: HIGH. Effort: 1-2 weeks.
-3. **Compliance Framework** (MEDIUM-HIGH): Map VA checks to CIS/PCI/NIST; add compliance score dashboard; PDF reports. Prioritization: MEDIUM-HIGH. Effort: 3-4 weeks.
-4. **Threshold-Based Alerting** (MEDIUM): Add threshold config to UserSettings; replace IQR with configured limits. Prioritization: MEDIUM. Effort: 1 week.
-5. **Multi-Tenant / MSP Features** (LOW-MEDIUM): Add environment abstraction, template deployment, multi-server rollup. Prioritization: LOW-MEDIUM. Effort: 4-6 weeks.
-6. **Advanced Blocking Analysis** (MEDIUM): Store blocking events; timeline view; top blockers report. Prioritization: MEDIUM. Effort: 2 weeks.
-7. **Health Score & Risk Rating** (MEDIUM): Compute weighted health index; trend arrow; executive summary. Prioritization: MEDIUM. Effort: 1 week.
-8. **Scheduled & Automated Reporting** (MEDIUM): Add report scheduler; SMTP; subscriptions. Prioritization: MEDIUM. Effort: 1-2 weeks.
-9. **Configuration Drift Detection** (MEDIUM-LOW): Store sp_configure snapshots; diff view; alerts. Prioritization: MEDIUM-LOW. Effort: 2 weeks.
-10. **Performance Benchmarks & Baselines** (LOW-MEDIUM): Learn typical values; z-score anomalies. Prioritization: LOW-MEDIUM. Effort: 2-3 weeks.
+**Note 2026-04-21:** Gap list updated with **diagnostic-first reframing**. Original dbWatch feature names retained for reference, but descriptions now align with "Diagnose deeply → Export thoroughly → Decide manually" mantra. Automation-leaning features converted to recommendation/reporting modes.
+**Note:** All features below are filtered through diagnostic philosophy: "Diagnose deeply → Export thoroughly → Decide manually". We provide rich diagnostic output and prescriptive guidance, but DBA retains agency to review and act.
 
-### Implementation Roadmap
-- **Phase 1 (2-3 months)**: Maintenance automation, historical metrics, threshold alerts, reporting, health score.
-- **Phase 2 (3-4 months)**: Compliance, drift detection, advanced blocking, service mode.
-- **Phase 3 (4-6 months)**: Multi-tenant, benchmarks, predictions.
+1. **Maintenance Recommendation Engine** (HIGH priority): [Reframed from "Automated Maintenance Execution"] Generate T-SQL scripts (index rebuild/reorganize, UPDATE STATISTICS, DBCC CHECKDB) based on diagnostic analysis. Scripts include explanations, risk notes, and rollback guidance. User reviews and executes manually. Effort: 2-3 weeks (script generation + validation).
+2. **Historical Performance Repository** (HIGH priority): Extend SQLite schema to store aggregated metrics (hourly/daily rollups of wait stats, session counts, resource usage). Retention: 6-12 months configurable. Enables trend analysis, "when did this start?" diagnostics, and baseline comparisons. Effort: 1-2 weeks (schema + backfill + UI rollup views).
+3. **Compliance Framework** (MEDIUM-HIGH priority): Map existing 489 VA checks to industry standards (CIS, PCI, NIST, GDPR). Generate compliance scorecard dashboard (percentage compliant by control family). Export audit-ready PDF packages with evidence (query text, plan screenshot, finding details). **No automated remediation** — just diagnostic reporting. Effort: 3-4 weeks (mapping research + scoring engine + report templates).
+4. **Threshold-Based Filtering & Highlighting** (MEDIUM priority): [Reframed from "Threshold-Based Alerting"] Add UI controls to filter sessions/metrics by configured thresholds (CPU > X%, wait time > Y ms). Highlight rows that exceed thresholds with color coding. **No alerts, no emails, no always-on monitoring** — purely a triage aid during active diagnosis. User sets thresholds in Settings; IQR outlier detection remains as auto-detection complement. Effort: 1 week.
+5. **Multi-Tenant / MSP Features** (LOW-MEDIUM priority): Add "Environment" abstraction to group servers (Dev/Prod/CustomerA/CustomerB). Multi-server health rollup dashboard. Template deployment for connection strings and common dashboard layouts. **No user isolation or billing** — purely organizational for consultants managing multiple clients. Effort: 4-6 weeks.
+6. **Advanced Blocking Analysis** (MEDIUM priority): Store blocking events in history table. Timeline view showing blocking chain evolution. "Top Blocking Offenders" report (sessions that blocked others most over past 24h). Include SQL text for blocking and blocked statements. Effort: 2 weeks (event capture + timeline UI + report).
+7. **Health Score & Risk Rating** (MEDIUM priority): Compute weighted index (0-100) from: performance degradation trends, compliance gaps, security findings, resource saturation, blocking frequency. Executive summary panel on dashboard. Tooltips explain score composition. Enables quick "is this server healthy?" answer. Effort: 1 week.
+8. **Diagnostic Report Packages** (MEDIUM priority): [Reframed from "Scheduled & Automated Reporting"] One-click generation of: (a) Executive Summary (health score + top 5 risks + trend graphs), (b) DBA Handoff Package (full findings + connection details + known issues), (c) Audit Evidence (VA findings with screenshots/plans). **Optional scheduling** via internal timer (Quartz.NET) to generate reports at configured times and drop to disk — no email delivery, just file output. Effort: 1-2 weeks.
+9. **Configuration Snapshot & Diff** (MEDIUM-LOW priority): [Reframed from "Configuration Drift Detection"] Manual "Save Baseline" captures current sp_configure + surface area config. "Compare to Baseline" highlights changes (additions/removals/modifications) with color-coded diff. No continuous monitoring — user-triggered diagnostic for post-change verification (e.g., after patch/upgrade). Effort: 2 weeks.
+10. **Performance Baselines & Anomaly Detection** (LOW-MEDIUM priority): [Reframed from "Performance Benchmarks & Baselines"] Learn typical values per server (weekly pattern, hourly profile). Z-score anomaly detection flags metrics deviating >2σ from learned baseline. "Baseline period" configurable (e.g., "use last 30 days as normal"). Suppressed during known maintenance windows. Effort: 2-3 weeks (ML-lite training + anomaly scoring).
+
+### Implementation Roadmap (Aligned to Diagnostic Philosophy)
+**Note:** Phases built around diagnostic capabilities; automation/scheduling kept minimal and user-triggered only.
+
+**Pre-phase — Presentation Gap Audit (P0 — before coding new features)**
+
+Many diagnostic capabilities already exist in the engine (SQL queries, VA checks, health checks) but lack **presentation layer integration**. These are **work items** to make existing diagnostic data visible and actionable:
+
+| Existing Infrastructure | Missing Presentation | Work Item |
+|------------------------|---------------------|-----------|
+| `SqlAssessmentService` (489 VA checks in `ruleset.json`) | No compliance mapping to CIS/PCI/NIST; no scorecard dashboard; VA page only shows raw findings | **Add Compliance Mapping Layer** — map check IDs to frameworks; add framework selector; compute compliance % per control family; color-coded scorecard on VA page |
+| `AlertBaselineService` + `alert_baseline_stats` table | Baseline data only used for alerts; no UI to view "normal range" for any metric; no trend overlay on charts | **Expose Baselines on Dashboards** — add shaded p25-p75 band to all time-series charts; tooltip shows "normal range"; configurable baseline window (7d/30d/90d) |
+| `HealthCheckService` + `ServerHealthStatus` | Health page exists but no single overall score (0-100); not shown on dashboard/home; no trend arrow | **Add Executive Health Badge** — compute weighted 0-100 score; display prominently on home page and sessions header; show ↑↓ vs yesterday |
+| Session filters (HideSleeping, ShowOnlyBlocked, HideLowIO) | Only boolean filters; no numeric thresholds (CPU > X, Wait > Y ms) | **Add Numeric Threshold Filters** — Settings → Thresholds section; slider/input for CPU, memory, wait time; highlight rows exceeding thresholds |
+| `PrintService.PrintToPdfAsync()` | PDF export exists on some pages but not all; no scheduled generation despite UserSettings having `VaScheduledPdfEnabled`/`RoadmapScheduledPdfEnabled` | **Wire Scheduler + Add Report Bundles** — implement background job that reads schedule settings, generates PDFs, saves to `%APPDATA%\SQLTriage\Reports\`; add Executive Summary, DBA Handoff, Audit Evidence bundles |
+| Index fragmentation check in `ruleset.json` (PERF004) | Finding shows "high fragmentation" but no script to rebuild; no per-index recommendation | **Maintenance Script Generator** — page that lists fragmented indexes with `ALTER INDEX` scripts; includes rollback notes; copy-to-clipboard |
+| Blocking queries in `SessionDataService` | Live blocking chain shows SPIDs but not the actual SQL causing block; no history | **Blocking Forensics Tab** — modal showing blocker's SQL text, plan, session info; store blocking events in new `blocking_events` table; timeline of last 24h |
+| `SqliteCacheStore` with `cache_timeseries` | Raw data kept 7 days only; no rollup to monthly/quarterly for long-term capacity planning | **Time-Series Rollup Service** — daily/weekly aggregations; separate `cache_timeseries_rollup` table; query rollups when viewing >30d range |
+| `DynamicDashboard` + `PreloadFromCacheAsync` | Cache preloading happens but timing/cache-hit rate is invisible; no metrics to tune performance; concurrency limits fixed at 5/10 | **Dashboard Performance Telemetry** — add Stopwatch to `LoadPanelDataAsync` and `PreloadFromCacheAsync`; log per-panel load time, cache hit/miss, SQLite read latency; expose optional UI overlay (Developer Mode) to see real-time metrics |
+| `CachingQueryExecutor` + `QueryThrottleService` | Throttling limits hardcoded (MaxHeavyConcurrent=5, MaxLightConcurrent=10); not user-configurable; no visibility into current queue depth | **Concurrency Configuration** — add `MaxHeavyConcurrent` and `MaxLightConcurrent` to UserSettings; sliders in Settings → Performance (range 3-15 heavy, 5-30 light); read in `QueryThrottleService` constructor; display current active semaphore count in status bar when Developer Mode enabled |
+| `CacheStateTracker` + `_hasLoadedOnce` flag | Dashboard preloads cache on first visit but no proactive warm-up; subsequent visits fast but first visit to any dashboard is cold | **Cache Warm-up on Startup** — after connection test, call `WarmCacheForDashboardAsync` for Home, QuickCheck, Health dashboards; run at low priority; respects `EnableDebugLogging=false` to avoid surprising background load |
+| No panel lazy-loading | All panels load in parallel immediately; dashboard with 15+ panels overwhelms SQL even with cache preloading | **Lazy-Load Panels** (stretch) — Settings → `LazyLoadThreshold` (default 6); load first N panels synchronously, remainder after 200ms delay or when scrolled into view; reduces initial perceived load time |
+
+**Action:** Complete all Pre-phase items **before** starting Phases 1-3. These "visibility gaps" are prerequisite to using the diagnostic data effectively.
+
+- **Phase 1 (2-3 months)**: Historical repository (P0), Maintenance recommendation engine (P1), Health score (P1), Threshold filtering (P1), Advanced blocking (P1).
+- **Phase 2 (3-4 months)**: Compliance framework (P1), Diagnostic report packages (P1), Config snapshot & diff (P2), Baselines & anomalies (P2).
+- **Phase 3 (4-6 months)**: Multi-tenant environments (P2), Predictive capacity forecasting (stretch — anomaly-based, not automated response), Integration APIs (webhooks to feed findings into external ticketing systems — still diagnostic handoff, not auto-remediation).
+
+**Guiding Principle:** Each feature must answer: "Does this help the DBA diagnose more deeply, export more thoroughly, or decide more confidently?" If yes → include. If it removes DBA agency or adds operational burden → defer to separate "SQLTriage Operator" module (future commercial add-on).
 
 Files affected: README.md, WORKFILE_remaining.md (this file), new Pages/, templates/, .csproj, .sln.
 Commit pattern: `git commit -m "feat: description\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"`
+**Commit note:** Use `feat:` prefix for new diagnostics (e.g., `feat: add maintenance recommendation engine`), `fix:` for bug fixes, `refactor:` for code quality. All commits must pass `dotnet build` and ideally include brief manual test steps in commit body.

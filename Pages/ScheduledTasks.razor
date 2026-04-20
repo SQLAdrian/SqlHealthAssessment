@@ -3,6 +3,8 @@
 @using SQLTriage.Data
 @using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
+@using Microsoft.Data.SqlClient
+@using System.Data
 @inject ScheduledTaskDefinitionService Definitions
 @inject ScheduledTaskEngine Engine
 @inject ScheduledTaskHistoryService History
@@ -37,8 +39,8 @@
         _loadingMaintenance = true;
         try
         {
-            // Load servers
-            _servers = ConnectionManager.GetServers().Where(s => s.Enabled).ToList();
+            // Load servers (using current API)
+            _servers = ConnectionManager.GetConnections().Where(s => s.IsEnabled).ToList();
 
             // Check Ola maintenance jobs on each server
             _maintenanceJobs.Clear();
@@ -72,18 +74,26 @@
                 WHERE j.name LIKE 'DatabaseBackup%' OR j.name LIKE 'IndexOptimize%' OR j.name LIKE 'DatabaseIntegrityCheck%'
                 ORDER BY j.name";
 
-            var results = await ConnectionManager.ExecuteQueryAsync(server.ServerNames, query);
+             // Execute raw query against server using direct ADO.NET
+             DataTable results;
+             var connStr = server.GetConnectionString(server.ServerNames, "master");
+             using var conn = new SqlConnection(connStr);
+             await conn.OpenAsync();
+             using var cmd = new SqlCommand(query, conn);
+             using var reader = await cmd.ExecuteReaderAsync();
+             results = new DataTable();
+             results.Load(reader);
 
-            foreach (var row in results)
-            {
-                var status = new MaintenanceJobStatus
-                {
-                    ServerName = server.Name,
-                    JobName = row["name"].ToString() ?? "",
-                    IsInstalled = true,
-                    IsRunning = false, // Would need to check running jobs
-                    Status = row["enabled"].ToString() == "1" ? "Enabled" : "Disabled"
-                };
+             foreach (DataRow row in results.Rows)
+             {
+                 var status = new MaintenanceJobStatus
+                 {
+                     ServerName = server.ServerNames,
+                     JobName = row["name"].ToString() ?? "",
+                     IsInstalled = true,
+                     IsRunning = false, // Would need to check running jobs
+                     Status = row["enabled"].ToString() == "1" ? "Enabled" : "Disabled"
+                 };
 
                 // Parse last run
                 if (row["run_date"] != DBNull.Value)
@@ -103,9 +113,9 @@
             // If no jobs found, add placeholders
             if (!jobs.Any())
             {
-                jobs.Add(new MaintenanceJobStatus { ServerName = server.Name, JobName = "DatabaseBackup - USER_DATABASES", IsInstalled = false, Status = "Not Installed" });
-                jobs.Add(new MaintenanceJobStatus { ServerName = server.Name, JobName = "IndexOptimize - USER_DATABASES", IsInstalled = false, Status = "Not Installed" });
-                jobs.Add(new MaintenanceJobStatus { ServerName = server.Name, JobName = "DatabaseIntegrityCheck - USER_DATABASES", IsInstalled = false, Status = "Not Installed" });
+                jobs.Add(new MaintenanceJobStatus { ServerName = server.ServerNames, JobName = "DatabaseBackup - USER_DATABASES", IsInstalled = false, Status = "Not Installed" });
+                jobs.Add(new MaintenanceJobStatus { ServerName = server.ServerNames, JobName = "IndexOptimize - USER_DATABASES", IsInstalled = false, Status = "Not Installed" });
+                jobs.Add(new MaintenanceJobStatus { ServerName = server.ServerNames, JobName = "DatabaseIntegrityCheck - USER_DATABASES", IsInstalled = false, Status = "Not Installed" });
             }
         }
         catch (Exception ex)
@@ -136,8 +146,18 @@
                           .Replace("@CleanupTime", cleanupTime.ToString())
                           .Replace("@CheckDbTime", checkDbTime.ToString());
 
-            // Execute on server
-            await ConnectionManager.ExecuteNonQueryAsync(serverName, script);
+            // Execute on server using direct ADO.NET
+            var serverConn = _servers.FirstOrDefault(s => s.ServerNames == serverName);
+            if (serverConn == null)
+            {
+                Toast.ShowError("Maintenance", $"Server connection not found: {serverName}");
+                return;
+            }
+            var connStr = serverConn.GetConnectionString(serverName, "master");
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+            using var cmd = new SqlCommand(script, conn);
+            await cmd.ExecuteNonQueryAsync();
 
             Toast.ShowSuccess("Maintenance", "Ola Hallengren solution deployed successfully");
             await LoadMaintenance(); // Refresh
