@@ -1,8 +1,39 @@
 # SQLTriage — Agentless SQL Server Triage That Actually Holds Up at Scale
 
-**Diagnose production issues across 200+ SQL Server instances in seconds — no agents, no installs, no nonsense.**
+**Diagnose production issues across 200+ SQL Server instances in seconds — agentless for live monitoring, optional SQLWATCH for history.**
 
 **Latest**: v0.85.2 (17 Apr 2026) • [Download →](https://github.com/SQLAdrian/SQLTriage/releases)
+
+**Demo**: [60s SQLTriage Demo](docs/sql-server-dba-monitoring-demo.gif)
+
+---
+
+## Screenshots
+
+| Live Sessions                                     | Wait Stats                                  | Query Plans                                         | Multi-Instance View                                   |
+| ------------------------------------------------- | ------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+| ![Sessions](docs/screenshots/4-live-sessions.jpg) | ![Waits](docs/screenshots/3-wait-state.jpg) | ![Plans](docs/screenshots/14-query-plan-viewer.jpg) | ![Overview](docs/screenshots/6-instance-overview.jpg) |
+
+Full gallery → `/docs/screenshots`
+
+---
+
+## Comparison
+
+| Capability                | SQLTriage             | sp_Blitz | SQLWATCH | dbwatch | SolarWinds DPA |
+| ------------------------- | --------------------- | -------- | -------- | ------- | -------------- |
+| Cost                      | Free                  | Free     | Free     | $$$     | $$$            |
+| Agents Required           | No (optional SQLWATCH)| No       | Yes      | No      | Yes            |
+| Interactive Plan Viewer   | Yes (V2)              | No       | No       | Yes     | Yes            |
+| Runs as Windows Service   | Yes                   | No       | Partial  | Yes     | Yes            |
+| Multi-Instance Visibility | Yes (designed for it) | No       | Yes      | Yes     | Yes            |
+| Historical Trending       | Short-term            | No       | Yes      | Yes     | Yes            |
+| Compliance Mapping        | Basic VA              | No       | No       | Yes     | Yes            |
+| Automated Maintenance     | No                    | No       | No       | Yes     | Yes            |
+| Threshold Alerts          | IQR-based             | No       | Basic    | Yes     | Yes            |
+| MSP/Multi-Tenant          | No                    | No       | No       | Yes     | Yes            |
+
+**Positioning**: SQLTriage = Fast, agentless triage across SQL estates. Script kits = Manual troubleshooting. SQLWATCH = History. Enterprise tools = Full observability.
 
 ---
 
