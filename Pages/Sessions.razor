@@ -142,19 +142,23 @@
              </select>
          </div>
 
-         <div class="toolbar-status">
-             <span style="font-size: 11px; color: var(--text-muted);">
-                 @FilteredSessions.Count sessions displayed
-                 @if (AllSessions.Count != FilteredSessions.Count)
-                 {
-                     <span>(@AllSessions.Count total)</span>
-                 }
-                 @if (!string.IsNullOrEmpty(LastRefreshTime))
-                 {
-                     <span>&nbsp;| Last: @LastRefreshTime</span>
-                 }
-             </span>
-         </div>
+          <div class="toolbar-status">
+              <span style="font-size: 11px; color: var(--text-muted);">
+                  @FilteredSessions.Count sessions displayed
+                  @if (AllSessions.Count != FilteredSessions.Count)
+                  {
+                      <span>(@AllSessions.Count total)</span>
+                  }
+                  @if (!string.IsNullOrEmpty(LastRefreshTime))
+                  {
+                      <span>&nbsp;| Last: @LastRefreshTime</span>
+                      @if (_refreshing)
+                      {
+                          <i class="fa-solid fa-spinner fa-spin" style="font-size:11px;color:var(--text-secondary);margin-left:4px;"></i>
+                      }
+                  }
+              </span>
+          </div>
      </div>
 
     @* Error display *@
@@ -219,8 +223,10 @@
     // ENHANCEMENT: Added search, memory, row count, settings persistence, kill, CSV export, improved timer
 
     private List<SessionInfo> AllSessions = new();
+    private List<SessionInfo> _backgroundSessions = new();
     private SessionInfo? SelectedSession;
     private bool IsLoading = false;
+    private bool _refreshing = false;
     private string? ErrorMessage;
     private string? LastRefreshTime;
 
@@ -393,52 +399,53 @@
         catch { /* non-critical */ }
     }
 
-    private async Task LoadSessions()
-    {
-        // ENHANCEMENT: Concurrency guard - skip if already loading
-        if (!_loadLock.Wait(0))
-            return;
+     private async Task LoadSessions()
+     {
+         // ENHANCEMENT: Concurrency guard - skip if already loading
+         if (!_loadLock.Wait(0))
+             return;
 
-        try
-        {
-            IsLoading = true;
-            ErrorMessage = null;
+         try
+         {
+             _refreshing = true;
+             ErrorMessage = null;
 
-            // Fetch all sessions with current filters (server-side)
-            var sessions = await SessionService.GetLiveSessionsAsync(
-                topCount: MaxDisplayCount, // safety cap
-                hideSleeping: HideSleeping,
-                onlyBlocked: ShowOnlyBlocked,
-                hideLowIO: HideLowIO,
-                searchText: SearchText);
+             // Fetch all sessions with current filters (server-side) into background variable
+             var newSessions = await SessionService.GetLiveSessionsAsync(
+                 topCount: MaxDisplayCount, // safety cap
+                 hideSleeping: HideSleeping,
+                 onlyBlocked: ShowOnlyBlocked,
+                 hideLowIO: HideLowIO,
+                 searchText: SearchText);
 
-            AllSessions = sessions;
-            LastRefreshTime = DateTime.Now.ToString("HH:mm:ss");
+             // Only after fetch completes: update the displayed sessions
+             AllSessions = newSessions;
+             LastRefreshTime = DateTime.Now.ToString("HH:mm:ss");
 
-            // ENHANCEMENT: Update blocking chain lookup for line drawing
-            await UpdateBlockingChainAsync();
+             // ENHANCEMENT: Update blocking chain lookup for line drawing
+             await UpdateBlockingChainAsync();
 
-            // If selected session no longer exists, deselect
-            if (SelectedSession != null && !sessions.Any(s => s.SPID == SelectedSession.SPID))
-            {
-                SelectedSession = null;
-            }
-            else if (SelectedSession != null)
-            {
-                // Update selected session with latest data
-                SelectedSession = sessions.FirstOrDefault(s => s.SPID == SelectedSession.SPID);
-            }
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Failed to load sessions: {ex.Message}";
-        }
-        finally
-        {
-            IsLoading = false;
-            _loadLock.Release();
-        }
-    }
+             // If selected session no longer exists, deselect
+             if (SelectedSession != null && !newSessions.Any(s => s.SPID == SelectedSession.SPID))
+             {
+                 SelectedSession = null;
+             }
+             else if (SelectedSession != null)
+             {
+                 // Update selected session with latest data
+                 SelectedSession = newSessions.FirstOrDefault(s => s.SPID == SelectedSession.SPID);
+             }
+         }
+         catch (Exception ex)
+         {
+             ErrorMessage = $"Failed to load sessions: {ex.Message}";
+         }
+         finally
+         {
+             _refreshing = false;
+             _loadLock.Release();
+         }
+     }
 
     // ENHANCEMENT: Build blocking chain set for visualization
     private async Task UpdateBlockingChainAsync()
