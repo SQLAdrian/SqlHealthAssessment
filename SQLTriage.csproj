@@ -23,9 +23,9 @@
     <Authors>Adrian Sullivn</Authors>
     <Description>An Enterprise grade SQL health check assessment tool. This tool will generate diagnostic outputs for a comprehensive SQL health audit. Incorporating SQLWATCH for database metrics.</Description>
     <Copyright>Adrian Sullivan</Copyright>
-    <PackageProjectUrl>https://github.com/SQLAdrian/SqlHealthAssessment</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/SQLAdrian/SQLTriage</PackageProjectUrl>
     <PackageIcon>SQLTriage.png</PackageIcon>
-    <RepositoryUrl>https://github.com/SQLAdrian/SqlHealthAssessment</RepositoryUrl>
+    <RepositoryUrl>https://github.com/SQLAdrian/SQLTriage</RepositoryUrl>
     <RepositoryType>GIthub</RepositoryType>
     <!-- Memory Optimization: Server GC for better throughput, concurrent for lower latency -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
