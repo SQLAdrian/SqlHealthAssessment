@@ -55,6 +55,8 @@ namespace SQLTriage
         private System.Windows.Forms.ToolStripMenuItem? _trayOpenBrowserItem;
         private System.Windows.Forms.ToolStripMenuItem? _trayServerStatusItem;   // green/red dot + label
         private System.Windows.Forms.ToolStripMenuItem? _trayServerCountItem;    // connected / total servers
+        private System.Windows.Forms.ToolStripMenuItem? _trayMcpServerItem;      // MCP server toggle
+        private System.Diagnostics.Process? _mcpProcess;                        // MCP server process
 
         /// <summary>
         /// Renders a 12×12 filled circle bitmap in the given colour — used as status dot icons in the tray menu.
@@ -113,6 +115,8 @@ namespace SQLTriage
 
                 _trayServerModeItem = new System.Windows.Forms.ToolStripMenuItem("Start Server Mode", null, (_, _) => TrayToggleServerMode());
 
+                _trayMcpServerItem = new System.Windows.Forms.ToolStripMenuItem("Start MCP Server", null, (_, _) => TrayToggleMcpServer());
+
                 var menu = new System.Windows.Forms.ContextMenuStrip();
                 menu.Items.Add("Show Window", null, (_, _) => TrayShow());
                 menu.Items.Add("Hide to Tray", null, (_, _) => TrayHide());
@@ -121,6 +125,7 @@ namespace SQLTriage
                 menu.Items.Add(_trayServerCountItem);
                 menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
                 menu.Items.Add(_trayServerModeItem);
+                menu.Items.Add(_trayMcpServerItem);
                 menu.Items.Add(_trayOpenBrowserItem);
                 menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
@@ -267,6 +272,44 @@ namespace SQLTriage
             }
         }
 
+        private void TrayToggleMcpServer()
+        {
+            try
+            {
+                if (_mcpProcess != null && !_mcpProcess.HasExited)
+                {
+                    // Stop MCP server
+                    _mcpProcess.Kill();
+                    _mcpProcess.Dispose();
+                    _mcpProcess = null;
+                    _trayMcpServerItem!.Text = "Start MCP Server";
+                    _trayIcon?.ShowBalloonTip(2000, "SQLTriage", "MCP server stopped", System.Windows.Forms.ToolTipIcon.Info);
+                    _logger?.LogInformation("MCP server stopped from tray");
+                }
+                else
+                {
+                    // Start MCP server
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "python",
+                        Arguments = "mcp_server.py",
+                        WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    _mcpProcess = System.Diagnostics.Process.Start(psi);
+                    _trayMcpServerItem!.Text = "Stop MCP Server";
+                    _trayIcon?.ShowBalloonTip(2000, "SQLTriage", "MCP server started", System.Windows.Forms.ToolTipIcon.Info);
+                    _logger?.LogInformation("MCP server started from tray");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to toggle MCP server from tray");
+                _trayIcon?.ShowBalloonTip(2000, "SQLTriage", "Failed to toggle MCP server", System.Windows.Forms.ToolTipIcon.Error);
+            }
+        }
+
         private void TrayToggleServerMode()
         {
             _ = TrayToggleServerModeAsync();
@@ -300,6 +343,12 @@ namespace SQLTriage
         private void TrayExit()
         {
             _forceClose = true;
+            // Stop MCP server if running
+            if (_mcpProcess != null && !_mcpProcess.HasExited)
+            {
+                _mcpProcess.Kill();
+                _mcpProcess.Dispose();
+            }
             _trayIcon?.Dispose();
             _trayIcon = null;
             Application.Current.Shutdown();
@@ -417,7 +466,7 @@ namespace SQLTriage
                     {
                         _logger?.LogDebug("WebView navigation completed successfully");
                         ApplyZoom(_userSettings?.GetZoomLevel() ?? 150);
-                        ApplyTheme(_userSettings?.GetSelectedTheme() ?? "default");
+                        _ = ApplyThemeAsync(_userSettings?.GetSelectedTheme() ?? "default");
                     }
                     else
                     {
@@ -457,18 +506,18 @@ namespace SQLTriage
 
         private void OnSelectedThemeChanged(string theme)
         {
-            Dispatcher.Invoke(() => ApplyTheme(theme));
+            Dispatcher.InvokeAsync(() => ApplyThemeAsync(theme));
         }
 
-        private void ApplyTheme(string theme)
+        private async Task ApplyThemeAsync(string theme)
         {
             if (BlazorWebView?.WebView?.CoreWebView2 == null) return;
             try
             {
-                // Escape the theme string for JS injection
+                // Use applyTheme() so legacy inline-style overrides are cleared first
                 var escaped = theme.Replace("'", "\\'");
-                var script = $"document.documentElement.setAttribute('data-theme', '{escaped}');";
-                BlazorWebView.WebView.CoreWebView2.ExecuteScript(script);
+                var script = $"if(window.applyTheme){{window.applyTheme('{escaped}');}}else{{document.documentElement.setAttribute('data-theme','{escaped}');}}";
+                await BlazorWebView.WebView.CoreWebView2.ExecuteScriptAsync(script);
                 _logger?.LogInformation("Applied UI theme: {Theme}", theme);
             }
             catch (Exception ex)
