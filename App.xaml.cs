@@ -124,6 +124,8 @@ namespace SQLTriage
             services.AddSingleton<ResilienceService>();
             services.AddSingleton<DashboardConfigService>();
             services.AddSingleton<IQueryOrchestrator, QueryOrchestrator>();
+            services.AddMemoryCache();
+            services.AddSingleton<ICacheHotTier, CacheHotTier>();
             services.AddSingleton<QueryExecutor>();
             services.AddScoped<DashboardDataService>();
             services.AddSingleton<AutoRefreshService>();

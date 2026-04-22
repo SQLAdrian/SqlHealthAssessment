@@ -255,6 +255,8 @@ namespace SQLTriage.Data.Services
             services.AddSingleton<QueryScheduler>();
             services.AddSingleton<SchedulerRegistryService>();
             services.AddSingleton<IQueryOrchestrator, QueryOrchestrator>();
+            services.AddMemoryCache();
+            services.AddSingleton<ICacheHotTier, CacheHotTier>();
             services.AddSingleton<Data.Services.AlertDefinitionService>();
             services.AddSingleton<Data.Services.AlertTemplateService>();
             services.AddSingleton<Data.Services.AlertHistoryService>();

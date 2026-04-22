@@ -30,6 +30,7 @@ namespace SQLTriage.Data.Caching
     {
         private readonly QueryExecutor _inner;
         private readonly liveQueriesCacheStore _cache;
+        private readonly ICacheHotTier _hot;
         private readonly CacheStateTracker _stateTracker;
         private readonly DashboardConfigService _configService;
         private readonly TimeSpan _evictionThreshold;
@@ -80,6 +81,7 @@ namespace SQLTriage.Data.Caching
         public CachingQueryExecutor(
             QueryExecutor inner,
             liveQueriesCacheStore cache,
+            ICacheHotTier hot,
             CacheStateTracker stateTracker,
             DashboardConfigService configService,
             IConfiguration configuration,
@@ -87,6 +89,7 @@ namespace SQLTriage.Data.Caching
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _hot = hot ?? throw new ArgumentNullException(nameof(hot));
             _stateTracker = stateTracker ?? throw new ArgumentNullException(nameof(stateTracker));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -132,6 +135,7 @@ namespace SQLTriage.Data.Caching
                 if (_stateTracker.RequiresFullReload(dashboardId, timeRangeMinutes, selectedInstance, timezoneOffsetHours))
                 {
                     await _cache.InvalidateAllAsync();
+                    _hot.InvalidateAll();
                 }
                 _stateTracker.RecordFilterState(dashboardId, timeRangeMinutes, selectedInstance, timezoneOffsetHours);
             }
@@ -173,6 +177,8 @@ namespace SQLTriage.Data.Caching
                 // Cache the result for offline fallback
                 await _cache.UpsertDataTableAsync(queryId, instanceKey, result, DateTime.UtcNow);
                 await _cache.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
+                await _hot.SetDataTableAsync(queryId, instanceKey, result);
+                await _hot.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
 
                 return result;
             }
@@ -182,13 +188,21 @@ namespace SQLTriage.Data.Caching
             }
             catch (Exception ex)
             {
-                // SQL Server failed — try serving from cache
+                // SQL Server failed — try serving from cache (hot tier first, then SQLite)
                 _stateTracker.RecordFailure();
+
+                var hot = await _hot.GetDataTableAsync(queryId, instanceKey);
+                if (hot != null)
+                {
+                    Interlocked.Increment(ref _cacheHits);
+                    return hot;
+                }
 
                 var cached = await _cache.GetDataTableAsync(queryId, instanceKey);
                 if (cached != null)
                 {
                     Interlocked.Increment(ref _cacheHits);
+                    await _hot.SetDataTableAsync(queryId, instanceKey, cached);
                     return cached;
                 }
 
@@ -257,7 +271,8 @@ namespace SQLTriage.Data.Caching
             CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _totalQueries);
-            var lastFetch = await _cache.GetLastFetchTimeAsync(queryId, instanceKey);
+            var lastFetch = await _hot.GetLastFetchTimeAsync(queryId, instanceKey)
+                ?? await _cache.GetLastFetchTimeAsync(queryId, instanceKey);
 
             if (lastFetch == null)
             {
@@ -287,9 +302,11 @@ namespace SQLTriage.Data.Caching
                 if (deltaRows.Count > 0 && deltaRows is List<TimeSeriesPoint> tsPoints)
                 {
                     await _cache.UpsertTimeSeriesAsync(queryId, instanceKey, tsPoints, DateTime.UtcNow);
+                    await _hot.SetTimeSeriesAsync(queryId, instanceKey, tsPoints);
                 }
 
                 await _cache.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
+                await _hot.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
 
                 // Trim old data outside the current time window
                 await _cache.TrimTimeSeriesAsync(queryId, instanceKey, filter.TimeFrom);
@@ -304,12 +321,19 @@ namespace SQLTriage.Data.Caching
                 _stateTracker.RecordFailure();
             }
 
-            // Serve full window from cache
-            var cachedRows = await _cache.GetTimeSeriesAsync(queryId, instanceKey, filter.TimeFrom, filter.TimeTo);
+            // Serve full window from cache (hot tier first, then SQLite)
+            var hotRows = await _hot.GetTimeSeriesAsync(queryId, instanceKey);
+            if (hotRows != null && hotRows.Count > 0 && typeof(T) == typeof(TimeSeriesPoint))
+            {
+                Interlocked.Increment(ref _cacheHits);
+                return (List<T>)(object)hotRows;
+            }
 
+            var cachedRows = await _cache.GetTimeSeriesAsync(queryId, instanceKey, filter.TimeFrom, filter.TimeTo);
             if (cachedRows.Count > 0 && typeof(T) == typeof(TimeSeriesPoint))
             {
                 Interlocked.Increment(ref _cacheHits);
+                await _hot.SetTimeSeriesAsync(queryId, instanceKey, cachedRows);
                 return (List<T>)(object)cachedRows;
             }
 
@@ -338,8 +362,10 @@ namespace SQLTriage.Data.Caching
                 if (rows is List<TimeSeriesPoint> tsPoints && tsPoints.Count > 0)
                 {
                     await _cache.UpsertTimeSeriesAsync(queryId, instanceKey, tsPoints, DateTime.UtcNow);
+                    await _hot.SetTimeSeriesAsync(queryId, instanceKey, tsPoints);
                 }
                 await _cache.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
+                await _hot.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
 
                 return rows;
             }
@@ -349,13 +375,21 @@ namespace SQLTriage.Data.Caching
             }
             catch (Exception ex)
             {
-                // SQL Server failed on initial load — check if cache has any data
+                // SQL Server failed on initial load — check if cache has any data (hot tier first)
                 _stateTracker.RecordFailure();
+
+                var hot = await _hot.GetTimeSeriesAsync(queryId, instanceKey);
+                if (hot != null && hot.Count > 0 && typeof(T) == typeof(TimeSeriesPoint))
+                {
+                    Interlocked.Increment(ref _cacheHits);
+                    return (List<T>)(object)hot;
+                }
 
                 var cached = await _cache.GetTimeSeriesAsync(queryId, instanceKey, filter.TimeFrom, filter.TimeTo);
                 if (cached.Count > 0 && typeof(T) == typeof(TimeSeriesPoint))
                 {
                     Interlocked.Increment(ref _cacheHits);
+                    await _hot.SetTimeSeriesAsync(queryId, instanceKey, cached);
                     return (List<T>)(object)cached;
                 }
 
@@ -384,6 +418,8 @@ namespace SQLTriage.Data.Caching
                 {
                     await _cache.UpsertBarGaugeAsync(queryId, instanceKey, statRows, DateTime.UtcNow);
                     await _cache.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
+                    await _hot.SetBarGaugeAsync(queryId, instanceKey, statRows);
+                    await _hot.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
                 }
 
                 return rows;
@@ -394,13 +430,21 @@ namespace SQLTriage.Data.Caching
             }
             catch (Exception)
             {
-                // SQL Server failed — try serving from cache
+                // SQL Server failed — try serving from cache (hot tier first)
                 _stateTracker.RecordFailure();
+
+                var hot = await _hot.GetBarGaugeAsync(queryId, instanceKey);
+                if (hot != null)
+                {
+                    Interlocked.Increment(ref _cacheHits);
+                    return (List<T>)(object)hot;
+                }
 
                 var cached = await _cache.GetBarGaugeAsync(queryId, instanceKey);
                 if (cached != null)
                 {
                     Interlocked.Increment(ref _cacheHits);
+                    await _hot.SetBarGaugeAsync(queryId, instanceKey, cached);
                     return (List<T>)(object)cached;
                 }
 
@@ -429,6 +473,8 @@ namespace SQLTriage.Data.Caching
                 {
                     await _cache.UpsertCheckStatusAsync(queryId, instanceKey, checkRows, DateTime.UtcNow);
                     await _cache.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
+                    await _hot.SetCheckStatusAsync(queryId, instanceKey, checkRows);
+                    await _hot.SetLastFetchTimeAsync(queryId, instanceKey, DateTime.UtcNow);
                 }
 
                 return rows;
@@ -439,13 +485,21 @@ namespace SQLTriage.Data.Caching
             }
             catch (Exception ex)
             {
-                // SQL Server failed — try serving from cache
+                // SQL Server failed — try serving from cache (hot tier first)
                 _stateTracker.RecordFailure();
+
+                var hot = await _hot.GetCheckStatusAsync(queryId, instanceKey);
+                if (hot != null && hot.Count > 0 && typeof(T) == typeof(CheckStatus))
+                {
+                    Interlocked.Increment(ref _cacheHits);
+                    return (List<T>)(object)hot;
+                }
 
                 var cached = await _cache.GetCheckStatusAsync(queryId, instanceKey);
                 if (cached.Count > 0 && typeof(T) == typeof(CheckStatus))
                 {
                     Interlocked.Increment(ref _cacheHits);
+                    await _hot.SetCheckStatusAsync(queryId, instanceKey, cached);
                     return (List<T>)(object)cached;
                 }
 
@@ -498,17 +552,18 @@ namespace SQLTriage.Data.Caching
                         {
                             var from = filter.TimeFrom == default ? DateTime.UtcNow.AddHours(-1) : filter.TimeFrom;
                             var to   = filter.TimeTo   == default ? DateTime.UtcNow               : filter.TimeTo;
-                            var pts = await _cache.GetTimeSeriesAsync(panel.Id, instanceKey, from, to);
+                            var pts = await _hot.GetTimeSeriesAsync(panel.Id, instanceKey)
+                                ?? await _cache.GetTimeSeriesAsync(panel.Id, instanceKey, from, to);
                             if (pts?.Count > 0) tsResults[panel.Id] = pts;
                             break;
                         }
                         case "StatCard":
                         case "DeltaStatCard":
                         {
-                            var dt = await _cache.GetDataTableAsync(panel.Id, instanceKey);
+                            var dt = await _hot.GetDataTableAsync(panel.Id, instanceKey)
+                                ?? await _cache.GetDataTableAsync(panel.Id, instanceKey);
                             if (dt != null && dt.Rows.Count > 0)
                             {
-                                // Re-use same scalar-extraction logic as LoadPanelDataAsync
                                 var row = dt.Rows[0];
                                 double val = 0;
                                 if (dt.Columns.Count > 0 && row[0] != DBNull.Value)
@@ -519,19 +574,22 @@ namespace SQLTriage.Data.Caching
                         }
                         case "BarGauge":
                         {
-                            var bg = await _cache.GetBarGaugeAsync(panel.Id, instanceKey);
+                            var bg = await _hot.GetBarGaugeAsync(panel.Id, instanceKey)
+                                ?? await _cache.GetBarGaugeAsync(panel.Id, instanceKey);
                             if (bg?.Count > 0) bgResults[panel.Id] = bg;
                             break;
                         }
                         case "DataGrid":
                         {
-                            var dt = await _cache.GetDataTableAsync(panel.Id, instanceKey);
+                            var dt = await _hot.GetDataTableAsync(panel.Id, instanceKey)
+                                ?? await _cache.GetDataTableAsync(panel.Id, instanceKey);
                             if (dt != null) gridResults[panel.Id] = dt;
                             break;
                         }
                         case "CheckStatus":
                         {
-                            var cs = await _cache.GetCheckStatusAsync(panel.Id, instanceKey);
+                            var cs = await _hot.GetCheckStatusAsync(panel.Id, instanceKey)
+                                ?? await _cache.GetCheckStatusAsync(panel.Id, instanceKey);
                             if (cs?.Count > 0) checkResults[panel.Id] = cs;
                             break;
                         }

@@ -16,6 +16,7 @@ using Serilog;
 using SQLTriage.Data.Caching;
 using SQLTriage.Data.Models;
 using SQLTriage.Data.Scheduling;
+using Microsoft.Extensions.Caching.Memory;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -300,6 +301,8 @@ namespace SQLTriage.Data.Services
             TryAdd<QueryExecutor>(services, wpf);
             TryAdd<ResilienceService>(services, wpf);
             TryAdd<IQueryOrchestrator, QueryOrchestrator>(services, wpf);
+            TryAdd<IMemoryCache, MemoryCache>(services, wpf);
+            TryAdd<ICacheHotTier, CacheHotTier>(services, wpf);
             TryAdd<CheckRepositoryService>(services, wpf);
             TryAdd<CheckExecutionService>(services, wpf);
             TryAdd<DiagnosticScriptRunner>(services, wpf);
