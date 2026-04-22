@@ -11,6 +11,7 @@ namespace SQLTriage.Data.Caching
     /// Runs periodic cache eviction on a timer (default: every 5 minutes).
     /// Removes rows from all liveQueries cache tables where fetched_at is older
     /// than the configured threshold (default: 24 hours).
+    /// Uses a SemaphoreSlim to prevent overlapping executions.
     /// </summary>
     public class CacheEvictionService : IDisposable
     {
@@ -20,7 +21,9 @@ namespace SQLTriage.Data.Caching
         private readonly long _maxCacheSizeBytes;
         private readonly MemoryMonitorService? _memoryMonitor;
         private readonly ILogger<CacheEvictionService> _logger;
-        private Timer? _timer;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly SemaphoreSlim _evictionLock = new(1, 1);
+        private Task? _loopTask;
         private bool _disposed;
 
         public CacheEvictionService(liveQueriesCacheStore cache, IConfiguration config, ILogger<CacheEvictionService> logger, MemoryMonitorService? memoryMonitor = null)
@@ -47,41 +50,67 @@ namespace SQLTriage.Data.Caching
         }
 
         /// <summary>
-        /// Starts the periodic eviction timer.
+        /// Starts the periodic eviction loop.
         /// </summary>
         public void Start()
         {
-            _timer = new Timer(OnTimerTick, null, _interval, _interval);
+            _loopTask = Task.Run(EvictionLoopAsync);
         }
 
         /// <summary>
-        /// Stops the periodic eviction timer.
+        /// Stops the periodic eviction loop gracefully.
         /// </summary>
         public void Stop()
         {
-            _timer?.Dispose();
-            _timer = null;
+            _cts.Cancel();
         }
 
-        private void OnTimerTick(object? state)
+        private async Task EvictionLoopAsync()
         {
-            _ = RunEvictionAsync();
+            while (!_cts.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(_interval, _cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                // Skip if previous eviction is still running
+                if (!await _evictionLock.WaitAsync(0))
+                {
+                    _logger.LogWarning("Previous cache eviction still running; skipping this cycle to prevent overlap");
+                    continue;
+                }
+
+                try
+                {
+                    await RunEvictionAsync(_cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Cache eviction failed");
+                }
+                finally
+                {
+                    _evictionLock.Release();
+                }
+            }
         }
 
-        private async Task RunEvictionAsync()
+        private async Task RunEvictionAsync(CancellationToken cancellationToken)
         {
-            try
-            {
-                // Time-based eviction
-                await _cache.EvictOlderThanAsync(_evictionThreshold);
+            // Time-based eviction
+            await _cache.EvictOlderThanAsync(_evictionThreshold);
 
-                // Size-based eviction
-                await _cache.EnforceSizeLimitAsync(_maxCacheSizeBytes);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Cache eviction failed");
-            }
+            // Size-based eviction
+            await _cache.EnforceSizeLimitAsync(_maxCacheSizeBytes);
         }
 
         private void OnMemoryPressureChanged(object? sender, MemoryPressureEventArgs e)
@@ -94,6 +123,7 @@ namespace SQLTriage.Data.Caching
 
         private async Task RunPressureEvictionAsync()
         {
+            if (!await _evictionLock.WaitAsync(0)) return; // skip if eviction running
             try
             {
                 await _cache.EvictOlderThanAsync(TimeSpan.FromHours(24));
@@ -103,17 +133,23 @@ namespace SQLTriage.Data.Caching
             {
                 _logger.LogError(ex, "Memory pressure eviction failed");
             }
+            finally
+            {
+                _evictionLock.Release();
+            }
         }
 
         public void Dispose()
         {
             if (!_disposed)
             {
+                _cts.Cancel();
                 if (_memoryMonitor != null)
                 {
                     _memoryMonitor.MemoryPressureChanged -= OnMemoryPressureChanged;
                 }
-                _timer?.Dispose();
+                _cts.Dispose();
+                _evictionLock.Dispose();
                 _disposed = true;
             }
         }

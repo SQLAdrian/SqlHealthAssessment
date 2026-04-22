@@ -2,6 +2,7 @@
 
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using SQLTriage.Data.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,8 @@ namespace SQLTriage.Data.Caching
     /// <summary>
     /// Runs periodic liveQueries database maintenance on a timer.
     /// Each cycle: purges data older than the retention period, runs
-    /// PRAGMA optimize and VACUUM, and optionally PRAGMA integrity_check.
+    /// PRAGMA optimize and incremental_vacuum, and optionally PRAGMA integrity_check.
+    /// Uses a Task-based loop with proper exception observation.
     /// </summary>
     public class liveQueriesMaintenanceService : IDisposable
     {
@@ -20,7 +22,8 @@ namespace SQLTriage.Data.Caching
         private readonly TimeSpan _retentionPeriod;
         private readonly int _integrityCheckEveryNRuns;
         private readonly ILogger<liveQueriesMaintenanceService> _logger;
-        private Timer? _timer;
+        private readonly CancellationTokenSource _cts = new();
+        private Task? _loopTask;
         private int _runCount;
         private bool _disposed;
 
@@ -55,36 +58,50 @@ namespace SQLTriage.Data.Caching
         }
 
         /// <summary>
-        /// Starts the periodic maintenance timer.
+        /// Starts the periodic maintenance loop.
         /// </summary>
         public void Start()
         {
-            // First run after one interval; then repeat at the configured interval
-            _timer = new Timer(_ => OnTimerTickAsync(), null, _interval, _interval);
+            _loopTask = Task.Run(MaintenanceLoopAsync);
         }
 
         /// <summary>
-        /// Stops the periodic maintenance timer.
+        /// Stops the periodic maintenance loop gracefully.
         /// </summary>
         public void Stop()
         {
-            _timer?.Dispose();
-            _timer = null;
+            _cts.Cancel();
         }
 
-        private async void OnTimerTick(object? state)
+        private async Task MaintenanceLoopAsync()
         {
-            try
+            while (!_cts.Token.IsCancellationRequested)
             {
-                await OnTimerTickAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Timer tick failed");
+                try
+                {
+                    await Task.Delay(_interval, _cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await OnTimerTickAsync(_cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Maintenance timer tick failed");
+                }
             }
         }
 
-        private async Task OnTimerTickAsync()
+        private async Task OnTimerTickAsync(CancellationToken cancellationToken)
         {
             _runCount++;
             var includeIntegrity = (_runCount % _integrityCheckEveryNRuns) == 0;
@@ -92,7 +109,7 @@ namespace SQLTriage.Data.Caching
             // 1. Purge data beyond the retention period (default 30 days)
             var rowsPurged = await _cache.PurgeOlderThanAsync(_retentionPeriod);
 
-            // 2. Run optimize + vacuum (+ optional integrity check)
+            // 2. Run optimize + incremental vacuum (+ optional integrity check)
             var result = await _cache.RunMaintenanceAsync(includeIntegrity);
             result.RowsPurged = rowsPurged;
             LastResult = result;
@@ -112,7 +129,8 @@ namespace SQLTriage.Data.Caching
         {
             if (!_disposed)
             {
-                _timer?.Dispose();
+                _cts.Cancel();
+                _cts.Dispose();
                 _disposed = true;
             }
         }

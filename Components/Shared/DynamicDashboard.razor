@@ -1099,8 +1099,10 @@
                         Work = async ct =>
                         {
                             await LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, ct);
-                            Interlocked.Increment(ref _loadedPanelCount);
-                            await SafeStateHasChanged();
+                            var loaded = Interlocked.Increment(ref _loadedPanelCount);
+                            // Coalesce StateHasChanged: render every 5 panels instead of every panel
+                            if (loaded % 5 == 0)
+                                await SafeStateHasChanged();
                         },
                         CancellationToken = cancellationToken
                     }, panel.PanelType == "TimeSeries" ? QueryPriority.P0_Dashboard : QueryPriority.P0_Dashboard);
@@ -1118,6 +1120,7 @@
         {
             await Task.WhenAll(parallelTasks);
             Logger.LogDebug("[DynamicDashboard:{DashboardId}] All panel groups completed successfully", DashboardId);
+            await SafeStateHasChanged(); // Final render for any remaining panels
         }
         catch (Exception ex)
         {
