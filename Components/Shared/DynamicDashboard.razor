@@ -5,6 +5,7 @@
 @using SQLTriage.Data
 @using SQLTriage.Data.Caching
 @using SQLTriage.Data.Models
+@using SQLTriage.Data.Scheduling
 @using Microsoft.Extensions.Logging
 @using Microsoft.Data.SqlClient
 @inject DashboardConfigService ConfigService
@@ -15,7 +16,7 @@
 @inject UserSettingsService UserSettings
 @inject ServerConnectionManager ConnectionManager
 @inject GlobalInstanceSelector InstanceSelector
-@inject QueryThrottleService QueryThrottle
+@inject IQueryOrchestrator QueryOrchestrator
 @inject IDbConnectionFactory _connectionFactory
 @inject ILogger<DynamicDashboard> Logger
 @inject LocalLogService LocalLogger
@@ -1091,15 +1092,21 @@
                     DashboardId, group.Key, group.Count());
                     
                 var groupTasks = group.Select(async panel =>
-                    await QueryThrottle.ExecuteAsync(async () =>
+                {
+                    var result = await QueryOrchestrator.EnqueueAsync(new QueryRequest
                     {
-                        await LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, cancellationToken);
-                        Interlocked.Increment(ref _loadedPanelCount);
-                        await SafeStateHasChanged();
-                        return Task.CompletedTask;
-                    },
-                    isHeavy: panel.PanelType == "TimeSeries",
-                    cancellationToken));
+                        QueryId = panel.Id,
+                        Work = async ct =>
+                        {
+                            await LoadPanelDataAsync(panel, filter, tsResults, statResults, bgResults, gridResults, checkResults, ct);
+                            Interlocked.Increment(ref _loadedPanelCount);
+                            await SafeStateHasChanged();
+                        },
+                        CancellationToken = cancellationToken
+                    }, panel.PanelType == "TimeSeries" ? QueryPriority.P0_Dashboard : QueryPriority.P0_Dashboard);
+                    if (!result.Success)
+                        Logger.LogError(result.Exception, "[DynamicDashboard:{DashboardId}] Panel {PanelId} failed", DashboardId, panel.Id);
+                });
                 
                 await Task.WhenAll(groupTasks);
                 Logger.LogDebug("[DynamicDashboard:{DashboardId}] Completed panel group: {PanelType}", DashboardId, group.Key);
