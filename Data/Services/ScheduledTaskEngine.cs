@@ -22,6 +22,7 @@ namespace SQLTriage.Data.Services
         private readonly NotificationChannelService? _notifications;
         private readonly ToastService _toast;
         private readonly System.Timers.Timer _timer;
+        private readonly CancellationTokenSource _cts = new();
 
         private readonly SemaphoreSlim _evaluationLock = new(1, 1);
         private const int MaxConcurrentTasks = 3;
@@ -56,7 +57,8 @@ namespace SQLTriage.Data.Services
             {
                 _ = Task.Run(async () =>
                 {
-                    try { await ExecuteAllDueAsync(); }
+                    try { await ExecuteAllDueAsync(_cts.Token); }
+                    catch (OperationCanceledException) { /* graceful shutdown */ }
                     catch (Exception ex) { _logger.LogError(ex, "Scheduled task cycle failed"); }
                 });
             };
@@ -75,6 +77,7 @@ namespace SQLTriage.Data.Services
         {
             _isRunning = false;
             _timer.Stop();
+            _cts.Cancel();
             _logger.LogInformation("Scheduled task engine stopped");
         }
 
@@ -89,9 +92,10 @@ namespace SQLTriage.Data.Services
             }
         }
 
-        public async Task ExecuteAllDueAsync()
+        public async Task ExecuteAllDueAsync(CancellationToken cancellationToken = default)
         {
-            if (!await _evaluationLock.WaitAsync(0)) return;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!await _evaluationLock.WaitAsync(0, cancellationToken)) return;
 
             try
             {
@@ -105,7 +109,7 @@ namespace SQLTriage.Data.Services
                 {
                     if (IsDue(task, now))
                     {
-                        dueTasks.Add(ThrottledExecuteAsync(task));
+                        dueTasks.Add(ThrottledExecuteAsync(task, cancellationToken));
                     }
                 }
 
@@ -162,9 +166,9 @@ namespace SQLTriage.Data.Services
             }
         }
 
-        private async Task ThrottledExecuteAsync(ScheduledTaskDefinition task)
+        private async Task ThrottledExecuteAsync(ScheduledTaskDefinition task, CancellationToken cancellationToken)
         {
-            await _taskSemaphore.WaitAsync();
+            await _taskSemaphore.WaitAsync(cancellationToken);
             try
             {
                 await ExecuteTaskAsync(task);
@@ -345,6 +349,8 @@ namespace SQLTriage.Data.Services
         {
             Stop();
             _timer?.Dispose();
+            _cts?.Cancel();
+            _cts?.Dispose();
             _evaluationLock?.Dispose();
             _taskSemaphore?.Dispose();
         }

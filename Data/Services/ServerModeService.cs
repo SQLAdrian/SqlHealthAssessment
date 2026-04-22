@@ -15,6 +15,7 @@ using Radzen;
 using Serilog;
 using SQLTriage.Data.Caching;
 using SQLTriage.Data.Models;
+using SQLTriage.Data.Scheduling;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -299,6 +300,7 @@ namespace SQLTriage.Data.Services
             TryAdd<QueryExecutor>(services, wpf);
             TryAdd<ResilienceService>(services, wpf);
             TryAdd<QueryThrottleService>(services, wpf);
+            TryAdd<IQueryOrchestrator, QueryOrchestrator>(services, wpf);
             TryAdd<CheckRepositoryService>(services, wpf);
             TryAdd<CheckExecutionService>(services, wpf);
             TryAdd<DiagnosticScriptRunner>(services, wpf);
@@ -360,6 +362,29 @@ namespace SQLTriage.Data.Services
             catch (Exception ex)
             {
                 Log.Warning(ex, "ServerMode: failed to register {Service}", typeof(T).Name);
+            }
+        }
+
+        private static void TryAdd<TService, TImplementation>(IServiceCollection services, IServiceProvider provider)
+            where TService : class
+            where TImplementation : class, TService
+        {
+            try
+            {
+                var instance = provider.GetService<TService>();
+                if (instance != null)
+                {
+                    services.AddSingleton<TService>(instance);
+                    Log.Debug("ServerMode: registered {Service}", typeof(TService).Name);
+                }
+                else
+                {
+                    Log.Warning("ServerMode: {Service} not found in WPF container", typeof(TService).Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "ServerMode: failed to register {Service}", typeof(TService).Name);
             }
         }
 

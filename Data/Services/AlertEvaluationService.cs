@@ -28,6 +28,7 @@ namespace SQLTriage.Data.Services
         private readonly AlertBaselineService? _baseline;
         private readonly ConnectionHealthService? _health;
         private readonly System.Timers.Timer _timer;
+        private readonly CancellationTokenSource _cts = new();
 
         // In-memory state: key = "alertId:serverName"
         private readonly ConcurrentDictionary<string, AlertState> _activeStates = new(StringComparer.OrdinalIgnoreCase);
@@ -104,7 +105,8 @@ namespace SQLTriage.Data.Services
             {
                 _ = Task.Run(async () =>
                 {
-                    try { await EvaluateAllAsync(); }
+                    try { await EvaluateAllAsync(_cts.Token); }
+                    catch (OperationCanceledException) { /* graceful shutdown */ }
                     catch (Exception ex) { _logger.LogError(ex, "Alert evaluation cycle failed"); }
                 });
             };
@@ -122,15 +124,17 @@ namespace SQLTriage.Data.Services
         {
             _isRunning = false;
             _timer.Stop();
+            _cts.Cancel();
             _logger.LogInformation("Alert evaluation engine stopped");
         }
 
         /// <summary>
         /// Run a single evaluation cycle across all enabled alerts and all enabled servers.
         /// </summary>
-        public async Task EvaluateAllAsync()
+        public async Task EvaluateAllAsync(CancellationToken cancellationToken = default)
         {
-            if (!await _evaluationLock.WaitAsync(0)) return; // skip if already running
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!await _evaluationLock.WaitAsync(0, cancellationToken)) return; // skip if already running
 
             try
             {
@@ -191,7 +195,7 @@ namespace SQLTriage.Data.Services
                         {
                             foreach (var serverName in conn.GetServerList())
                             {
-                                specialTasks.Add(ThrottledSpecialEvaluateAsync(alert, conn, serverName, globalDefaults));
+                                specialTasks.Add(ThrottledSpecialEvaluateAsync(alert, conn, serverName, globalDefaults, cancellationToken));
                             }
                         }
                         await Task.WhenAll(specialTasks);
@@ -206,7 +210,7 @@ namespace SQLTriage.Data.Services
                     {
                         foreach (var serverName in conn.GetServerList())
                         {
-                            tasks.Add(ThrottledEvaluateAsync(alert, conn, serverName, globalDefaults));
+                            tasks.Add(ThrottledEvaluateAsync(alert, conn, serverName, globalDefaults, cancellationToken));
                         }
                     }
 
@@ -232,9 +236,10 @@ namespace SQLTriage.Data.Services
             AlertDefinition alert,
             ServerConnection connection,
             string serverName,
-            AlertGlobalDefaults globalDefaults)
+            AlertGlobalDefaults globalDefaults,
+            CancellationToken cancellationToken)
         {
-            await _querySemaphore.WaitAsync();
+            await _querySemaphore.WaitAsync(cancellationToken);
             try
             {
                 await EvaluateAlertOnServerAsync(alert, connection, serverName, globalDefaults);
@@ -249,9 +254,10 @@ namespace SQLTriage.Data.Services
             AlertDefinition alert,
             ServerConnection connection,
             string serverName,
-            AlertGlobalDefaults globalDefaults)
+            AlertGlobalDefaults globalDefaults,
+            CancellationToken cancellationToken)
         {
-            await _querySemaphore.WaitAsync();
+            await _querySemaphore.WaitAsync(cancellationToken);
             try
             {
                 await EvaluateSpecialAlertAsync(alert, connection, serverName, globalDefaults);
@@ -819,6 +825,8 @@ namespace SQLTriage.Data.Services
         {
             Stop();
             _timer?.Dispose();
+            _cts?.Cancel();
+            _cts?.Dispose();
             _evaluationLock?.Dispose();
             _querySemaphore?.Dispose();
         }

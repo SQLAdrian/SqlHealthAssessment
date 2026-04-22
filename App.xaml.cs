@@ -10,6 +10,7 @@ using Serilog.Core;
 using SQLTriage.Data;
 using SQLTriage.Data.Caching;
 using SQLTriage.Data.Models;
+using SQLTriage.Data.Scheduling;
 using SQLTriage.Data.Services;
 
 #pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
@@ -123,6 +124,7 @@ namespace SQLTriage
             services.AddSingleton<ResilienceService>();
             services.AddSingleton<DashboardConfigService>();
             services.AddSingleton<QueryThrottleService>();
+            services.AddSingleton<IQueryOrchestrator, QueryOrchestrator>();
             services.AddSingleton<QueryExecutor>();
             services.AddScoped<DashboardDataService>();
             services.AddSingleton<AutoRefreshService>();

@@ -255,6 +255,7 @@ namespace SQLTriage.Data.Services
             services.AddSingleton<QueryRegistry>();
             services.AddSingleton<QueryScheduler>();
             services.AddSingleton<SchedulerRegistryService>();
+            services.AddSingleton<IQueryOrchestrator, QueryOrchestrator>();
             services.AddSingleton<Data.Services.AlertDefinitionService>();
             services.AddSingleton<Data.Services.AlertTemplateService>();
             services.AddSingleton<Data.Services.AlertHistoryService>();
