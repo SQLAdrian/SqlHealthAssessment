@@ -59,8 +59,10 @@ namespace SQLTriage.Data
 
             var dt = new DataTable();
             var startTime = DateTime.UtcNow;
+            var serverName = (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown";
+            var pipeline = _resilience.GetServerPipeline(serverName);
 
-            return await _resilience.SqlPipeline.ExecuteAsync(async ct =>
+            return await pipeline.ExecuteAsync(async ct =>
             {
                 using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
                     ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
@@ -158,41 +160,46 @@ namespace SQLTriage.Data
             if (!string.IsNullOrEmpty(currentDb) && currentDb != "master")
                 defaultDatabase = currentDb;
 
-            var results = new List<T>();
+            var serverName = (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown";
+            var pipeline = _resilience.GetServerPipeline(serverName);
 
-            using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
-                ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
-                : (SqlConnection)_connectionFactory.CreateConnection();
-            await conn.OpenAsync(cancellationToken);
-
-            // Resolve version-aware query after connection is open
-            int sqlMajorVersion = 0;
-            if (Version.TryParse(conn.ServerVersion, out var sv))
-                sqlMajorVersion = sv.Major;
-            var sql = _configService.GetQuery(queryId, _connectionFactory.DataSourceType, sqlMajorVersion);
-
-            using var cmd = (SqlCommand)conn.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.CommandTimeout = _commandTimeout;
-            cmd.Connection = conn;
-
-            AddFilterParameters(cmd, filter);
-
-            if (additionalParams != null)
+            return await pipeline.ExecuteAsync(async ct =>
             {
-                foreach (var kvp in additionalParams)
+                var results = new List<T>();
+                using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
+                    ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
+                    : (SqlConnection)_connectionFactory.CreateConnection();
+                await conn.OpenAsync(ct);
+
+                // Resolve version-aware query after connection is open
+                int sqlMajorVersion = 0;
+                if (Version.TryParse(conn.ServerVersion, out var sv))
+                    sqlMajorVersion = sv.Major;
+                var sql = _configService.GetQuery(queryId, _connectionFactory.DataSourceType, sqlMajorVersion);
+
+                using var cmd = (SqlCommand)conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.CommandTimeout = _commandTimeout;
+                cmd.Connection = conn;
+
+                AddFilterParameters(cmd, filter);
+
+                if (additionalParams != null)
                 {
-                    AddParameter(cmd, kvp.Key, kvp.Value);
+                    foreach (var kvp in additionalParams)
+                    {
+                        AddParameter(cmd, kvp.Key, kvp.Value);
+                    }
                 }
-            }
 
-            using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                results.Add(mapper(reader));
-            }
+                using var reader = await cmd.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                {
+                    results.Add(mapper(reader));
+                }
 
-            return results;
+                return results;
+            }, cancellationToken);
         }
 
         /// <summary>
@@ -212,31 +219,37 @@ namespace SQLTriage.Data
             if (!string.IsNullOrEmpty(currentDb) && currentDb != "master")
                 defaultDatabase = currentDb;
 
-            using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
-                ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
-                : (SqlConnection)_connectionFactory.CreateConnection();
-            await conn.OpenAsync(cancellationToken);
+            var serverName = (_connectionFactory as SqlServerConnectionFactory)?.ServerName ?? "unknown";
+            var pipeline = _resilience.GetServerPipeline(serverName);
 
-            using var cmd = (SqlCommand)conn.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.CommandTimeout = _commandTimeout;
-            cmd.Connection = conn;
-
-            AddFilterParameters(cmd, filter);
-
-            if (additionalParams != null)
+            return await pipeline.ExecuteAsync(async ct =>
             {
-                foreach (var kvp in additionalParams)
+                using var conn = _connectionFactory is SqlServerConnectionFactory sqlFactory
+                    ? (SqlConnection)sqlFactory.CreateConnection(defaultDatabase)
+                    : (SqlConnection)_connectionFactory.CreateConnection();
+                await conn.OpenAsync(ct);
+
+                using var cmd = (SqlCommand)conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.CommandTimeout = _commandTimeout;
+                cmd.Connection = conn;
+
+                AddFilterParameters(cmd, filter);
+
+                if (additionalParams != null)
                 {
-                    AddParameter(cmd, kvp.Key, kvp.Value);
+                    foreach (var kvp in additionalParams)
+                    {
+                        AddParameter(cmd, kvp.Key, kvp.Value);
+                    }
                 }
-            }
 
-            var result = await cmd.ExecuteScalarAsync(cancellationToken);
-            if (result == null || result == DBNull.Value)
-                return default;
+                var result = await cmd.ExecuteScalarAsync(ct);
+                if (result == null || result == DBNull.Value)
+                    return default(T);
 
-            return (T)Convert.ChangeType(result, typeof(T));
+                return (T)Convert.ChangeType(result, typeof(T));
+            }, cancellationToken);
         }
 
         /// <summary>
