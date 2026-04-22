@@ -22,13 +22,14 @@ public class QueryOrchestratorTests : IDisposable
             })
             .Build();
 
-        _orchestrator = new QueryOrchestrator(NullLogger<QueryOrchestrator>.Instance, config);
+        var registry = new QueryRegistry(NullLogger<QueryRegistry>.Instance, config);
+        _orchestrator = new QueryOrchestrator(NullLogger<QueryOrchestrator>.Instance, config, registry);
         _orchestrator.Start();
     }
 
     public void Dispose()
     {
-        _orchestrator.StopAsync().GetAwaiter().GetResult();
+        _orchestrator.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
         _orchestrator.Dispose();
     }
 

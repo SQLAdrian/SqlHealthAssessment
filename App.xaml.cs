@@ -254,6 +254,9 @@ namespace SQLTriage
                 if (baseline != null) await baseline.StartAsync();
             });
 
+            // Start unified query orchestrator
+            Services.GetService<IQueryOrchestrator>()?.Start();
+
             // Start alert evaluation engine
             Services.GetService<Data.Services.AlertEvaluationService>()?.Start();
 

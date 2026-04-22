@@ -289,6 +289,7 @@ namespace SQLTriage.Data.Services
 
         private static void InitializeBackgroundServices(IServiceProvider services)
         {
+            services.GetService<IQueryOrchestrator>()?.Start();
             services.GetService<LogCleanupService>()?.Start();
             services.GetService<MemoryMonitorService>();
             services.GetService<CacheEvictionService>()?.Start();
