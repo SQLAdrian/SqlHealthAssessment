@@ -65,7 +65,7 @@ namespace SQLTriage.Data.Caching
             _dataProtection = dataProtection;
             _userSettings = userSettings;
             var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SQLTriage-cache.db");
-            _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
+            _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;";
             InitializeSchema();
         }
 
@@ -115,6 +115,13 @@ namespace SQLTriage.Data.Caching
             using (var pragma = conn.CreateCommand())
             {
                 pragma.CommandText = "PRAGMA journal_mode=WAL;";
+                pragma.ExecuteNonQuery();
+            }
+
+            // Enable incremental vacuum to reclaim free pages without exclusive lock
+            using (var pragma = conn.CreateCommand())
+            {
+                pragma.CommandText = "PRAGMA auto_vacuum = INCREMENTAL;";
                 pragma.ExecuteNonQuery();
             }
 
@@ -1048,10 +1055,10 @@ namespace SQLTriage.Data.Caching
                 }
                 result.OptimizeCompleted = true;
 
-                // VACUUM — rebuilds the database file, reclaiming free pages
+                // incremental_vacuum — reclaims up to 1000 free pages without exclusive lock
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "VACUUM;";
+                    cmd.CommandText = "PRAGMA incremental_vacuum(1000);";
                     await cmd.ExecuteNonQueryAsync();
                 }
                 result.VacuumCompleted = true;
