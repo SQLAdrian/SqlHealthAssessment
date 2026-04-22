@@ -47,7 +47,15 @@ jobs:
       - name: Restore NuGet packages
         run: dotnet restore SQLTriage.sln
 
-      # ── 5. Build & Publish (self-contained, win-x64) ─────────────────────
+      # ── 5. Build ─────────────────────────────────────────────────────────
+      - name: Build
+        run: dotnet build SQLTriage.sln -c Release --no-restore
+
+      # ── 6. Test ──────────────────────────────────────────────────────────
+      - name: Test
+        run: dotnet test Tests/SQLTriage.Tests/SQLTriage.Tests.csproj -c Release --no-build --verbosity normal
+
+      # ── 7. Build & Publish (self-contained, win-x64) ─────────────────────
       - name: Publish
         run: |
           dotnet publish SQLTriage.sln `
@@ -58,7 +66,7 @@ jobs:
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -o ${{ env.PUBLISH_DIR }}
 
-      # ── 6. Code-sign exe (skipped if secret not configured) ──────────────
+      # ── 8. Code-sign exe (skipped if secret not configured) ──────────────
       - name: Sign executable
         if: ${{ secrets.CODESIGN_CERT_BASE64 != '' }}
         shell: pwsh
@@ -95,7 +103,7 @@ jobs:
           Remove-Item $certPath -Force
           Write-Host "Executable signed successfully."
 
-      # ── 7. Rename exe to SQLTriage.exe ─────────────────────────────────
+      # ── 9. Rename exe to SQLTriage.exe ─────────────────────────────────
       - name: Rename exe
         shell: pwsh
         run: |
@@ -105,7 +113,7 @@ jobs:
           }
           Write-Host "Exe: ${{ env.PUBLISH_DIR }}\${{ env.EXE_NAME }}"
 
-      # ── 8. ZIP the raw exe ───────────────────────────────────────────────
+      # ── 10. ZIP the raw exe ───────────────────────────────────────────────
       - name: Create ZIP
         shell: pwsh
         run: |
@@ -114,7 +122,7 @@ jobs:
                            -DestinationPath $zipName
           echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
-      # ── 9. Build Inno Setup installer ────────────────────────────────────
+      # ── 11. Build Inno Setup installer ────────────────────────────────────
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
@@ -139,7 +147,7 @@ jobs:
           $setup = Get-ChildItem installer\Output -Filter "*.exe" | Select-Object -First 1
           Copy-Item $setup.FullName "${{ env.INSTALLER_NAME }}"
 
-       # ── 10. Sign installer ───────────────────────────────────────────────
+       # ── 12. Sign installer ───────────────────────────────────────────────
       - name: Sign installer
         if: ${{ secrets.CODESIGN_CERT_BASE64 != '' }}
         shell: pwsh
@@ -175,7 +183,7 @@ jobs:
           Remove-Item $certPath -Force
           Write-Host "Installer signed successfully."
 
-      # ── 11. Extract release notes from version.json ──────────────────────
+      # ── 13. Extract release notes from version.json ──────────────────────
       - name: Extract release notes
         id: notes
         shell: pwsh
@@ -186,7 +194,7 @@ jobs:
           # Write to file to avoid env var length limits
           $body | Out-File -FilePath release_notes.md -Encoding utf8
 
-      # ── 12. Create GitHub Release ─────────────────────────────────────────
+      # ── 14. Create GitHub Release ─────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
