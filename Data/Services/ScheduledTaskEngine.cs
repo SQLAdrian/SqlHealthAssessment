@@ -8,6 +8,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data;
 using SQLTriage.Data.Models;
+using SQLTriage.Data.Scheduling;
 
 namespace SQLTriage.Data.Services
 {
@@ -21,15 +22,14 @@ namespace SQLTriage.Data.Services
         private readonly AzureBlobExportService? _blobExport;
         private readonly NotificationChannelService? _notifications;
         private readonly ToastService _toast;
+        private readonly IQueryOrchestrator _orchestrator;
         private readonly System.Timers.Timer _timer;
-        private readonly CancellationTokenSource _cts = new();
 
         private readonly SemaphoreSlim _evaluationLock = new(1, 1);
-        private const int MaxConcurrentTasks = 3;
-        private readonly SemaphoreSlim _taskSemaphore = new(MaxConcurrentTasks, MaxConcurrentTasks);
 
         private readonly ConcurrentDictionary<string, DateTime> _lastExecutionTime = new(StringComparer.OrdinalIgnoreCase);
         private bool _isRunning;
+        private readonly CancellationTokenSource _cts = new();
 
         public event Action? OnTaskCompleted;
         public bool IsRunning => _isRunning;
@@ -40,6 +40,7 @@ namespace SQLTriage.Data.Services
             ScheduledTaskHistoryService history,
             ServerConnectionManager connections,
             ToastService toast,
+            IQueryOrchestrator orchestrator,
             AzureBlobExportService? blobExport = null,
             NotificationChannelService? notifications = null)
         {
@@ -48,6 +49,7 @@ namespace SQLTriage.Data.Services
             _history = history;
             _connections = connections;
             _toast = toast;
+            _orchestrator = orchestrator;
             _blobExport = blobExport;
             _notifications = notifications;
 
@@ -168,15 +170,15 @@ namespace SQLTriage.Data.Services
 
         private async Task ThrottledExecuteAsync(ScheduledTaskDefinition task, CancellationToken cancellationToken)
         {
-            await _taskSemaphore.WaitAsync(cancellationToken);
-            try
+            var result = await _orchestrator.EnqueueAsync(new QueryRequest
             {
-                await ExecuteTaskAsync(task);
-            }
-            finally
-            {
-                _taskSemaphore.Release();
-            }
+                QueryId = $"task:{task.Id}",
+                Work = async _ => await ExecuteTaskAsync(task),
+                CancellationToken = cancellationToken
+            }, QueryPriority.P2_ScheduledTask, cancellationToken);
+
+            if (!result.Success)
+                _logger.LogError(result.Exception, "Scheduled task execution failed for {TaskName}", task.Name);
         }
 
         private async Task ExecuteTaskAsync(ScheduledTaskDefinition task)
@@ -352,7 +354,6 @@ namespace SQLTriage.Data.Services
             _cts?.Cancel();
             _cts?.Dispose();
             _evaluationLock?.Dispose();
-            _taskSemaphore?.Dispose();
         }
     }
 }

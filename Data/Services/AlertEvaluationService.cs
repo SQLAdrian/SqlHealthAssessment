@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using SQLTriage.Data;
 using SQLTriage.Data.Caching;
 using SQLTriage.Data.Models;
+using SQLTriage.Data.Scheduling;
 
 namespace SQLTriage.Data.Services
 {
@@ -27,8 +28,8 @@ namespace SQLTriage.Data.Services
         private readonly liveQueriesCacheStore _cache;
         private readonly AlertBaselineService? _baseline;
         private readonly ConnectionHealthService? _health;
+        private readonly IQueryOrchestrator _orchestrator;
         private readonly System.Timers.Timer _timer;
-        private readonly CancellationTokenSource _cts = new();
 
         // In-memory state: key = "alertId:serverName"
         private readonly ConcurrentDictionary<string, AlertState> _activeStates = new(StringComparer.OrdinalIgnoreCase);
@@ -45,10 +46,7 @@ namespace SQLTriage.Data.Services
         private bool _isRunning;
         private bool _dryRun;
         private readonly SemaphoreSlim _evaluationLock = new(1, 1);
-
-        /// <summary>Max concurrent SQL queries during alert evaluation (prevents connection exhaustion).</summary>
-        private const int MaxConcurrentQueries = 5;
-        private readonly SemaphoreSlim _querySemaphore = new(MaxConcurrentQueries, MaxConcurrentQueries);
+        private readonly CancellationTokenSource _cts = new();
 
         public event Action? OnAlertsChanged;
 
@@ -85,6 +83,7 @@ namespace SQLTriage.Data.Services
             ToastService toast,
             NotificationChannelService channels,
             liveQueriesCacheStore cache,
+            IQueryOrchestrator orchestrator,
             AlertBaselineService? baseline = null,
             ConnectionHealthService? health = null)
         {
@@ -96,6 +95,7 @@ namespace SQLTriage.Data.Services
             _toast = toast;
             _channels = channels;
             _cache = cache;
+            _orchestrator = orchestrator;
             _baseline = baseline;
             _health = health;
 
@@ -239,15 +239,15 @@ namespace SQLTriage.Data.Services
             AlertGlobalDefaults globalDefaults,
             CancellationToken cancellationToken)
         {
-            await _querySemaphore.WaitAsync(cancellationToken);
-            try
+            var result = await _orchestrator.EnqueueAsync(new QueryRequest
             {
-                await EvaluateAlertOnServerAsync(alert, connection, serverName, globalDefaults);
-            }
-            finally
-            {
-                _querySemaphore.Release();
-            }
+                QueryId = $"alert:{alert.Id}:{serverName}",
+                Work = async _ => await EvaluateAlertOnServerAsync(alert, connection, serverName, globalDefaults),
+                CancellationToken = cancellationToken
+            }, QueryPriority.P1_Alert, cancellationToken);
+
+            if (!result.Success)
+                _logger.LogError(result.Exception, "Alert evaluation failed for {AlertId} on {Server}", alert.Id, serverName);
         }
 
         private async Task ThrottledSpecialEvaluateAsync(
@@ -257,15 +257,15 @@ namespace SQLTriage.Data.Services
             AlertGlobalDefaults globalDefaults,
             CancellationToken cancellationToken)
         {
-            await _querySemaphore.WaitAsync(cancellationToken);
-            try
+            var result = await _orchestrator.EnqueueAsync(new QueryRequest
             {
-                await EvaluateSpecialAlertAsync(alert, connection, serverName, globalDefaults);
-            }
-            finally
-            {
-                _querySemaphore.Release();
-            }
+                QueryId = $"alert:special:{alert.Id}:{serverName}",
+                Work = async _ => await EvaluateSpecialAlertAsync(alert, connection, serverName, globalDefaults),
+                CancellationToken = cancellationToken
+            }, QueryPriority.P1_Alert, cancellationToken);
+
+            if (!result.Success)
+                _logger.LogError(result.Exception, "Special alert evaluation failed for {AlertId} on {Server}", alert.Id, serverName);
         }
 
         private async Task EvaluateSpecialAlertAsync(
@@ -828,7 +828,6 @@ namespace SQLTriage.Data.Services
             _cts?.Cancel();
             _cts?.Dispose();
             _evaluationLock?.Dispose();
-            _querySemaphore?.Dispose();
         }
     }
 }
