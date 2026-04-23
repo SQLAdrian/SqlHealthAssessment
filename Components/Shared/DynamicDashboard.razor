@@ -21,6 +21,7 @@
 @inject ILogger<DynamicDashboard> Logger
 @inject LocalLogService LocalLogger
 @inject liveQueriesCacheStore CacheStore
+@inject PerformanceInspectorService PerfService
 @implements IDisposable
 
 
@@ -1178,10 +1179,21 @@
     CancellationToken cancellationToken)
     {
         var panelDebugStart = DateTime.Now;
-        Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Starting panel load (Type: {PanelType})", 
+        Logger.LogDebug("[DynamicDashboard:{DashboardId}] [Panel:{PanelId}] Starting panel load (Type: {PanelType})",
             DashboardId, panel.Id, panel.PanelType);
         System.Diagnostics.Debug.WriteLine($"[DynamicDashboard:{DashboardId}] [Panel:{panel.Id}] START loading (Type={panel.PanelType})");
-        
+
+        var trace = new PanelTrace
+        {
+            DashboardId = DashboardId,
+            PanelId = panel.Id,
+            QueryId = panel.Id,
+            ServerName = filter.Instances?.FirstOrDefault() ?? "",
+            EnqueuedAt = DateTime.Now
+        };
+        trace.DequeuedAt = DateTime.Now;
+        trace.SqlStarted = DateTime.Now;
+
         try
         {
             switch (panel.PanelType)
@@ -1271,6 +1283,12 @@
                         DashboardId, panel.Id, panel.PanelType);
                     break;
             }
+
+            trace.DataReadyAt = DateTime.Now;
+            trace.CacheHitTier = "Unknown";
+            trace.RowCount = 0;
+            trace.BytesReturned = 0;
+            PerfService.AddTrace(trace);
 
             // Panel finished loading — no longer showing cached data for this panel
             _cachedPanelIds.TryRemove(panel.Id, out _);

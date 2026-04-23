@@ -47,9 +47,12 @@ namespace SQLTriage.Data.Caching
         private readonly DataProtectionService? _dataProtection;
         private readonly UserSettingsService? _userSettings;
 
-        // Per-(queryId:instanceKey) semaphores for concurrent panel writes.
+        // Striped write locks for concurrent panel writes (B8).
+        // A fixed array avoids unbounded memory/handle growth from per-key semaphores.
+        // Hash collisions are acceptable — they only serialize two panels briefly.
         // Global ops (eviction, vacuum) use _globalWriteLock exclusively.
-        private readonly ConcurrentDictionary<string, SemaphoreSlim> _writeLocks = new();
+        private const int WriteLockStripes = 64;
+        private readonly SemaphoreSlim[] _writeLocks;
         private readonly SemaphoreSlim _globalWriteLock = new(1, 1);
         private bool _disposed;
 
@@ -60,8 +63,14 @@ namespace SQLTriage.Data.Caching
         private readonly CancellationTokenSource _batchCts = new();
         private readonly Task _batchWriterTask;
 
-        private SemaphoreSlim GetLockFor(string queryId, string instanceKey) =>
-            _writeLocks.GetOrAdd($"{queryId}:{instanceKey}", _ => new SemaphoreSlim(1, 1));
+        private SemaphoreSlim GetLockFor(string queryId, string instanceKey)
+        {
+            // FNV-like hash collapsed to the stripe count. Using string.GetHashCode()
+            // is randomized per process, which is fine — we only need consistent
+            // bucketing within a single run.
+            var hash = ((uint)queryId.GetHashCode() * 397u) ^ (uint)instanceKey.GetHashCode();
+            return _writeLocks[hash % WriteLockStripes];
+        }
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -72,6 +81,11 @@ namespace SQLTriage.Data.Caching
         {
             _dataProtection = dataProtection;
             _userSettings = userSettings;
+
+            _writeLocks = new SemaphoreSlim[WriteLockStripes];
+            for (int i = 0; i < WriteLockStripes; i++)
+                _writeLocks[i] = new SemaphoreSlim(1, 1);
+
             var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SQLTriage-cache.db");
             _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;";
             InitializeSchema();
@@ -1198,8 +1212,7 @@ namespace SQLTriage.Data.Caching
                 catch { /* best effort */ }
                 _batchCts.Dispose();
                 _globalWriteLock.Dispose();
-                foreach (var sem in _writeLocks.Values) sem.Dispose();
-                _writeLocks.Clear();
+                foreach (var sem in _writeLocks) sem.Dispose();
                 _disposed = true;
             }
         }

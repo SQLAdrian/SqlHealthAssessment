@@ -55,10 +55,10 @@ namespace SQLTriage.Data.Models
     public class PlanCachePoint : TimeSeriesPoint
     {
         [JsonPropertyName("series")]
-        public string Series { get; set; } = "Cached Plans";
+        public new string Series { get; set; } = "Cached Plans";
 
         [JsonPropertyName("value")]
-        public long Value { get; set; }
+        public new long Value { get; set; }
     }
 
     /// <summary>
@@ -67,10 +67,10 @@ namespace SQLTriage.Data.Models
     public class BatchRequestPoint : TimeSeriesPoint
     {
         [JsonPropertyName("series")]
-        public string Series { get; set; } = "Batch Requests/sec";
+        public new string Series { get; set; } = "Batch Requests/sec";
 
         [JsonPropertyName("value")]
-        public double Value { get; set; }
+        public new double Value { get; set; }
     }
 
     /// <summary>
@@ -79,10 +79,10 @@ namespace SQLTriage.Data.Models
     public class CompilationPoint : TimeSeriesPoint
     {
         [JsonPropertyName("series")]
-        public string Series { get; set; } = "Compilations/sec";
+        public new string Series { get; set; } = "Compilations/sec";
 
         [JsonPropertyName("value")]
-        public double Value { get; set; }
+        public new double Value { get; set; }
     }
 
     /// <summary>

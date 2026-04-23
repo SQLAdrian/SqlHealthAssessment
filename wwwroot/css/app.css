@@ -573,3 +573,5 @@ html, body { background: var(--bg-primary); color: var(--text-primary); margin: 
    That is a 8000+ line change — doing it incrementally per component is safer.
    For now, the :root + theme blocks are ready. The systematic sweep will
    happen in subsequent passes to avoid breaking the layout mid-edit. */
+. p u l s e   {   a n i m a t i o n :   p u l s e   2 s   i n f i n i t e ;   }   @ k e y f r a m e s   p u l s e   {   0 % , 1 0 0 %   {   o p a c i t y : 1 ;   }   5 0 %   {   o p a c i t y : 0 . 5 ;   }   }   . l o a d i n g - s k e l e t o n   {   b a c k g r o u n d :   l i n e a r - g r a d i e n t ( 9 0 d e g ,   # f 0 f 0 f 0   2 5 % ,   # e 0 e 0 e 0   5 0 % ,   # f 0 f 0 f 0   7 5 % ) ;   b a c k g r o u n d - s i z e :   2 0 0 %   1 0 0 % ;   a n i m a t i o n :   l o a d i n g   1 . 5 s   i n f i n i t e ;   }   @ k e y f r a m e s   l o a d i n g   {   0 %   {   b a c k g r o u n d - p o s i t i o n :   2 0 0 %   0 ;   }   1 0 0 %   {   b a c k g r o u n d - p o s i t i o n :   - 2 0 0 %   0 ;   }   }  
+ 

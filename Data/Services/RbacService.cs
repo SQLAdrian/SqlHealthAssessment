@@ -1,7 +1,10 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using Konscious.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data.Models;
 
@@ -232,6 +235,148 @@ namespace SQLTriage.Data.Services
         /// Returns the role for the current desktop user (WPF mode = always Admin).
         /// </summary>
         public string GetDesktopUserRole() => AppRoles.Admin;
+
+        // ── Local password authentication (Argon2id) ─────────────────────
+        //
+        // Format: argon2id$v=19$m=19456,t=2,p=1$<salt-b64>$<hash-b64>
+        // Parameters follow OWASP 2024 recommendations (19 MiB memory, 2 iterations, 1 lane).
+        // Salt: 16 bytes random. Hash: 32 bytes. Verification is constant-time.
+
+        private const int Argon2MemoryKib = 19456;   // 19 MiB
+        private const int Argon2Iterations = 2;
+        private const int Argon2Parallelism = 1;
+        private const int Argon2SaltBytes = 16;
+        private const int Argon2HashBytes = 32;
+
+        /// <summary>
+        /// Hashes a password with Argon2id. Returns a self-describing string
+        /// that can be stored as-is and later passed to <see cref="VerifyPassword"/>.
+        /// </summary>
+        public static string HashPassword(string password)
+        {
+            if (string.IsNullOrEmpty(password))
+                throw new ArgumentException("Password cannot be empty", nameof(password));
+
+            var salt = RandomNumberGenerator.GetBytes(Argon2SaltBytes);
+            var hash = ComputeArgon2(password, salt);
+            return $"argon2id$v=19$m={Argon2MemoryKib},t={Argon2Iterations},p={Argon2Parallelism}$" +
+                   $"{Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
+        }
+
+        /// <summary>
+        /// Verifies a password against a stored Argon2id hash in constant time.
+        /// Returns false for malformed hashes; never throws on user input.
+        /// </summary>
+        public static bool VerifyPassword(string password, string storedHash)
+        {
+            if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash))
+                return false;
+
+            var parts = storedHash.Split('$');
+            if (parts.Length != 5 || parts[0] != "argon2id") return false;
+
+            try
+            {
+                var salt = Convert.FromBase64String(parts[3]);
+                var expected = Convert.FromBase64String(parts[4]);
+                var actual = ComputeArgon2(password, salt);
+                return CryptographicOperations.FixedTimeEquals(actual, expected);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static byte[] ComputeArgon2(string password, byte[] salt)
+        {
+            using var argon2 = new Argon2id(Encoding.UTF8.GetBytes(password))
+            {
+                Salt = salt,
+                DegreeOfParallelism = Argon2Parallelism,
+                MemorySize = Argon2MemoryKib,
+                Iterations = Argon2Iterations
+            };
+            return argon2.GetBytes(Argon2HashBytes);
+        }
+
+        /// <summary>
+        /// Sets a password for a user. The plaintext is hashed with Argon2id
+        /// before storage; plaintext is never persisted.
+        /// </summary>
+        public void SetPassword(string email, string password)
+        {
+            if (string.IsNullOrEmpty(password))
+                throw new ArgumentException("Password cannot be empty", nameof(password));
+
+            var hash = HashPassword(password);
+            lock (_lock)
+            {
+                var user = _users.FirstOrDefault(u =>
+                    u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+                if (user != null)
+                {
+                    user.PasswordHash = hash;
+                    SaveUsers();
+                    _logger.LogInformation("Password set for user: {Email}", email);
+                }
+                else
+                {
+                    _logger.LogWarning("SetPassword called for unknown user: {Email}", email);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Validates a local-auth login. Returns the user if the password matches
+        /// and the account is enabled; null otherwise. Runs in roughly constant
+        /// time regardless of whether the user exists (to limit enumeration).
+        /// </summary>
+        public RbacUser? ValidateLocalLogin(string email, string password)
+        {
+            RbacUser? user;
+            string? storedHash;
+
+            lock (_lock)
+            {
+                user = _users.FirstOrDefault(u =>
+                    u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+                storedHash = user?.PasswordHash;
+            }
+
+            // Always run the Argon2 work — even on miss — so timing does not
+            // reveal whether the email exists. The dummy hash is well-formed but
+            // never produced by HashPassword for any real password.
+            if (string.IsNullOrEmpty(storedHash))
+            {
+                _ = VerifyPassword(password, "argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+                return null;
+            }
+
+            if (!VerifyPassword(password, storedHash))
+                return null;
+
+            if (user == null || !user.Enabled)
+                return null;
+
+            lock (_lock)
+            {
+                user.LastLogin = DateTime.UtcNow;
+                SaveUsers();
+            }
+            return user;
+        }
+
+        /// <summary>Checks if a user has the specified role.</summary>
+        public bool HasRole(string email, string role)
+        {
+            lock (_lock)
+            {
+                var user = _users.FirstOrDefault(u =>
+                    u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+                return user != null && user.Role.Equals(role, StringComparison.OrdinalIgnoreCase);
+            }
+        }
 
         // ── Persistence ──────────────────────────────────────────────────
 

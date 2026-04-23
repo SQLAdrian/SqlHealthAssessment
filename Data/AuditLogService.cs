@@ -3,8 +3,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -14,30 +17,45 @@ namespace SQLTriage.Data
 {
     /// <summary>
     /// Enterprise audit logging service for tracking security-relevant actions.
-    /// Logs connection attempts, script executions, configuration changes, and security events.
-    /// Writes to a structured JSON log file with automatic daily rotation.
+    /// Entries are written in a tamper-evident HMAC-SHA256 chain: each record's
+    /// signature incorporates the previous record's signature, so any later
+    /// edit, deletion, or reorder invalidates the chain from that point forward.
+    /// Chain is verified on startup; breaks set <see cref="ChainBroken"/> and
+    /// are mirrored to the Windows Event Log when available.
     /// </summary>
     public class AuditLogService : IDisposable
     {
         private readonly string _logDirectory;
+        private readonly string _keyPath;
+        private readonly byte[] _hmacKey;
         private readonly ConcurrentQueue<AuditLogEntry> _pendingEntries = new();
         private readonly Timer _flushTimer;
         private readonly object _writeLock = new();
+        private string _lastSignature = string.Empty;
         private bool _disposed;
+        private bool _eventLogAvailable;
+
+        /// <summary>Event Log source name. Creating the source requires admin rights.</summary>
+        private const string EventLogSource = "SQLTriage-Audit";
+        private const string EventLogName = "Application";
+
+        /// <summary>Maximum log file size before rotation (64 KiB).</summary>
+        private const long RotationSizeBytes = 64 * 1024;
 
         /// <summary>
-        /// Maximum number of entries to buffer before forcing a flush.
+        /// True when startup verification detected a chain break. While set, new
+        /// writes still succeed (so the incident itself is auditable) but the
+        /// break is surfaced to callers.
         /// </summary>
+        public bool ChainBroken { get; private set; }
+
+        /// <summary>Maximum number of entries to buffer before forcing a flush.</summary>
         public int MaxBufferSize { get; set; } = 50;
 
-        /// <summary>
-        /// Flush interval in milliseconds.
-        /// </summary>
+        /// <summary>Flush interval in milliseconds.</summary>
         public int FlushIntervalMs { get; set; } = 5000;
 
-        /// <summary>
-        /// Retention period in days (default 90 for SOC2).
-        /// </summary>
+        /// <summary>Retention period in days (default 90 for SOC2).</summary>
         public int RetentionDays { get; set; } = 90;
 
         private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -51,8 +69,94 @@ namespace SQLTriage.Data
             if (!Directory.Exists(_logDirectory))
                 Directory.CreateDirectory(_logDirectory);
 
+            _keyPath = Path.Combine(_logDirectory, "hmac.key");
+            _hmacKey = LoadOrCreateHmacKey(_keyPath);
+
+            _eventLogAvailable = TryEnsureEventLogSource();
+            VerifyChainOnStartup();
+
             // Periodic flush timer
             _flushTimer = new Timer(_ => Flush(), null, FlushIntervalMs, FlushIntervalMs);
+        }
+
+        private static byte[] LoadOrCreateHmacKey(string keyPath)
+        {
+            if (File.Exists(keyPath))
+            {
+                try
+                {
+                    var existing = File.ReadAllBytes(keyPath);
+                    if (existing.Length >= 32) return existing;
+                }
+                catch { /* fall through to recreate */ }
+            }
+
+            var fresh = RandomNumberGenerator.GetBytes(32);
+            try
+            {
+                File.WriteAllBytes(keyPath, fresh);
+                // Best-effort ACL: owner-only. On non-NTFS paths this is a no-op.
+                try { File.SetAttributes(keyPath, FileAttributes.Hidden); } catch { }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Failed to persist audit HMAC key — chain will restart next launch");
+            }
+            return fresh;
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static bool TryCreateEventLogSource()
+        {
+            if (EventLog.SourceExists(EventLogSource)) return true;
+            EventLog.CreateEventSource(new EventSourceCreationData(EventLogSource, EventLogName));
+            return true;
+        }
+
+        private bool TryEnsureEventLogSource()
+        {
+            if (!OperatingSystem.IsWindows()) return false;
+            try { return TryCreateEventLogSource(); }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug(ex, "Event Log source registration failed (non-admin); audit mirror disabled");
+                return false;
+            }
+        }
+
+        private void VerifyChainOnStartup()
+        {
+            try
+            {
+                var latest = GetCurrentLogFile();
+                if (!File.Exists(latest)) return;
+
+                string? previousSig = string.Empty;
+                foreach (var line in File.ReadLines(latest))
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var entry = JsonSerializer.Deserialize<AuditLogEntry>(line, SerializerOptions);
+                    if (entry == null) continue;
+
+                    var recomputed = ComputeSignature(entry, previousSig ?? string.Empty);
+                    if (!string.Equals(recomputed, entry.Signature, StringComparison.Ordinal))
+                    {
+                        ChainBroken = true;
+                        Serilog.Log.Error("Audit log chain break detected at {Timestamp} in {File}",
+                            entry.Timestamp, Path.GetFileName(latest));
+                        WriteEventLog("Audit log chain integrity check failed. Investigate tampering.",
+                            AuditSeverity.Error);
+                        break;
+                    }
+                    previousSig = entry.Signature;
+                }
+
+                _lastSignature = previousSig ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Audit chain verification failed");
+            }
         }
 
         // ================================================================
@@ -311,7 +415,9 @@ namespace SQLTriage.Data
         }
 
         /// <summary>
-        /// Flushes all pending log entries to the current day's log file.
+        /// Flushes all pending log entries to the current log file, signing each
+        /// entry with an HMAC that chains to the previous entry's signature.
+        /// Rotates to a new segment when the current file exceeds the rotation threshold.
         /// </summary>
         public void Flush()
         {
@@ -329,11 +435,23 @@ namespace SQLTriage.Data
             {
                 try
                 {
-                    var logFile = Path.Combine(_logDirectory, $"audit-{DateTime.Now:yyyy-MM-dd}.jsonl");
+                    var logFile = GetCurrentLogFile();
+                    MaybeRotate(ref logFile);
+
                     var sb = new StringBuilder();
                     foreach (var entry in entries)
                     {
+                        entry.PreviousHash = _lastSignature;
+                        entry.Signature = ComputeSignature(entry, _lastSignature);
+                        _lastSignature = entry.Signature;
                         sb.AppendLine(JsonSerializer.Serialize(entry, SerializerOptions));
+
+                        // Mirror Critical/Error severity to Event Log for SOC2 visibility
+                        if (_eventLogAvailable &&
+                            (entry.Severity == AuditSeverity.Critical || entry.Severity == AuditSeverity.Error))
+                        {
+                            WriteEventLog($"[{entry.EventType}] {entry.Message}", entry.Severity);
+                        }
                     }
                     File.AppendAllText(logFile, sb.ToString());
                 }
@@ -343,6 +461,90 @@ namespace SQLTriage.Data
                     Serilog.Log.Warning(ex, "Failed to write audit log to file");
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns the path to the current active segment. Segment naming:
+        /// audit-YYYYMMDD.jsonl for the first segment of a day, then
+        /// audit-YYYYMMDD_NNNN.jsonl for rotated segments.
+        /// </summary>
+        private string GetCurrentLogFile()
+        {
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            var baseFile = Path.Combine(_logDirectory, $"audit-{today}.jsonl");
+
+            // Pick the highest-numbered rotated segment if any exist.
+            var rotated = Directory.GetFiles(_logDirectory, $"audit-{today}_*.jsonl");
+            if (rotated.Length == 0) return baseFile;
+
+            return rotated
+                .OrderByDescending(f => f, StringComparer.OrdinalIgnoreCase)
+                .First();
+        }
+
+        private void MaybeRotate(ref string logFile)
+        {
+            try
+            {
+                var fi = new FileInfo(logFile);
+                if (!fi.Exists || fi.Length < RotationSizeBytes) return;
+
+                var today = DateTime.Now.ToString("yyyy-MM-dd");
+                int next = 1;
+                while (File.Exists(Path.Combine(_logDirectory, $"audit-{today}_{next:D4}.jsonl")))
+                    next++;
+
+                logFile = Path.Combine(_logDirectory, $"audit-{today}_{next:D4}.jsonl");
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Audit log rotation check failed");
+            }
+        }
+
+        /// <summary>
+        /// Computes HMAC-SHA256(key, previousSig || canonical(entry)) and returns
+        /// it base64-encoded. The canonical form excludes Signature itself so the
+        /// entry's own signature does not participate in its computation.
+        /// </summary>
+        private string ComputeSignature(AuditLogEntry entry, string previousSig)
+        {
+            var canonical = new
+            {
+                entry.Timestamp,
+                entry.EventType,
+                entry.Severity,
+                entry.Message,
+                entry.Details,
+                entry.User,
+                entry.Machine,
+                entry.PreviousHash
+            };
+            var payload = JsonSerializer.Serialize(canonical, SerializerOptions);
+            var input = Encoding.UTF8.GetBytes(previousSig + "|" + payload);
+            using var hmac = new HMACSHA256(_hmacKey);
+            return Convert.ToBase64String(hmac.ComputeHash(input));
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static void WriteEventLogCore(string message, AuditSeverity severity)
+        {
+            var type = severity switch
+            {
+                AuditSeverity.Critical => EventLogEntryType.Error,
+                AuditSeverity.Error => EventLogEntryType.Error,
+                AuditSeverity.Warning => EventLogEntryType.Warning,
+                _ => EventLogEntryType.Information
+            };
+            using var log = new EventLog(EventLogName) { Source = EventLogSource };
+            log.WriteEntry(message, type);
+        }
+
+        private void WriteEventLog(string message, AuditSeverity severity)
+        {
+            if (!_eventLogAvailable || !OperatingSystem.IsWindows()) return;
+            try { WriteEventLogCore(message, severity); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Event Log write failed"); }
         }
 
         /// <summary>
@@ -381,27 +583,29 @@ namespace SQLTriage.Data
 
             for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
             {
-                var logFile = Path.Combine(_logDirectory, $"audit-{date:yyyy-MM-dd}.jsonl");
-                if (!File.Exists(logFile)) continue;
-
-                try
+                // Match both the base file and any rotated segments for the day.
+                var pattern = $"audit-{date:yyyy-MM-dd}*.jsonl";
+                foreach (var logFile in Directory.EnumerateFiles(_logDirectory, pattern))
                 {
-                    foreach (var line in File.ReadLines(logFile))
+                    try
                     {
-                        if (string.IsNullOrWhiteSpace(line)) continue;
-                        var entry = JsonSerializer.Deserialize<AuditLogEntry>(line, SerializerOptions);
-                        if (entry != null && entry.Timestamp >= from && entry.Timestamp <= to)
+                        foreach (var line in File.ReadLines(logFile))
                         {
-                            if (filterType == null || entry.EventType == filterType)
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+                            var entry = JsonSerializer.Deserialize<AuditLogEntry>(line, SerializerOptions);
+                            if (entry != null && entry.Timestamp >= from && entry.Timestamp <= to)
                             {
-                                entries.Add(entry);
+                                if (filterType == null || entry.EventType == filterType)
+                                {
+                                    entries.Add(entry);
+                                }
                             }
                         }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Serilog.Log.Warning(ex, "Error reading audit log {LogFile}", logFile);
+                    catch (Exception ex)
+                    {
+                        Serilog.Log.Warning(ex, "Error reading audit log {LogFile}", logFile);
+                    }
                 }
             }
 
@@ -430,6 +634,12 @@ namespace SQLTriage.Data
         public Dictionary<string, string> Details { get; set; } = new();
         public string User { get; set; } = Environment.UserName;
         public string Machine { get; set; } = Environment.MachineName;
+
+        /// <summary>Base64 signature of the preceding entry; empty on the first record of a chain.</summary>
+        public string PreviousHash { get; set; } = string.Empty;
+
+        /// <summary>HMAC-SHA256 signature of this entry + PreviousHash.</summary>
+        public string Signature { get; set; } = string.Empty;
     }
 
     public enum AuditEventType

@@ -447,3 +447,6 @@ Tests/**/bin/
 Tests/SQLTriage.Tests/bin/*
 LiveMonitor/.claude/*
 
+.ignore/
+
+wwwroot/css - Copy/

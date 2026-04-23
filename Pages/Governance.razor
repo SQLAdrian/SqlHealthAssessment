@@ -1,0 +1,444 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/governance"
+@using SQLTriage.Data
+@using SQLTriage.Data.Models
+@using SQLTriage.Data.Services
+@using static SQLTriage.Data.Services.GovernanceService
+@using Microsoft.Data.SqlClient
+@using System.Data
+@inject IGovernanceService GovernanceService
+@inject IFindingTranslator FindingTranslator
+@inject IQuickCheckRunner QuickCheckRunner
+@inject ServerConnectionManager ConnectionManager
+@inject NavigationManager Navigation
+@inject ToastService Toast
+
+<PageTitle>Governance - SQLTriage</PageTitle>
+
+<div class="governance-container">
+    <div class="governance-header">
+        <h1>SQL Server Governance</h1>
+        <p>Health assessment and compliance overview</p>
+    </div>
+
+    <!-- Indicative Check Banner -->
+    @if (_isIndicative)
+    {
+        <div class="indicative-banner">
+            <i class="fa-solid fa-info-circle"></i>
+            <span>This is an <strong>indicative assessment</strong> from the Quick Check (≤60 seconds). Run a full Vulnerability Assessment for complete governance scoring.</span>
+        </div>
+    }
+
+    <!-- Status Overview -->
+    @if (_governanceScore != null)
+    {
+        <div class="score-overview">
+            <div class="score-card">
+                <h3>Governance Score</h3>
+                <div class="score-value">@_governanceScore.Overall.ToString("F0")</div>
+                <div class="score-band">@_governanceScore.Band</div>
+                <div class="score-severity severity-medium">
+                    Indicative
+                </div>
+            </div>
+
+            <div class="score-details">
+                <div class="detail-item">
+                    <span class="label">Passed Findings:</span>
+                    <span class="value">@_governanceScore.PassedFindings</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Total Findings:</span>
+                    <span class="value">@_governanceScore.TotalFindings</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Failed Findings:</span>
+                    <span class="value">@_governanceScore.FailedFindings</span>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        @if (_isIndicative)
+        {
+            <button class="btn btn-primary" @onclick="RunFullAssessment">
+                <i class="fa-solid fa-search"></i> Run Full Vulnerability Assessment
+            </button>
+        }
+        <button class="btn btn-secondary" @onclick="RunQuickCheck">
+            <i class="fa-solid fa-refresh"></i> Re-run Quick Check
+        </button>
+        <button class="btn btn-info" @onclick="NavigateToValidator">
+            <i class="fa-solid fa-external-link"></i> Open Check Validator
+        </button>
+    </div>
+
+    <!-- Findings Summary -->
+    @if (_findings.Any())
+    {
+        <div class="findings-section">
+            <h3>Key Findings</h3>
+            <div class="findings-list">
+                @foreach (var finding in _findings.Take(5))
+                {
+                    <div class="finding-item severity-@finding.Severity.ToString().ToLower()">
+                        <div class="finding-header">
+                            <span class="finding-title">@finding.CheckName</span>
+                            <span class="finding-severity">@finding.Severity</span>
+                        </div>
+                        <div class="finding-description">@finding.Description</div>
+                        <div class="finding-action">@finding.RecommendedAction</div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Loading State -->
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>@_loadingMessage</p>
+        </div>
+    }
+</div>
+
+<style>
+    .governance-container {
+        padding: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .governance-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .governance-header h1 {
+        color: var(--text-primary);
+        margin-bottom: 8px;
+    }
+
+    .governance-header p {
+        color: var(--text-secondary);
+        font-size: 16px;
+    }
+
+    .indicative-banner {
+        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 500;
+    }
+
+    .score-overview {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .score-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+    }
+
+    .score-card h3 {
+        color: var(--text-primary);
+        margin: 0 0 16px 0;
+        font-size: 18px;
+    }
+
+    .score-value {
+        font-size: 48px;
+        font-weight: bold;
+        color: var(--accent);
+        margin-bottom: 8px;
+    }
+
+    .score-band {
+        font-size: 20px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+    }
+
+    .score-severity {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .score-severity.severity-critical { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .score-severity.severity-high { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .score-severity.severity-medium { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+    .score-severity.severity-low { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+
+    .score-details {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-light);
+    }
+
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+
+    .detail-item .label {
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .detail-item .value {
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 30px;
+    }
+
+    .action-buttons .btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        font-weight: 500;
+    }
+
+    .findings-section {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+    }
+
+    .findings-section h3 {
+        color: var(--text-primary);
+        margin: 0 0 20px 0;
+    }
+
+    .findings-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .finding-item {
+        border-left: 4px solid var(--border);
+        padding: 16px;
+        background: var(--bg-primary);
+        border-radius: 8px;
+    }
+
+    .finding-item.severity-critical { border-left-color: #ef4444; }
+    .finding-item.severity-high { border-left-color: #f59e0b; }
+    .finding-item.severity-medium { border-left-color: #eab308; }
+    .finding-item.severity-low { border-left-color: #22c55e; }
+
+    .finding-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .finding-title {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 16px;
+    }
+
+    .finding-severity {
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .finding-severity.severity-critical { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .finding-severity.severity-high { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .finding-severity.severity-medium { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+    .finding-severity.severity-low { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+
+    .finding-description {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 8px;
+        line-height: 1.4;
+    }
+
+    .finding-action {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .loading-state {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-secondary);
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--border);
+        border-top: 3px solid var(--accent);
+        border-radius: 50%;
+        margin: 0 auto 16px;
+    }
+</style>
+
+@code {
+    private bool _isIndicative = false;
+    private GovernanceScore? _governanceScore;
+    private List<CheckResult> _findings = new();
+    private bool _loading = false;
+    private string _loadingMessage = "";
+
+    protected override Task OnInitializedAsync()
+    {
+        // Check if this is from a quick check (indicated by query parameter)
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var queryParams = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        _isIndicative = queryParams.TryGetValue("IsIndicative", out var indicativeValue) && string.Equals(indicativeValue, "true", StringComparison.OrdinalIgnoreCase);
+
+        LoadDataAsync();
+        return Task.CompletedTask;
+    }
+
+    private void LoadDataAsync()
+    {
+        _loading = true;
+        _loadingMessage = "Loading governance data...";
+
+        try
+        {
+            // For now, create a mock governance score
+            // In a real implementation, this would come from stored assessment results
+            _governanceScore = new GovernanceScore
+            {
+                IsIndicative = _isIndicative,
+                Overall = 75.0,
+                Band = ScoreBand.Silver,
+                TotalFindings = 20,
+                PassedFindings = 15,
+                FailedFindings = 5,
+                Categories = new Dictionary<string, CategoryScore>()
+            };
+
+            // Mock findings
+            _findings = new List<CheckResult>
+            {
+                new CheckResult
+                {
+                    CheckId = "VA-001",
+                    CheckName = "Backup Validation",
+                    Description = "Recent full backups not found for all databases",
+                    Severity = "High",
+                    RecommendedAction = "Schedule regular full backups and verify backup integrity",
+                    Passed = false
+                },
+                new CheckResult
+                {
+                    CheckId = "VA-002",
+                    CheckName = "Memory Configuration",
+                    Description = "SQL Server memory settings may not be optimal",
+                    Severity = "Medium",
+                    RecommendedAction = "Review and adjust max server memory settings",
+                    Passed = false
+                }
+            };
+
+            // In a real implementation, load from stored assessment data
+            // _governanceScore = await GovernanceService.GetLatestScoreAsync(serverName);
+            // _findings = await FindingTranslator.TranslateFindingsAsync(latestResults);
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Failed to load governance data", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RunQuickCheck()
+    {
+        // Get the first connected server
+        var connection = ConnectionManager.GetEnabledConnections().FirstOrDefault();
+        if (connection == null)
+        {
+            Toast.ShowWarning("No server connection", "Please configure a server connection first.");
+            Navigation.NavigateTo("/servers");
+            return;
+        }
+
+        _loading = true;
+        _loadingMessage = "Running Quick Check...";
+
+        try
+        {
+            var progress = new Progress<QuickCheckProgress>(p =>
+            {
+                _loadingMessage = $"Running Quick Check... ({p.Completed}/{p.Total})";
+                StateHasChanged();
+            });
+
+            var result = await QuickCheckRunner.RunAsync(connection, connection.ServerNames.Split(',')[0], progress);
+            Toast.ShowSuccess("Quick Check complete", $"{result.Summary.Passed}/{result.Summary.TotalChecks} passed");
+
+            // Reload data
+        LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Quick Check failed", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void RunFullAssessment()
+    {
+        // Navigate to full vulnerability assessment
+        Navigation.NavigateTo("/vulnerability-assessment");
+    }
+
+    private void NavigateToValidator()
+    {
+        Navigation.NavigateTo("/check-validator");
+    }
+}

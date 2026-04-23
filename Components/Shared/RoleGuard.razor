@@ -1,0 +1,40 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@using SQLTriage.Data.Services
+@inject RbacService RbacService
+@inject AppUserState UserState
+
+@if (_authorized)
+{
+    @ChildContent
+}
+else if (ShowUnauthorizedMessage)
+{
+    <div style="padding: 24px; text-align: center; color: var(--text-muted);">
+        <i class="fa-solid fa-lock" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+        <p>You do not have permission to view this content.</p>
+        <p style="font-size: 12px;">Required role: <strong>@RequiredRole</strong></p>
+    </div>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Required role for access. Supports hierarchy: Admin > DBA > Operator > Viewer/Auditor.
+    /// </summary>
+    [Parameter] public string RequiredRole { get; set; } = "";
+
+    /// <summary>
+    /// When true, shows a lock icon + message instead of blank space.
+    /// </summary>
+    [Parameter] public bool ShowUnauthorizedMessage { get; set; } = true;
+
+    private bool _authorized;
+
+    protected override void OnParametersSet()
+    {
+        var currentRole = UserState.Role;
+        _authorized = string.IsNullOrEmpty(RequiredRole)
+            || RbacService.HasRole(currentRole, RequiredRole);
+    }
+}

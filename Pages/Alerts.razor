@@ -4,6 +4,7 @@
 @using SQLTriage.Data
 @using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
+@using Microsoft.AspNetCore.Components
 @inject AlertDefinitionService Definitions
 @inject AlertEvaluationService Engine
 @inject AlertHistoryService History
@@ -154,9 +155,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var alert in _activeAlerts)
+                        @foreach (var alert in PagedAlerts)
                         {
-                            <tr style="border-left: 3px solid @GetSeverityColor(alert.Severity);">
+                            <tr style="border-left: 3px solid @GetSeverityColor(alert.Severity);" class="@(alert.Severity == "Critical" ? "pulse" : "")">
                                 <td>
                                     <span class="severity-badge severity-@(alert.Severity.ToLower())"
                                           style="font-size: 10px; padding: 2px 6px;">
@@ -172,12 +173,7 @@
                                 <td style="text-align: center;">@alert.HitCount</td>
                                 <td style="font-size: 12px;">@alert.FirstTriggered.ToLocalTime().ToString("MM/dd HH:mm")</td>
                                 <td style="font-size: 12px;">@alert.LastTriggered.ToLocalTime().ToString("MM/dd HH:mm")</td>
-                                <td>
-                                    <span class="severity-badge @(alert.Status == AlertStatus.Active ? "severity-warning" : "")"
-                                          style="font-size: 10px; padding: 2px 6px;">
-                                        @alert.Status
-                                    </span>
-                                </td>
+                                <td>@GetStatusIcon(alert.Status.ToString())</td>
                                 <td>
                                     @if (alert.Status == AlertStatus.Active)
                                     {
@@ -986,6 +982,13 @@
     private string _historyFilter = "all";
     private int _activeAlertCount;
 
+    private int _alertPage = 1;
+    private int _alertPageSize = 20;
+
+    private IEnumerable<AlertState> PagedAlerts => _activeAlerts.Skip((_alertPage - 1) * _alertPageSize).Take(_alertPageSize);
+
+    private int AlertTotalPages => (int)Math.Ceiling((double)_activeAlerts.Count / _alertPageSize);
+
     private AlertGlobalDefaults _globalDefaults = new();
     private List<AlertCategory> _categories = new();
     private List<AlertDefinition> _allAlerts = new();
@@ -1563,6 +1566,27 @@
         {
             Toast.ShowError($"Failed to load sessions: {ex.Message}");
         }
+    }
+
+    private MarkupString GetStatusIcon(string status)
+    {
+        return status switch
+        {
+            "Active" => new MarkupString("<i class='fas fa-play' style='color:green; font-size:12px;'></i>"),
+            "Inactive" => new MarkupString("<i class='fas fa-pause' style='color:orange; font-size:12px;'></i>"),
+            "Acknowledged" => new MarkupString("<i class='fas fa-check' style='color:blue; font-size:12px;'></i>"),
+            _ => new MarkupString(status)
+        };
+    }
+
+    private void NextAlertPage()
+    {
+        _alertPage = Math.Min(_alertPage + 1, AlertTotalPages);
+    }
+
+    private void PrevAlertPage()
+    {
+        _alertPage = Math.Max(_alertPage - 1, 1);
     }
 
     public void Dispose()

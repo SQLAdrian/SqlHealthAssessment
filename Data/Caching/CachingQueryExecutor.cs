@@ -38,6 +38,12 @@ namespace SQLTriage.Data.Caching
         private readonly ILogger<CachingQueryExecutor> _logger;
         private readonly long _memoryThresholdBytes;
 
+        // Single-flight: collapses concurrent identical queries onto one SQL execution (B7).
+        // Key = $"{queryId}:{instanceKey}:{shape}". Entries are removed as soon as the
+        // underlying task completes, so memory stays bounded by in-flight concurrency.
+        private readonly ConcurrentDictionary<string, Task<DataTable>> _inFlightDataTable = new();
+        private readonly ConcurrentDictionary<string, Task> _inFlightTyped = new();
+
         /// <summary>
         /// True when the most recent SQL Server query failed and we are serving stale cached data.
         /// </summary>
@@ -167,6 +173,23 @@ namespace SQLTriage.Data.Caching
             Interlocked.Increment(ref _totalQueries);
             var instanceKey = BuildInstanceKey(filter);
 
+            // Single-flight: if another caller is already fetching this exact (queryId, instanceKey),
+            // wait for its result instead of launching a parallel SQL round-trip. additionalParams
+            // participates in the key so distinct parameter sets are not collapsed.
+            var flightKey = $"dt:{queryId}:{instanceKey}:{BuildParamKey(additionalParams)}";
+            var flight = _inFlightDataTable.GetOrAdd(flightKey,
+                _ => ExecuteQueryInternalAsync(queryId, filter, instanceKey, additionalParams, cancellationToken));
+            try { return await flight; }
+            finally { _inFlightDataTable.TryRemove(flightKey, out _); }
+        }
+
+        private async Task<DataTable> ExecuteQueryInternalAsync(
+            string queryId,
+            DashboardFilter filter,
+            string instanceKey,
+            Dictionary<string, object>? additionalParams,
+            CancellationToken cancellationToken)
+        {
             try
             {
                 // Always try SQL Server first for DataTable queries (StatCard, DataGrid, TextCard)
@@ -622,6 +645,21 @@ namespace SQLTriage.Data.Caching
                 .OrderBy(i => i, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             return string.Join(",", sorted);
+        }
+
+        /// <summary>
+        /// Stable key for additionalParams so single-flight does not collapse
+        /// queries that differ only in parameter values.
+        /// </summary>
+        private static string BuildParamKey(Dictionary<string, object>? additionalParams)
+        {
+            if (additionalParams == null || additionalParams.Count == 0) return "-";
+            var sb = new System.Text.StringBuilder();
+            foreach (var kv in additionalParams.OrderBy(k => k.Key, StringComparer.Ordinal))
+            {
+                sb.Append(kv.Key).Append('=').Append(kv.Value).Append(';');
+            }
+            return sb.ToString();
         }
     }
 }

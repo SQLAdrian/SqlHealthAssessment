@@ -262,7 +262,8 @@ namespace SQLTriage.Data.Scheduling
                     var request = await DequeueNextAsync(_cts.Token);
                     if (request == null)
                     {
-                        await Task.Delay(10, _cts.Token);
+                        if (_cts.Token.IsCancellationRequested) break;
+                        await Task.Delay(50, _cts.Token);
                         continue;
                     }
 
@@ -299,7 +300,7 @@ namespace SQLTriage.Data.Scheduling
             // that might receive work soon. Fall back to lower channels with timeout.
             for (int p = 0; p < PriorityCount; p++)
             {
-                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
                 try
                 {
@@ -309,6 +310,16 @@ namespace SQLTriage.Data.Scheduling
                 {
                     // Timeout on this channel — try next lower priority
                     continue;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // External cancellation (shutdown) — propagate immediately
+                    throw;
+                }
+                catch (ChannelClosedException)
+                {
+                    // Channel completed (shutdown race) — let dispatcher check cancellation
+                    return null;
                 }
             }
 

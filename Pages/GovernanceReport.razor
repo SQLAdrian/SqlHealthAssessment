@@ -1,0 +1,210 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/governance-report"
+@using SQLTriage.Data.Services
+@using SQLTriage.Data.Models
+@inject IReportService ReportService
+@inject ServerConnectionManager ConnectionManager
+@inject ToastService Toast
+@inject NavigationManager Navigation
+
+<PageTitle>Governance Report - SQLTriage</PageTitle>
+
+<div class="page-container">
+    <div class="page-header">
+        <h1><i class="fa-solid fa-file-pdf"></i> Governance Report</h1>
+        <p>Generate a printable PDF governance assessment for your SQL Server instances.</p>
+    </div>
+
+    <div class="card">
+        <h2>Report Configuration</h2>
+        <div class="form-group">
+            <label>Server Instance</label>
+            <select class="form-control" @bind="_selectedInstance">
+                <option value="">-- Select instance --</option>
+                @foreach (var conn in ConnectionManager.GetConnections())
+                {
+                    @foreach (var server in conn.GetServerList())
+                    {
+                        <option value="@server">@server</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" @bind="_includeAllFindings" />
+                Include all findings (default: top 10 failed only)
+            </label>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" @onclick="GenerateReport" disabled="@_generating">
+                @if (_generating)
+                {
+                    <span><i class="fa-solid fa-spinner fa-spin"></i> Generating</span>
+                }
+                else
+                {
+                    <span><i class="fa-solid fa-file-pdf"></i> Generate PDF</span>
+                }
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_statusMessage))
+        {
+            <div class="alert alert-info" style="margin-top: 12px;">@_statusMessage</div>
+        }
+    </div>
+
+    @if (_pdfBytes != null)
+    {
+        <div class="card">
+            <h2>Preview</h2>
+            <p>The report has been generated. You can download it below.</p>
+            <button class="btn btn-primary" @onclick="DownloadPdf">
+                <i class="fa-solid fa-download"></i> Download PDF
+            </button>
+        </div>
+    }
+</div>
+
+<style>
+    .page-container {
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .page-header {
+        margin-bottom: 24px;
+    }
+    .page-header h1 {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .page-header p {
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+    .card {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+    }
+    .card h2 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 12px 0;
+        color: var(--text-primary);
+    }
+    .form-group {
+        margin-bottom: 12px;
+    }
+    .form-group label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+    }
+    .form-control {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 13px;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+    .actions {
+        margin-top: 16px;
+    }
+    .btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .btn-primary {
+        background: var(--accent);
+        color: white;
+    }
+    .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    .alert {
+        padding: 10px 12px;
+        border-radius: 4px;
+        font-size: 13px;
+    }
+    .alert-info {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+    }
+</style>
+
+@code {
+    private string _selectedInstance = "";
+    private bool _includeAllFindings = false;
+    private bool _generating = false;
+    private string _statusMessage = "";
+    private byte[]? _pdfBytes;
+
+    private async Task GenerateReport()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedInstance))
+        {
+            Toast.ShowWarning("Select a server", "Please choose a SQL Server instance to generate the report.");
+            return;
+        }
+
+        _generating = true;
+        _statusMessage = "Generating report...";
+        _pdfBytes = null;
+        StateHasChanged();
+
+        try
+        {
+            // In a real implementation, fetch actual check results from the database
+            // For now, generate with mock/empty results to demonstrate the pipeline
+            var mockResults = new List<CheckResult>();
+            _pdfBytes = await ReportService.GenerateGovernanceReportAsync(_selectedInstance, mockResults);
+            _statusMessage = $"Report generated: {_pdfBytes.Length:N0} bytes";
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to generate report: {ex.Message}";
+            Toast.ShowError("Report generation failed", ex.Message);
+        }
+        finally
+        {
+            _generating = false;
+        }
+    }
+
+    private void DownloadPdf()
+    {
+        if (_pdfBytes == null) return;
+        var fileName = $"SQLTriage-Governance-{_selectedInstance.Replace("\\", "-")}-{DateTime.Now:yyyyMMdd}.pdf";
+        // Use JS interop for download in real implementation
+        // For Blazor Hybrid, write to temp and open
+        var tempPath = Path.Combine(Path.GetTempPath(), fileName);
+        File.WriteAllBytes(tempPath, _pdfBytes);
+        _statusMessage = $"Saved to: {tempPath}";
+        Toast.ShowSuccess("Report saved", tempPath);
+    }
+}

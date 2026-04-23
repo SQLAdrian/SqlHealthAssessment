@@ -1,5 +1,6 @@
 /* In the name of God, the Merciful, the Compassionate */
 
+using ApexCharts;
 using SQLTriage.Data.Services;
 
 namespace SQLTriage.Data;
@@ -60,4 +61,49 @@ public class ChartThemeService : IChartThemeService
     /// Returns blur amount in pixels (0 for AMG, 12 for Rolls Royce).
     /// </summary>
     public int GlassBlurPx => _currentTheme == "rolls-royce" ? 12 : 0;
+
+    /// <summary>
+    /// Returns fully configured options for a line chart.
+    /// </summary>
+    public ApexChartOptions<T> GetLineOptions<T>(string title, string yAxisLabel) where T : class
+    {
+        var palette = GetCurrentPalette();
+        return new ApexChartOptions<T>
+        {
+            Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+            Colors = new List<string> { palette.Success, palette.Warning, palette.Critical, palette.Neutral },
+            Title = new Title { Text = title },
+            Yaxis = new List<YAxis> { new YAxis { Title = new AxisTitle { Text = yAxisLabel } } }
+        };
+    }
+
+    /// <summary>
+    /// Returns fully configured options for a donut chart.
+    /// </summary>
+    public ApexChartOptions<T> GetDonutOptions<T>(string title) where T : class
+    {
+        var palette = GetCurrentPalette();
+        return new ApexChartOptions<T>
+        {
+            Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+            Colors = new List<string> { palette.Success, palette.Warning, palette.Critical, palette.Neutral },
+            Title = new Title { Text = title }
+        };
+    }
+
+    /// <summary>
+    /// Returns fully configured options for a horizontal bar chart.
+    /// </summary>
+    public ApexChartOptions<T> GetBarOptions<T>(string title, string xAxisLabel) where T : class
+    {
+        var palette = GetCurrentPalette();
+        return new ApexChartOptions<T>
+        {
+            Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+            Colors = new List<string> { palette.Success, palette.Warning, palette.Critical, palette.Neutral },
+            Title = new Title { Text = title },
+            Xaxis = new XAxis { Title = new AxisTitle { Text = xAxisLabel } },
+            PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true } }
+        };
+    }
 }

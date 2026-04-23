@@ -1030,6 +1030,81 @@
         }
     </div>
 
+    <!-- Performance Diagnostics -->
+    <div class="settings-group">
+        <h3>Performance Diagnostics</h3>
+        <div class="settings-row">
+            <label class="settings-label">
+                Enable Performance Inspector
+                <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(adds timing overhead to dashboard loads)</span>
+            </label>
+            <input type="checkbox" @bind="_enablePerfInspector" @bind:after="SavePerformanceSettings" />
+        </div>
+        @if (_enablePerfInspector)
+        {
+            <p style="color:var(--text-muted);font-size:12px;margin-top:4px;">
+                Visit <a href="/perf-inspector" target="_blank">/perf-inspector</a> to view dashboard load traces and identify bottlenecks.
+            </p>
+        }
+    </div>
+
+    @if (_enablePerfInspector)
+    {
+        <!-- Performance Tuning -->
+        <div class="settings-group">
+            <h3>Performance Tuning</h3>
+            <p style="color:var(--text-muted);font-size:12px;margin-bottom:16px;">
+                Adjust these knobs based on perf-inspector findings. Changes take effect immediately.
+            </p>
+
+            <h4>Orchestrator</h4>
+            <div class="settings-row">
+                <label class="settings-label">Global Concurrency</label>
+                <input type="number" @bind="_globalConcurrency" @bind:after="SaveTuningSettings" min="1" max="50" />
+            </div>
+            <div class="settings-row">
+                <label class="settings-label">Per-Server Concurrency</label>
+                <input type="number" @bind="_perServerConcurrency" @bind:after="SaveTuningSettings" min="1" max="10" />
+            </div>
+            <div class="settings-row">
+                <label class="settings-label">Channel Capacity</label>
+                <input type="number" @bind="_channelCapacity" @bind:after="SaveTuningSettings" min="100" max="10000" />
+            </div>
+            <div class="settings-row">
+                <label class="settings-label">Default Timeout (sec)</label>
+                <input type="number" @bind="_defaultTimeoutSeconds" @bind:after="SaveTuningSettings" min="5" max="300" />
+            </div>
+
+            <h4>Dashboard</h4>
+            <div class="settings-row">
+                <label class="settings-label">Max Panels In Flight</label>
+                <input type="number" @bind="_maxPanelsInFlight" @bind:after="SaveTuningSettings" min="1" max="50" />
+            </div>
+            <div class="settings-row">
+                <label class="settings-label">Render Coalesce (ms)</label>
+                <input type="number" @bind="_renderCoalesceMs" @bind:after="SaveTuningSettings" min="0" max="1000" />
+            </div>
+            <div class="settings-row">
+                <label class="settings-label">Preload from Cache</label>
+                <input type="checkbox" @bind="_preloadFromCacheOnInit" @bind:after="SaveTuningSettings" />
+            </div>
+
+            <h4>Cache</h4>
+            <div class="settings-row">
+                <label class="settings-label">Batch Write Size</label>
+                <input type="number" @bind="_batchWriteSize" @bind:after="SaveTuningSettings" min="1" max="100" />
+            </div>
+            <div class="settings-row">
+                <label class="settings-label">Batch Flush (ms)</label>
+                <input type="number" @bind="_batchFlushMs" @bind:after="SaveTuningSettings" min="10" max="5000" />
+            </div>
+            <div class="settings-row">
+                <label class="settings-label">Hot Tier Sliding (sec)</label>
+                <input type="number" @bind="_hotTierSlidingSeconds" @bind:after="SaveTuningSettings" min="30" max="3600" />
+            </div>
+        </div>
+    }
+
 </div>
 
 @* ── SQLDBA.ORG Consent Modal ── *@
@@ -1252,6 +1327,19 @@
     private bool _showMaturityRoadmap;
     private bool _noPantsModeActive;
     private bool _experimentalModeActive;
+    private bool _enablePerfInspector;
+
+    // Tuning knobs
+    private int _globalConcurrency = 5;
+    private int _perServerConcurrency = 3;
+    private int _channelCapacity = 1000;
+    private int _defaultTimeoutSeconds = 60;
+    private int _maxPanelsInFlight = 10;
+    private int _renderCoalesceMs = 50;
+    private bool _preloadFromCacheOnInit = true;
+    private int _batchWriteSize = 50;
+    private int _batchFlushMs = 100;
+    private int _hotTierSlidingSeconds = 90;
 
     private void LoadSettings()
     {
@@ -1288,6 +1376,23 @@
         _maxHeavy = UserSettings.GetMaxHeavyConcurrent();
         _maxLight = UserSettings.GetMaxLightConcurrent();
         _updateProxyUrl = UserSettings.GetUpdateProxyUrl() ?? "";
+        _enablePerfInspector = UserSettings.GetEnablePerfInspector();
+
+        // Set performance inspector enabled
+        var perfService = (PerformanceInspectorService?)App.Services?.GetService(typeof(PerformanceInspectorService));
+        perfService?.SetEnabled(_enablePerfInspector);
+
+        // Load tuning values from config
+        _globalConcurrency = Configuration.GetValue<int>("Orchestrator:GlobalConcurrency", 5);
+        _perServerConcurrency = Configuration.GetValue<int>("Orchestrator:PerServerConcurrency", 3);
+        _channelCapacity = Configuration.GetValue<int>("Orchestrator:ChannelCapacity", 1000);
+        _defaultTimeoutSeconds = Configuration.GetValue<int>("Orchestrator:DefaultTimeoutSeconds", 60);
+        _maxPanelsInFlight = Configuration.GetValue<int>("Dashboard:MaxPanelsInFlight", 10);
+        _renderCoalesceMs = Configuration.GetValue<int>("Dashboard:RenderCoalesceMs", 50);
+        _preloadFromCacheOnInit = Configuration.GetValue<bool>("Dashboard:PreloadFromCacheOnInit", true);
+        _batchWriteSize = Configuration.GetValue<int>("Cache:BatchWriteSize", 50);
+        _batchFlushMs = Configuration.GetValue<int>("Cache:BatchFlushMs", 100);
+        _hotTierSlidingSeconds = Configuration.GetValue<int>("Cache:HotTierSlidingSeconds", 90);
 
         // Load cache metrics service and current session stats
         _cacheMetricsService = CacheMetrics;
@@ -1811,6 +1916,56 @@
     private void SavePreviewSettings()
     {
         UserSettings.SetShowMaturityRoadmap(_showMaturityRoadmap);
+    }
+
+    private void SavePerformanceSettings()
+    {
+        // Assuming UserSettings has a method for this
+        UserSettings.SetEnablePerfInspector(_enablePerfInspector);
+        // Also set the service
+        var perfService = (PerformanceInspectorService?)App.Services?.GetService(typeof(PerformanceInspectorService));
+        perfService?.SetEnabled(_enablePerfInspector);
+    }
+
+    private void SaveTuningSettings()
+    {
+        try
+        {
+            var appsettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+            var json = File.ReadAllText(appsettingsPath);
+            var config = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new();
+
+            // Update Orchestrator
+            if (!config.ContainsKey("Orchestrator")) config["Orchestrator"] = new Dictionary<string, object>();
+            var orch = (Dictionary<string, object>)config["Orchestrator"];
+            orch["GlobalConcurrency"] = _globalConcurrency;
+            orch["PerServerConcurrency"] = _perServerConcurrency;
+            orch["ChannelCapacity"] = _channelCapacity;
+            orch["DefaultTimeoutSeconds"] = _defaultTimeoutSeconds;
+
+            // Update Dashboard
+            if (!config.ContainsKey("Dashboard")) config["Dashboard"] = new Dictionary<string, object>();
+            var dash = (Dictionary<string, object>)config["Dashboard"];
+            dash["MaxPanelsInFlight"] = _maxPanelsInFlight;
+            dash["RenderCoalesceMs"] = _renderCoalesceMs;
+            dash["PreloadFromCacheOnInit"] = _preloadFromCacheOnInit;
+
+            // Update Cache
+            if (!config.ContainsKey("Cache")) config["Cache"] = new Dictionary<string, object>();
+            var cache = (Dictionary<string, object>)config["Cache"];
+            cache["BatchWriteSize"] = _batchWriteSize;
+            cache["BatchFlushMs"] = _batchFlushMs;
+            cache["HotTierSlidingSeconds"] = _hotTierSlidingSeconds;
+
+            var updatedJson = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(appsettingsPath, updatedJson);
+
+            Toast.ShowSuccess("Tuning settings saved. Restart may be required for some changes.");
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Failed to save tuning settings: {ex.Message}");
+        }
     }
 
     // ── RBAC ──────────────────────────────────────────────────────────────

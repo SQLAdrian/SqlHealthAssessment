@@ -59,6 +59,10 @@ namespace SQLTriage.Data.Models
         /// <summary>Last login timestamp.</summary>
         [JsonPropertyName("lastLogin")]
         public DateTime? LastLogin { get; set; }
+
+        /// <summary>Argon2id hash for local password authentication.</summary>
+        [JsonPropertyName("passwordHash")]
+        public string? PasswordHash { get; set; }
     }
 
     /// <summary>

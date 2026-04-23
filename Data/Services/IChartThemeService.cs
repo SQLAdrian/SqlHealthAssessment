@@ -1,5 +1,6 @@
 /* In the name of God, the Merciful, the Compassionate */
 
+using ApexCharts;
 using SQLTriage.Data;
 
 namespace SQLTriage.Data.Services;
@@ -21,4 +22,13 @@ public interface IChartThemeService
 
     /// <summary>Fired when the user switches themes so chart components can refresh.</summary>
     event Action? OnChartThemeChanged;
+
+    /// <summary>Returns fully configured options for a line chart.</summary>
+    ApexChartOptions<T> GetLineOptions<T>(string title, string yAxisLabel) where T : class;
+
+    /// <summary>Returns fully configured options for a donut chart.</summary>
+    ApexChartOptions<T> GetDonutOptions<T>(string title) where T : class;
+
+    /// <summary>Returns fully configured options for a horizontal bar chart.</summary>
+    ApexChartOptions<T> GetBarOptions<T>(string title, string xAxisLabel) where T : class;
 }

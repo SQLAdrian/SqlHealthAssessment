@@ -26,24 +26,5 @@
       "Bash(ls -la /c/GitHub/LiveMonitor/Pages/*.razor)"
     ]
   },
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          { "type": "command", "command": "python .claude/hooks/compress-prompt.py" },
-          { "type": "command", "command": "python .claude/hooks/log-compression-metrics.py" },
-          { "type": "command", "command": "python .claude/hooks/route-dsl.py" }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|Bash|Grep|Glob|NotebookEdit",
-        "hooks": [
-          { "type": "command", "command": "python .claude/hooks/validate-no-shorthand.py" }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

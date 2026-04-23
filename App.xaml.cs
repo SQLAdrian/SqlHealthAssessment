@@ -1,5 +1,6 @@
 /* In the name of God, the Merciful, the Compassionate */
 
+using System.IO;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Radzen;
@@ -27,8 +28,18 @@ namespace SQLTriage
         /// <summary>Runtime-switchable Serilog minimum level. Toggle via Settings → Enable Debug Logging.</summary>
         public static readonly LoggingLevelSwitch LogLevelSwitch = new(Serilog.Events.LogEventLevel.Information);
 
-        protected override async void OnStartup(StartupEventArgs e)
+        protected override void OnStartup(StartupEventArgs e)
         {
+            // Configure Serilog EARLY so we get logs even if startup fails
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.File(
+                    path: System.IO.Path.Combine(AppContext.BaseDirectory, "logs", "app-.log"),
+                    rollingInterval: RollingInterval.Day,
+                    outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .CreateLogger();
+
+            Log.Information("Application starting...");
             base.OnStartup(e);
             _ = OnStartupAsync(e);
         }
@@ -41,6 +52,7 @@ namespace SQLTriage
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
             // Configure Serilog - Single consolidated log file
+            var configStart = DateTime.Now;
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.ControlledBy(LogLevelSwitch)
                 .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
@@ -55,11 +67,13 @@ namespace SQLTriage
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
-            Log.Information("Application starting...");
-
-            // Check WebView2 runtime availability before proceeding
+            // ===== STARTUP PHASE 1: WebView2 Check =====
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var webView2Helper = new WebView2Helper();
             var webView2Status = await webView2Helper.CheckWebView2StatusAsync();
+            sw.Stop();
+            Log.Information("[STARTUP] WebView2 check completed in {ElapsedMs}ms - Version: {Version}, IsCompatible: {Compatible}", 
+                sw.ElapsedMilliseconds, webView2Status.Version, webView2Status.IsCompatible);
 
             WebView2Helper = webView2Helper;
 
@@ -80,11 +94,17 @@ namespace SQLTriage
                 Log.Information("WebView2 runtime verified. Version: {Version}", webView2Status.Version);
             }
 
+            // ===== STARTUP PHASE 2: Configuration Loading =====
+            sw.Restart();
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
                 .AddJsonFile("config/appsettings.json", optional: false, reloadOnChange: true)
                 .Build();
+            sw.Stop();
+            Log.Information("[STARTUP] Configuration loaded in {ElapsedMs}ms", sw.ElapsedMilliseconds);
 
+            // ===== STARTUP PHASE 3: Service Registration =====
+            sw.Restart();
             var services = new ServiceCollection();
 
             services.AddSingleton<IConfiguration>(configuration);
@@ -200,8 +220,11 @@ namespace SQLTriage
             services.AddSingleton<liveQueriesMaintenanceService>();
             services.AddSingleton<CacheMetricsService>();
             services.AddSingleton<CacheMetricsService>();
+            services.AddSingleton<PerformanceInspectorService>();
 
             Services = services.BuildServiceProvider();
+            sw.Stop();
+            Log.Information("[STARTUP] DI container built in {ElapsedMs}ms", sw.ElapsedMilliseconds);
 
             // Apply saved proxy to AutoUpdateService (before background check starts)
             var savedProxy = Services.GetService<UserSettingsService>()?.GetUpdateProxyUrl();
@@ -236,40 +259,58 @@ namespace SQLTriage
             }
 
             // Start log cleanup (runs now + every 24 hours)
+            Log.Information("[STARTUP] Starting background services...");
             Services.GetService<LogCleanupService>()?.Start();
 
             // Start memory monitoring
             Services.GetService<MemoryMonitorService>();
+            Log.Information("[STARTUP] MemoryMonitorService started");
 
             // Start cache eviction timer (runs every 5 minutes)
             Services.GetService<CacheEvictionService>()?.Start();
+            Log.Information("[STARTUP] CacheEvictionService started");
 
             // Start liveQueries maintenance timer (VACUUM + optimize, default every 4 hours)
             Services.GetService<liveQueriesMaintenanceService>()?.Start();
+            Log.Information("[STARTUP] liveQueriesMaintenanceService started");
 
             // Start alert baseline service (aggressive seeding for first 5 min, then hourly recompute)
+            Log.Information("[STARTUP] AlertBaselineService starting async...");
             _ = Task.Run(async () =>
             {
-                var baseline = Services.GetService<Data.Services.AlertBaselineService>();
-                if (baseline != null) await baseline.StartAsync();
+                try
+                {
+                    var baseline = Services.GetService<Data.Services.AlertBaselineService>();
+                    if (baseline != null) await baseline.StartAsync();
+                    Log.Information("[STARTUP] AlertBaselineService completed");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[STARTUP] AlertBaselineService failed");
+                }
             });
 
             // Start unified query orchestrator
             Services.GetService<IQueryOrchestrator>()?.Start();
+            Log.Information("[STARTUP] QueryOrchestrator started");
 
             // Start alert evaluation engine
             Services.GetService<Data.Services.AlertEvaluationService>()?.Start();
+            Log.Information("[STARTUP] AlertEvaluationService started");
 
             // Start scheduled task engine
             Services.GetService<Data.Services.ScheduledTaskEngine>()?.Start();
+            Log.Information("[STARTUP] ScheduledTaskEngine started");
 
             // Start connection health monitor (30s ping per enabled server)
             Services.GetService<Data.Services.ConnectionHealthService>()?.Start();
+            Log.Information("[STARTUP] ConnectionHealthService started");
 
             // Log application start for audit trail
             var auditLog = Services.GetService<AuditLogService>();
             auditLog?.LogApplicationStart();
             Log.Information("Application started successfully");
+            Log.Information("[STARTUP] All services started - entering UI phase");
 
             // Pre-warm Live Monitor session data so the page loads instantly
             // Fires on startup (if connections exist) and whenever connections change
@@ -360,13 +401,17 @@ namespace SQLTriage
             // on active timer callbacks or Kestrel connections.
             StopBackgroundServices();
 
-            // Dispose the DI container with a timeout to prevent hanging
+            // Dispose the DI container with a timeout to prevent hanging.
+            // We run the async dispose on a thread-pool task and wait on the Task
+            // directly — no GetAwaiter().GetResult() on the continuation, which
+            // avoids the UI-thread deadlock risk if a disposable's continuation
+            // captures SynchronizationContext.
             try
             {
-                var disposeTask = Task.Run(() =>
+                var disposeTask = Task.Run(async () =>
                 {
                     if (Services is IAsyncDisposable asyncDisposable)
-                        asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                        await asyncDisposable.DisposeAsync().ConfigureAwait(false);
                     else if (Services is IDisposable disposable)
                         disposable.Dispose();
                 });

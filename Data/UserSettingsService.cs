@@ -99,6 +99,10 @@ namespace SQLTriage.Data
             /// <summary>Maximum number of sessions to display.</summary>
             public int SessionsMaxDisplay { get; set; } = 500;
 
+            // ── Performance Inspector ──
+            /// <summary>When true, enables performance tracing for dashboard loads.</summary>
+            public bool EnablePerfInspector { get; set; } = false;
+
             // ── Query Concurrency ──
             /// <summary>Maximum concurrent heavy queries (TimeSeries panels). Default 5. Range 1-20.</summary>
             public int MaxHeavyConcurrent { get; set; } = 5;
@@ -411,6 +415,14 @@ namespace SQLTriage.Data
 
         /// <summary>Fired when Show Maturity Roadmap is toggled.</summary>
         public event Action<bool>? OnShowMaturityRoadmapChanged;
+
+        // ── Performance Inspector ──
+        public bool GetEnablePerfInspector() { lock (_lock) return _settings.EnablePerfInspector; }
+        public void SetEnablePerfInspector(bool enabled)
+        {
+            lock (_lock) _settings.EnablePerfInspector = enabled;
+            SaveSettings();
+        }
 
         // ── Onboarding ──
         public bool GetOnboardingComplete() { lock (_lock) return _settings.OnboardingComplete; }

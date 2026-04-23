@@ -15,6 +15,7 @@ namespace SQLTriage.Data.Services
     /// <summary>
     /// Background singleton that pings each enabled server connection every 30 seconds
     /// and exposes a live up/down status dictionary for use in NavMenu and Dashboard.
+    /// Uses PeriodicTimer + cancellation-driven loop; exceptions are observed per cycle.
     /// </summary>
     public class ConnectionHealthService : IDisposable
     {
@@ -22,15 +23,17 @@ namespace SQLTriage.Data.Services
 
         public record HealthEntry(ServerStatus Status, DateTime LastChecked, string? Error);
 
+        private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+
         private readonly ServerConnectionManager _connections;
         private readonly ILogger<ConnectionHealthService> _logger;
         private readonly ConcurrentDictionary<string, HealthEntry> _status = new(StringComparer.OrdinalIgnoreCase);
 
         // EngineEdition 5 = Azure SQL DB, 8 = Azure SQL Managed Instance
-        // Populated during each health check cycle; used to skip unsupported DMV checks on Azure.
         private readonly ConcurrentDictionary<string, bool> _isAzure = new(StringComparer.OrdinalIgnoreCase);
 
-        private readonly System.Timers.Timer _timer;
+        private readonly CancellationTokenSource _cts = new();
+        private Task? _loopTask;
         private bool _disposed;
 
         public event Action? OnStatusChanged;
@@ -43,24 +46,33 @@ namespace SQLTriage.Data.Services
         {
             _connections = connections;
             _logger = logger;
-
-            _timer = new System.Timers.Timer(30_000);
-            _timer.Elapsed += (_, _) =>
-            {
-                _ = Task.Run(async () =>
-                {
-                    try { await CheckAllAsync(); }
-                    catch (Exception ex) { _logger.LogError(ex, "Health check cycle failed"); }
-                });
-            };
-            _timer.AutoReset = true;
         }
 
         /// <summary>Start polling. Called once from App startup after DI is ready.</summary>
         public void Start()
         {
-            _ = Task.Run(CheckAllAsync); // immediate first check
-            _timer.Start();
+            if (_loopTask != null) return;
+            _loopTask = Task.Run(() => RunLoopAsync(_cts.Token));
+        }
+
+        private async Task RunLoopAsync(CancellationToken ct)
+        {
+            // Immediate first check
+            try { await CheckAllAsync(ct); }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex) { _logger.LogError(ex, "Initial health check cycle failed"); }
+
+            using var timer = new PeriodicTimer(PollInterval);
+            try
+            {
+                while (await timer.WaitForNextTickAsync(ct))
+                {
+                    try { await CheckAllAsync(ct); }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex) { _logger.LogError(ex, "Health check cycle failed"); }
+                }
+            }
+            catch (OperationCanceledException) { /* shutdown */ }
         }
 
         /// <summary>Returns the current health status for a server name (or Unknown if not yet checked).</summary>
@@ -83,7 +95,7 @@ namespace SQLTriage.Data.Services
             return n;
         }
 
-        private async Task CheckAllAsync()
+        private async Task CheckAllAsync(CancellationToken ct = default)
         {
             var enabled = _connections.GetEnabledConnections();
             var tasks = new List<Task>();
@@ -94,7 +106,7 @@ namespace SQLTriage.Data.Services
                 {
                     var s = server;
                     var c = conn;
-                    tasks.Add(CheckServerAsync(c, s));
+                    tasks.Add(CheckServerAsync(c, s, ct));
                 }
             }
 
@@ -102,7 +114,7 @@ namespace SQLTriage.Data.Services
             OnStatusChanged?.Invoke();
         }
 
-        private async Task CheckServerAsync(ServerConnection conn, string serverName)
+        private async Task CheckServerAsync(ServerConnection conn, string serverName, CancellationToken outerCt)
         {
             try
             {
@@ -110,11 +122,11 @@ namespace SQLTriage.Data.Services
                               ";Connect Timeout=5;Application Name=SQLTriage-HealthCheck";
 
                 using var sql = new SqlConnection(connStr);
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(outerCt);
+                cts.CancelAfter(TimeSpan.FromSeconds(6));
                 await sql.OpenAsync(cts.Token);
 
-                // Probe EngineEdition to detect Azure SQL DB (5) or Azure SQL MI (8)
-                // Only probe once per session — skip if already cached
+                // Probe EngineEdition to detect Azure SQL DB (5) or Azure SQL MI (8) once per session
                 if (!_isAzure.ContainsKey(serverName))
                 {
                     try
@@ -134,12 +146,15 @@ namespace SQLTriage.Data.Services
                 _status[serverName] = new HealthEntry(ServerStatus.Online, DateTime.UtcNow, null);
                 _logger.LogDebug("Health check OK: {Server}", serverName);
             }
+            catch (OperationCanceledException) when (outerCt.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 var prev = GetStatus(serverName);
                 _status[serverName] = new HealthEntry(ServerStatus.Offline, DateTime.UtcNow, ex.Message);
 
-                // Only log transition to offline, not every failed ping
                 if (prev.Status != ServerStatus.Offline)
                     _logger.LogWarning("Server went offline: {Server} — {Error}", serverName, ex.Message);
             }
@@ -149,8 +164,17 @@ namespace SQLTriage.Data.Services
         {
             if (_disposed) return;
             _disposed = true;
-            _timer.Stop();
-            _timer.Dispose();
+
+            try { _cts.Cancel(); } catch { }
+
+            try
+            {
+                if (_loopTask != null && !_loopTask.Wait(TimeSpan.FromSeconds(2)))
+                    _logger.LogWarning("ConnectionHealthService loop did not exit within 2s");
+            }
+            catch { }
+
+            _cts.Dispose();
         }
     }
 }

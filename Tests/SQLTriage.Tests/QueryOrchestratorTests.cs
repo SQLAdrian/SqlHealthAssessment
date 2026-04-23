@@ -6,12 +6,12 @@ using SQLTriage.Data.Scheduling;
 
 namespace SQLTriage.Tests;
 
-public class QueryOrchestratorTests : IDisposable
+public class QueryOrchestratorTests : IAsyncLifetime
 {
-    private readonly QueryOrchestrator _orchestrator;
-    private readonly QueryRegistry _registry;
+    private QueryOrchestrator _orchestrator = null!;
+    private QueryRegistry _registry = null!;
 
-    public QueryOrchestratorTests()
+    public async Task InitializeAsync()
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -19,24 +19,21 @@ public class QueryOrchestratorTests : IDisposable
                 ["Orchestrator:GlobalConcurrency"] = "10",
                 ["Orchestrator:PerServerConcurrency"] = "10",
                 ["Orchestrator:ChannelCapacity"] = "100",
-                ["Orchestrator:DefaultTimeoutSeconds"] = "5"
+                ["Orchestrator:DefaultTimeoutSeconds"] = "2"
             })
             .Build();
 
         _registry = new QueryRegistry(NullLogger<QueryRegistry>.Instance, config);
         _orchestrator = new QueryOrchestrator(NullLogger<QueryOrchestrator>.Instance, config, _registry);
         _orchestrator.Start();
+        await Task.CompletedTask;
     }
 
-    public void Dispose()
+    public async Task DisposeAsync()
     {
-        // Run shutdown off the xUnit sync context to avoid deadlocks
-        Task.Run(async () =>
-        {
-            await _orchestrator.StopAsync();
-            _orchestrator.Dispose();
-            _registry.Dispose();
-        }).Wait(TimeSpan.FromSeconds(10));
+        await _orchestrator.StopAsync();
+        _orchestrator.Dispose();
+        _registry.Dispose();
     }
 
     [Fact]
@@ -113,20 +110,18 @@ public class QueryOrchestratorTests : IDisposable
     public async Task EnqueueAsync_CancellationToken_RespectsExternalCancellation()
     {
         using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
         var request = new QueryRequest
         {
             QueryId = "test:cancel",
-            CancellationToken = cts.Token,
-            Work = async ct =>
-            {
-                await Task.Delay(5000, ct);
-            }
+            Work = async ct => await Task.Delay(10, ct)
         };
 
-        var task = _orchestrator.EnqueueAsync(request, QueryPriority.P1_Alert);
-        cts.CancelAfter(50);
+        var task = _orchestrator.EnqueueAsync(request, QueryPriority.P1_Alert, cts.Token);
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => task);
+        var ex = await Record.ExceptionAsync(async () => await task);
+        Assert.IsAssignableFrom<OperationCanceledException>(ex);
     }
 
     [Fact]

@@ -340,10 +340,45 @@ namespace SQLTriage
             _ = AutoStartServerModeAsync();
         }
 
+/// <summary>
+        /// Explicitly disposes the BlazorWebView and its underlying WebView2 control
+        /// to prevent zombie msedgewebview2.exe processes that lock the user-data folder
+        /// and cause relaunch hangs.
+        /// </summary>
+        private void DisposeWebView()
+        {
+            if (BlazorWebView == null) return;
+
+            try
+            {
+                BlazorWebView.BlazorWebViewInitialized -= OnBlazorWebViewInitialized;
+                BlazorWebView.BlazorWebViewInitializing -= OnBlazorWebViewInitializing;
+
+                var wv = BlazorWebView.WebView;
+                if (wv?.CoreWebView2 != null)
+                {
+                    try { wv.Dispose(); } catch { /* best effort */ }
+                }
+
+// Let WPF shut down naturally - WebView2 will be cleaned up by the OS
+                // when the process exits. Force-killing causes issues with other apps.
+                // This is acceptable because we're closing the entire application.
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Error during WebView disposal");
+            }
+            finally
+            {
+                WebViewHost.Content = null;
+                BlazorWebView = null;
+            }
+        }
+
         private void TrayExit()
         {
             _forceClose = true;
-            // Stop MCP server if running
+            DisposeWebView();
             if (_mcpProcess != null && !_mcpProcess.HasExited)
             {
                 _mcpProcess.Kill();
@@ -367,24 +402,35 @@ namespace SQLTriage
 
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
         {
+            _logger?.LogDebug("[MAINWINDOW] OnWindowLoaded started");
+            
             // Always attempt WebView2 first, regardless of pre-check result
             try
             {
+                _logger?.LogDebug("[MAINWINDOW] Creating BlazorWebView...");
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                
                 BlazorWebView = new Microsoft.AspNetCore.Components.WebView.Wpf.BlazorWebView
                 {
                     HostPage = "wwwroot/index.html",
                     Services = App.Services!
                 };
+                _logger?.LogDebug("[MAINWINDOW] BlazorWebView instance created, adding root components...");
+
                 BlazorWebView.RootComponents.Add(
                     new Microsoft.AspNetCore.Components.WebView.Wpf.RootComponent
                     {
                         Selector = "#app",
                         ComponentType = typeof(Components.Layout.MainLayout)
                     });
+                _logger?.LogDebug("[MAINWINDOW] Root components added, wiring events...");
+
                 BlazorWebView.BlazorWebViewInitialized += OnBlazorWebViewInitialized;
                 BlazorWebView.BlazorWebViewInitializing += OnBlazorWebViewInitializing;
                 WebViewHost.Content = BlazorWebView;
-                _logger?.LogInformation("MainWindow loaded — BlazorWebView created successfully");
+                
+                sw.Stop();
+                _logger?.LogInformation("MainWindow loaded — BlazorWebView created successfully in {ElapsedMs}ms", sw.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
@@ -410,8 +456,7 @@ namespace SQLTriage
             Dispatcher.Invoke(() =>
             {
                 _logger?.LogWarning("FallbackToServerMode triggered from dispatcher exception");
-                BlazorWebView = null;
-                WebViewHost.Content = null;
+                DisposeWebView();
                 SwitchToServerMode();
             });
         }
@@ -703,6 +748,7 @@ namespace SQLTriage
             }
 
             _forceClose = true;
+            DisposeWebView();
             _trayIcon?.Dispose();
             _trayIcon = null;
 

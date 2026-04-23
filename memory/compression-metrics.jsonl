@@ -1,9 +1,0 @@
-{"ts": "2026-04-19T19:39:51Z", "session_id": "c2e9d6c2-1fd0-441d-9caa-9cd7d39657f2", "original_chars": 235, "compressed_chars": 235, "saved_chars": 0, "saved_pct": 0.0, "matched": [], "vocab_size": 10}
-{"ts": "2026-04-19T19:40:41Z", "session_id": "c2e9d6c2-1fd0-441d-9caa-9cd7d39657f2", "original_chars": 105, "compressed_chars": 105, "saved_chars": 0, "saved_pct": 0.0, "matched": [], "vocab_size": 10}
-{"ts": "2026-04-19T19:44:32Z", "session_id": "test-1", "original_chars": 28, "compressed_chars": 13, "saved_chars": 15, "saved_pct": 53.57, "matched": ["nxt", "wl"], "vocab_size": 10}
-{"ts": "2026-04-19T19:57:30Z", "session_id": "c2e9d6c2-1fd0-441d-9caa-9cd7d39657f2", "original_chars": 313, "compressed_chars": 313, "saved_chars": 0, "saved_pct": 0.0, "matched": [], "vocab_size": 10}
-{"ts": "2026-04-19T20:02:03Z", "session_id": "c2e9d6c2-1fd0-441d-9caa-9cd7d39657f2", "original_chars": 277, "compressed_chars": 277, "saved_chars": 0, "saved_pct": 0.0, "matched": [], "vocab_size": 10}
-{"ts": "2026-04-19T20:06:00Z", "session_id": "c2e9d6c2-1fd0-441d-9caa-9cd7d39657f2", "original_chars": 2249, "compressed_chars": 1976, "saved_chars": 273, "saved_pct": 12.14, "matched": ["dcfg", "nxt", "USS", "dlk", "wl", "QC"], "vocab_size": 10}
-{"ts": "2026-04-19T20:07:28Z", "session_id": "c2e9d6c2-1fd0-441d-9caa-9cd7d39657f2", "original_chars": 1007, "compressed_chars": 899, "saved_chars": 108, "saved_pct": 10.72, "matched": ["dcfg", "USS", "wl", "VA"], "vocab_size": 10}
-{"ts": "2026-04-19T20:08:50Z", "session_id": "c2e9d6c2-1fd0-441d-9caa-9cd7d39657f2", "original_chars": 169, "compressed_chars": 169, "saved_chars": 0, "saved_pct": 0.0, "matched": [], "vocab_size": 10}
-{"ts": "2026-04-19T20:17:51Z", "session_id": "test-rich", "original_chars": 311, "compressed_chars": 311, "saved_chars": 0, "saved_pct": 0.0, "matched": [], "vocab_size": 50}

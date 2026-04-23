@@ -87,12 +87,6 @@
                     <span class="nav-icon"><i class="fa-solid fa-road"></i></span><span class="nav-link-text"> Maturity Roadmap</span>
                 </NavLink>
             }
-            @if (ShowToolsSection)
-            {
-                <NavLink href="/xevents" class="nav-link">
-                    <span class="nav-icon"><i class="fa-solid fa-list-check"></i></span><span class="nav-link-text"> XEvent / Profiler</span>
-                </NavLink>
-            }
         </div>
 
         <br />
@@ -386,7 +380,7 @@
 
 @code {
     // Set to true once XEvent/Profiler, Schema Compare, and Dependency Walker pages are ready
-    private const bool ShowToolsSection = false;
+
 
     private bool _performanceMonitorExists = false;
     private bool _SQLWATCHExists = false;

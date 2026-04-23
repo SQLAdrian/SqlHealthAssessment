@@ -1,0 +1,419 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/unified-checks"
+@using SQLTriage.Data
+@using SQLTriage.Data.Models
+@using SQLTriage.Data.Services
+@using SQLTriage.Components.Shared
+@using Microsoft.Data.SqlClient
+@using System.Data
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject UnifiedCheckService UnifiedCheckService
+@inject CheckRepositoryService CheckRepositoryService
+@inject ServerConnectionManager ConnectionManager
+@inject UserSettingsService UserSettings
+@inject LocalLogService Log
+@inject ToastService Toast
+@inject SQLTriage.Data.Services.AppUserState UserState
+@inject NavigationManager Navigation
+
+<PageTitle>Unified Health Checks - SQLTriage</PageTitle>
+
+<div class="unified-checks-container">
+    <div class="header">
+        <h1>Unified Health Checks</h1>
+        <p>Manage and synchronize health checks between development (.ignore) and production environments</p>
+    </div>
+
+    <!-- Status Overview -->
+    <div class="status-cards">
+        <div class="status-card">
+            <h3>Development Checks</h3>
+            <div class="count">@_devCheckCount</div>
+            <p>In .ignore/categories_unified/</p>
+        </div>
+        <div class="status-card">
+            <h3>Production Checks</h3>
+            <div class="count">@_prodCheckCount</div>
+            <p>In Config/sql-checks.json</p>
+        </div>
+        <div class="status-card">
+            <h3>Last Sync</h3>
+            <div class="count">@(_lastSync ?? "Never")</div>
+            <p>Development ↔ Production</p>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <button class="btn btn-primary" @onclick="LoadCheckCounts" disabled="@_loading">
+            <i class="fa-solid fa-refresh"></i> Refresh Counts
+        </button>
+        <button class="btn btn-secondary" @onclick="ImportToProduction" disabled="@_loading || _devCheckCount == 0">
+            <i class="fa-solid fa-upload"></i> Import to Production (@_devCheckCount checks)
+        </button>
+        <button class="btn btn-secondary" @onclick="ExportFromProduction" disabled="@_loading || _prodCheckCount == 0">
+            <i class="fa-solid fa-download"></i> Export to Development (@_prodCheckCount checks)
+        </button>
+        <button class="btn btn-info" @onclick="NavigateToValidator">
+            <i class="fa-solid fa-external-link"></i> Open Check Validator
+        </button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading">
+            <p>@_loadingMessage</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width:@(_progressPercent.ToString("F0"))%;"></div>
+            </div>
+        </div>
+    }
+
+    <!-- Results -->
+    @if (_lastResult != null)
+    {
+        <div class="result-section">
+            <h3>Last Operation Result</h3>
+            <div class="result-content">
+                <pre>@_lastResult</pre>
+            </div>
+        </div>
+    }
+
+    <!-- Recent Activity -->
+    @if (_recentActivity.Any())
+    {
+        <div class="activity-section">
+            <h3>Recent Activity</h3>
+            <div class="activity-list">
+                @foreach (var activity in _recentActivity)
+                {
+                    <div class="activity-item">
+                        <span class="activity-time">@activity.Timestamp.ToString("HH:mm:ss")</span>
+                        <span class="activity-type @activity.Type.ToLower()">@activity.Type</span>
+                        <span class="activity-message">@activity.Message</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .unified-checks-container {
+        padding: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .header h1 {
+        color: var(--text-primary);
+        margin-bottom: 8px;
+    }
+
+    .header p {
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+
+    .status-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .status-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .status-card h3 {
+        color: var(--text-primary);
+        margin: 0 0 10px 0;
+        font-size: 16px;
+    }
+
+    .status-card .count {
+        font-size: 32px;
+        font-weight: bold;
+        color: var(--accent);
+        margin-bottom: 8px;
+    }
+
+    .status-card p {
+        color: var(--text-secondary);
+        font-size: 12px;
+        margin: 0;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 30px;
+    }
+
+    .action-buttons .btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        white-space: nowrap;
+    }
+
+    .loading {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .loading p {
+        color: var(--text-primary);
+        margin-bottom: 12px;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: var(--bg-tertiary);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: var(--accent);
+        transition: width 0.3s ease;
+    }
+
+    .result-section {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .result-section h3 {
+        color: var(--text-primary);
+        margin: 0 0 15px 0;
+    }
+
+    .result-content pre {
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 12px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: var(--text-primary);
+        overflow-x: auto;
+        margin: 0;
+        white-space: pre-wrap;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .activity-section {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+    }
+
+    .activity-section h3 {
+        color: var(--text-primary);
+        margin: 0 0 15px 0;
+    }
+
+    .activity-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .activity-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        border-radius: 4px;
+        font-size: 13px;
+    }
+
+    .activity-time {
+        color: var(--text-secondary);
+        font-family: 'Courier New', monospace;
+        min-width: 80px;
+    }
+
+    .activity-type {
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .activity-type.success { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+    .activity-type.info { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
+    .activity-type.warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .activity-type.error { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+    .activity-message {
+        color: var(--text-primary);
+        flex: 1;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>
+
+@code {
+    private int _devCheckCount = 0;
+    private int _prodCheckCount = 0;
+    private string? _lastSync;
+    private bool _loading = false;
+    private string _loadingMessage = "";
+    private double _progressPercent = 0;
+    private string? _lastResult;
+
+    private class ActivityItem
+    {
+        public DateTime Timestamp { get; set; }
+        public string Type { get; set; } = "";
+        public string Message { get; set; } = "";
+    }
+
+    private List<ActivityItem> _recentActivity = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCheckCounts();
+    }
+
+    private async Task LoadCheckCounts()
+    {
+        _loading = true;
+        _loadingMessage = "Loading check counts...";
+
+        try
+        {
+            // Load development checks
+            var devChecks = await UnifiedCheckService.LoadUnifiedChecksAsync();
+            _devCheckCount = devChecks.Count;
+
+            // Load production checks
+            await CheckRepositoryService.LoadChecksAsync();
+            _prodCheckCount = CheckRepositoryService.Checks.Count();
+
+            // Check last sync (could be stored in a file or setting)
+            _lastSync = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+
+            AddActivity("INFO", $"Loaded {_devCheckCount} development checks and {_prodCheckCount} production checks");
+        }
+        catch (Exception ex)
+        {
+            AddActivity("ERROR", $"Failed to load check counts: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ImportToProduction()
+    {
+        _loading = true;
+        _loadingMessage = "Importing checks to production...";
+        _progressPercent = 0;
+
+        try
+        {
+            var imported = await UnifiedCheckService.ImportToLiveRepositoryAsync(CheckRepositoryService);
+
+            _lastResult = $"Successfully imported {imported} checks from development to production.\n" +
+                         $"Development: {_devCheckCount} checks\n" +
+                         $"Production: {_prodCheckCount + imported} checks (after import)";
+
+            await LoadCheckCounts(); // Refresh counts
+            AddActivity("SUCCESS", $"Imported {imported} checks to production");
+        }
+        catch (Exception ex)
+        {
+            _lastResult = $"Import failed: {ex.Message}";
+            AddActivity("ERROR", $"Import failed: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ExportFromProduction()
+    {
+        _loading = true;
+        _loadingMessage = "Exporting checks to development...";
+        _progressPercent = 0;
+
+        try
+        {
+            var exported = await UnifiedCheckService.ExportFromLiveRepositoryAsync(CheckRepositoryService);
+
+            _lastResult = $"Successfully exported {exported} checks from production to development.\n" +
+                         $"Production: {_prodCheckCount} checks\n" +
+                         $"Development: {_devCheckCount + exported} checks (after export)";
+
+            await LoadCheckCounts(); // Refresh counts
+            AddActivity("SUCCESS", $"Exported {exported} checks to development");
+        }
+        catch (Exception ex)
+        {
+            _lastResult = $"Export failed: {ex.Message}";
+            AddActivity("ERROR", $"Export failed: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void NavigateToValidator()
+    {
+        Navigation.NavigateTo("/check-validator");
+    }
+
+    private void AddActivity(string type, string message)
+    {
+        _recentActivity.Insert(0, new ActivityItem
+        {
+            Timestamp = DateTime.Now,
+            Type = type,
+            Message = message
+        });
+
+        // Keep only last 10 activities
+        if (_recentActivity.Count > 10)
+        {
+            _recentActivity = _recentActivity.Take(10).ToList();
+        }
+    }
+}
