@@ -70,9 +70,11 @@ jobs:
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -o ${{ env.PUBLISH_DIR }}
 
-      # ── 8. Code-sign exe (skipped if secret not configured) ──────────────
+      # ── 8. Code-sign exe (skipped at runtime if secret not configured) ──
+      # Note: cannot use `if: ${{ secrets.X != '' }}` — GitHub Actions does
+      # not allow `secrets.*` in `if:` expressions. The runtime guard inside
+      # the script handles the no-cert case instead.
       - name: Sign executable
-        if: ${{ secrets.CODESIGN_CERT_BASE64 != '' }}
         shell: pwsh
         env:
           CERT_BASE64:  ${{ secrets.CODESIGN_CERT_BASE64 }}
@@ -156,9 +158,8 @@ jobs:
           $setup = Get-ChildItem installer\Output -Filter "*.exe" | Select-Object -First 1
           Copy-Item $setup.FullName "${{ env.INSTALLER_NAME }}"
 
-       # ── 12. Sign installer ───────────────────────────────────────────────
+      # ── 12. Sign installer (skipped at runtime if secret not configured) ─
       - name: Sign installer
-        if: ${{ secrets.CODESIGN_CERT_BASE64 != '' }}
         shell: pwsh
         env:
           CERT_BASE64:   ${{ secrets.CODESIGN_CERT_BASE64 }}
