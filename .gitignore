@@ -16,6 +16,9 @@ Config/panel-metrics.json
 unique-styles.txt
 wwwroot/css/appreworked.css
 
+# Sibling repo for RAG corpus building — local-only, never push from this repo
+SQLTriage-RAG-Builder/
+
 # User-specific files
 *.rsuser
 *.suo

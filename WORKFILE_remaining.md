@@ -27,6 +27,9 @@
 - DPI-aware manifest (PerMonitorV2)
 - QUICKSTART.md
 - Check Validator search + category chips
+- Parallax background bound to monitor (not window)
+- QueryPlanModal: ServerVersion/ServerEdition probe + ONLINE/RESUMABLE gating
+- Release pipeline end-to-end (publish exe + ZIP + Inno installer to GitHub Release on tag push)
 
 ---
 
@@ -441,3 +444,60 @@ Many diagnostic capabilities already exist in the engine (SQL queries, VA checks
 Files affected: README.md, WORKFILE_remaining.md (this file), new Pages/, templates/, .csproj, .sln.
 Commit pattern: `git commit -m "feat: description\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"`
 **Commit note:** Use `feat:` prefix for new diagnostics (e.g., `feat: add maintenance recommendation engine`), `fix:` for bug fixes, `refactor:` for code quality. All commits must pass `dotnet build` and ideally include brief manual test steps in commit body.
+
+---
+
+## AI ASSISTANT / RAG WORKSTREAM (separate repo + Experimental in-app feature)
+
+**Architecture decision (2026-04-27):** Splitting the corpus-building work from the app. Two repos:
+
+| Repo | Where | Language | What it produces |
+|---|---|---|---|
+| `SQLTriage-RAG-Builder` (NEW, local-only for now) | `C:\GitHub\LiveMonitor\SQLTriage-RAG-Builder` | Python | A signed `sqltriage-corpus.db` (SQLite + sqlite-vec embeddings) |
+| `SQLTriage` (this repo) | `c:\GitHub\LiveMonitor` | C# | Reads the corpus DB if present; AI features gracefully disable if absent |
+
+**Why split:** corpus updates monthly (new MS docs, new videos transcribed); app ships every few weeks. Decoupling prevents every corpus update from forcing an app release. Different toolchains (Python ML stack vs WPF/.NET) stay clean.
+
+**Existing raw data:** ~2GB JSON cache at `research_output/01_yaml_enhancement/web_cache/` — 587 check folders × ~14 sources each = ~8000 SQL-Server-specific articles already harvested with metadata, source URLs, and per-check linkage. Original schema includes `used_for_rag: false` flag. **This is the seed corpus.**
+
+**Privacy/security non-negotiables:**
+1. Default = local-only. Embedding model + retrieval + (optional) local LLM all run on the user's machine. No network calls.
+2. Cloud LLM = Experimental setting, off by default, opt-in with explicit warning ("Sends query + retrieved passages to {provider}. Server data may be included. Do not enable for regulated data without sign-off.").
+3. Server-data tool-call (LLM connecting to SQL to retrieve DMV results) = separate opt-in. AI Assistant on AND Cloud LLM on AND Server-data tool-call on are three independent locks.
+4. Every cloud LLM call → AuditLogService entry (timestamp, prompt-hash, model, byte-count, user).
+
+### Use cases (target features in `SQLTriage`)
+
+- **AI co-pilot** (`Pages/Assistant.razor`): user types "slow waits" → mini-LLM steers them through diagnosis using retrieved corpus chunks; user can opt to "gather data" and the LLM calls a read-only DMV tool.
+- **Roadmap appendix** (`Data/Services/RoadmapAppendixService.cs`): when sp_triage populates the roadmap, each failed item gets a remediation paragraph synthesised from top-K retrieved chunks (with citations); consolidated into a working document attached to the roadmap PDF.
+- **"Explain this check" / "Similar checks"** (proof-of-concept first): one button on `CheckValidator.razor` that retrieves top-3 similar checks via cosine similarity. Smallest possible vertical slice to validate the loop end-to-end.
+
+### Workstream — RAG-Builder (Python, separate repo)
+
+- [ ] **R1. Repo scaffold** — directory structure, README, ingestion-architecture doc. *(this session, no code)*
+- [ ] **R2. JSON-cache parser** — read `web_cache/{check_id}/source_*.json`, extract text, dedup, preserve source URL + check linkage
+- [ ] **R3. Chunker** — split each source into ~512-token passages with overlap, preserve heading anchors and source URL
+- [ ] **R4. Embedder** — `all-MiniLM-L6-v2` via sentence-transformers (local CPU), ~80MB model
+- [ ] **R5. Builder** — write `sqltriage-corpus.db` with `chunks` table + `vec_chunks` virtual table (sqlite-vec)
+- [ ] **R6. Validator** — duplicate detection, embedding QA (k-nearest sanity check), smoke retrieval test ("page life expectancy" → expect SQLSkills/Brent Ozar hits)
+- [ ] **R7. Versioning + sign** — corpus DB has version + checksum; release as a separate downloadable asset alongside the app
+
+### Workstream — RagService (C# in this repo, Experimental flag, opt-in)
+
+- [ ] **A1. RagService skeleton** — open corpus DB if present at `%localappdata%\SQLTriage\corpus.db` or beside exe; load sqlite-vec extension; no-op if missing
+- [ ] **A2. Local embedding model** — bundle MiniLM via `SmartComponents.LocalEmbeddings` or equivalent .NET package; **must use the same model as the builder** or vectors are garbage
+- [ ] **A3. `Search(query, K)` API** — embed query, vector search top-K from corpus, return chunks with source citation + similarity score
+- [ ] **A4. CheckValidator "Similar checks" button** (proof-of-concept) — minimum vertical slice; validates the whole pipeline end-to-end
+- [ ] **A5. Settings → Experimental → AI Assistant** — three independent toggles (assistant, cloud LLM, server-data tool-call); explicit warnings on the latter two
+- [ ] **A6. Cloud LLM client** (Anthropic/OpenAI) — only enabled when toggle is on; AuditLogService entry per call
+- [ ] **A7. `Pages/Assistant.razor`** — chat interface, retrieved chunks shown as collapsible source cards with URLs
+- [ ] **A8. Server-data tool** — read-only DMV query function, gated by RBAC (Operator+ only) + No-Pants
+- [ ] **A9. RoadmapAppendixService** — for each failed roadmap check, RagService.Search → cloud-or-local LLM synthesis → markdown appendix
+
+### Bridge item (this repo, eventually merge with FTS5 plan)
+
+- [ ] **B1. Hybrid search** — once corpus DB exists, replace CheckValidator's Contains search with a hybrid: FTS5 BM25 + vector cosine, both querying the corpus DB. Smarter ranking than either alone.
+
+### Why this is in this file but coded elsewhere
+
+The RAG-Builder repo lives at `C:\GitHub\LiveMonitor\SQLTriage-RAG-Builder` as a sibling folder, **not** under this repo's git tree. It is in `.gitignore` and `.claudeignore`. Build/publish actions of `SQLTriage.csproj` ignore it (no content globs reach there). The corpus DB it produces ships to users **separately** from the app — as an optional download, not bundled in the installer.

@@ -32,6 +32,23 @@ namespace SQLTriage.Data.Services
         // EngineEdition 5 = Azure SQL DB, 8 = Azure SQL Managed Instance
         private readonly ConcurrentDictionary<string, bool> _isAzure = new(StringComparer.OrdinalIgnoreCase);
 
+        // Cached SQL Server major version + edition string per server.
+        // Probed once on the first successful health-check; consumers (Query
+        // Plan modal, NoPants index-create UI) read these to gate features
+        // like ONLINE / RESUMABLE that have version/edition requirements.
+        private readonly ConcurrentDictionary<string, ServerCapabilities> _caps =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>SQL Server version + edition info exposed for feature-gating.</summary>
+        /// <param name="MajorVersion">SQL Server major version (e.g. 14 = 2017, 15 = 2019, 16 = 2022). 0 if unknown.</param>
+        /// <param name="Edition">Full edition string (e.g. "Enterprise Edition (64-bit)"). null if unknown.</param>
+        /// <param name="IsEnterpriseClass">True for Enterprise / Developer / Evaluation editions, which support online/resumable index ops.</param>
+        public record ServerCapabilities(int MajorVersion, string? Edition, bool IsEnterpriseClass);
+
+        /// <summary>Returns capabilities for a server, or null if not yet probed.</summary>
+        public ServerCapabilities? GetCapabilities(string serverName)
+            => _caps.TryGetValue(serverName, out var v) ? v : null;
+
         private readonly CancellationTokenSource _cts = new();
         private Task? _loopTask;
         private bool _disposed;
@@ -126,21 +143,53 @@ namespace SQLTriage.Data.Services
                 cts.CancelAfter(TimeSpan.FromSeconds(6));
                 await sql.OpenAsync(cts.Token);
 
-                // Probe EngineEdition to detect Azure SQL DB (5) or Azure SQL MI (8) once per session
+                // Probe SERVERPROPERTY values once per session: EngineEdition
+                // (Azure detection), ProductMajorVersion, and Edition.
+                // EngineEdition: 3 = Enterprise, 5 = Azure SQL DB, 6 = DataWarehouse,
+                //                8 = Azure SQL MI; Enterprise/Developer/Evaluation
+                //                support online + resumable index operations.
                 if (!_isAzure.ContainsKey(serverName))
                 {
                     try
                     {
                         using var cmd = sql.CreateCommand();
-                        cmd.CommandText = "SELECT SERVERPROPERTY('EngineEdition')";
+                        cmd.CommandText = @"
+                            SELECT
+                                CAST(SERVERPROPERTY('EngineEdition') AS int)        AS EngineEdition,
+                                CAST(SERVERPROPERTY('ProductMajorVersion') AS int)  AS ProductMajorVersion,
+                                CAST(SERVERPROPERTY('Edition') AS nvarchar(256))    AS Edition";
                         cmd.CommandTimeout = 4;
-                        var edition = await cmd.ExecuteScalarAsync(cts.Token);
-                        var ee = edition is DBNull || edition == null ? 0 : Convert.ToInt32(edition);
+                        using var rdr = await cmd.ExecuteReaderAsync(cts.Token);
+                        int ee = 0, pmv = 0;
+                        string? ed = null;
+                        if (await rdr.ReadAsync(cts.Token))
+                        {
+                            ee  = rdr.IsDBNull(0) ? 0    : rdr.GetInt32(0);
+                            pmv = rdr.IsDBNull(1) ? 0    : rdr.GetInt32(1);
+                            ed  = rdr.IsDBNull(2) ? null : rdr.GetString(2);
+                        }
                         _isAzure[serverName] = ee == 5 || ee == 8;
+
+                        // Enterprise-class engines: 3 = Enterprise (incl. Developer/Evaluation),
+                        // 5 = Azure SQL DB Premium tiers also expose ONLINE; 8 = Azure MI Business Critical.
+                        // Conservative gate: anything except Standard/Web/Express.
+                        bool isEnterpriseClass = ee == 3 || ee == 5 || ee == 8 ||
+                            (ed != null && (ed.Contains("Enterprise", StringComparison.OrdinalIgnoreCase)
+                                         || ed.Contains("Developer",  StringComparison.OrdinalIgnoreCase)
+                                         || ed.Contains("Evaluation", StringComparison.OrdinalIgnoreCase)));
+
+                        _caps[serverName] = new ServerCapabilities(pmv, ed, isEnterpriseClass);
+
                         if (_isAzure[serverName])
                             _logger.LogInformation("Azure SQL detected: {Server} (EngineEdition={E})", serverName, ee);
+                        _logger.LogDebug("Server caps probed: {Server} v{Ver} edition='{Ed}' enterpriseClass={Ent}",
+                            serverName, pmv, ed, isEnterpriseClass);
                     }
-                    catch { _isAzure[serverName] = false; }
+                    catch (Exception ex)
+                    {
+                        _isAzure[serverName] = false;
+                        _logger.LogDebug(ex, "Server capability probe failed for {Server}", serverName);
+                    }
                 }
 
                 _status[serverName] = new HealthEntry(ServerStatus.Online, DateTime.UtcNow, null);

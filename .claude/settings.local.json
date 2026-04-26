@@ -24,7 +24,9 @@
       "Bash(git commit:*)",
       "Bash(ls C:/GitHub/LiveMonitor/research_output/LLM1/*.yaml)",
       "Bash(ls -la /c/GitHub/LiveMonitor/Pages/*.razor)",
-      "PowerShell(Start-Sleep -Seconds 3; try { $s = [System.IO.File]::Open\\(\"c:\\\\GitHub\\\\LiveMonitor\\\\bin\\\\Debug\\\\net8.0-windows\\\\win-x64\\\\SQLTriage.exe\", 'Open', 'ReadWrite', 'None'\\); $s.Close\\(\\); \"FREE\" } catch { \"$\\($_.Exception.Message\\)\" })"
+      "PowerShell(Start-Sleep -Seconds 3; try { $s = [System.IO.File]::Open\\(\"c:\\\\GitHub\\\\LiveMonitor\\\\bin\\\\Debug\\\\net8.0-windows\\\\win-x64\\\\SQLTriage.exe\", 'Open', 'ReadWrite', 'None'\\); $s.Close\\(\\); \"FREE\" } catch { \"$\\($_.Exception.Message\\)\" })",
+      "Bash(dotnet test *)",
+      "Read(//c/GitHub/mempalace-3.0.0/**)"
     ]
   },
   "hooks": {}

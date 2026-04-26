@@ -107,6 +107,9 @@ BPScripts/Ignore/
 Deploy/
 !Deploy/installer/
 
+# Sibling RAG-Builder repo — never auto-search; ~2GB of cached web pages
+SQLTriage-RAG-Builder/
+
 # Test fixtures
 Tests/**/TestData/
 Tests/**/Fixtures/

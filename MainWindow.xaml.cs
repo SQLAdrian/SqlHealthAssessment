@@ -2,7 +2,9 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using SQLTriage.Data;
@@ -495,6 +497,18 @@ namespace SQLTriage
                 _webView2Initialized = true;
                 _coreWebView2 = e.WebView.CoreWebView2;
 
+                // Wire up parallax background: push monitor+window geometry into
+                // the WebView whenever the window moves, resizes, or changes DPI.
+                LocationChanged += OnParallaxGeometryChanged;
+                SizeChanged += OnParallaxGeometryChanged;
+                DpiChanged += OnParallaxGeometryChanged;
+                // Push initial state once navigation completes (host page must be
+                // loaded before postMessage can reach the JS listener).
+                e.WebView.NavigationCompleted += (_, args) =>
+                {
+                    if (args.IsSuccess) PushParallaxGeometry();
+                };
+
                 // Wire up PrintService with the live CoreWebView2 instance
                 var printService = App.Services?.GetService<Data.Services.PrintService>();
                 printService?.SetWebView(_coreWebView2);
@@ -525,6 +539,116 @@ namespace SQLTriage
                 BlazorWebView = null;
                 SwitchToServerMode();
             }
+        }
+
+        // ── Parallax background plumbing ────────────────────────────────────
+        // Anchors the ambient background to the monitor (not the window) by
+        // pushing geometry into the WebView. Two layers of throttling:
+        //   1) WPF events (LocationChanged etc.) just flip a dirty flag —
+        //      they fire at mouse-move rate (often >120 Hz on modern mice)
+        //      and a JSON-serialize + cross-process PostWebMessageAsString
+        //      per tick was the source of drag jank.
+        //   2) A DispatcherTimer at ~60 Hz drains the flag, so we IPC at most
+        //      once per frame regardless of input rate.
+        // The browser side has its own rAF coalescing on top of this.
+        private DispatcherTimer? _parallaxTimer;
+        private bool _parallaxDirty;
+        private int _lastMonitorW, _lastMonitorH, _lastWindowX, _lastWindowY;
+
+        private void OnParallaxGeometryChanged(object? sender, EventArgs e)
+        {
+            _parallaxDirty = true;
+            // Lazy-start the timer on first event so we don't pay the tick
+            // cost during sessions where the window never moves.
+            if (_parallaxTimer == null)
+            {
+                _parallaxTimer = new DispatcherTimer(DispatcherPriority.Render)
+                {
+                    Interval = TimeSpan.FromMilliseconds(16)
+                };
+                _parallaxTimer.Tick += (_, _) =>
+                {
+                    if (_parallaxDirty) PushParallaxGeometry();
+                };
+                _parallaxTimer.Start();
+            }
+        }
+
+        private void PushParallaxGeometry()
+        {
+            _parallaxDirty = false;
+            if (_coreWebView2 == null) return;
+
+            try
+            {
+                var hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd == IntPtr.Zero) return;
+
+                var hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+                if (!GetMonitorInfo(hMonitor, ref mi)) return;
+
+                // Convert monitor rect (device pixels) → CSS pixels using this
+                // window's current DPI scale. WPF's CompositionTarget gives us
+                // a transform that already accounts for per-monitor DPI.
+                var src = PresentationSource.FromVisual(this);
+                double dpiX = 1.0, dpiY = 1.0;
+                if (src?.CompositionTarget != null)
+                {
+                    var m = src.CompositionTarget.TransformToDevice;
+                    dpiX = m.M11;
+                    dpiY = m.M22;
+                }
+
+                int monitorW = (int)((mi.rcMonitor.Right - mi.rcMonitor.Left) / dpiX);
+                int monitorH = (int)((mi.rcMonitor.Bottom - mi.rcMonitor.Top) / dpiY);
+                // Window.Left/Top are already in CSS-equivalent DIPs at the
+                // window's DPI; subtract monitor origin (also DIPs after divide).
+                int windowX = (int)(this.Left - (mi.rcMonitor.Left / dpiX));
+                int windowY = (int)(this.Top - (mi.rcMonitor.Top / dpiY));
+
+                // Clamp to non-negative so a window slightly off-screen (e.g.
+                // mid-drag across monitors) doesn't push the image outside.
+                if (windowX < 0) windowX = 0;
+                if (windowY < 0) windowY = 0;
+
+                // Skip identical ticks — saves an IPC + JSON parse on the
+                // browser side when the OS reports the same coords twice.
+                if (monitorW == _lastMonitorW && monitorH == _lastMonitorH &&
+                    windowX == _lastWindowX && windowY == _lastWindowY) return;
+                _lastMonitorW = monitorW; _lastMonitorH = monitorH;
+                _lastWindowX = windowX;   _lastWindowY = windowY;
+
+                var json = $"{{\"type\":\"parallax\",\"monitorW\":{monitorW},\"monitorH\":{monitorH},\"windowX\":{windowX},\"windowY\":{windowY}}}";
+                _coreWebView2.PostWebMessageAsString(json);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "Parallax geometry push failed");
+            }
+        }
+
+        // P/Invoke for monitor info — needed because WPF's SystemParameters
+        // only describe the *primary* screen, not the monitor the window is
+        // currently on.
+        private const int MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int dwFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MONITORINFO
+        {
+            public int cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public uint dwFlags;
         }
 
         private void ApplyZoom(int zoomPercent)

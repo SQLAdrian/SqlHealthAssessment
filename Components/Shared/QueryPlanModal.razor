@@ -4,6 +4,7 @@
 @inject SQLTriage.Data.UserSettingsService UserSettings
 @inject SQLTriage.Data.ToastService Toast
 @inject ServerConnectionManager ConnectionManager
+@inject SQLTriage.Data.Services.ConnectionHealthService HealthService
 @using SQLTriage.Data.Services
 @using Microsoft.Data.SqlClient
 
@@ -79,17 +80,17 @@
             {
                 <div class="plan-options-panel" style="display:flex;gap:12px;padding:6px 12px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap;background:rgba(239,68,68,0.05);">
                     <span style="font-size:11px;font-weight:600;color:var(--red);opacity:0.8;">NO-PANTS</span>
-                    <div style="display:flex;align-items:center;gap:4px;">
-                        <input type="checkbox" id="idx-opt-online" @bind="_indexOptionOnline" />
-                        <label for="idx-opt-online" style="margin:0;font-size:12px;">ONLINE</label>
+                    <div style="display:flex;align-items:center;gap:4px;" title="@(CanUseOnline ? "Build the index without taking the table offline" : $"ONLINE not supported on this edition (Enterprise/Developer only). Detected: {_serverEdition ?? "unknown"}")">
+                        <input type="checkbox" id="idx-opt-online" @bind="_indexOptionOnline" disabled="@(!CanUseOnline)" />
+                        <label for="idx-opt-online" style="margin:0;font-size:12px;@(CanUseOnline ? "" : "opacity:0.4;")">ONLINE</label>
                     </div>
                     <div style="display:flex;align-items:center;gap:4px;">
                         <input type="checkbox" id="idx-opt-sorttemp" @bind="_indexOptionSortInTempDb" />
                         <label for="idx-opt-sorttemp" style="margin:0;font-size:12px;">SORT_IN_TEMPDB</label>
                     </div>
-                    <div style="display:flex;align-items:center;gap:4px;">
-                        <input type="checkbox" id="idx-opt-resumable" @bind="_indexOptionResumable" />
-                        <label for="idx-opt-resumable" style="margin:0;font-size:12px;">RESUMABLE</label>
+                    <div style="display:flex;align-items:center;gap:4px;" title="@(CanUseResumable ? "Pause/resume during long index builds" : $"RESUMABLE requires Enterprise + SQL 2017+. Detected: v{_serverVersion?.ToString() ?? "?"} {_serverEdition ?? "edition unknown"}")">
+                        <input type="checkbox" id="idx-opt-resumable" @bind="_indexOptionResumable" disabled="@(!CanUseResumable)" />
+                        <label for="idx-opt-resumable" style="margin:0;font-size:12px;@(CanUseResumable ? "" : "opacity:0.4;")">RESUMABLE</label>
                     </div>
                     <div style="display:flex;align-items:center;gap:4px;">
                         <label style="margin:0;font-size:12px;">MAXDOP:</label>
@@ -123,9 +124,17 @@
     [Parameter] public string? QueryText  { get; set; }
     [Parameter] public string? ConnectionId { get; set; }
     [Parameter] public string? DatabaseName { get; set; }
-    [Parameter] public int? ServerVersion { get; set; }
-    [Parameter] public string? ServerEdition { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+
+    // Resolved from ConnectionHealthService when the modal opens. Used to
+    // gate ONLINE / RESUMABLE checkboxes:
+    //   ONLINE     — Enterprise / Developer / Evaluation only
+    //   RESUMABLE  — Enterprise-class AND SQL Server 2017+ (major version >= 14)
+    private int? _serverVersion;
+    private string? _serverEdition;
+    private bool _serverIsEnterpriseClass;
+    private bool CanUseOnline    => _serverIsEnterpriseClass;
+    private bool CanUseResumable => _serverIsEnterpriseClass && (_serverVersion ?? 0) >= 14;
 
     public bool IsVisible { get; private set; }
 
@@ -164,6 +173,13 @@
         QueryText     = queryText;
         _showQueryText = false;
         IsVisible     = true;
+
+        // Resolve server capabilities from the live health-check cache so
+        // we can gate ONLINE/RESUMABLE checkboxes appropriately. Falls back
+        // to "unknown" (everything disabled) if the server hasn't been
+        // probed yet — better than silently emitting invalid index DDL.
+        ResolveServerCapabilities();
+
         StateHasChanged();
         await Task.Delay(50); // allow DOM to render
 
@@ -402,6 +418,39 @@
     private void CancelIndexCreation()
     {
         _indexExecutionCts?.Cancel();
+    }
+
+    private void ResolveServerCapabilities()
+    {
+        _serverVersion = null;
+        _serverEdition = null;
+        _serverIsEnterpriseClass = false;
+
+        if (string.IsNullOrEmpty(ConnectionId)) return;
+        var conn = ConnectionManager.GetConnection(ConnectionId);
+        if (conn == null) return;
+
+        // ServerNames is comma-separated; the health service keys per-server,
+        // so probe the first one (DDL targets a single instance via the
+        // SqlConnection passed to ExecuteCreateIndexAsync, so this matches
+        // what the user will actually run against).
+        var firstServer = conn.ServerNames.Split(',', StringSplitOptions.RemoveEmptyEntries
+                                                    | StringSplitOptions.TrimEntries)
+                              .FirstOrDefault();
+        if (string.IsNullOrEmpty(firstServer)) return;
+
+        var caps = HealthService.GetCapabilities(firstServer);
+        if (caps == null) return;
+        _serverVersion = caps.MajorVersion > 0 ? caps.MajorVersion : null;
+        _serverEdition = caps.Edition;
+        _serverIsEnterpriseClass = caps.IsEnterpriseClass;
+
+        // Force-clear flags whose checkbox is now disabled, so the generated
+        // DDL doesn't carry over a stale "ON" from a previous server with
+        // different capabilities. The user can re-enable manually if the
+        // checkbox is available.
+        if (!CanUseOnline)    _indexOptionOnline    = false;
+        if (!CanUseResumable) _indexOptionResumable = false;
     }
 
     public async ValueTask DisposeAsync()
