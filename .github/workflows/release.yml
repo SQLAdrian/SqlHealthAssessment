@@ -43,8 +43,10 @@ jobs:
           echo "tag=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
 
       # ── 4. Restore ───────────────────────────────────────────────────────
+      # csproj has <RuntimeIdentifier>win-x64</RuntimeIdentifier> so restore
+      # must include the win-x64 runtime pack — otherwise NETSDK1112.
       - name: Restore NuGet packages
-        run: dotnet restore SQLTriage.sln
+        run: dotnet restore SQLTriage.sln -r win-x64
 
       # ── 5. Build ─────────────────────────────────────────────────────────
       - name: Build

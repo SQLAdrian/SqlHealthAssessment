@@ -15,18 +15,19 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      # SQLTriage.csproj hardcodes <RuntimeIdentifier>win-x64</RuntimeIdentifier>,
+      # so restore must download the win-x64 runtime pack or build fails with
+      # NETSDK1112. Pass -r win-x64 explicitly.
       - name: Restore
-        run: dotnet restore SQLTriage.sln
+        run: dotnet restore SQLTriage.sln -r win-x64
 
       - name: Build
         run: dotnet build SQLTriage.sln -c Release --no-restore
