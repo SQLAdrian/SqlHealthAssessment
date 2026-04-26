@@ -1,20 +1,15 @@
 {
-    "version":  "0.85.2",
-    "buildNumber":  1409,
+    "version":  "0.85.3",
+    "buildNumber":  1410,
     "buildDate":  "2026-04-26",
     "releaseType":  "Production",
     "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SQLTriage/releases/latest",
     "whatsnew":  [
-                     "Performance: Added cache hit-rate telemetry — per-dashboard counters (fresh vs cached) now logged and persisted for historical analysis",
-                     "Settings: New Cache Performance panel shows current session, last 24h, and last 7d cache hit rates",
-                     "Settings: Configurable query concurrency sliders (Heavy TimeSeries, Light Stat/Grid) — adjust to match server capacity",
-                     "Dashboard: Panels now display a subtle \"Cached\" badge during preload, so users see when data is from cache vs fresh",
-                     "Dashboard: Preload-from-cache now tracks which panels are stale; badge clears as fresh data arrives",
-                     "Metrics: New CacheMetricsService stores retrieval history in SQLite for trend analysis",
-                     "Engine: CachingQueryExecutor instrumented with thread-safe counters (total, fresh, cache hits)",
-                     "Throttling: QueryThrottleService reads limits from UserSettings and supports runtime UpdateLimits()",
-                     "UX: Fixed ScheduledTasks page API mismatches (GetConnections, ExecuteQueryAsync, ServerNames property)",
-                     "UX: Fixed DynamicPanel markup structure and added IsCached parameter propagation",
-                     "Release: Updated publish-release.ps1 naming from LiveMonitor to SQLTriage throughout"
+                     "Build: Removed legacy PerformanceStudio submodule + Plan Analyzer page (was breaking CI builds)",
+                     "Release: Fixed automated release pipeline — exe and ZIP now publish to GitHub Releases on tag push",
+                     "CI: Restore now uses -r win-x64 so the runtime pack is fetched (NETSDK1112 fix)",
+                     "Tests: ErrorCatalog golden file now committed and copied to test output directory",
+                     "UX: Bottom-right server-mode toggle no longer overlaps the no-pants/mute status badges",
+                     "UX: Check Validator page styles restored (extracted from commented-out style block to wwwroot/css/CheckValidator.css)"
                  ]
 }
