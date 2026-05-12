@@ -51,12 +51,16 @@ GO
 DECLARE @DoBaseConfigEngine	BIT = 0	  -- Deploy set of base configurations
 DECLARE @DoBaseConfigDB		BIT = 0   -- Deploy database configuations
 DECLARE @DoTopDBCount		TINYINT = 5   -- Only do TOP n databases based on overall IO usage.
+										  -- This will impact things like Query store configuration, RCSI, auto create statistics, auto update statistics. It's only needed on the top usage DBs.
+DECLARE @DoAgentAlerts		BIT = 1   -- There is really no reason why you won't want to get the agent alerts
 DECLARE @UpdateOla          BIT = 0   -- Update Ola job schedules
 DECLARE @AddMappedDrive     BIT = 0   -- Create backup mapped drive (requires @MappedDriveDomainPassword below)
 DECLARE @NeedEmptyFile      BIT = 0   -- Create emergency empty file
 DECLARE @DoDeadlocks        BIT = 0   -- Enable deadlock XEvent capture
 DECLARE @Apply_TARGET_RECOVERY_TIME BIT = 0
+DECLARE @Apply_NumErrorLogs	BIT = 0	  -- Number of error logs < 100, set to 100
 DECLARE @ApplyMaxMemory     BIT = 0   -- Apply calculated max server memory (SET TO 1 TO APPLY)
+DECLARE @ApplyMaxDOP		BIT = 0
 DECLARE @ApplyTrustworthy   BIT = 0   -- SET TRUSTWORTHY OFF on user databases (SET TO 1 TO APPLY)
 DECLARE @ApplyChaining      BIT = 0   -- SET DB_CHAINING OFF on user databases (SET TO 1 TO APPLY)
 DECLARE @EnableRCSI         BIT = 0   -- Enable RCSI on OLTP user databases (SET TO 1 TO APPLY)
@@ -64,21 +68,52 @@ DECLARE @UpgradeCompatLevel BIT = 0   -- Upgrade database compat levels (SET TO 
 DECLARE @ApplyTraceFlags    BIT = 0   -- Write trace flags to registry startup params (SET TO 1 TO APPLY)
 DECLARE @EnableAudit        BIT = 0   -- Create/enable SQL Server Audit (SET TO 1 TO CREATE)
 DECLARE @ForChangeControl	BIT = 1	  -- SET to 1 to create print output of change control
+DECLARE @UpdateAgentProps	BIT = 1   -- Set SQL Agent Properties
+DECLARE @disablesurfacearea BIT = 0   -- Disables some surface area configurations, NOT RECOMMENDED to just change for base configurations
+DECLARE @ApplyBlockedProcessThreshold BIT = 0  -- Configure 'blocked process threshold (s)' to fire blocked_process_report XEvent
+DECLARE @BlockedProcessThresholdSeconds INT = 5  -- Seconds. 0 = disabled. 5 is the standard starting point.
+DECLARE @ApplyDefaultTrace  BIT = 0   -- Re-enable default trace if currently disabled (off by default; set 1 to apply)
+
+
+-- Change @OperatorName as needed
+DECLARE @OperatorName sysname 
+SET @OperatorName= N'SQLDBA';
+--Do current operator checks as well
+DECLARE @DBMailStatus TINYINT
+SELECT --@DBMailStatus, value, 
+@DBMailStatus = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'Database Mail XPs';
+
+
+-- Get the server name
+DECLARE @ServerName sysname 
+SET @ServerName = (SELECT @@SERVERNAME);
 
 IF @ForChangeControl = 1
 BEGIN
-	/*we are doing a change control, so mark everything as 0*/
-	 SET @UpdateOla				= 0     
+	/* Change-control mode: every per-action Apply* flag must be reset to 0 so that
+	   no actual change can execute. The downstream gates use:
+	       IF @Apply<X> = 1 AND @ForChangeControl = 0 AND <current_state> <> <desired>
+	   so this reset is the master kill-switch for the whole script.
+	   Alerts and stored-procedure deployment are exempt per design. */
+	 SET @UpdateOla				= 0
 	 SET @AddMappedDrive     	= 0
 	 SET @NeedEmptyFile      	= 0
 	 SET @DoDeadlocks        	= 0
 	 SET @ApplyMaxMemory     	= 0
+	 SET @ApplyMaxDOP			= 0
+	 SET @Apply_NumErrorLogs	= 0
+	 SET @Apply_TARGET_RECOVERY_TIME = 0
 	 SET @ApplyTrustworthy   	= 0
 	 SET @ApplyChaining      	= 0
 	 SET @EnableRCSI         	= 0
 	 SET @UpgradeCompatLevel 	= 0
 	 SET @ApplyTraceFlags    	= 0
 	 SET @EnableAudit        	= 0
+	 SET @disablesurfacearea	= 0
+	 SET @ApplyBlockedProcessThreshold = 0
+	 SET @ApplyDefaultTrace		= 0
 END
 -- Mapped drive credential — only used when @AddMappedDrive = 1
 -- FILL IN: replace with actual domain account and password before running
@@ -131,14 +166,70 @@ EXEC('ALTER PROCEDURE [dbo].[sp_LogConfigurationChange]
     @ErrorMessage NVARCHAR(MAX) = NULL
 AS
 BEGIN
-    INSERT INTO [master].[dbo].[DBA_Configuration_Log] 
+    INSERT INTO [master].[dbo].[DBA_Configuration_Log]
         (Category, SettingName, OldValue, NewValue, Status, ErrorMessage)
-    VALUES 
+    VALUES
         (@Category, @SettingName, @OldValue, @NewValue, @Status, @ErrorMessage);
 END');
 
 /*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Per-run Change-Control Report (session-scoped)
+--   - #ChangeControlReport collects every gate decision for this run
+--   - tempdb..#sp_CCReport inserts a row AND emits RAISERROR in one call
+--   - At the end of the script we render this table as a Markdown table
+--   - Survives across GO because #temp objects are session-scoped
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+IF OBJECT_ID('tempdb..#ChangeControlReport') IS NOT NULL DROP TABLE #ChangeControlReport;
+CREATE TABLE #ChangeControlReport
+(
+    [ID]            INT IDENTITY(1,1) PRIMARY KEY,
+    [Captured]      DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    [Mode]          NVARCHAR(20)   NOT NULL,   -- IMPLEMENTING / PLANNED / INFO / SKIPPED / FAILED / NOTICE
+    [Section]       NVARCHAR(100)  NOT NULL,
+    [Setting]       NVARCHAR(200)  NOT NULL,
+    [CurrentValue]  NVARCHAR(200)  NULL,
+    [TargetValue]   NVARCHAR(200)  NULL,
+    [Detail]        NVARCHAR(MAX)  NULL
+);
+
+IF OBJECT_ID('tempdb..#sp_CCReport') IS NOT NULL EXEC('DROP PROCEDURE #sp_CCReport;');
+/* Helper: insert into #ChangeControlReport and emit a matching RAISERROR.
+   Created via dynamic SQL so we don't break the outer batch's variable scope
+   (CREATE PROCEDURE must be the first statement in a batch).
+   Use this for every per-action gate so the final markdown summary captures it.
+   Alerts and stored-procedure deployment are exempt by design. */
+EXEC(N'
+CREATE PROCEDURE #sp_CCReport
+    @Mode         NVARCHAR(20),
+    @Section      NVARCHAR(100),
+    @Setting      NVARCHAR(200),
+    @CurrentValue NVARCHAR(200) = NULL,
+    @TargetValue  NVARCHAR(200) = NULL,
+    @Detail       NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO #ChangeControlReport (Mode, Section, Setting, CurrentValue, TargetValue, Detail)
+    VALUES (@Mode, @Section, @Setting, @CurrentValue, @TargetValue, @Detail);
+
+    DECLARE @Msg NVARCHAR(MAX) =
+        @Mode + '': ['' + @Section + ''] '' + @Setting
+        + CASE WHEN @CurrentValue IS NOT NULL OR @TargetValue IS NOT NULL
+               THEN '' (current='' + ISNULL(@CurrentValue, ''NULL'')
+                  + '', target='' + ISNULL(@TargetValue, ''NULL'') + '')''
+               ELSE '''' END
+        + CASE WHEN @Detail IS NOT NULL THEN '' - '' + @Detail ELSE '''' END;
+    -- RAISERROR format string can''t contain a literal %, escape it
+    SET @Msg = REPLACE(@Msg, ''%'', ''%%'');
+    RAISERROR(@Msg, 0, 1) WITH NOWAIT;
+END;
+');
+
+/*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 --==========================================================
 -- Permission Checks
@@ -196,7 +287,7 @@ BEGIN
 	INSERT  INTO master.dbo.DBA_SYS_DATABASE_FILES
 	SELECT GETDATE() [Timestamp], DB_NAME(dbid) AS [DB], *
 	FROM sys.sysaltfiles SF
-	WHERE dbid < 32000
+	WHERE dbid < 32767
 END
 
 
@@ -633,7 +724,7 @@ DECLARE @Databases TABLE
 	, NULL
 	,DS.[TotalIO]
 	, DS.[Rank]
-	, CASE WHEN db.database_id < 4 THEN 1 ELSE 0 END
+	, CASE WHEN db.database_id <= 4 THEN 1 ELSE 0 END
 	, db.is_auto_close_on
 	, db.is_auto_shrink_on
 	, db.is_auto_create_stats_on
@@ -656,7 +747,7 @@ DECLARE @Databases TABLE
 		GROUP BY Name, d.database_id
 	) DS on DS.database_id = db.database_id
 	WHERE 1 =1 
-	 AND db.database_id > 4
+	 AND 1=1/*db.database_id > 4*/ 
 	 AND db.user_access = 0 
 	 AND db.State = 0 
 	
@@ -664,12 +755,46 @@ DECLARE @Databases TABLE
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    SECTION 2.2: BLOCKED PROCESS THRESHOLD & XEvent
    Configure blocked process report (default 5 seconds) and create
-   XEvent session to capture blocking/deadlock events
+   XEvent session to capture blocking/deadlock events.
+   Off by default — set @ApplyBlockedProcessThreshold = 1 to apply.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
+DECLARE @CurrentBlockedThreshold INT;
+SELECT @CurrentBlockedThreshold = CONVERT(INT, value_in_use)
+FROM sys.configurations WHERE name = N'blocked process threshold (s)';
 
-
-
+IF @ApplyBlockedProcessThreshold = 1
+   AND @ForChangeControl = 0
+   AND @CurrentBlockedThreshold <> @BlockedProcessThresholdSeconds
+BEGIN
+    BEGIN TRY
+        EXEC sys.sp_configure N'show advanced options', N'1'; RECONFIGURE WITH OVERRIDE;
+        EXEC sys.sp_configure N'blocked process threshold (s)', @BlockedProcessThresholdSeconds; RECONFIGURE WITH OVERRIDE;
+        EXEC sys.sp_configure N'show advanced options', N'0'; RECONFIGURE WITH OVERRIDE;
+        EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Server Config', @Setting='blocked process threshold (s)',
+            @CurrentValue=@CurrentBlockedThreshold, @TargetValue=@BlockedProcessThresholdSeconds,
+            @Detail='fires blocked_process_report XEvent';
+    END TRY
+    BEGIN CATCH
+        EXEC #sp_CCReport @Mode='FAILED', @Section='Server Config', @Setting='blocked process threshold (s)',
+            @CurrentValue=@CurrentBlockedThreshold, @TargetValue=@BlockedProcessThresholdSeconds,
+            @Detail='sp_configure raised an error';
+    END CATCH
+END
+ELSE IF @ApplyBlockedProcessThreshold = 1
+   AND @ForChangeControl = 1
+   AND @CurrentBlockedThreshold <> @BlockedProcessThresholdSeconds
+    EXEC #sp_CCReport @Mode='PLANNED', @Section='Server Config', @Setting='blocked process threshold (s)',
+        @CurrentValue=@CurrentBlockedThreshold, @TargetValue=@BlockedProcessThresholdSeconds,
+        @Detail='fires blocked_process_report XEvent';
+ELSE IF @CurrentBlockedThreshold = @BlockedProcessThresholdSeconds
+    EXEC #sp_CCReport @Mode='INFO', @Section='Server Config', @Setting='blocked process threshold (s)',
+        @CurrentValue=@CurrentBlockedThreshold, @TargetValue=@BlockedProcessThresholdSeconds,
+        @Detail='already at target';
+ELSE IF @ApplyBlockedProcessThreshold = 0
+    EXEC #sp_CCReport @Mode='SKIPPED', @Section='Server Config', @Setting='blocked process threshold (s)',
+        @CurrentValue=@CurrentBlockedThreshold, @TargetValue=@BlockedProcessThresholdSeconds,
+        @Detail='@ApplyBlockedProcessThreshold = 0';
 
 /*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -852,33 +977,6 @@ END
 
 
 
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- Query Store retention settings (recommended by Brent Ozar)
--- Set to 7 days, auto-cleanup, capture all queries
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-
-IF @SQLVer >= 13
-BEGIN
-    DECLARE @QSSQL NVARCHAR(MAX) = N''
-    SELECT @QSSQL += N'ALTER DATABASE ' + QUOTENAME(db.name) + 
-        N' SET QUERY_STORE (OPERATION_MODE = READ_WRITE, CLEANUP_POLICY = (STALE_QUERY_THRESHOLD_DAYS = 30), ' +
-        N'DATA_FLUSH_INTERVAL_SECONDS = 60, MAX_STORAGE_SIZE_MB = 1000, INTERVAL_LENGTH_MINUTES = 60);' + CHAR(13)
-	FROM sys.databases db
-	INNER JOIN @Databases d ON d.database_id = db.database_id
-    WHERE db.database_id > 4 AND db.state = 0 AND db.is_query_store_on = 1 AND d.TotalIORank < @DoTopDBCount 
-    
-    IF @QSSQL <> N''
-    BEGIN
-        RAISERROR('PLANNED ACTION: Optimizing Query Store retention settings', 10, 1) WITH NOWAIT;
-        EXEC sp_executesql @QSSQL
-    END
-END
 
 /*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -923,7 +1021,7 @@ BEGIN
 
     IF LEN(@sql) > 0 --Clearly something came back
     BEGIN
-		IF @Apply_TARGET_RECOVERY_TIME = 1 AND @ForChangeControl = 0
+		IF @Apply_TARGET_RECOVERY_TIME = 1 AND @ForChangeControl = 0 
 		BEGIN
 			EXEC sp_executesql @sql;
 			RAISERROR ('IMPLEMENTING: Enabled indirect checkpoints (1 min target recovery)', 0, 1) WITH NOWAIT;
@@ -934,16 +1032,6 @@ BEGIN
     ELSE
         RAISERROR ('INFO: Indirect checkpoints already optimized', 10, 1) WITH NOWAIT;
 END
-
-
-
-
-
-
-
-
-
-
 
 
 /*
@@ -958,31 +1046,1104 @@ END
 
 DECLARE @PowerPlan NVARCHAR(100)
 EXEC master.dbo.xp_regread 'HKEY_LOCAL_MACHINE', 
-    'SYSTEM\CurrentControlSet\Control\PowerUser\PowerSchemes', 
+    'SOFTWARE\Policies\Microsoft\Power\PowerSettings', 
     'ActivePowerScheme', @PowerPlan OUTPUT
-IF @PowerPlan IS NOT NULL AND @PowerPlan <> '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+IF @PowerPlan IS NULL
+EXEC master.dbo.xp_regread 'HKEY_LOCAL_MACHINE', 
+    'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes', 
+    'ActivePowerScheme', @PowerPlan OUTPUT
+IF @PowerPlan IS NULL
+    EXEC #sp_CCReport @Mode='NOTICE', @Section='OS', @Setting='Power Plan',
+        @Detail='could not read ActivePowerScheme via xp_regread (registry permission?)';
+ELSE IF @PowerPlan <> '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+    EXEC #sp_CCReport @Mode='PLANNED', @Section='OS', @Setting='Power Plan',
+        @CurrentValue=@PowerPlan, @TargetValue='8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c',
+        @Detail='target = High Performance; set OS-side (powercfg /SETACTIVE SCHEME_MIN)';
+ELSE
+    EXEC #sp_CCReport @Mode='INFO', @Section='OS', @Setting='Power Plan',
+        @CurrentValue=@PowerPlan, @TargetValue=@PowerPlan,
+        @Detail='High Performance';
+
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- -- Limit error logs
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+
+DECLARE @NumErrorLogs NVARCHAR(10)
+EXEC master.dbo.xp_regread 'HKEY_LOCAL_MACHINE', 
+    'Software\Microsoft\MSSQLServer\MSSQLServer', 
+    'NumErrorLogs', @NumErrorLogs OUTPUT
+	SELECT @NumErrorLogs
+
+IF @NumErrorLogs IS NULL OR @NumErrorLogs < 100
 BEGIN
-    RAISERROR('WARNING: Power Plan is not set to High Performance (8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c)', 10, 1) WITH NOWAIT;
-    RAISERROR('      Current: %s - This can significantly impact SQL Server performance', 10, 1, @PowerPlan) WITH NOWAIT;
+	-- Limit error logs
+	IF @Apply_NumErrorLogs = 1 AND @ForChangeControl = 0
+	BEGIN
+	EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'NumErrorLogs', REG_DWORD, 100
+	--GO
+	RAISERROR ('IMPLEMENTING: Set Errorlogs to 100',0,1) WITH NOWAIT;
+	-- Set sp_configure settings
+	END
+	ELSE
+	BEGIN
+		RAISERROR('PLANNED ACTION: Set Errorlogs to 100', 10, 1, @PowerPlan) WITH NOWAIT;
+	END
+END
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set RAC
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+DECLARE @RACstate TINYINT
+SELECT --name, value, 
+@RACstate = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'remote admin connections';
+
+IF @RACstate = 0 AND @ForChangeControl = 0
+BEGIN
+	EXEC sys.sp_configure N'show advanced options', N'1'
+	RECONFIGURE WITH OVERRIDE
+	EXEC sys.sp_configure N'remote admin connections', N'1'
+	RECONFIGURE WITH OVERRIDE
+
+	RAISERROR ('IMPLEMENTING: Enabled remote admin connections',0,1) WITH NOWAIT;
+END
+IF @RACstate = 0 AND @ForChangeControl = 1
+BEGIN
+	RAISERROR ('PLANNED ACTION: Enable remote admin connections',0,1) WITH NOWAIT;
+END
+IF @RACstate = 1
+BEGIN
+	RAISERROR ('INFO: remote admin connections already enabled',0,1) WITH NOWAIT;
 END
 
 /*
-/* blocked process threshold: fires the blocked_process_report event when a session
-   is blocked for >= N seconds. Must be set BEFORE creating the XEvent session.
-   Default is 0 (disabled). 5 seconds is the standard starting point. */
-   
-EXEC sys.sp_configure N'show advanced options', N'1'
-RECONFIGURE WITH OVERRIDE
-EXEC sys.sp_configure N'blocked process threshold (s)', N'5'
-RECONFIGURE WITH OVERRIDE
-RAISERROR ('Action: Set blocked process threshold to 5 seconds', 0, 1) WITH NOWAIT;
-EXEC sys.sp_configure N'show advanced options', N'0'
-RECONFIGURE WITH OVERRIDE
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set repl size
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+DECLARE @RecInterval TINYINT
+SELECT --name, value, 
+@RecInterval = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'recovery interval (min)';
+
+IF @RecInterval = 0 AND @ForChangeControl = 0
+BEGIN
+	EXEC sys.sp_configure N'show advanced options', N'1'
+	RECONFIGURE WITH OVERRIDE
+	EXEC sys.sp_configure N'recovery interval (min)', N'1'
+	RECONFIGURE WITH OVERRIDE
+
+	RAISERROR ('IMPLEMENTING: Set recovery interval',0,1) WITH NOWAIT;
+END
+IF @RecInterval = 0 AND @ForChangeControl = 1
+BEGIN
+	RAISERROR ('PLANNED ACTION: Set recovery interval',0,1) WITH NOWAIT;
+END
+IF @RecInterval = 1
+BEGIN
+	RAISERROR ('INFO: Set recovery interval already set',0,1) WITH NOWAIT;
+END
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set recovery interval
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+DECLARE @MaxTxtRepl INT
+SELECT --name, value, 
+@MaxTxtRepl = CONVERT(INT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'max text repl size (B)';
+
+IF @MaxTxtRepl = 0 AND @ForChangeControl = 0
+BEGIN
+	EXEC sys.sp_configure N'show advanced options', N'1'
+	RECONFIGURE WITH OVERRIDE
+	EXEC sys.sp_configure N'max text repl size (B)', N'-1'
+	RECONFIGURE WITH OVERRIDE
+
+	RAISERROR ('IMPLEMENTING: max text replication size',0,1) WITH NOWAIT;
+END
+IF @MaxTxtRepl = 0 AND @ForChangeControl = 1
+BEGIN
+	RAISERROR ('PLANNED ACTION: Set max text replication size',0,1) WITH NOWAIT;
+END
+IF @MaxTxtRepl = 1
+BEGIN
+	RAISERROR ('INFO: max text replication size already set',0,1) WITH NOWAIT;
+END
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set agent history
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+DECLARE @SQLAgentPropTable TABLE
+(
+	auto_start INT,
+	msx_server_name sysname NULL,
+	sqlagent_type INT,
+	startup_account NVARCHAR(100) NULL,
+	sqlserver_restart INT,
+	jobhistory_max_rows INT,
+	jobhistory_max_rows_per_job INT,
+	errorlog_file NVARCHAR(255) NULL,
+	errorlogging_level INT,
+	errorlog_recipient NVARCHAR(255) NULL,
+	monitor_autostart INT,
+	local_host_server sysname NULL,
+	job_shutdown_timeout INT,
+	cmdexec_account VARBINARY(64) NULL,
+	regular_connections INT,
+	host_login_name sysname NULL,
+	host_login_password VARBINARY(512) NULL,
+	login_timeout INT,
+	idle_cpu_percent INT,
+	idle_cpu_duration INT,
+	oem_errorlog INT,
+	sysadmin_only NVARCHAR(64) NULL,
+	email_profile NVARCHAR(64) NULL,
+	email_save_in_sent_folder INT,
+	cpu_poller_enabled INT,
+	alert_replace_runtime_tokens INT
+)
+ 
+INSERT INTO @SQLAgentPropTable
+EXEC msdb.dbo.sp_get_sqlagent_properties
+
+
+DECLARE @Agent_jobhistory_max_rows INT
+, @Agent_jobhistory_max_rows_per_job INT
+, @Agent_email_save_in_sent_folder INT
+, @Agent_cpu_poller_enabled INT
+, @Agent_idle_cpu_percent INT   
+, @Agent_idle_cpu_duration INT
+
+SELECT 
+ @Agent_jobhistory_max_rows = jobhistory_max_rows
+, @Agent_jobhistory_max_rows_per_job = jobhistory_max_rows_per_job
+, @Agent_email_save_in_sent_folder = email_save_in_sent_folder
+, @Agent_cpu_poller_enabled = cpu_poller_enabled
+, @Agent_idle_cpu_percent = idle_cpu_percent      
+, @Agent_idle_cpu_duration = idle_cpu_duration
+FROM @SQLAgentPropTable
+
+DECLARE @sql_AgentPropChange NVARCHAR(4000)
+/*Let's set , don't want no huge msdb please*/
+SET @sql_AgentPropChange = '
+EXEC msdb.dbo.sp_set_sqlagent_properties
+	@jobhistory_max_rows= ' + CONVERT(VARCHAR(10),CASE WHEN @Agent_jobhistory_max_rows < 100000 THEN 100000 ELSE @Agent_jobhistory_max_rows END) + '
+	, @jobhistory_max_rows_per_job=' +  CONVERT(VARCHAR(10),CASE WHEN @Agent_jobhistory_max_rows_per_job < 1000 THEN 1000 ELSE @Agent_jobhistory_max_rows_per_job END) + '
+	, @email_save_in_sent_folder=' +  CONVERT(VARCHAR(10),CASE WHEN @Agent_email_save_in_sent_folder < 1 THEN 1 ELSE @Agent_email_save_in_sent_folder END) + '
+	, @cpu_poller_enabled=' +  CONVERT(VARCHAR(10),CASE WHEN @Agent_cpu_poller_enabled < 1 THEN 1 ELSE @Agent_cpu_poller_enabled END) + '
+	, @idle_cpu_percent=' +  CONVERT(VARCHAR(10),CASE WHEN @Agent_idle_cpu_percent < 10 THEN 10 ELSE @Agent_idle_cpu_percent END) + '     
+	, @idle_cpu_duration=' +  CONVERT(VARCHAR(10),CASE WHEN @Agent_idle_cpu_duration < 600 THEN 600 ELSE @Agent_idle_cpu_duration END) + '           
+/*Configure Agent alert conditions*/
+EXEC master.dbo.sp_MSsetalertinfo @failsafeoperator=N'''+ @OperatorName +''',@notificationmethod=1
+'
+
+IF @UpdateAgentProps = 1 AND @ForChangeControl = 0 
+BEGIN
+	EXEC sp_executesql @sql_AgentPropChange;
+	RAISERROR ('IMPLEMENTING: Set jobhistory to 100k, rows per job 1k)', 0, 1) WITH NOWAIT;
+END
+IF @UpdateAgentProps = 1 AND @ForChangeControl = 1
+	RAISERROR ('PLANNED ACTION: Set jobhistory to 100k, rows per job 1ky)', 0, 1) WITH NOWAIT;
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set backup checksum
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
 
+DECLARE @BackupChecksum TINYINT
+SELECT --name, value, 
+@BackupChecksum = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'backup checksum default';
+
+/*Check if server version > SQL 2008R2*/
+DECLARE @SQLVersion INT
+SELECT @SQLVersion = @@MicrosoftVersion / 0x01000000  OPTION (RECOMPILE)-- Get major version
+
+IF @SQLVersion >= 10
+BEGIN
+	IF @BackupChecksum = 0 AND @ForChangeControl = 0
+	BEGIN
+		EXEC sys.sp_configure N'show advanced options', N'1'
+		RECONFIGURE WITH OVERRIDE
+		EXEC sys.sp_configure N'backup checksum default', N'1'
+		RECONFIGURE WITH OVERRIDE
+
+		RAISERROR ('IMPLEMENTING: backup checksum',0,1) WITH NOWAIT;
+	END
+	IF @BackupChecksum = 0 AND @ForChangeControl = 1
+	BEGIN
+		RAISERROR ('PLANNED ACTION: Enable backup checksum',0,1) WITH NOWAIT;
+	END
+	IF @BackupChecksum = 1
+	BEGIN
+		RAISERROR ('INFO: backup checksum already set',0,1) WITH NOWAIT;
+	END
+END
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set backup compression
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+
+-- Use 'backup compression default' when server is NOT CPU bound
+
+DECLARE @BackupCompression TINYINT
+SELECT --name, value, 
+@BackupCompression = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'backup compression default';
+
+IF @SQLVersion >= 10
+BEGIN
+	IF @BackupCompression = 0 AND @ForChangeControl = 0
+	BEGIN
+		EXEC sys.sp_configure N'show advanced options', N'1'
+		RECONFIGURE WITH OVERRIDE
+		EXEC sys.sp_configure N'backup compression default', N'1'
+		RECONFIGURE WITH OVERRIDE
+
+		RAISERROR ('IMPLEMENTING: Enabling backup compression',0,1) WITH NOWAIT;
+	END
+	IF @BackupCompression = 0 AND @ForChangeControl = 1
+	BEGIN
+		RAISERROR ('PLANNED ACTION: Enable backup compression',0,1) WITH NOWAIT;
+	END
+	IF @BackupCompression = 1
+	BEGIN
+		RAISERROR ('INFO: backup compression already enabled',0,1) WITH NOWAIT;
+	END
+END
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set contained databases
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+DECLARE @ContainedDBAuth TINYINT
+SELECT --name, value, 
+@ContainedDBAuth = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'contained database authentication';
+
+/*Check if server version > SQL 2012*/
+IF @SQLVersion >= 11
+BEGIN
+
+	IF @ContainedDBAuth = 0 AND @ForChangeControl = 0
+	BEGIN
+		EXEC sys.sp_configure N'show advanced options', N'1'
+		RECONFIGURE WITH OVERRIDE
+		EXEC sys.sp_configure N'contained database authentication', N'1'
+		RECONFIGURE WITH OVERRIDE
+
+		RAISERROR ('IMPLEMENTING: Enabling contained DBs',0,1) WITH NOWAIT;
+	END
+	IF @ContainedDBAuth = 0 AND @ForChangeControl = 1
+	BEGIN
+		RAISERROR ('PLANNED ACTION: Enable contained DBs',0,1) WITH NOWAIT;
+	END
+	IF @ContainedDBAuth = 1
+	BEGIN
+		RAISERROR ('INFO: contained DBs already enabled',0,1) WITH NOWAIT;
+	END
+END
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set optimize for ad hoc workload
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+
+-- Use 'optimize for ad hoc workloads' for OLTP workloads ONLY
+
+DECLARE @OptimizeAdhoc TINYINT
+SELECT --name, value, 
+@OptimizeAdhoc = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'optimize for ad hoc workloads';
+
+IF @SQLVersion >= 10
+BEGIN
+	IF @OptimizeAdhoc = 0 AND @ForChangeControl = 0
+	BEGIN
+		EXEC sys.sp_configure N'show advanced options', N'1'
+		RECONFIGURE WITH OVERRIDE
+		EXEC sys.sp_configure N'optimize for ad hoc workloads', N'1'
+		RECONFIGURE WITH OVERRIDE
+
+		RAISERROR ('IMPLEMENTING: Enabling optimize for ad hoc workloads',0,1) WITH NOWAIT;
+	END
+	IF @OptimizeAdhoc = 0 AND @ForChangeControl = 1
+	BEGIN
+		RAISERROR ('PLANNED ACTION: Enable optimize for ad hoc workloads',0,1) WITH NOWAIT;
+	END
+	IF @OptimizeAdhoc = 1
+	BEGIN
+		RAISERROR ('INFO: optimize for ad hoc workloads already enabled',0,1) WITH NOWAIT;
+	END
+END
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- MAXDOP and Cost Threshold for Parallelism
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+/* MAXDOP: cap at 8, use half physical cores, never exceed NUMA node size.
+   Default 0 causes full-server parallelism storms on OLTP workloads.
+   Adjust @TargetMAXDOP before running if you know the workload profile. */
+DECLARE @PhysicalCores     INT
+DECLARE @NumaNodes         INT
+DECLARE @CoresPerNuma      INT
+DECLARE @TargetMAXDOP      INT
+DECLARE @MaxDOPMsg         NVARCHAR(300)
+
+SELECT
+    @PhysicalCores = si.cpu_count / si.hyperthread_ratio,
+    @NumaNodes     = COUNT(DISTINCT mn.memory_node_id)
+FROM sys.dm_os_sys_info si
+CROSS JOIN sys.dm_os_memory_nodes mn
+WHERE mn.memory_node_id <> 64  -- exclude DAC node
+GROUP BY si.cpu_count, si.hyperthread_ratio;
+
+/* Cores per NUMA node (floor, minimum 1) */
+SET @CoresPerNuma = CASE WHEN @NumaNodes > 0 THEN @PhysicalCores / @NumaNodes ELSE @PhysicalCores END;
+IF @CoresPerNuma < 1 SET @CoresPerNuma = 1;
+
+/* MAXDOP: half physical cores, capped at 8, never exceeds cores-per-NUMA-node, minimum 1 */
+SET @TargetMAXDOP = CASE
+    WHEN @PhysicalCores / 2 >= 8         THEN 8
+    WHEN @PhysicalCores / 2 < 1          THEN 1
+    ELSE @PhysicalCores / 2
+END;
+/* NUMA guard: MAXDOP must not exceed physical cores per NUMA node */
+IF @TargetMAXDOP > @CoresPerNuma SET @TargetMAXDOP = @CoresPerNuma;
+
+/* Capture current MAXDOP so we can decide whether anything needs to change. */
+DECLARE @CurrentMAXDOP INT
+SELECT @CurrentMAXDOP = CONVERT(INT, value_in_use)
+FROM sys.configurations
+WHERE name = N'max degree of parallelism';
+
+DECLARE @MaxDOPDetail NVARCHAR(500) = 'physical cores=' + CONVERT(VARCHAR(5), @PhysicalCores)
+    + ', NUMA nodes=' + CONVERT(VARCHAR(5), @NumaNodes)
+    + ', cores/NUMA=' + CONVERT(VARCHAR(5), @CoresPerNuma);
+
+IF @ApplyMaxDOP = 1 AND @ForChangeControl = 0 AND @CurrentMAXDOP <> @TargetMAXDOP
+BEGIN
+	BEGIN TRY
+		EXEC sys.sp_configure N'show advanced options', N'1'; RECONFIGURE WITH OVERRIDE;
+		EXEC sys.sp_configure N'max degree of parallelism', @TargetMAXDOP; RECONFIGURE WITH OVERRIDE;
+		EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Server Config', @Setting='max degree of parallelism',
+			@CurrentValue=@CurrentMAXDOP, @TargetValue=@TargetMAXDOP, @Detail=@MaxDOPDetail;
+	END TRY
+	BEGIN CATCH
+		EXEC #sp_CCReport @Mode='FAILED', @Section='Server Config', @Setting='max degree of parallelism',
+			@CurrentValue=@CurrentMAXDOP, @TargetValue=@TargetMAXDOP, @Detail='sp_configure raised an error';
+	END CATCH
+END
+ELSE IF @ApplyMaxDOP = 1 AND @ForChangeControl = 1 AND @CurrentMAXDOP <> @TargetMAXDOP
+	EXEC #sp_CCReport @Mode='PLANNED', @Section='Server Config', @Setting='max degree of parallelism',
+		@CurrentValue=@CurrentMAXDOP, @TargetValue=@TargetMAXDOP, @Detail=@MaxDOPDetail;
+ELSE IF @CurrentMAXDOP = @TargetMAXDOP
+	EXEC #sp_CCReport @Mode='INFO', @Section='Server Config', @Setting='max degree of parallelism',
+		@CurrentValue=@CurrentMAXDOP, @TargetValue=@TargetMAXDOP, @Detail='already at target';
+ELSE IF @ApplyMaxDOP = 0
+	EXEC #sp_CCReport @Mode='SKIPPED', @Section='Server Config', @Setting='max degree of parallelism',
+		@CurrentValue=@CurrentMAXDOP, @TargetValue=@TargetMAXDOP, @Detail='@ApplyMaxDOP = 0';
 
 
 
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Set Cost threshold for parallelism
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+
+-- Use 'optimize for ad hoc workloads' for OLTP workloads ONLY
+
+DECLARE @CostThresholdMaxdop TINYINT
+SELECT --name, value, 
+@CostThresholdMaxdop = CONVERT(TINYINT,value_in_use )
+FROM sys.configurations 
+WHERE name = 'cost threshold for parallelism';
+
+
+IF @CostThresholdMaxdop = 5 AND @ForChangeControl = 0
+BEGIN
+	EXEC sys.sp_configure N'show advanced options', N'1'
+	RECONFIGURE WITH OVERRIDE
+	EXEC sys.sp_configure N'cost threshold for parallelism', N'50'
+	RECONFIGURE WITH OVERRIDE
+
+	RAISERROR ('IMPLEMENTING: Set cost threshold for parallelism to 50',0,1) WITH NOWAIT;
+END
+IF @CostThresholdMaxdop = 5 AND @ForChangeControl = 1
+BEGIN
+	RAISERROR ('PLANNED ACTION: Set cost threshold for parallelism to 50',0,1) WITH NOWAIT;
+END
+IF @CostThresholdMaxdop <> 5
+BEGIN
+	RAISERROR ('INFO: cost threshold for parallelism changed from default',0,1) WITH NOWAIT;
+END
+
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Max Server Memory  (CRITICAL — default is unlimited)
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+/* Reserve OS + non-buffer-pool SQL memory.
+   Formula: leave 10% or 4 GB for OS (whichever is larger), minus ~1 GB per 4 logical cores for thread stacks.
+   MODIFY @ReservedForOSMB if this is a dedicated SQL box vs shared host. */
+DECLARE @TotalRAMMB       BIGINT
+DECLARE @ReservedForOSMB  BIGINT
+DECLARE @TargetMaxMemMB   BIGINT
+DECLARE @LogicalCores     INT
+
+SELECT @TotalRAMMB   = physical_memory_kb / 1024,
+       @LogicalCores = cpu_count
+FROM sys.dm_os_sys_info;
+
+/* Reserve: max of (10% of RAM, 4096 MB) + 256 MB per 4 logical cores for thread stacks */
+SET @ReservedForOSMB = CASE
+    WHEN @TotalRAMMB * 0.10 > 4096 THEN CONVERT(BIGINT, @TotalRAMMB * 0.10)
+    ELSE 4096
+END + ((@LogicalCores / 4) * 256);
+
+SET @TargetMaxMemMB = @TotalRAMMB - @ReservedForOSMB;
+
+/* Safety floor: never set below 512 MB */
+IF @TargetMaxMemMB < 512 SET @TargetMaxMemMB = 512;
+
+DECLARE @MaxMemMsg NVARCHAR(500)
+SET @MaxMemMsg = 'Action: Set max server memory to ' + CONVERT(VARCHAR(10), @TargetMaxMemMB)
+    + ' MB (total RAM: ' + CONVERT(VARCHAR(10), @TotalRAMMB) + ' MB, reserved for OS: ' + CONVERT(VARCHAR(10), @ReservedForOSMB) + ' MB)'
+RAISERROR (@MaxMemMsg, 0, 1) WITH NOWAIT;
+
+
+/* @CurrentMaxMemory must be BIGINT — TINYINT silently truncates anything > 255 MB */
+DECLARE @CurrentMaxMemory BIGINT
+SELECT @CurrentMaxMemory = CONVERT(BIGINT, value_in_use)
+FROM sys.configurations
+WHERE name = N'max server memory (MB)';
+
+DECLARE @MaxMemDetail NVARCHAR(500) =
+    'total RAM=' + CONVERT(VARCHAR(20), @TotalRAMMB) + ' MB, reserved for OS=' + CONVERT(VARCHAR(20), @ReservedForOSMB) + ' MB';
+
+IF @ApplyMaxMemory = 1 AND @ForChangeControl = 0 AND @CurrentMaxMemory <> @TargetMaxMemMB
+BEGIN
+	BEGIN TRY
+		EXEC sys.sp_configure N'show advanced options', N'1'; RECONFIGURE WITH OVERRIDE;
+		EXEC sys.sp_configure N'max server memory (MB)', @TargetMaxMemMB; RECONFIGURE WITH OVERRIDE;
+		EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Memory', @Setting='max server memory (MB)',
+			@CurrentValue=@CurrentMaxMemory, @TargetValue=@TargetMaxMemMB, @Detail=@MaxMemDetail;
+	END TRY
+	BEGIN CATCH
+		EXEC #sp_CCReport @Mode='FAILED', @Section='Memory', @Setting='max server memory (MB)',
+			@CurrentValue=@CurrentMaxMemory, @TargetValue=@TargetMaxMemMB, @Detail='sp_configure raised an error';
+	END CATCH
+END
+ELSE IF @ApplyMaxMemory = 1 AND @ForChangeControl = 1 AND @CurrentMaxMemory <> @TargetMaxMemMB
+	EXEC #sp_CCReport @Mode='PLANNED', @Section='Memory', @Setting='max server memory (MB)',
+		@CurrentValue=@CurrentMaxMemory, @TargetValue=@TargetMaxMemMB, @Detail=@MaxMemDetail;
+ELSE IF @CurrentMaxMemory = @TargetMaxMemMB
+	EXEC #sp_CCReport @Mode='INFO', @Section='Memory', @Setting='max server memory (MB)',
+		@CurrentValue=@CurrentMaxMemory, @TargetValue=@TargetMaxMemMB, @Detail='already at target';
+ELSE IF @ApplyMaxMemory = 0
+	EXEC #sp_CCReport @Mode='SKIPPED', @Section='Memory', @Setting='max server memory (MB)',
+		@CurrentValue=@CurrentMaxMemory, @TargetValue=@TargetMaxMemMB, @Detail='@ApplyMaxMemory = 0';
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Security Hardening: disable surface area features not in use
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+IF @disablesurfacearea = 1
+BEGIN
+	/* Capture current state of each surface-area feature so we can decide per-feature
+	   whether anything needs to change. */
+	DECLARE @SAOleAuto INT, @SAAdHoc INT, @SACrossDB INT, @SASqlMail INT;
+	SELECT @SAOleAuto = CONVERT(INT, value_in_use) FROM sys.configurations WHERE name = N'Ole Automation Procedures';
+	SELECT @SAAdHoc   = CONVERT(INT, value_in_use) FROM sys.configurations WHERE name = N'Ad Hoc Distributed Queries';
+	SELECT @SACrossDB = CONVERT(INT, value_in_use) FROM sys.configurations WHERE name = N'cross db ownership chaining';
+	SELECT @SASqlMail = CONVERT(INT, value_in_use) FROM sys.configurations WHERE name = N'SQL Mail XPs';
+
+	/* show advanced options is required to read/write some of these — turn on only if needed */
+	IF @ForChangeControl = 0 AND (@SAOleAuto = 1 OR @SAAdHoc = 1 OR @SACrossDB = 1 OR @SASqlMail = 1)
+	BEGIN
+		BEGIN TRY
+			EXEC sys.sp_configure N'show advanced options', N'1'; RECONFIGURE WITH OVERRIDE;
+		END TRY
+		BEGIN CATCH
+			EXEC #sp_CCReport @Mode='FAILED', @Section='Surface Area', @Setting='show advanced options',
+				@TargetValue='1', @Detail='could not enable show advanced options for surface area lockdown';
+		END CATCH
+	END
+
+	/* Ole Automation Procedures */
+	IF @SAOleAuto = 1 AND @ForChangeControl = 0
+	BEGIN
+		BEGIN TRY
+			EXEC sys.sp_configure N'Ole Automation Procedures', N'0'; RECONFIGURE WITH OVERRIDE;
+			EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Surface Area', @Setting='Ole Automation Procedures',
+				@CurrentValue='1', @TargetValue='0';
+		END TRY
+		BEGIN CATCH
+			EXEC #sp_CCReport @Mode='FAILED', @Section='Surface Area', @Setting='Ole Automation Procedures',
+				@CurrentValue='1', @TargetValue='0', @Detail='sp_configure raised an error';
+		END CATCH
+	END
+	ELSE IF @SAOleAuto = 1 AND @ForChangeControl = 1
+		EXEC #sp_CCReport @Mode='PLANNED', @Section='Surface Area', @Setting='Ole Automation Procedures',
+			@CurrentValue='1', @TargetValue='0';
+	ELSE IF @SAOleAuto = 0
+		EXEC #sp_CCReport @Mode='INFO', @Section='Surface Area', @Setting='Ole Automation Procedures',
+			@CurrentValue='0', @TargetValue='0', @Detail='already disabled';
+
+	/* Ad Hoc Distributed Queries */
+	IF @SAAdHoc = 1 AND @ForChangeControl = 0
+	BEGIN
+		BEGIN TRY
+			EXEC sys.sp_configure N'Ad Hoc Distributed Queries', N'0'; RECONFIGURE WITH OVERRIDE;
+			EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Surface Area', @Setting='Ad Hoc Distributed Queries',
+				@CurrentValue='1', @TargetValue='0', @Detail='OPENROWSET/OPENDATASOURCE';
+		END TRY
+		BEGIN CATCH
+			EXEC #sp_CCReport @Mode='FAILED', @Section='Surface Area', @Setting='Ad Hoc Distributed Queries',
+				@CurrentValue='1', @TargetValue='0', @Detail='sp_configure raised an error';
+		END CATCH
+	END
+	ELSE IF @SAAdHoc = 1 AND @ForChangeControl = 1
+		EXEC #sp_CCReport @Mode='PLANNED', @Section='Surface Area', @Setting='Ad Hoc Distributed Queries',
+			@CurrentValue='1', @TargetValue='0', @Detail='OPENROWSET/OPENDATASOURCE';
+	ELSE IF @SAAdHoc = 0
+		EXEC #sp_CCReport @Mode='INFO', @Section='Surface Area', @Setting='Ad Hoc Distributed Queries',
+			@CurrentValue='0', @TargetValue='0', @Detail='already disabled';
+
+	/* cross db ownership chaining */
+	IF @SACrossDB = 1 AND @ForChangeControl = 0
+	BEGIN
+		BEGIN TRY
+			EXEC sys.sp_configure N'cross db ownership chaining', N'0'; RECONFIGURE WITH OVERRIDE;
+			EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Surface Area', @Setting='cross db ownership chaining',
+				@CurrentValue='1', @TargetValue='0';
+		END TRY
+		BEGIN CATCH
+			EXEC #sp_CCReport @Mode='FAILED', @Section='Surface Area', @Setting='cross db ownership chaining',
+				@CurrentValue='1', @TargetValue='0', @Detail='sp_configure raised an error';
+		END CATCH
+	END
+	ELSE IF @SACrossDB = 1 AND @ForChangeControl = 1
+		EXEC #sp_CCReport @Mode='PLANNED', @Section='Surface Area', @Setting='cross db ownership chaining',
+			@CurrentValue='1', @TargetValue='0';
+	ELSE IF @SACrossDB = 0
+		EXEC #sp_CCReport @Mode='INFO', @Section='Surface Area', @Setting='cross db ownership chaining',
+			@CurrentValue='0', @TargetValue='0', @Detail='already disabled';
+
+	/* SQL Mail XPs (legacy, superseded by Database Mail). Removed in SQL 2022+. */
+	IF EXISTS(SELECT * FROM sys.configurations WHERE name = N'SQL Mail XPs')
+	BEGIN
+		IF @SASqlMail = 1 AND @ForChangeControl = 0
+		BEGIN
+			BEGIN TRY
+				EXEC sys.sp_configure N'SQL Mail XPs', N'0'; RECONFIGURE WITH OVERRIDE;
+				EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Surface Area', @Setting='SQL Mail XPs',
+					@CurrentValue='1', @TargetValue='0', @Detail='legacy, superseded by Database Mail';
+			END TRY
+			BEGIN CATCH
+				EXEC #sp_CCReport @Mode='FAILED', @Section='Surface Area', @Setting='SQL Mail XPs',
+					@CurrentValue='1', @TargetValue='0', @Detail='sp_configure raised an error';
+			END CATCH
+		END
+		ELSE IF @SASqlMail = 1 AND @ForChangeControl = 1
+			EXEC #sp_CCReport @Mode='PLANNED', @Section='Surface Area', @Setting='SQL Mail XPs',
+				@CurrentValue='1', @TargetValue='0', @Detail='legacy';
+		ELSE IF @SASqlMail = 0
+			EXEC #sp_CCReport @Mode='INFO', @Section='Surface Area', @Setting='SQL Mail XPs',
+				@CurrentValue='0', @TargetValue='0', @Detail='already disabled';
+	END
+	ELSE
+		EXEC #sp_CCReport @Mode='INFO', @Section='Surface Area', @Setting='SQL Mail XPs',
+			@Detail='not present (SQL 2022+) - nothing to do';
+
+	/* Always reset show advanced options at the end */
+	IF @ForChangeControl = 0
+	BEGIN
+		BEGIN TRY
+			EXEC sys.sp_configure N'show advanced options', N'0'; RECONFIGURE WITH OVERRIDE;
+		END TRY
+		BEGIN CATCH
+			EXEC #sp_CCReport @Mode='NOTICE', @Section='Surface Area', @Setting='show advanced options',
+				@TargetValue='0', @Detail='could not reset to 0 (non-fatal)';
+		END CATCH
+	END
+END
+ELSE
+	EXEC #sp_CCReport @Mode='SKIPPED', @Section='Surface Area', @Setting='@disablesurfacearea',
+		@Detail='@disablesurfacearea = 0 - surface area lockdown not requested';
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- SECTION 3: DATABASE MAIL CONFIGURATION
+-- Enable Database Mail and create operators for alert notifications
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+/*Thanks:
+Brent Ozar Unlimited, https://www.brentozar.com/blitz/configure-sql-server-alerts/
+@KeefOnToast and Chuck
+*/
+
+--@DBMailStatus already set earlier
+
+IF @DBMailStatus = 0 AND @ForChangeControl = 0
+BEGIN
+	EXEC sys.sp_configure N'show advanced options', N'1'
+	RECONFIGURE WITH OVERRIDE
+	EXEC sys.sp_configure N'Database Mail XPs', N'1'
+	RECONFIGURE WITH OVERRIDE
+
+	RAISERROR ('IMPLEMENTING: Enabling database mail',0,1) WITH NOWAIT;
+END
+IF @DBMailStatus = 0 AND @ForChangeControl = 1
+BEGIN
+	RAISERROR ('PLANNED ACTION: Enable database mail',0,1) WITH NOWAIT;
+END
+IF @DBMailStatus = 1
+BEGIN
+	RAISERROR ('INFO: Database mail enabled',0,1) WITH NOWAIT;
+END
+
+
+USE [master]
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   SECTION 4: SQL AGENT ALERTS
+   Create comprehensive alerts for severity levels, error numbers,
+   and Always On availability group events
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+---------------------------------------------------------------------------------------------------------
+	/* Adapted by Adrian Sullivan from Glenn Berry's script*/
+IF @DoAgentAlerts = 1
+BEGIN
+	-- Add important SQL Agent Alerts to your instance
+
+	-- This will work with SQL Server 2008 and newer
+	-- Glenn Berry
+	-- SQLskills.com
+	-- Last Modified: August 11, 2014
+	-- http://sqlserverperformance.wordpress.com/
+	-- http://sqlskills.com/blogs/glenn/
+	-- Twitter: GlennAlanBerry
+
+	-- Listen to my Pluralsight courses
+	-- http://www.pluralsight.com/author/glenn-berry
+
+
+	DECLARE @Operator NVARCHAR(500);
+	DECLARE @Severity TINYINT;
+	DECLARE @AlertName NVARCHAR(500);
+	DECLARE @StepDescription NVARCHAR(500);
+	DECLARE @WhereToSend TINYINT;
+	DECLARE @SQLDBANotification NVARCHAR(512);
+	SET @SQLDBANotification= N'Notify SQLDBA. If business impact: sqlalerts@sqldba.org or (NZ) 0800 000 174';
+
+
+
+
+	SET @WhereToSend = 1 /*Change this to 7 to cover Email(1), Pager(2) and Net Send(4)*/
+	SET @Operator = @OperatorName;
+	SET @DynamicSQL =' EXEC msdb.dbo.sp_add_operator @name=N''' + @Operator + ''', 
+	@enabled=1, 
+	@weekday_pager_start_time=90000, 
+	@weekday_pager_end_time=180000, 
+	@saturday_pager_start_time=90000, 
+	@saturday_pager_end_time=180000, 
+	@sunday_pager_start_time=90000, 
+	@sunday_pager_end_time=180000, 
+	@pager_days=0, 
+	@email_address=N''sqlalerts@sqldba.org'', 
+	@category_name=N''SQL Support''; '
+	BEGIN TRY
+			EXEC sp_executesql @DynamicSQL;
+			SET @StepDescription = 'Operator created: ' + @Operator;
+	END TRY
+	BEGIN CATCH
+			SET @StepDescription = 'Operator already exists for: ' + @Operator;
+			EXEC msdb.dbo.sp_update_operator @name=N'SQLDBA', 
+			@enabled=1, 
+			@pager_days=0, 
+			@email_address=N'sqlalerts@sqldba.org', 
+			@pager_address=N''
+
+	END CATCH
+	RAISERROR (@StepDescription,0,1) WITH NOWAIT;
+
+	-- Make sure you have an Agent Operator defined that matches the name you supplied
+	IF NOT EXISTS(SELECT * FROM msdb.dbo.sysoperators WHERE name = @OperatorName)
+		BEGIN
+			RAISERROR ('There is no SQL Operator with a name of %s' , 18 , 16 , @OperatorName);
+			RETURN;
+		END
+
+	-- Change @CategoryName as needed
+	DECLARE @CategoryName sysname 
+	SET @CategoryName = N'SQL Server Agent Alerts';
+
+
+	-- Add Alert Category if it does not exist
+	IF NOT EXISTS (SELECT *
+				   FROM msdb.dbo.syscategories
+				   WHERE category_class = 2  -- ALERT
+				   AND category_type = 3
+				   AND name = @CategoryName)
+		BEGIN
+			EXEC msdb.dbo.sp_add_category @class = N'ALERT', @type = N'NONE', @name = @CategoryName;
+		END
+	DECLARE @AlertTable TABLE 
+	(
+		ID INT IDENTITY(1,1)
+		, AlertType NVARCHAR(50)
+		, TheNumber INT
+		, AlertName sysname
+	)
+	INSERT INTO @AlertTable VALUES ('Severity',19, 	@ServerName + N' Alert - Sev 19 Error: Fatal Error in Resource')
+	INSERT INTO @AlertTable VALUES ('Severity',20, 	@ServerName + N' Alert - Sev 20 Error: Fatal Error in Current Process')
+	INSERT INTO @AlertTable VALUES ('Severity',21, 	@ServerName + N' Alert - Sev 21 Error: Fatal Error in Database Process')
+	INSERT INTO @AlertTable VALUES ('Severity',22, 	@ServerName + N' Alert - Sev 22 Error: Fatal Error: Table Integrity Suspect')
+	INSERT INTO @AlertTable VALUES ('Severity',23, 	@ServerName + N' Alert - Sev 23 Error: Fatal Error Database Integrity Suspect')
+	INSERT INTO @AlertTable VALUES ('Severity',24, 	@ServerName + N' Alert - Sev 24 Error: Fatal Hardware Error')
+	INSERT INTO @AlertTable VALUES ('Severity',25, 	@ServerName + N' Alert - Sev 25 Error: Fatal Error')
+
+
+
+	-- Error 823: Operating System Error
+	-- How to troubleshoot a Msg 823 error in SQL Server	
+	-- http://support.microsoft.com/kb/2015755
+
+	-- Error 824: Logical consistency-based I/O error
+	-- How to troubleshoot Msg 824 in SQL Server
+	-- http://support.microsoft.com/kb/2015756
+
+	-- Error 825: Read-Retry Required
+	-- How to troubleshoot Msg 825 (read retry) in SQL Server
+	-- http://support.microsoft.com/kb/2015757
+
+	-- Error 832: Constant page has changed
+	-- http://www.sqlskills.com/blogs/paul/dont-confuse-error-823-and-error-832/
+	-- http://support.microsoft.com/kb/2015759
+
+
+	-- Memory Error Correction alerts added on 10/30/2013
+
+	-- Mitigation of RAM Hardware Errors
+	-- When SQL Server 2012 Enterprise Edition is installed on a Windows 2012 operating system with hardware that supports bad memory diagnostics, 
+	-- you will notice new error messages like 854, 855, and 856 instead of the 832 errors that LazyWriter usually generates.
+	-- Error 854 is just informing you that your instance supports memory error correction
+
+	-- Using SQL Server in Windows 8 and Windows Server 2012 environments
+	--https://learn.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-events-and-errors-0-to-999?view=sql-server-ver17
+	-- http://support.microsoft.com/kb/2681562
+	INSERT INTO @AlertTable VALUES ('Error',610, 	@ServerName + N' Error 610: Invalid header value from a page.' )--  Run DBCC CHECKDB to check for a data corruption.'   )
+	INSERT INTO @AlertTable VALUES ('Error',823, 	@ServerName + N' Error 823: The operating system returned an error')
+	INSERT INTO @AlertTable VALUES ('Error',824, 	@ServerName + N' Error 824: Logical consistency-based I/O error')
+	INSERT INTO @AlertTable VALUES ('Error',825, 	@ServerName + N' Error 825: Read-Retry Required')
+	INSERT INTO @AlertTable VALUES ('Error',832, 	@ServerName + N' Error 832: Constant page has changed')
+	INSERT INTO @AlertTable VALUES ('Error',855, 	@ServerName + N' Error 855: Uncorrectable hardware memory corruption detected')
+	INSERT INTO @AlertTable VALUES ('Error',856, 	@ServerName + N' Error 856: SQL Server has detected hardware memory corruption, but has recovered the page')
+	INSERT INTO @AlertTable VALUES ('Error',1205, 	@ServerName + N' Error 1205: Deadlock')
+	INSERT INTO @AlertTable VALUES ('Error',3928, 	@ServerName + N' Error 3928: Deadlock')
+	INSERT INTO @AlertTable VALUES ('Error',829,	@ServerName + N' Error Database, Page is marked RestorePending, which may indicate disk corruption.')-- To recover from this state, perform a restore.')
+	INSERT INTO @AlertTable VALUES ('Error',211,	@ServerName + N' Error 211: Corruption in database possibly due to schema or catalog inconsistency.')-- Run DBCC CHECKCATALOG.')
+	INSERT INTO @AlertTable VALUES ('Error',602,	@ServerName + N' Error 602: Stored procedure references a dropped table, or metadata is corrupted.')-- Drop and re-create the stored procedure, or execute DBCC CHECKDB.
+	INSERT INTO @AlertTable VALUES ('Error',603,	@ServerName + N' Error 603: Could not find an entry for table or index with object ID.')-- This error can occur if a stored procedure references a dropped table, or metadata is corrupted. Drop and re-create the stored procedure, or execute DBCC CHECKDB.
+	INSERT INTO @AlertTable VALUES ('Error',608,	@ServerName + N' Error 608: No catalog entry found for partition ID in database. The metadata is inconsistent.')-- Run DBCC CHECKDB to check for a metadata corruption.	
+	INSERT INTO @AlertTable VALUES ('Error',683,	@ServerName + N' Error 683: Error occurred trying to convert between variable- and fixed-length decimal formats.')-- Run DBCC CHECKDB to check for any database corruption.
+	INSERT INTO @AlertTable VALUES ('Error',684,	@ServerName + N' Error 684: Error occurred attempting to convert between compressed and uncompressed storage.')-- Run DBCC CHECKDB to check for any corruption.
+	INSERT INTO @AlertTable VALUES ('Error',692,	@ServerName + N' Error 692: Error. Buffer provided to write a fixed column value is too large.')-- Run DBCC CHECKDB to check for any corruption.
+	INSERT INTO @AlertTable VALUES ('Error',808,	@ServerName + N' Error 808: Insufficient bytes transferred. Backup,insufficient disk space,corruption/hardware failure.')-- Check errorlogs/application-logs for detailed messages and correct error conditions.
+	INSERT INTO @AlertTable VALUES ('Error',882,	@ServerName + N' Error 882: Schema of a table created by InternalBaseTable is corrupt.')--
+	INSERT INTO @AlertTable VALUES ('Error',918,	@ServerName + N' Error 918: Failed to load engine script metadata from script DLL. This is a serious error condition.')-- which usually indicates a corrupt or incomplete installation-- Repairing the SQL Server instance may help resolve this error.
+	INSERT INTO @AlertTable VALUES ('Error',965,	@ServerName + N' Error 965: Warning: Column nullability inconsistency detected in the metadata. Index may be corrupt.')-- Run DBCC CHECKTABLE to verify consistency.
+	INSERT INTO @AlertTable VALUES ('Error',976,	@ServerName + N' Error 976: Database Not Accessible')
+	INSERT INTO @AlertTable VALUES ('Error',983,	@ServerName + N' Error 983: Database Role Resolving. Unable to access availability database')
+	INSERT INTO @AlertTable VALUES ('Error',3402,	@ServerName + N' Error 3402: Database Restoring')
+	/* Always On / AG critical */
+	INSERT INTO @AlertTable VALUES ('Error',35265, 	@ServerName + N' AG 35265: AG Data Movement - Resumed')
+	INSERT INTO @AlertTable VALUES ('Error',35264, 	@ServerName + N' AG 35264: AG Data Movement - Suspended')
+	INSERT INTO @AlertTable VALUES ('Error',28034, 	@ServerName + N' AG 28034: Connection handshake on broker')
+	INSERT INTO @AlertTable VALUES ('Error',1480, 	@ServerName + N' AG 1480: AG Role Change' )
+	INSERT INTO @AlertTable VALUES ('Error',41091, 	@ServerName + N' AG 41091: Replica Going Offline Lease Expired')
+	INSERT INTO @AlertTable VALUES ('Error',41131, 	@ServerName + N' AG 41131: Failed to Bring AG ONLINE')
+	INSERT INTO @AlertTable VALUES ('Error',41142, 	@ServerName + N' AG 41142: Replica Cannot become primary')
+	INSERT INTO @AlertTable VALUES ('Error',41406, 	@ServerName + N' AG 41406: AG not Ready for Auto Failover')
+	INSERT INTO @AlertTable VALUES ('Error',41414, 	@ServerName + N' AG 41414: Secondary not Connected')
+	INSERT INTO @AlertTable VALUES ('Error',35276, 	@ServerName + N' Error 35276: Failed to allocate and schedule an AG task for database. Database Out of Sync'  )
+
+
+	INSERT INTO @AlertTable VALUES ('Error',1481,	@ServerName + N' AG 1481: Database replica sync health check failed')
+	INSERT INTO @AlertTable VALUES ('Error',35201,	@ServerName + N' AG 35201: Connection to primary failed')
+	INSERT INTO @AlertTable VALUES ('Error',19407, 	@ServerName + N' AG 19407: Cluster connectivity issue.' )-- The lease between the SQL availability group and the Windows Server Failover Cluster has expired.'  )
+	INSERT INTO @AlertTable VALUES ('Error',19419, 	@ServerName + N' AG 19419: Cluster to SQL lease timeout.' )--  Failover Cluster did not receive a process event signal from SQL Server hosting availability group within the lease timeout period.'  )
+	INSERT INTO @AlertTable VALUES ('Error',19421, 	@ServerName + N' AG 19421: SQL to Cluster lease timeout.' )--  SQL availability group did not receive a process event signal from the Failover Cluster within the lease timeout period.'  )
+	INSERT INTO @AlertTable VALUES ('Error',19422, 	@ServerName + N' AG 19422: AG lease renewal failed.' )--  SQL availability group and the Windows Server Failover Cluster failed because SQL Server encountered Windows error with error code.'  )
+	INSERT INTO @AlertTable VALUES ('Error',41143, 	@ServerName + N' AG 41143: AG replica is in a failed state.' )--   A previous operation to read or update persisted configuration data for the availability group has failed.  To recover from this failure, either restart the local Windows Server Failover Clustering (WSFC) service or restart the local instance of SQL Server.'  )
+	INSERT INTO @AlertTable VALUES ('Error',41005, 	@ServerName + N' AG 41005: Failed to obtain Failover Clustering (WSFC) resource handle.' )--  The WSFC service may not be running or may not be accessible in its current state.'  )
+	INSERT INTO @AlertTable VALUES ('Error',41144, 	@ServerName + N' AG 41144: Local AG replica is in a failed state.' )--   The replica failed to read or update the persisted configuration data. To recover from this failure, either restart the local Windows Server Failover Clustering (WSFC) service or restart the local instance of SQL Server.'  )
+
+	INSERT INTO @AlertTable VALUES ('Error',19406, 	@ServerName + N' AG 19406: AG Replica Changed States')
+	INSERT INTO @AlertTable VALUES ('Error',35206, 	@ServerName + N' AG 35206: Connection Timeout')
+	INSERT INTO @AlertTable VALUES ('Error',35250, 	@ServerName + N' AG 35250: Connection to Primary Inactive')
+	INSERT INTO @AlertTable VALUES ('Error',35273, 	@ServerName + N' AG 35273: Database Inaccessible')
+	INSERT INTO @AlertTable VALUES ('Error',35274, 	@ServerName + N' AG 35274: Database Recovery Pending')
+	INSERT INTO @AlertTable VALUES ('Error',35275, 	@ServerName + N' AG 35275: Database in Suspect State')
+      
+ 
+
+	INSERT INTO @AlertTable VALUES ('Error',9002, 	@ServerName + N' Error 9002: Log File FULL')
+	INSERT INTO @AlertTable VALUES ('Error',1101,	@ServerName + N' Error 1101: Database filegroup out of space')
+	INSERT INTO @AlertTable VALUES ('Error',3041,	@ServerName + N' Error 3041: BACKUP failed to complete. Check the backup application log for detailed messages.')
+	INSERT INTO @AlertTable VALUES ('Error',12412,	@ServerName + N' Error 12412: Internal table access error. Failed to access the Query Store internal table.')
+	INSERT INTO @AlertTable VALUES ('Error',18210,	@ServerName + N' Error 18210:  Failure on backup device. Operating system error.')
+	INSERT INTO @AlertTable VALUES ('Error',28036, 	@ServerName + N' Error 28036: Connection handshake failed.' )--  The certificate used by this endpoint was not found')
+	INSERT INTO @AlertTable VALUES ('Error',2511, 	@ServerName + N' Error 2511: Table error. Keys out of order on page.' )-- 
+	INSERT INTO @AlertTable VALUES ('Error',5228, 	@ServerName + N' Error 5228: Table error. DBCC detected incomplete cleanup.' )-- 
+	INSERT INTO @AlertTable VALUES ('Error',5229, 	@ServerName + N' Error 5229: Table error. contains an anti-matter column.' )-- 
+	INSERT INTO @AlertTable VALUES ('Error',5242, 	@ServerName + N' Error 5242: An inconsistency was detected during an internal operation in database.' )-- 
+	INSERT INTO @AlertTable VALUES ('Error',5243, 	@ServerName + N' Error 5243: An inconsistency was detected during an internal operation.' )-- 
+	INSERT INTO @AlertTable VALUES ('Error',5250, 	@ServerName + N' Error 5250: Database error. This error cannot be repaired.' )--
+
+	/* Memory pressure alerts */
+	INSERT INTO @AlertTable VALUES ('Error',701,	@ServerName + N' Error 701: Insufficient memory in resource pool')
+	INSERT INTO @AlertTable VALUES ('Error',802,	@ServerName + N' Error 802: Insufficient memory available in the buffer pool')
+	INSERT INTO @AlertTable VALUES ('Error',8645,	@ServerName + N' Error 8645: Timeout waiting for memory resource (RESOURCE_SEMAPHORE)')
+	INSERT INTO @AlertTable VALUES ('Error',8651,	@ServerName + N' Error 8651: Low memory condition - deferred request failed')
+	INSERT INTO @AlertTable VALUES ('Error',17803,	@ServerName + N' Error 17803: Insufficient memory during thread creation (Windows memory allocation failed)')
+
+	/* Log / disk space alerts */
+	INSERT INTO @AlertTable VALUES ('Error',9001,	@ServerName + N' Error 9001: Log for database is not available (log corruption / inaccessible)')
+	INSERT INTO @AlertTable VALUES ('Error',1105,	@ServerName + N' Error 1105: Could not allocate space in filegroup (data file full, including PRIMARY)')
+	INSERT INTO @AlertTable VALUES ('Error',3271,	@ServerName + N' Error 3271: Non-recoverable I/O error occurred on file')
+
+	/* Authentication / security */
+	INSERT INTO @AlertTable VALUES ('Error',17806,	@ServerName + N' Error 17806: SSPI handshake failed (authentication failure)')
+
+	/* I/O subsystem */
+	INSERT INTO @AlertTable VALUES ('Error',7105,	@ServerName + N' Error 7105: Could not retrieve row from disk (out-of-row BLOB I/O error)')
+
+	/* Configuration change audit trail */
+	INSERT INTO @AlertTable VALUES ('Error',15457,	@ServerName + N' Error 15457: Configuration option changed (audit trail)')
+
+	/* Network / TDS errors */
+	INSERT INTO @AlertTable VALUES ('Error',4014,	@ServerName + N' Error 4014: Fatal error reading input stream from the network (TDS corruption)')
+	INSERT INTO @AlertTable VALUES ('Error',17826,	@ServerName + N' Error 17826: Could not start network library due to internal error (SQL lost its listener)')
+
+	/* File Control Block / pre-corruption indicator */
+	INSERT INTO @AlertTable VALUES ('Error',5180,	@ServerName + N' Error 5180: Could not open File Control Block for invalid file ID (precursor to 823/824 corruption)')
+
+	/* Stack alignment fatal error */
+	INSERT INTO @AlertTable VALUES ('Error',17551,	@ServerName + N' Error 17551: Fatal error - stack not properly aligned (indicates driver/OS issue)')
+
+	/* Buffer manager internal error */
+	INSERT INTO @AlertTable VALUES ('Error',8966,	@ServerName + N' Error 8966: Unable to read and latch page (internal buffer manager error indicating corruption)')
+
+	/* Backup / restore termination (complementary to 3041 -- also fires on restore failures) */
+	INSERT INTO @AlertTable VALUES ('Error',3013,	@ServerName + N' Error 3013: BACKUP or RESTORE terminating abnormally')
+
+	/* MSDTC distributed transaction recovery */
+	INSERT INTO @AlertTable VALUES ('Error',3452,	@ServerName + N' Error 3452: Recovery of in-doubt distributed transactions (MSDTC) detected')
+
+	/* Security monitoring -- login failures (delay_between_responses set to 60s in the loop to avoid storms) */
+	INSERT INTO @AlertTable VALUES ('Error',18456,	@ServerName + N' Error 18456: Login failed (security monitoring)')
+
+	/* Additional critical missing alerts - best practice additions */
+	/* I/O subsystem and lock errors */
+	INSERT INTO @AlertTable VALUES ('Error',596,	@ServerName + N' Error 596: LCK_M_IX lock wait exceeded (severe blocking)')
+	INSERT INTO @AlertTable VALUES ('Error',595,	@ServerName + N' Error 595: Lock escalation prevented')
+	INSERT INTO @AlertTable VALUES ('Error',1221,	@ServerName + N' Error 1221: Lock resources exceeded (deadlock victim)')
+
+	/* Query Store errors */
+	INSERT INTO @AlertTable VALUES ('Error',12410,	@ServerName + N' Error 12410: Query Store internal error')
+	INSERT INTO @AlertTable VALUES ('Error',12411,	@ServerName + N' Error 12411: Query Store collection failed')
+
+	/* Transaction log corruption */
+	INSERT INTO @AlertTable VALUES ('Error',9003,	@ServerName + N' Error 9003: Log scan - invalid log sequence number')
+	INSERT INTO @AlertTable VALUES ('Error',9004,	@ServerName + N' Error 9004: Log file corruption - truncated')
+	INSERT INTO @AlertTable VALUES ('Error',9013,	@ServerName + N' Error 9013: Virtual log file too small')
+
+	/* DAC connection issues */
+	INSERT INTO @AlertTable VALUES ('Error',233,	@ServerName + N' Error 233: Shared memory provider disconnected')
+
+	/* Brent Ozar / Microsoft additional critical alerts */
+	/* Resource semaphore exhaustion */
+	INSERT INTO @AlertTable VALUES ('Error',8645, 	@ServerName + N' Error 8645: Resource semaphore wait timeout')
+
+	/* SOS scheduler exhaustion (critical) */
+	INSERT INTO @AlertTable VALUES ('Error',17883, 	@ServerName + N' Error 17883: Scheduler deadlock detected')
+	INSERT INTO @AlertTable VALUES ('Error',17884, 	@ServerName + N' Error 17884: All schedulers appear deadlocked')
+
+
+	DECLARE @MaxAlerts TINYINT
+	DECLARE @AlertCounter TINYINT 
+	SET @AlertCounter = 1
+	DECLARE @ThisName sysname
+	DECLARE @Exception NVARCHAR(2000)
+	DECLARE @ThisAlert INT
+	DECLARE @ThisMessage INT
+	DECLARE @ThisAlertType NVARCHAR(50)
+	DECLARE @RaiseMsg NVARCHAR(2000)
+	SELECT @MaxAlerts = MAX(ID) FROM @AlertTable
+	USE msdb
+	WHILE @AlertCounter <= @MaxAlerts
+	BEGIN
+		SELECT @ThisName = AlertName
+		, @ThisAlert = TheNumber
+		, @ThisAlertType = AlertType
+		FROM @AlertTable WHERE ID = @AlertCounter
+		IF @ThisAlertType = 'Error'
+		BEGIN
+			SET @ThisMessage = @ThisAlert
+			SET @ThisAlert = 0
+		END
+		IF @ThisAlertType = 'Severity'
+		BEGIN
+			SET @ThisMessage = 0
+			SET @ThisAlert = @ThisAlert
+		END
+		IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name = @ThisName)
+		BEGIN
+			IF @ThisAlert <> 0
+				RAISERROR (@ThisAlert,0,1) WITH NOWAIT;
+			BEGIN TRY
+				IF @ForChangeControl = 1
+				BEGIN
+					SET @RaiseMsg = 'PLANNED ACTION: Create alert '+@ThisName
+					RAISERROR (@RaiseMsg,0,1) WITH NOWAIT;
+				END
+
+				IF @ForChangeControl = 0
+				BEGIN
+					EXEC msdb.dbo.sp_add_alert @name = @ThisName, 
+								  @message_id = @ThisMessage
+								  , @severity = @ThisAlert
+								  , @enabled = 1
+								  , @delay_between_responses = 900
+								  , @include_event_description_in = 1
+								  , @notification_message=@SQLDBANotification
+								  , @category_name = @CategoryName
+								  , @job_id = N'00000000-0000-0000-0000-000000000000';
+					IF NOT EXISTS(SELECT *
+						  FROM msdb.dbo.sysalerts AS sa
+						  INNER JOIN msdb.dbo.sysnotifications AS sn
+						  ON sa.id = sn.alert_id
+						  WHERE (sa.name = @ThisName
+						  OR sa.message_id = @ThisAlert))
+					BEGIN
+						EXEC msdb.dbo.sp_add_notification @alert_name = @ThisName, @operator_name = @OperatorName, @notification_method = 1;
+						--EXEC msdb.dbo.sp_add_notification @alert_name = @ThisName, @operator_name = @ServiceDesk, @notification_method = 1;
+						SET @ThisName = 'Configure alert - ' + @ThisName
+			
+						/*Ensure these errors log for SCOM*/
+						IF @ThisAlertType = 'Error'
+							EXEC sp_altermessage @ThisMessage, 'WITH_LOG', 'true'
+
+						SET @RaiseMsg = 'IMPLEMENTING: : Create alert '+@ThisName
+						RAISERROR (@RaiseMsg,0,1) WITH NOWAIT;
+					END
+				END
+			END TRY
+
+			BEGIN CATCH
+				SET @Exception = 'Failed to configure alert - ' + @ThisName + '. ' + CONVERT(VARCHAR(50),ERROR_NUMBER()) + '. ' + CONVERT(VARCHAR(500),ERROR_MESSAGE())
+				IF ERROR_NUMBER() <> 14501 --Already exists
+					RAISERROR (@Exception,16,1) WITH NOWAIT;
+			END CATCH
+		END		  
+		SET @AlertCounter = @AlertCounter + 1
+	END
+
+END
+
+
+
+/* XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent*/
 /* XEvent session to capture blocking reports and deadlocks together.
    Writes to a ring buffer (in-memory, no file I/O overhead).
    The ring_buffer target holds ~10 MB of events by default.          */
@@ -1017,8 +2178,58 @@ BEGIN CATCH
 	RAISERROR ('BlockingAndDeadlocks XEvent session already running', 0, 1) WITH NOWAIT;
 END CATCH
 
-
+/* XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent XEvent*/
 USE [msdb]
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Default Trace
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+/* The default trace records schema changes, database file growth/shrink,
+   security changes, server start/stop, and error events to a rolling set
+   of .trc files. It is on by default but can be accidentally disabled.
+   It is the first place to look when troubleshooting "who changed what".
+   Note: deprecated in SQL 2022 in favour of XEvent system_health — this
+   block enables it on all earlier versions and warns on 2022+.          */
+DECLARE @DefaultTraceEnabled INT
+DECLARE @DefaultTraceVer     INT
+SELECT @DefaultTraceEnabled = CONVERT(INT, value_in_use)
+FROM sys.configurations WHERE name = 'default trace enabled';
+SELECT @DefaultTraceVer = @@MicrosoftVersion / 0x01000000;
+
+IF @DefaultTraceVer >= 16
+    EXEC #sp_CCReport @Mode='INFO', @Section='Server Config', @Setting='default trace enabled',
+        @Detail='deprecated in SQL 2022+; use system_health XEvent';
+ELSE IF @ApplyDefaultTrace = 1 AND @DefaultTraceEnabled = 0 AND @ForChangeControl = 0
+BEGIN
+    BEGIN TRY
+        EXEC sys.sp_configure N'show advanced options', N'1'; RECONFIGURE WITH OVERRIDE;
+        EXEC sys.sp_configure N'default trace enabled', N'1'; RECONFIGURE WITH OVERRIDE;
+        EXEC sys.sp_configure N'show advanced options', N'0'; RECONFIGURE WITH OVERRIDE;
+        EXEC #sp_CCReport @Mode='IMPLEMENTING', @Section='Server Config', @Setting='default trace enabled',
+            @CurrentValue='0', @TargetValue='1', @Detail='re-enabled (was disabled)';
+    END TRY
+    BEGIN CATCH
+        EXEC #sp_CCReport @Mode='FAILED', @Section='Server Config', @Setting='default trace enabled',
+            @CurrentValue='0', @TargetValue='1', @Detail='sp_configure raised an error';
+    END CATCH
+END
+ELSE IF @ApplyDefaultTrace = 1 AND @DefaultTraceEnabled = 0 AND @ForChangeControl = 1
+    EXEC #sp_CCReport @Mode='PLANNED', @Section='Server Config', @Setting='default trace enabled',
+        @CurrentValue='0', @TargetValue='1', @Detail='re-enable default trace';
+ELSE IF @DefaultTraceEnabled = 1
+    EXEC #sp_CCReport @Mode='INFO', @Section='Server Config', @Setting='default trace enabled',
+        @CurrentValue='1', @TargetValue='1', @Detail='already enabled';
+ELSE IF @ApplyDefaultTrace = 0 AND @DefaultTraceEnabled = 0
+    EXEC #sp_CCReport @Mode='SKIPPED', @Section='Server Config', @Setting='default trace enabled',
+        @CurrentValue='0', @Detail='@ApplyDefaultTrace = 0 - left disabled';
+
+
 
 
 /* JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS*/
@@ -1113,371 +2324,6 @@ BEGIN
 	END CATCH
 END
 -- Alert Names start with the name of the server 
-
-
-
-
-
-
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   SECTION 3: DATABASE MAIL CONFIGURATION
-   Enable Database Mail and create operators for alert notifications
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-/* We will assume you have Datbase Mail enabled and configured*/
-/*Thanks:
-Brent Ozar Unlimited, https://www.brentozar.com/blitz/configure-sql-server-alerts/
-@KeefOnToast and Chuck
-*/
-
-
-
-/*Enable Advanced options*/
-EXEC sys.sp_configure N'show advanced options', N'1'
-RECONFIGURE WITH OVERRIDE
-
-/*Enable Database Mail*/
-EXEC sp_configure 'Database Mail XPs', 1
-RECONFIGURE WITH OVERRIDE
-RAISERROR ('Action: Enabled database mail',0,1) WITH NOWAIT;
-
-
-
-USE [master]
-
--- Get the server name
-DECLARE @ServerName sysname 
-SET @ServerName = (SELECT @@SERVERNAME);
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   SECTION 4: SQL AGENT ALERTS
-   Create comprehensive alerts for severity levels, error numbers,
-   and Always On availability group events
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
----------------------------------------------------------------------------------------------------------
-/* Adapted by Adrian Sullivan from Glenn Berry's script*/
-
--- Add important SQL Agent Alerts to your instance
-
--- This will work with SQL Server 2008 and newer
--- Glenn Berry
--- SQLskills.com
--- Last Modified: August 11, 2014
--- http://sqlserverperformance.wordpress.com/
--- http://sqlskills.com/blogs/glenn/
--- Twitter: GlennAlanBerry
-
--- Listen to my Pluralsight courses
--- http://www.pluralsight.com/author/glenn-berry
-
-
-DECLARE @Operator NVARCHAR(500);
-DECLARE @Severity TINYINT;
-DECLARE @AlertName NVARCHAR(500);
-DECLARE @StepDescription NVARCHAR(500);
-DECLARE @WhereToSend TINYINT;
-DECLARE @SQLDBANotification NVARCHAR(200);
-SET @SQLDBANotification= N'Possible P2/P3. Assign to SQL Engineers/DBA';
-
--- Change @OperatorName as needed
-DECLARE @OperatorName sysname 
-SET @OperatorName= N'SQLDBA';
-
-
-SET @WhereToSend = 1 /*Change this to 7 to cover Email(1), Pager(2) and Net Send(4)*/
-SET @Operator = @OperatorName;
-SET @DynamicSQL =' EXEC msdb.dbo.sp_add_operator @name=N''' + @Operator + ''', 
-@enabled=1, 
-@weekday_pager_start_time=90000, 
-@weekday_pager_end_time=180000, 
-@saturday_pager_start_time=90000, 
-@saturday_pager_end_time=180000, 
-@sunday_pager_start_time=90000, 
-@sunday_pager_end_time=180000, 
-@pager_days=0, 
-@email_address=N''alerts@sqldba.org'', 
-@category_name=N''[Uncategorized]''; '
-BEGIN TRY
-		EXEC sp_executesql @DynamicSQL;
-		SET @StepDescription = 'Operator created: ' + @Operator;
-END TRY
-BEGIN CATCH
-		SET @StepDescription = 'Operator already exists for: ' + @Operator;
-		EXEC msdb.dbo.sp_update_operator @name=N'SQLDBA', 
-		@enabled=1, 
-		@pager_days=0, 
-		@email_address=N'alerts@sqldba.org', 
-		@pager_address=N''
-
-END CATCH
-RAISERROR (@StepDescription,0,1) WITH NOWAIT;
-
--- Make sure you have an Agent Operator defined that matches the name you supplied
-IF NOT EXISTS(SELECT * FROM msdb.dbo.sysoperators WHERE name = @OperatorName)
-    BEGIN
-        RAISERROR ('There is no SQL Operator with a name of %s' , 18 , 16 , @OperatorName);
-        RETURN;
-    END
-
--- Change @CategoryName as needed
-DECLARE @CategoryName sysname 
-SET @CategoryName = N'SQL Server Agent Alerts';
-
-
--- Add Alert Category if it does not exist
-IF NOT EXISTS (SELECT *
-               FROM msdb.dbo.syscategories
-               WHERE category_class = 2  -- ALERT
-               AND category_type = 3
-               AND name = @CategoryName)
-    BEGIN
-        EXEC msdb.dbo.sp_add_category @class = N'ALERT', @type = N'NONE', @name = @CategoryName;
-    END
-DECLARE @AlertTable TABLE 
-(
-	ID INT IDENTITY(1,1)
-	, AlertType NVARCHAR(50)
-	, TheNumber INT
-	, AlertName sysname
-)
-INSERT INTO @AlertTable VALUES ('Severity',19, 	@ServerName + N' Alert - Sev 19 Error: Fatal Error in Resource')
-INSERT INTO @AlertTable VALUES ('Severity',20, 	@ServerName + N' Alert - Sev 20 Error: Fatal Error in Current Process')
-INSERT INTO @AlertTable VALUES ('Severity',21, 	@ServerName + N' Alert - Sev 21 Error: Fatal Error in Database Process')
-INSERT INTO @AlertTable VALUES ('Severity',22, 	@ServerName + N' Alert - Sev 22 Error: Fatal Error: Table Integrity Suspect')
-INSERT INTO @AlertTable VALUES ('Severity',23, 	@ServerName + N' Alert - Sev 23 Error: Fatal Error Database Integrity Suspect')
-INSERT INTO @AlertTable VALUES ('Severity',24, 	@ServerName + N' Alert - Sev 24 Error: Fatal Hardware Error')
-INSERT INTO @AlertTable VALUES ('Severity',25, 	@ServerName + N' Alert - Sev 25 Error: Fatal Error')
-
-
-
--- Error 823: Operating System Error
--- How to troubleshoot a Msg 823 error in SQL Server	
--- http://support.microsoft.com/kb/2015755
-
--- Error 824: Logical consistency-based I/O error
--- How to troubleshoot Msg 824 in SQL Server
--- http://support.microsoft.com/kb/2015756
-
--- Error 825: Read-Retry Required
--- How to troubleshoot Msg 825 (read retry) in SQL Server
--- http://support.microsoft.com/kb/2015757
-
--- Error 832: Constant page has changed
--- http://www.sqlskills.com/blogs/paul/dont-confuse-error-823-and-error-832/
--- http://support.microsoft.com/kb/2015759
-
-
--- Memory Error Correction alerts added on 10/30/2013
-
--- Mitigation of RAM Hardware Errors
--- When SQL Server 2012 Enterprise Edition is installed on a Windows 2012 operating system with hardware that supports bad memory diagnostics, 
--- you will notice new error messages like 854, 855, and 856 instead of the 832 errors that LazyWriter usually generates.
--- Error 854 is just informing you that your instance supports memory error correction
-
--- Using SQL Server in Windows 8 and Windows Server 2012 environments
---https://learn.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-events-and-errors-0-to-999?view=sql-server-ver17
--- http://support.microsoft.com/kb/2681562
-INSERT INTO @AlertTable VALUES ('Error',610, 	@ServerName + N' Error 610: Invalid header value from a page.' )--  Run DBCC CHECKDB to check for a data corruption.'   )
-INSERT INTO @AlertTable VALUES ('Error',823, 	@ServerName + N' Error 823: The operating system returned an error')
-INSERT INTO @AlertTable VALUES ('Error',824, 	@ServerName + N' Error 824: Logical consistency-based I/O error')
-INSERT INTO @AlertTable VALUES ('Error',825, 	@ServerName + N' Error 825: Read-Retry Required')
-INSERT INTO @AlertTable VALUES ('Error',832, 	@ServerName + N' Error 832: Constant page has changed')
-INSERT INTO @AlertTable VALUES ('Error',855, 	@ServerName + N' Error 855: Uncorrectable hardware memory corruption detected')
-INSERT INTO @AlertTable VALUES ('Error',856, 	@ServerName + N' Error 856: SQL Server has detected hardware memory corruption, but has recovered the page')
-INSERT INTO @AlertTable VALUES ('Error',1205, 	@ServerName + N' Error 1205: Deadlock')
-INSERT INTO @AlertTable VALUES ('Error',3928, 	@ServerName + N' Error 3928: Deadlock')
-INSERT INTO @AlertTable VALUES ('Error',829,	@ServerName + N' Error Database, Page is marked RestorePending, which may indicate disk corruption.')-- To recover from this state, perform a restore.')
-INSERT INTO @AlertTable VALUES ('Error',211,	@ServerName + N' Error 211: Corruption in database possibly due to schema or catalog inconsistency.')-- Run DBCC CHECKCATALOG.')
-INSERT INTO @AlertTable VALUES ('Error',602,	@ServerName + N' Error 602: Stored procedure references a dropped table, or metadata is corrupted.')-- Drop and re-create the stored procedure, or execute DBCC CHECKDB.
-INSERT INTO @AlertTable VALUES ('Error',603,	@ServerName + N' Error 603: Could not find an entry for table or index with object ID.')-- This error can occur if a stored procedure references a dropped table, or metadata is corrupted. Drop and re-create the stored procedure, or execute DBCC CHECKDB.
-INSERT INTO @AlertTable VALUES ('Error',608,	@ServerName + N' Error 608: No catalog entry found for partition ID in database. The metadata is inconsistent.')-- Run DBCC CHECKDB to check for a metadata corruption.	
-INSERT INTO @AlertTable VALUES ('Error',683,	@ServerName + N' Error 683: Error occurred trying to convert between variable- and fixed-length decimal formats.')-- Run DBCC CHECKDB to check for any database corruption.
-INSERT INTO @AlertTable VALUES ('Error',684,	@ServerName + N' Error 684: Error occurred attempting to convert between compressed and uncompressed storage.')-- Run DBCC CHECKDB to check for any corruption.
-INSERT INTO @AlertTable VALUES ('Error',692,	@ServerName + N' Error 692: Error. Buffer provided to write a fixed column value is too large.')-- Run DBCC CHECKDB to check for any corruption.
-INSERT INTO @AlertTable VALUES ('Error',808,	@ServerName + N' Error 808: Insufficient bytes transferred. Backup,insufficient disk space,corruption/hardware failure.')-- Check errorlogs/application-logs for detailed messages and correct error conditions.
-INSERT INTO @AlertTable VALUES ('Error',882,	@ServerName + N' Error 882: Schema of a table created by InternalBaseTable is corrupt.')--
-INSERT INTO @AlertTable VALUES ('Error',918,	@ServerName + N' Error 918: Failed to load engine script metadata from script DLL. This is a serious error condition.')-- which usually indicates a corrupt or incomplete installation-- Repairing the SQL Server instance may help resolve this error.
-INSERT INTO @AlertTable VALUES ('Error',965,	@ServerName + N' Error 965: Warning: Column nullability inconsistency detected in the metadata. Index may be corrupt.')-- Run DBCC CHECKTABLE to verify consistency.
-INSERT INTO @AlertTable VALUES ('Error',976,	@ServerName + N' Error 976: Database Not Accessible')
-INSERT INTO @AlertTable VALUES ('Error',983,	@ServerName + N' Error 983: Database Role Resolving. Unable to access availability database')
-INSERT INTO @AlertTable VALUES ('Error',3402,	@ServerName + N' Error 3402: Database Restoring')
-/* Always On / AG critical */
-INSERT INTO @AlertTable VALUES ('Error',35265, 	@ServerName + N' AG 35265: AG Data Movement - Resumed')
-INSERT INTO @AlertTable VALUES ('Error',35264, 	@ServerName + N' AG 35264: AG Data Movement - Suspended')
-INSERT INTO @AlertTable VALUES ('Error',28034, 	@ServerName + N' AG 28034: Connection handshake on broker')
-INSERT INTO @AlertTable VALUES ('Error',1480, 	@ServerName + N' AG 1480: AG Role Change' )
-INSERT INTO @AlertTable VALUES ('Error',41091, 	@ServerName + N' AG 41091: Replica Going Offline Lease Expired')
-INSERT INTO @AlertTable VALUES ('Error',41131, 	@ServerName + N' AG 41131: Failed to Bring AG ONLINE')
-INSERT INTO @AlertTable VALUES ('Error',41142, 	@ServerName + N' AG 41142: Replica Cannot become primary')
-INSERT INTO @AlertTable VALUES ('Error',41406, 	@ServerName + N' AG 41406: AG not Ready for Auto Failover')
-INSERT INTO @AlertTable VALUES ('Error',41414, 	@ServerName + N' AG 41414: Secondary not Connected')
-INSERT INTO @AlertTable VALUES ('Error',35276, 	@ServerName + N' Error 35276: Failed to allocate and schedule an AG task for database. Database Out of Sync'  )
-
-
-INSERT INTO @AlertTable VALUES ('Error',1481,	@ServerName + N' AG 1481: Database replica sync health check failed')
-INSERT INTO @AlertTable VALUES ('Error',35201,	@ServerName + N' AG 35201: Connection to primary failed')
-INSERT INTO @AlertTable VALUES ('Error',19407, 	@ServerName + N' AG 19407: Cluster connectivity issue.' )-- The lease between the SQL availability group and the Windows Server Failover Cluster has expired.'  )
-INSERT INTO @AlertTable VALUES ('Error',19419, 	@ServerName + N' AG 19419: Cluster to SQL lease timeout.' )--  Failover Cluster did not receive a process event signal from SQL Server hosting availability group within the lease timeout period.'  )
-INSERT INTO @AlertTable VALUES ('Error',19421, 	@ServerName + N' AG 19421: SQL to Cluster lease timeout.' )--  SQL availability group did not receive a process event signal from the Failover Cluster within the lease timeout period.'  )
-INSERT INTO @AlertTable VALUES ('Error',19422, 	@ServerName + N' AG 19422: AG lease renewal failed.' )--  SQL availability group and the Windows Server Failover Cluster failed because SQL Server encountered Windows error with error code.'  )
-INSERT INTO @AlertTable VALUES ('Error',41143, 	@ServerName + N' AG 41143: AG replica is in a failed state.' )--   A previous operation to read or update persisted configuration data for the availability group has failed.  To recover from this failure, either restart the local Windows Server Failover Clustering (WSFC) service or restart the local instance of SQL Server.'  )
-INSERT INTO @AlertTable VALUES ('Error',41005, 	@ServerName + N' AG 41005: Failed to obtain Failover Clustering (WSFC) resource handle.' )--  The WSFC service may not be running or may not be accessible in its current state.'  )
-INSERT INTO @AlertTable VALUES ('Error',41144, 	@ServerName + N' AG 41144: Local AG replica is in a failed state.' )--   The replica failed to read or update the persisted configuration data. To recover from this failure, either restart the local Windows Server Failover Clustering (WSFC) service or restart the local instance of SQL Server.'  )
-
-INSERT INTO @AlertTable VALUES ('Error',19406, 	@ServerName + N' AG 19406: AG Replica Changed States')
-INSERT INTO @AlertTable VALUES ('Error',35206, 	@ServerName + N' AG 35206: Connection Timeout')
-INSERT INTO @AlertTable VALUES ('Error',35250, 	@ServerName + N' AG 35250: Connection to Primary Inactive')
-INSERT INTO @AlertTable VALUES ('Error',35273, 	@ServerName + N' AG 35273: Database Inaccessible')
-INSERT INTO @AlertTable VALUES ('Error',35274, 	@ServerName + N' AG 35274: Database Recovery Pending')
-INSERT INTO @AlertTable VALUES ('Error',35275, 	@ServerName + N' AG 35275: Database in Suspect State')
-      
- 
-
-INSERT INTO @AlertTable VALUES ('Error',9002, 	@ServerName + N' Error 9002: Log File FULL')
-INSERT INTO @AlertTable VALUES ('Error',1101,	@ServerName + N' Error 1101: Database filegroup out of space')
-INSERT INTO @AlertTable VALUES ('Error',3041,	@ServerName + N' Error 3041: BACKUP failed to complete. Check the backup application log for detailed messages.')
-INSERT INTO @AlertTable VALUES ('Error',12412,	@ServerName + N' Error 12412: Internal table access error. Failed to access the Query Store internal table.')
-INSERT INTO @AlertTable VALUES ('Error',18210,	@ServerName + N' Error 18210:  Failure on backup device. Operating system error.')
-INSERT INTO @AlertTable VALUES ('Error',28036, 	@ServerName + N' Error 28036: Connection handshake failed.' )--  The certificate used by this endpoint was not found')
-INSERT INTO @AlertTable VALUES ('Error',2511, 	@ServerName + N' Error 2511: Table error. Keys out of order on page.' )-- 
-INSERT INTO @AlertTable VALUES ('Error',5228, 	@ServerName + N' Error 5228: Table error. DBCC detected incomplete cleanup.' )-- 
-INSERT INTO @AlertTable VALUES ('Error',5229, 	@ServerName + N' Error 5229: Table error. contains an anti-matter column.' )-- 
-INSERT INTO @AlertTable VALUES ('Error',5242, 	@ServerName + N' Error 5242: An inconsistency was detected during an internal operation in database.' )-- 
-INSERT INTO @AlertTable VALUES ('Error',5243, 	@ServerName + N' Error 5243: An inconsistency was detected during an internal operation.' )-- 
-INSERT INTO @AlertTable VALUES ('Error',5250, 	@ServerName + N' Error 5250: Database error. This error cannot be repaired.' )--
-
-/* Memory pressure alerts */
-INSERT INTO @AlertTable VALUES ('Error',701,	@ServerName + N' Error 701: Insufficient memory in resource pool')
-INSERT INTO @AlertTable VALUES ('Error',802,	@ServerName + N' Error 802: Insufficient memory available in the buffer pool')
-INSERT INTO @AlertTable VALUES ('Error',8645,	@ServerName + N' Error 8645: Timeout waiting for memory resource (RESOURCE_SEMAPHORE)')
-INSERT INTO @AlertTable VALUES ('Error',8651,	@ServerName + N' Error 8651: Low memory condition - deferred request failed')
-INSERT INTO @AlertTable VALUES ('Error',17803,	@ServerName + N' Error 17803: Insufficient memory during thread creation (Windows memory allocation failed)')
-
-/* Log / disk space alerts */
-INSERT INTO @AlertTable VALUES ('Error',9001,	@ServerName + N' Error 9001: Log for database is not available (log corruption / inaccessible)')
-INSERT INTO @AlertTable VALUES ('Error',1105,	@ServerName + N' Error 1105: Could not allocate space in filegroup (data file full, including PRIMARY)')
-INSERT INTO @AlertTable VALUES ('Error',3271,	@ServerName + N' Error 3271: Non-recoverable I/O error occurred on file')
-
-/* Authentication / security */
-INSERT INTO @AlertTable VALUES ('Error',17806,	@ServerName + N' Error 17806: SSPI handshake failed (authentication failure)')
-
-/* I/O subsystem */
-INSERT INTO @AlertTable VALUES ('Error',7105,	@ServerName + N' Error 7105: Could not retrieve row from disk (out-of-row BLOB I/O error)')
-
-/* Configuration change audit trail */
-INSERT INTO @AlertTable VALUES ('Error',15457,	@ServerName + N' Error 15457: Configuration option changed (audit trail)')
-
-/* Network / TDS errors */
-INSERT INTO @AlertTable VALUES ('Error',4014,	@ServerName + N' Error 4014: Fatal error reading input stream from the network (TDS corruption)')
-INSERT INTO @AlertTable VALUES ('Error',17826,	@ServerName + N' Error 17826: Could not start network library due to internal error (SQL lost its listener)')
-
-/* File Control Block / pre-corruption indicator */
-INSERT INTO @AlertTable VALUES ('Error',5180,	@ServerName + N' Error 5180: Could not open File Control Block for invalid file ID (precursor to 823/824 corruption)')
-
-/* Stack alignment fatal error */
-INSERT INTO @AlertTable VALUES ('Error',17551,	@ServerName + N' Error 17551: Fatal error - stack not properly aligned (indicates driver/OS issue)')
-
-/* Buffer manager internal error */
-INSERT INTO @AlertTable VALUES ('Error',8966,	@ServerName + N' Error 8966: Unable to read and latch page (internal buffer manager error indicating corruption)')
-
-/* Backup / restore termination (complementary to 3041 -- also fires on restore failures) */
-INSERT INTO @AlertTable VALUES ('Error',3013,	@ServerName + N' Error 3013: BACKUP or RESTORE terminating abnormally')
-
-/* MSDTC distributed transaction recovery */
-INSERT INTO @AlertTable VALUES ('Error',3452,	@ServerName + N' Error 3452: Recovery of in-doubt distributed transactions (MSDTC) detected')
-
-/* Security monitoring -- login failures (delay_between_responses set to 60s in the loop to avoid storms) */
-INSERT INTO @AlertTable VALUES ('Error',18456,	@ServerName + N' Error 18456: Login failed (security monitoring)')
-
-/* Additional critical missing alerts - best practice additions */
-/* I/O subsystem and lock errors */
-INSERT INTO @AlertTable VALUES ('Error',596,	@ServerName + N' Error 596: LCK_M_IX lock wait exceeded (severe blocking)')
-INSERT INTO @AlertTable VALUES ('Error',595,	@ServerName + N' Error 595: Lock escalation prevented')
-INSERT INTO @AlertTable VALUES ('Error',1221,	@ServerName + N' Error 1221: Lock resources exceeded (deadlock victim)')
-
-/* Query Store errors */
-INSERT INTO @AlertTable VALUES ('Error',12410,	@ServerName + N' Error 12410: Query Store internal error')
-INSERT INTO @AlertTable VALUES ('Error',12411,	@ServerName + N' Error 12411: Query Store collection failed')
-
-/* Transaction log corruption */
-INSERT INTO @AlertTable VALUES ('Error',9003,	@ServerName + N' Error 9003: Log scan - invalid log sequence number')
-INSERT INTO @AlertTable VALUES ('Error',9004,	@ServerName + N' Error 9004: Log file corruption - truncated')
-INSERT INTO @AlertTable VALUES ('Error',9013,	@ServerName + N' Error 9013: Virtual log file too small')
-
-/* DAC connection issues */
-INSERT INTO @AlertTable VALUES ('Error',233,	@ServerName + N' Error 233: Shared memory provider disconnected')
-
-/* Brent Ozar / Microsoft additional critical alerts */
-/* Resource semaphore exhaustion */
-INSERT INTO @AlertTable VALUES ('Error',8645, 	@ServerName + N' Error 8645: Resource semaphore wait timeout')
-
-/* SOS scheduler exhaustion (critical) */
-INSERT INTO @AlertTable VALUES ('Error',17883, 	@ServerName + N' Error 17883: Scheduler deadlock detected')
-INSERT INTO @AlertTable VALUES ('Error',17884, 	@ServerName + N' Error 17884: All schedulers appear deadlocked')
-
-
-DECLARE @MaxAlerts TINYINT
-DECLARE @AlertCounter TINYINT 
-SET @AlertCounter = 1
-DECLARE @ThisName sysname
-DECLARE @Exception NVARCHAR(2000)
-DECLARE @ThisAlert INT
-DECLARE @ThisMessage INT
-DECLARE @ThisAlertType NVARCHAR(50)
-SELECT @MaxAlerts = MAX(ID) FROM @AlertTable
-USE msdb
-WHILE @AlertCounter <= @MaxAlerts
-BEGIN
-	SELECT @ThisName = AlertName
-	, @ThisAlert = TheNumber
-	, @ThisAlertType = AlertType
-	FROM @AlertTable WHERE ID = @AlertCounter
-	IF @ThisAlertType = 'Error'
-	BEGIN
-		SET @ThisMessage = @ThisAlert
-		SET @ThisAlert = 0
-	END
-	IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name = @ThisName)
-	BEGIN
-		IF @ThisAlert <> 0
-			RAISERROR (@ThisAlert,0,1) WITH NOWAIT;
-		BEGIN TRY
-			EXEC msdb.dbo.sp_add_alert @name = @ThisName, 
-						  @message_id = @ThisMessage, @severity = @ThisAlert, @enabled = 1, 
-						  @delay_between_responses = 900, @include_event_description_in = 1,@notification_message=@SQLDBANotification,
-						  @category_name = @CategoryName, 
-						 @job_id = N'00000000-0000-0000-0000-000000000000';
-			IF NOT EXISTS(SELECT *
-				  FROM msdb.dbo.sysalerts AS sa
-				  INNER JOIN msdb.dbo.sysnotifications AS sn
-				  ON sa.id = sn.alert_id
-				  WHERE (sa.name = @ThisName
-				  OR sa.message_id = @ThisAlert))
-			BEGIN
-				EXEC msdb.dbo.sp_add_notification @alert_name = @ThisName, @operator_name = @OperatorName, @notification_method = 1;
-				--EXEC msdb.dbo.sp_add_notification @alert_name = @ThisName, @operator_name = @ServiceDesk, @notification_method = 1;
-				SET @ThisName = 'Configure alert - ' + @ThisName
-			
-				/*Ensure these errors log for SCOM*/
-				IF @ThisAlertType = 'Error'
-					EXEC sp_altermessage @ThisMessage, 'WITH_LOG', 'true'
-
-				RAISERROR (@ThisName,0,1) WITH NOWAIT;
-			END
-
-		END TRY
-
-		BEGIN CATCH
-			SET @Exception = 'Failed to configure alert - ' + @ThisName + '. ' + CONVERT(VARCHAR(50),ERROR_NUMBER()) + '. ' + CONVERT(VARCHAR(500),ERROR_MESSAGE())
-			IF ERROR_NUMBER() <> 14501 --Already exists
-				RAISERROR (@Exception,16,1) WITH NOWAIT;
-		END CATCH
-	END		  
-	SET @AlertCounter = @AlertCounter + 1
-END
-
 
 
 /*
@@ -1598,281 +2444,9 @@ EndSave:
 RAISERROR ( 'Daily Cycle Log job created',0,1) WITH NOWAIT;
 
 
-
--- Limit error logs
-EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'NumErrorLogs', REG_DWORD, 100
---GO
-RAISERROR ('Action: Set Errorlogs to 100',0,1) WITH NOWAIT;
--- Set sp_configure settings
-
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- Set RAC, repl size, recovery interval and agent history
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-EXEC sys.sp_configure N'show advanced options', N'1'
-RECONFIGURE WITH OVERRIDE
-
-EXEC sys.sp_configure N'remote admin connections', N'1'
-RECONFIGURE WITH OVERRIDE
-
-RAISERROR ('Action: Enabled remote admin mail',0,1) WITH NOWAIT;
+/* JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS JOBS*/
 
 
-EXEC sys.sp_configure N'recovery interval (min)', N'1'
-RAISERROR ('Action: Set recovery interval',0,1) WITH NOWAIT;
-
-EXEC sys.sp_configure N'max text repl size (B)', N'-1'
-RAISERROR ('Action: Set max text replication size',0,1) WITH NOWAIT;
-
-
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- Default Trace
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-/* The default trace records schema changes, database file growth/shrink,
-   security changes, server start/stop, and error events to a rolling set
-   of .trc files. It is on by default but can be accidentally disabled.
-   It is the first place to look when troubleshooting "who changed what".
-   Note: deprecated in SQL 2022 in favour of XEvent system_health — this
-   block enables it on all earlier versions and warns on 2022+.          */
-DECLARE @DefaultTraceEnabled INT
-DECLARE @DefaultTraceVer     INT
-SELECT @DefaultTraceEnabled = CONVERT(INT, value_in_use)
-FROM sys.configurations WHERE name = 'default trace enabled';
-SELECT @DefaultTraceVer = @@MicrosoftVersion / 0x01000000;
-
-IF @DefaultTraceVer >= 16
-BEGIN
-    RAISERROR ('Action: Default trace is deprecated in SQL 2022+ (system_health XEvent session covers the same ground)', 0, 1) WITH NOWAIT;
-END
-ELSE IF @DefaultTraceEnabled = 0
-BEGIN
-    EXEC sys.sp_configure N'show advanced options', N'1'
-    RECONFIGURE WITH OVERRIDE
-    EXEC sys.sp_configure N'default trace enabled', N'1'
-    RECONFIGURE WITH OVERRIDE
-    EXEC sys.sp_configure N'show advanced options', N'0'
-    RECONFIGURE WITH OVERRIDE
-    RAISERROR ('Action: Default trace was disabled -- re-enabled', 0, 1) WITH NOWAIT;
-END
-ELSE
-    RAISERROR ('Action: Default trace is already enabled', 0, 1) WITH NOWAIT;
-
-
-/*Let's set , don't want no huge msdb please*/
-EXEC msdb.dbo.sp_set_sqlagent_properties
-	@jobhistory_max_rows=100000,
-	@jobhistory_max_rows_per_job=1000,
-	@email_save_in_sent_folder=1,
-	@cpu_poller_enabled=1,
-	@idle_cpu_percent=10,        -- idle when CPU below 10%
-	@idle_cpu_duration=600       -- for 600 consecutive seconds
-/*Configure Agent alert conditions*/
-EXEC master.dbo.sp_MSsetalertinfo @failsafeoperator=N'SQLDBA',
-		@notificationmethod=1
-
-RAISERROR ('Action: Set jobhistory to 100k, rows per job 1k',0,1) WITH NOWAIT;
-
-
-
-
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- Set backup checksum, contained databases, backup compression and ad hoc workloads
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-/*Check if server version > SQL 2008R2*/
-DECLARE @SQLVersion INT
-SELECT @SQLVersion = @@MicrosoftVersion / 0x01000000  OPTION (RECOMPILE)-- Get major version
-IF @ForChangeControl = 0
-BEGIN
-IF @SQLVersion >= 10
-BEGIN
-	BEGIN TRY
-		EXEC sys.sp_configure N'backup checksum default', N'1'
-		RECONFIGURE WITH OVERRIDE
-		RAISERROR ('Action: Set backup checksum',0,1) WITH NOWAIT;
-		
-	END TRY
-	BEGIN CATCH 
-		RAISERROR ('Failed to configure backup checksum default',0,1) WITH NOWAIT;
-	END CATCH
-	EXEC sys.sp_configure N'contained database authentication', N'1'
-	RECONFIGURE WITH OVERRIDE
-	RAISERROR ( 'Action: Enabled contained DBs',0,1) WITH NOWAIT;
-END
--- Use 'backup compression default' when server is NOT CPU bound
-IF CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff) >= 10
-EXEC sys.sp_configure N'backup compression default', N'1'
-RECONFIGURE WITH OVERRIDE
-
-RAISERROR ('Action: Set backup compression',0,1) WITH NOWAIT;
--- Use 'optimize for ad hoc workloads' for OLTP workloads ONLY
-IF CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff) >= 10
-EXEC sys.sp_configure N'optimize for ad hoc workloads', N'1'
-RECONFIGURE WITH OVERRIDE
-RAISERROR ('Action: Set optimize for ad hoc',0,1) WITH NOWAIT;
-END
-
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- MAXDOP and Cost Threshold for Parallelism
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-/* MAXDOP: cap at 8, use half physical cores, never exceed NUMA node size.
-   Default 0 causes full-server parallelism storms on OLTP workloads.
-   Adjust @TargetMAXDOP before running if you know the workload profile. */
-
-DECLARE @PhysicalCores     INT
-DECLARE @NumaNodes         INT
-DECLARE @CoresPerNuma      INT
-DECLARE @TargetMAXDOP      INT
-DECLARE @MaxDOPMsg         NVARCHAR(300)
-
-SELECT
-    @PhysicalCores = si.cpu_count / si.hyperthread_ratio,
-    @NumaNodes     = COUNT(DISTINCT mn.memory_node_id)
-FROM sys.dm_os_sys_info si
-CROSS JOIN sys.dm_os_memory_nodes mn
-WHERE mn.memory_node_id <> 64  -- exclude DAC node
-GROUP BY si.cpu_count, si.hyperthread_ratio;
-
-/* Cores per NUMA node (floor, minimum 1) */
-SET @CoresPerNuma = CASE WHEN @NumaNodes > 0 THEN @PhysicalCores / @NumaNodes ELSE @PhysicalCores END;
-IF @CoresPerNuma < 1 SET @CoresPerNuma = 1;
-
-/* MAXDOP: half physical cores, capped at 8, never exceeds cores-per-NUMA-node, minimum 1 */
-SET @TargetMAXDOP = CASE
-    WHEN @PhysicalCores / 2 >= 8         THEN 8
-    WHEN @PhysicalCores / 2 < 1          THEN 1
-    ELSE @PhysicalCores / 2
-END;
-
-/* NUMA guard: MAXDOP must not exceed physical cores per NUMA node */
-IF @TargetMAXDOP > @CoresPerNuma SET @TargetMAXDOP = @CoresPerNuma;
-
-EXEC sys.sp_configure N'show advanced options', N'1'
-RECONFIGURE WITH OVERRIDE
-
-EXEC sys.sp_configure N'max degree of parallelism', @TargetMAXDOP
-RECONFIGURE WITH OVERRIDE
-
-SET @MaxDOPMsg = 'Action: Set MAXDOP to ' + CONVERT(VARCHAR(5), @TargetMAXDOP)
-    + ' (physical cores: ' + CONVERT(VARCHAR(5), @PhysicalCores)
-    + ', NUMA nodes: ' + CONVERT(VARCHAR(5), @NumaNodes)
-    + ', cores/NUMA: ' + CONVERT(VARCHAR(5), @CoresPerNuma) + ')'
-RAISERROR (@MaxDOPMsg, 0, 1) WITH NOWAIT;
-
-/* Cost threshold for parallelism: default 5 is far too low.
-   50 is a widely accepted starting point for mixed OLTP. Adjust per workload. */
-IF @ForChangeControl = 0
-BEGIN
-	EXEC sys.sp_configure N'cost threshold for parallelism', N'50'
-	RECONFIGURE WITH OVERRIDE
-END
-RAISERROR ('Action: Set cost threshold for parallelism to 50', 0, 1) WITH NOWAIT;
-
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- Max Server Memory  (CRITICAL — default is unlimited)
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-/* Reserve OS + non-buffer-pool SQL memory.
-   Formula: leave 10% or 4 GB for OS (whichever is larger), minus ~1 GB per 4 logical cores for thread stacks.
-   MODIFY @ReservedForOSMB if this is a dedicated SQL box vs shared host. */
-DECLARE @TotalRAMMB       BIGINT
-DECLARE @ReservedForOSMB  BIGINT
-DECLARE @TargetMaxMemMB   BIGINT
-DECLARE @LogicalCores     INT
-
-SELECT @TotalRAMMB   = physical_memory_kb / 1024,
-       @LogicalCores = cpu_count
-FROM sys.dm_os_sys_info;
-
-/* Reserve: max of (10% of RAM, 4096 MB) + 256 MB per 4 logical cores for thread stacks */
-SET @ReservedForOSMB = CASE
-    WHEN @TotalRAMMB * 0.10 > 4096 THEN CONVERT(BIGINT, @TotalRAMMB * 0.10)
-    ELSE 4096
-END + ((@LogicalCores / 4) * 256);
-
-SET @TargetMaxMemMB = @TotalRAMMB - @ReservedForOSMB;
-
-/* Safety floor: never set below 512 MB */
-IF @TargetMaxMemMB < 512 SET @TargetMaxMemMB = 512;
-
-DECLARE @MaxMemMsg NVARCHAR(500)
-SET @MaxMemMsg = 'Action: Set max server memory to ' + CONVERT(VARCHAR(10), @TargetMaxMemMB)
-    + ' MB (total RAM: ' + CONVERT(VARCHAR(10), @TotalRAMMB) + ' MB, reserved for OS: ' + CONVERT(VARCHAR(10), @ReservedForOSMB) + ' MB)'
-RAISERROR (@MaxMemMsg, 0, 1) WITH NOWAIT;
-
-IF @ApplyMaxMemory = 1
-BEGIN
-    EXEC sys.sp_configure N'max server memory (MB)', @TargetMaxMemMB;
-    RECONFIGURE WITH OVERRIDE;
-    RAISERROR ('Action: Applied max server memory setting', 0, 1) WITH NOWAIT;
-END
-ELSE
-    RAISERROR ('Notice: @ApplyMaxMemory = 0 — max server memory not changed (set to 1 to apply)', 0, 1) WITH NOWAIT;
-
-/*
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
---==========================================================
--- Security Hardening: disable surface area features not in use
---==========================================================
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-*/
-
-/*
-/* Disable features that expand attack surface. Enable only what your apps require. */
-EXEC sys.sp_configure N'Ole Automation Procedures', N'0'
-RECONFIGURE WITH OVERRIDE
-RAISERROR ('Action: Disabled Ole Automation Procedures', 0, 1) WITH NOWAIT;
-
-EXEC sys.sp_configure N'Ad Hoc Distributed Queries', N'0'
-RECONFIGURE WITH OVERRIDE
-RAISERROR ('Action: Disabled Ad Hoc Distributed Queries (OPENROWSET/OPENDATASOURCE)', 0, 1) WITH NOWAIT;
-
-EXEC sys.sp_configure N'cross db ownership chaining', N'0'
-RECONFIGURE WITH OVERRIDE
-RAISERROR ('Action: Disabled cross-database ownership chaining', 0, 1) WITH NOWAIT;
-
-/* Ensure SQL Mail XPs are OFF (legacy, superseded by Database Mail) */
-IF EXISTS(SELECT * FROM sys.configurations WHERE name = 'SQL Mail XPs')
-BEGIN
-	EXEC sys.sp_configure N'SQL Mail XPs', N'0'
-	RECONFIGURE WITH OVERRIDE
-	RAISERROR ('Action: Disabled SQL Mail XPs (legacy)', 0, 1) WITH NOWAIT;
-END
-
-/* Always reset show advanced options — do this unconditionally so it is
-   not dependent on whether SQL Mail XPs exists (removed in SQL 2022+). */
-EXEC sys.sp_configure N'show advanced options', N'0'
-RECONFIGURE WITH OVERRIDE
-*/
 
 /*Configure memory
 BATCH_MODE_ON_ROWSTORE
@@ -1910,16 +2484,10 @@ DECLARE @AutoStatsInc TINYINT
 DECLARE @RecoveryModel TINYINT
 DECLARE @PageVerify TINYINT
 DECLARE @QueryStore TINYINT
+DECLARE @TotalIORank TINYINT
 
 
 
-
-
--- Exclude system databases and offline/restoring databases
-SET @DynamicSQL = @DynamicSQL + ' WHERE database_id > 4 AND state NOT IN (1,2,3,6)';
-SET @DynamicSQL = @DynamicSQL + ' OPTION (RECOMPILE)'
-INSERT INTO @Databases 
-EXEC sp_executesql @DynamicSQL ;
 SET @Databasei_Max = (SELECT MAX(id) FROM @Databases );
 
 DECLARE @dynamicmessage NVARCHAR(500)
@@ -1939,6 +2507,7 @@ BEGIN
 	, @RecoveryModel = recovery_model --3 = simple
 	, @PageVerify = page_verify_option --2 = checksum	
 	, @QueryStore = is_query_store_on
+	, @TotalIORank = TotalIORank
 	FROM @Databases d WHERE id = @Databasei_Count
 
 	IF @AutoClose = 1 
@@ -1947,11 +2516,11 @@ BEGIN
 		SET @DynamicSQLforDB = @DynamicSQLforDB + CHAR(13)+CHAR(10) + 'ALTER DATABASE [' + @DatabaseName + '] SET AUTO_SHRINK OFF WITH NO_WAIT'
 	IF @PageVerify <> 2
 		SET @DynamicSQLforDB = @DynamicSQLforDB + CHAR(13)+CHAR(10) + 'ALTER DATABASE [' + @DatabaseName + '] SET PAGE_VERIFY CHECKSUM WITH NO_WAIT'
-	IF @AutoCreateStats = 0
+	IF @AutoCreateStats = 0 AND @TotalIORank < @DoTopDBCount 
 		SET @DynamicSQLforDB = @DynamicSQLforDB + CHAR(13)+CHAR(10) + 'ALTER DATABASE [' + @DatabaseName + '] SET AUTO_CREATE_STATISTICS ON WITH NO_WAIT'
-	IF @AutoStats = 0
+	IF @AutoStats = 0 AND @TotalIORank < @DoTopDBCount 
 		SET @DynamicSQLforDB = @DynamicSQLforDB + CHAR(13)+CHAR(10) + 'ALTER DATABASE [' + @DatabaseName + '] SET AUTO_UPDATE_STATISTICS ON WITH NO_WAIT'
-	IF @QueryStore = 0
+	IF @QueryStore = 0 AND @TotalIORank < @DoTopDBCount 
 		SET @DynamicSQLforDB = @DynamicSQLforDB + CHAR(13)+CHAR(10) + 'ALTER DATABASE [' + @DatabaseName + '] SET QUERY_STORE = ON WITH NO_WAIT'
 	/*
 	
@@ -1962,20 +2531,63 @@ BEGIN
 --		SET @DynamicSQLforDB = @DynamicSQLforDB + CHAR(13)+CHAR(10) + 'ALTER DATABASE [' + @DatabaseName + '] SET RECOVERY FULL WITH NO_WAIT'
 	IF @DynamicSQLforDB <> ''
 	BEGIN
-		RAISERROR ('Committing database change',0,1) WITH NOWAIT;
-		RAISERROR (@DynamicSQLforDB,0,1) WITH NOWAIT;
-		BEGIN TRY
-			EXECUTE( @DynamicSQLforDB)
-			SET @dynamicmessage = 'Successfully applied changes to database: ' + @DatabaseName
+		IF @ForChangeControl = 0
+		BEGIN
+			RAISERROR ('IMPLEMENTING:Committing database change',0,1) WITH NOWAIT;
+			RAISERROR (@DynamicSQLforDB,0,1) WITH NOWAIT;
+			BEGIN TRY
+				EXECUTE( @DynamicSQLforDB)
+				SET @dynamicmessage = 'IMPLEMENTING: ' + @DatabaseName + '. '+@DynamicSQLforDB
+				RAISERROR (@dynamicmessage,0,1) WITH NOWAIT;
+			END TRY
+			BEGIN CATCH
+				SET @dynamicmessage = 'ERROR: Failed to apply changes to database [' + @DatabaseName + ']: ' + ERROR_MESSAGE()
+				RAISERROR (@dynamicmessage, 16, 1) WITH NOWAIT;
+				-- Continue processing other databases instead of stopping
+			END CATCH
+		END
+		IF @ForChangeControl = 1
+		BEGIN
+			SET @dynamicmessage = 'PLANNED ACTION: '+ @DatabaseName + '. '+@DynamicSQLforDB
 			RAISERROR (@dynamicmessage,0,1) WITH NOWAIT;
-		END TRY
-		BEGIN CATCH
-			SET @dynamicmessage = 'ERROR: Failed to apply changes to database [' + @DatabaseName + ']: ' + ERROR_MESSAGE()
-			RAISERROR (@dynamicmessage, 16, 1) WITH NOWAIT;
-			-- Continue processing other databases instead of stopping
-		END CATCH
+		END
 	END
 	SET @Databasei_Count = @Databasei_Count + 1
+END
+
+
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--==========================================================
+-- Query Store retention settings (recommended by Brent Ozar)
+-- Set to 7 days, auto-cleanup, capture all queries
+--==========================================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+
+IF @SQLVer >= 13
+BEGIN
+    DECLARE @QSSQL NVARCHAR(MAX) = N''
+    SELECT @QSSQL += N'ALTER DATABASE ' + QUOTENAME(db.name) + 
+        N' SET QUERY_STORE (OPERATION_MODE = READ_WRITE, CLEANUP_POLICY = (STALE_QUERY_THRESHOLD_DAYS = 30), ' +
+        N'DATA_FLUSH_INTERVAL_SECONDS = 60, MAX_STORAGE_SIZE_MB = 1000, INTERVAL_LENGTH_MINUTES = 60);' + CHAR(13)
+	FROM sys.databases db
+	INNER JOIN @Databases d ON d.database_id = db.database_id
+    WHERE db.database_id > 4 AND db.state = 0 AND db.is_query_store_on = 1 AND d.TotalIORank < @DoTopDBCount 
+    
+    IF @QSSQL <> N'' AND @ForChangeControl = 0
+    BEGIN
+        RAISERROR('PLANNED ACTION: Optimizing Query Store retention settings', 10, 1) WITH NOWAIT;
+        EXEC sp_executesql @QSSQL
+    END
+	IF @QSSQL <> N'' AND @ForChangeControl = 1
+    BEGIN
+        RAISERROR('PLANNED ACTION: Optimizing Query Store retention settings', 10, 1) WITH NOWAIT;
+        EXEC sp_executesql @QSSQL
+    END
 END
 
 
@@ -2547,8 +3159,8 @@ BEGIN
 	SELECT 13056, 1, 1, 16, 99, 1, 1, 'enable detailed memory grant feedback for index rebuilds'
 	UNION ALL
 	SELECT 1766, 1, 1 , 16, 99, 1, 1, 'enable large page allocations for batch mode'
-	--UNION ALL
-	--SELECT 9453, 1, 1, 16, 99, 1, 1, 'disable batch mode execution for serialized plans'
+	UNION ALL
+	SELECT 9453, 1, 1, 16, 99, 1, 1, 'disable batch mode execution for serialized plans'
 END
 
 --good ideas?
@@ -2698,11 +3310,8 @@ RAISERROR('!! Manual - Disable these traceflags in startup', 0, 1, '') WITH NOWA
 				   FOR XML PATH(''), TYPE).value('.','varchar(max)')
 				  ,1,1,'') + ', -1);'
 
-	--IF @DebugLevel = 0 
-	IF @ForChangeControl = 1
-		PRINT @SQLCMD
-	IF @ForChangeControl = 0
-		EXECUTE (@SQLCMD);
+	IF @DebugLevel = 0 
+	EXECUTE (@SQLCMD);
 	RAISERROR('Manual - Disable TFs Command: "%s"', 0, 1, @SQLCMD) WITH NOWAIT;
 END
 
@@ -2719,20 +3328,13 @@ BEGIN
     WHERE  enable = 1
 	AND WorthImplementing = 1
     ORDER BY TF
-	
+	SET @SQLCMD = 'DBCC TRACEON(' + @traceflagtodo + ', -1);'
     
 	--PRINT 11111
-	IF @ForChangeControl = 1
-	BEGIN
-		SET @SQLCMD = 'Action required: DBCC TRACEON(' + @traceflagtodo + ', -1);'
-		PRINT @SQLCMD
-	END
+	PRINT @SQLCMD
 
-	IF @ForChangeControl = 0
-	BEGIN
-		SET @SQLCMD = 'DBCC TRACEON(' + @traceflagtodo + ', -1);'
+	IF @DebugLevel = 0 
 		EXECUTE (@SQLCMD);
-	END
 
 	DELETE 
 	FROM @TraceFlags
@@ -2953,14 +3555,7 @@ BEGIN
     FROM sys.servers WHERE is_linked = 1
 END
 
--- Check for contained databases authentication
-DECLARE @ContainedDBauth INT
-SELECT @ContainedDBauth = CAST(value_in_use AS INT) FROM sys.configurations WHERE name = 'contained database authentication'
-IF @ContainedDBauth = 1
-BEGIN
-    RAISERROR('INFO: Contained database authentication is enabled', 10, 1) WITH NOWAIT;
-    RAISERROR('      Ensure contained DB users have strong passwords (password policies)', 10, 1) WITH NOWAIT;
-END
+
 
 /* Dynamic SQL uses NCHAR() variables for the 'E' and 'D' characters to break keyword
    boundaries (CREAT+E, ALT+E+R, A+D+D) so the IDE static parser never sees the full
@@ -3267,6 +3862,156 @@ ELSE
 
 
 
+
+
+
+USE [master]
+
+RAISERROR ('Congratulations you awesome DBA you! Now go herd some more cats', 0, 1) WITH NOWAIT;
+
+
+/*
+================================================================================
+  REFERENCE NOTES — sp_Blitz trace flag descriptions (Brent Ozar ULT)
+  Source: https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit
+  These are informational only and have no effect on script execution.
+================================================================================
+
+  652  — disables pre-fetching during index scans. Usually a very bad idea.
+  661  — disables ghost record removal, causing the database to grow. Usually a very bad idea.
+  834  — with columnstore indexes: not recommended by Microsoft.
+  1117 — grows all files in a filegroup at the same time (built-in SQL 2016+).
+  1118 — tries to reduce SGAM waits (built-in SQL 2016+).
+  1204 — captures deadlock graphs in the error log.
+  1211 — disables lock escalation unconditionally. Usually a very bad idea.
+  1222 — captures deadlock graphs in the error log (more detail than 1204).
+  1224 — disables lock escalation until memory pressure. Usually a very bad idea.
+  1806 — disables Instant File Initialization. Usually a very bad idea.
+  2330 — disables missing index requests. Usually a very bad idea.
+  2371 — changes auto update stats threshold (built-in SQL 2016+).
+  3023 — performs checksums by default on database backups.
+  3226 — suppresses successful backup entries from the event log.
+  3505 — disables Checkpoints. Usually a very bad idea.
+  4199 — enables non-default Query Optimizer fixes, may change plans.
+  7745 — makes shutdowns/failovers quicker by not waiting for Query Store flush.
+         Loses non-flushed Query Store data. Only useful if Query Store is in use.
+  7752 — stops queries waiting on Query Store load after database recovery.
+  8017 — disables schedulers for all logical processors (default on Express Edition).
+  8048 — tries to reduce CMEMTHREAD waits on high-core-count servers.
+  8649 — sets cost threshold for parallelism to 0. Usually a very bad idea.
+  1488 — enables Replication to continue when the secondary node is down.
+
+================================================================================
+*/
+
+/*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   FINAL CHANGE-CONTROL REPORT (Markdown)
+   Renders #ChangeControlReport as a Markdown table plus summary so the
+   output can be pasted straight into a CAB ticket / PR description.
+   Two result sets are returned:
+     1. The Markdown text (one row per line) — copy and paste this.
+     2. The raw #ChangeControlReport rows for filtering/sorting in SSMS.
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+SET NOCOUNT ON;
+
+DECLARE @ModeLabel NVARCHAR(80) =
+    CASE @ForChangeControl
+         WHEN 1 THEN 'Change Control Preview (no changes applied)'
+         ELSE 'Implementation (changes applied where needed)'
+    END;
+
+DECLARE @TotalRows  INT, @PlannedRows INT, @ImplementedRows INT,
+        @InfoRows   INT, @SkippedRows INT, @FailedRows INT, @NoticeRows INT;
+
+SELECT @TotalRows       = COUNT(*),
+       @PlannedRows     = SUM(CASE WHEN Mode = 'PLANNED'      THEN 1 ELSE 0 END),
+       @ImplementedRows = SUM(CASE WHEN Mode = 'IMPLEMENTING' THEN 1 ELSE 0 END),
+       @InfoRows        = SUM(CASE WHEN Mode = 'INFO'         THEN 1 ELSE 0 END),
+       @SkippedRows     = SUM(CASE WHEN Mode = 'SKIPPED'      THEN 1 ELSE 0 END),
+       @FailedRows      = SUM(CASE WHEN Mode = 'FAILED'       THEN 1 ELSE 0 END),
+       @NoticeRows      = SUM(CASE WHEN Mode = 'NOTICE'       THEN 1 ELSE 0 END)
+FROM #ChangeControlReport;
+
+/* Markdown escape: pipes inside cell content break the table layout. */
+;WITH Esc AS
+(
+    SELECT  ID,
+            Mode,
+            Section      = REPLACE(REPLACE(Section,      '|', '\|'), CHAR(13)+CHAR(10), ' '),
+            Setting      = REPLACE(REPLACE(Setting,      '|', '\|'), CHAR(13)+CHAR(10), ' '),
+            CurrentValue = REPLACE(REPLACE(ISNULL(CurrentValue, ''), '|', '\|'), CHAR(13)+CHAR(10), ' '),
+            TargetValue  = REPLACE(REPLACE(ISNULL(TargetValue,  ''), '|', '\|'), CHAR(13)+CHAR(10), ' '),
+            Detail       = REPLACE(REPLACE(ISNULL(Detail,       ''), '|', '\|'), CHAR(13)+CHAR(10), ' ')
+    FROM #ChangeControlReport
+),
+Body AS
+(
+    SELECT  Ord = 100 + ID,
+            Line = '| ' + CONVERT(VARCHAR(10), ID)
+                 + ' | ' + Mode
+                 + ' | ' + Section
+                 + ' | ' + Setting
+                 + ' | ' + CurrentValue
+                 + ' | ' + TargetValue
+                 + ' | ' + Detail
+                 + ' |'
+    FROM Esc
+),
+Header AS
+(
+    SELECT 1 AS Ord, '## SQL Server Standardised Implementation — Change Control Report' AS Line UNION ALL
+    SELECT 2,        '' UNION ALL
+    SELECT 3,        '**Server:** `' + @@SERVERNAME + '`' UNION ALL
+    SELECT 4,        '**Generated:** ' + CONVERT(VARCHAR(30), SYSDATETIMEOFFSET(), 120) UNION ALL
+    SELECT 5,        '**Mode:** ' + @ModeLabel UNION ALL
+    SELECT 6,        '**SQL version:** ' + @@VERSION UNION ALL
+    SELECT 7,        '' UNION ALL
+    SELECT 8,        '### Summary' UNION ALL
+    SELECT 9,        '' UNION ALL
+    SELECT 10,       '| Total | Planned | Implemented | Info | Skipped | Failed | Notice |' UNION ALL
+    SELECT 11,       '|------:|--------:|------------:|-----:|--------:|-------:|-------:|' UNION ALL
+    SELECT 12,       '| ' + CONVERT(VARCHAR(10), ISNULL(@TotalRows, 0))
+                   + ' | ' + CONVERT(VARCHAR(10), ISNULL(@PlannedRows, 0))
+                   + ' | ' + CONVERT(VARCHAR(10), ISNULL(@ImplementedRows, 0))
+                   + ' | ' + CONVERT(VARCHAR(10), ISNULL(@InfoRows, 0))
+                   + ' | ' + CONVERT(VARCHAR(10), ISNULL(@SkippedRows, 0))
+                   + ' | ' + CONVERT(VARCHAR(10), ISNULL(@FailedRows, 0))
+                   + ' | ' + CONVERT(VARCHAR(10), ISNULL(@NoticeRows, 0))
+                   + ' |' UNION ALL
+    SELECT 13,       '' UNION ALL
+    SELECT 14,       '### Detail' UNION ALL
+    SELECT 15,       '' UNION ALL
+    SELECT 16,       '| # | Mode | Section | Setting | Current | Target | Detail |' UNION ALL
+    SELECT 17,       '|---|------|---------|---------|---------|--------|--------|'
+),
+Footer AS
+(
+    SELECT 99999 AS Ord, '' AS Line UNION ALL
+    SELECT 100000,
+           CASE
+               WHEN ISNULL(@FailedRows, 0)  > 0 THEN '> [!CAUTION] ' + CONVERT(VARCHAR(10), @FailedRows) + ' operation(s) FAILED — review the Detail column above.'
+               WHEN @ForChangeControl = 1 AND ISNULL(@PlannedRows, 0) > 0 THEN '> [!NOTE] Change-control preview only — re-run with `@ForChangeControl = 0` to apply the ' + CONVERT(VARCHAR(10), @PlannedRows) + ' planned change(s).'
+               WHEN @ForChangeControl = 1 AND ISNULL(@PlannedRows, 0) = 0 THEN '> [!TIP] Change-control preview — nothing to apply, server already at target state.'
+               ELSE '> [!TIP] Implementation complete.'
+           END
+)
+SELECT [Markdown Change Control Report] = Line
+FROM (
+    SELECT Ord, Line FROM Header
+    UNION ALL SELECT Ord, Line FROM Body
+    UNION ALL SELECT Ord, Line FROM Footer
+) AS All_Lines
+ORDER BY Ord;
+
+/* Second result set: raw rows for filtering/sorting in SSMS */
+SELECT ID, Captured, Mode, Section, Setting, CurrentValue, TargetValue, Detail
+FROM #ChangeControlReport
+ORDER BY ID;
+
+
+
 /*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -3382,44 +4127,3 @@ BEGIN
 END
 
 END
-GO
-
-
-USE [master]
-GO
-RAISERROR ('Congratulations you awesome DBA you! Now go herd some more cats', 0, 1) WITH NOWAIT;
-
-
-/*
-================================================================================
-  REFERENCE NOTES — sp_Blitz trace flag descriptions (Brent Ozar ULT)
-  Source: https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit
-  These are informational only and have no effect on script execution.
-================================================================================
-
-  652  — disables pre-fetching during index scans. Usually a very bad idea.
-  661  — disables ghost record removal, causing the database to grow. Usually a very bad idea.
-  834  — with columnstore indexes: not recommended by Microsoft.
-  1117 — grows all files in a filegroup at the same time (built-in SQL 2016+).
-  1118 — tries to reduce SGAM waits (built-in SQL 2016+).
-  1204 — captures deadlock graphs in the error log.
-  1211 — disables lock escalation unconditionally. Usually a very bad idea.
-  1222 — captures deadlock graphs in the error log (more detail than 1204).
-  1224 — disables lock escalation until memory pressure. Usually a very bad idea.
-  1806 — disables Instant File Initialization. Usually a very bad idea.
-  2330 — disables missing index requests. Usually a very bad idea.
-  2371 — changes auto update stats threshold (built-in SQL 2016+).
-  3023 — performs checksums by default on database backups.
-  3226 — suppresses successful backup entries from the event log.
-  3505 — disables Checkpoints. Usually a very bad idea.
-  4199 — enables non-default Query Optimizer fixes, may change plans.
-  7745 — makes shutdowns/failovers quicker by not waiting for Query Store flush.
-         Loses non-flushed Query Store data. Only useful if Query Store is in use.
-  7752 — stops queries waiting on Query Store load after database recovery.
-  8017 — disables schedulers for all logical processors (default on Express Edition).
-  8048 — tries to reduce CMEMTHREAD waits on high-core-count servers.
-  8649 — sets cost threshold for parallelism to 0. Usually a very bad idea.
-  1488 — enables Replication to continue when the secondary node is down.
-
-================================================================================
-*/
