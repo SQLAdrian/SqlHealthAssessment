@@ -25,7 +25,11 @@
         </div>
     </div>
 
-    @if (!_loading && _diskForecasts.Count == 0 && _cpuForecasts.Count == 0)
+    @if (_loading)
+    {
+        <PageLoadingSpinner Message="Analyzing capacity data..." />
+    }
+    else if (_diskForecasts.Count == 0 && _cpuForecasts.Count == 0)
     {
         <div style="text-align: center; padding: 48px; color: var(--text-muted);">
             <i class="fa-solid fa-chart-line" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>

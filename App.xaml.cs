@@ -1,4 +1,4 @@
-/* In the name of God, the Merciful, the Compassionate */
+﻿/* In the name of God, the Merciful, the Compassionate */
 
 using System.IO;
 using System.Windows;
@@ -14,7 +14,7 @@ using SQLTriage.Data.Models;
 using SQLTriage.Data.Scheduling;
 using SQLTriage.Data.Services;
 
-#pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
+#pragma warning disable CA1416 // Windows-only API â€” project targets net8.0-windows
 
 namespace SQLTriage
 {
@@ -25,7 +25,7 @@ namespace SQLTriage
         public static bool WebView2Available { get; private set; } = true;
         public static string? WebView2ErrorMessage { get; private set; }
 
-        /// <summary>Runtime-switchable Serilog minimum level. Toggle via Settings → Enable Debug Logging.</summary>
+        /// <summary>Runtime-switchable Serilog minimum level. Toggle via Settings â†’ Enable Debug Logging.</summary>
         public static readonly LoggingLevelSwitch LogLevelSwitch = new(Serilog.Events.LogEventLevel.Information);
 
         protected override void OnStartup(StartupEventArgs e)
@@ -99,6 +99,7 @@ namespace SQLTriage
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
                 .AddJsonFile("config/appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile("config/governance-weights.json", optional: false, reloadOnChange: true)
                 .Build();
             sw.Stop();
             Log.Information("[STARTUP] Configuration loaded in {ElapsedMs}ms", sw.ElapsedMilliseconds);
@@ -114,116 +115,24 @@ namespace SQLTriage
                 builder.AddSerilog(dispose: true);
             });
             services.AddWpfBlazorWebView();
+            services.AddRadzenComponents();
 
             // Register WebView2 helper for runtime detection
             services.AddSingleton<WebView2Helper>();
 
             // Register ServerConnectionManager first - it will be used by SqlServerConnectionFactory
-            services.AddSingleton<ServerConnectionManager>();
-            services.AddSingleton<IServerConnectionManager>(sp => sp.GetRequiredService<ServerConnectionManager>());
-            services.AddSingleton<GlobalInstanceSelector>();
-
-            // Register SQL Server connection - uses ServerConnectionManager for dynamic server selection
-            var connStr = configuration.GetConnectionString("SqlServer") ?? "Server=.;Database=SQLWATCH;Integrated Security=true;";
-            var trustServerCert = configuration.GetValue<bool>("TrustServerCertificate", false);
-
-            // Create a temporary factory to get the registered ServerConnectionManager
-            services.AddSingleton<IDbConnectionFactory>(sp =>
-            {
-                var serverManager = sp.GetRequiredService<ServerConnectionManager>();
-                var instanceSelector = sp.GetRequiredService<GlobalInstanceSelector>();
-                return new SqlServerConnectionFactory(serverManager, instanceSelector, connStr, trustServerCert);
-            });
-            services.AddSingleton<SqlServerConnectionFactory>(sp =>
-            {
-                var serverManager = sp.GetRequiredService<ServerConnectionManager>();
-                var instanceSelector = sp.GetRequiredService<GlobalInstanceSelector>();
-                return new SqlServerConnectionFactory(serverManager, instanceSelector, connStr, trustServerCert);
-            });
-
-            services.AddSingleton<ResilienceService>();
-            services.AddSingleton<DashboardConfigService>();
-            services.AddSingleton<QueryRegistry>();
-            services.AddSingleton<IQueryOrchestrator, QueryOrchestrator>();
-            services.AddMemoryCache();
-            services.AddSingleton<ICacheHotTier, CacheHotTier>();
-            services.AddSingleton<QueryExecutor>();
-            services.AddScoped<DashboardDataService>();
-            services.AddSingleton<AutoRefreshService>();
-            services.AddSingleton<CheckRepositoryService>();
-            services.AddSingleton<BPScriptService>();
-            services.AddSingleton<DiagnosticScriptRunner>();
-            services.AddSingleton<FullAuditStateService>();
-            services.AddSingleton<AuditLogService>();
-            services.AddSingleton<Data.Services.NotificationChannelService>();
-            services.AddSingleton<AlertingService>();
-            services.AddSingleton<Data.Services.AlertDefinitionService>();
-            services.AddSingleton<Data.Services.AlertTemplateService>();
-            services.AddSingleton<Data.Services.AlertHistoryService>();
-            services.AddSingleton<Data.Services.AlertBaselineService>();
-            services.AddSingleton<Data.Services.AlertEvaluationService>();
-
-            // Scheduled Tasks
-            services.AddSingleton<Data.Services.ScheduledTaskDefinitionService>();
-            services.AddSingleton<Data.Services.ScheduledTaskHistoryService>();
-            services.AddSingleton<Data.Services.ScheduledTaskEngine>();
-            services.AddSingleton<HealthCheckService>();
-            services.AddSingleton<Data.Services.ExecutiveHealthService>();
-            services.AddSingleton<RateLimiter>();
-            services.AddSingleton<CheckExecutionService>();
-            services.AddSingleton<liveQueriesTableService>();
-            services.AddSingleton<SessionManager>();
-            services.AddSingleton<UserSettingsService>();
-            services.AddSingleton<Data.Services.IUserSettingsService>(sp => sp.GetRequiredService<UserSettingsService>());
-            services.AddSingleton<IChartThemeService, ChartThemeService>();
-            services.AddSingleton<SessionDataService>();
-            services.AddSingleton<ToastService>();
-            services.AddSingleton<LogCleanupService>();
-            services.AddSingleton<MemoryMonitorService>();
-            services.AddSingleton<ConfigurationValidator>();
-            services.AddSingleton<AutoUpdateService>();
-            services.AddSingleton<DatabaseAvailabilityService>();
-            services.AddSingleton<StartupService>();
-            services.AddSingleton<Data.Services.PrintService>();
-            services.AddSingleton<Data.Services.IPrintService>(sp => sp.GetRequiredService<Data.Services.PrintService>());
-            services.AddSingleton<Data.Services.ConnectionHealthService>();
-            services.AddSingleton<Data.Services.KeyboardShortcutService>();
-            services.AddSingleton<Data.Services.SqlAssessmentService>();
-
-            services.AddSingleton<Data.Services.ReportPageConfigService>();
-            services.AddSingleton<Data.Services.XEventService>();
-            services.AddSingleton<Data.Services.AdminAuthService>();
-            services.AddSingleton<QuickCheckStateService>();
-            services.AddSingleton<Data.Services.VulnerabilityAssessmentStateService>();
-
-            // Radzen Blazor component library
-            services.AddRadzenComponents();
-            services.AddSingleton<Data.Services.ThemeService>();
-            services.AddSingleton<Data.Services.ServerModeService>();
-            services.AddSingleton<Data.Services.DataProtectionService>();
-            services.AddSingleton<Data.Services.AzureBlobExportService>();
-            services.AddSingleton<Data.Services.ProcessGuard>();
-            services.AddSingleton<Data.Services.ForecastService>();
-            services.AddSingleton<Data.Services.ProductionReadinessGate>();
-            services.AddSingleton<Data.Services.RbacService>();
-            // Scoped per Blazor circuit — holds current user's role (WPF=Admin, Server=from cookie)
-            services.AddScoped<Data.Services.AppUserState>();
-
-            // Local log service — thin wrapper over ILogger, routes through Serilog
-            services.AddSingleton<LocalLogService>();
-            services.AddSingleton<Data.Services.PowerShellService>();
-
-            // liveQueries caching layer — delta-fetch + offline resilience
-            // liveQueriesCacheStore uses DataProtectionService for at-rest encryption
-            services.AddSingleton<liveQueriesCacheStore>();
-            services.AddSingleton<CacheStateTracker>();
-            services.AddSingleton<CachingQueryExecutor>();
-            services.AddSingleton<CacheEvictionService>();
-            services.AddSingleton<liveQueriesMaintenanceService>();
-            services.AddSingleton<CacheMetricsService>();
-            services.AddSingleton<CacheMetricsService>();
-            services.AddSingleton<PerformanceInspectorService>();
+            services.AddSharedServices(configuration); /* BM: shared services registered via AddSharedServices â€” see Data/ServiceCollectionExtensions.cs */
+                        services.AddSingleton<PerformanceInspectorService>();
             services.AddSingleton<PanelMetricsService>();
+
+            // DevBridge â€” only registered when --devbridge is on the command line.
+            // See Data/Services/DevBridgeService.cs and DEVBRIDGE.md for the
+            // security posture and usage. Off by default; never auto-on in release.
+            var devBridgeArg = e.Args?.FirstOrDefault(a => a.StartsWith("--devbridge", StringComparison.OrdinalIgnoreCase));
+            if (devBridgeArg != null)
+            {
+                services.AddSingleton<Data.Services.DevBridgeService>();
+            }
 
             Services = services.BuildServiceProvider();
             sw.Stop();
@@ -234,7 +143,20 @@ namespace SQLTriage
             if (!string.IsNullOrWhiteSpace(savedProxy))
                 Services.GetService<AutoUpdateService>()?.SetManualProxyUrl(savedProxy);
 
-            // Wire up debug logging toggle — switches Serilog level at runtime without restart
+            // Start DevBridge if requested via --devbridge[=PORT]. The service was
+            // only registered above when the flag was present, so a missing service
+            // here means the flag was absent and the bridge is intentionally off.
+            if (devBridgeArg != null)
+            {
+                int port = 5179;
+                var eq = devBridgeArg.IndexOf('=');
+                if (eq > 0 && int.TryParse(devBridgeArg.AsSpan(eq + 1), out var p) && p > 0 && p < 65536)
+                    port = p;
+
+                Services.GetService<Data.Services.DevBridgeService>()?.Start(port);
+            }
+
+            // Wire up debug logging toggle â€” switches Serilog level at runtime without restart
             var userSettings = Services.GetService<UserSettingsService>();
             if (userSettings != null)
             {
@@ -340,7 +262,7 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
                 {
                     _ = Task.Run(async () =>
                     {
-                        await Task.Delay(2000); // brief delay — let connection pool warm up first
+                        await Task.Delay(2000); // brief delay â€” let connection pool warm up first
                         await sessionSvc.PrefetchAsync();
                     });
                 }
@@ -395,7 +317,7 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
                 Log.Error(ex, "Failed to apply update on exit");
             }
 
-            // ── Flush SQLite WAL to prevent corruption on abrupt shutdown ──
+            // â”€â”€ Flush SQLite WAL to prevent corruption on abrupt shutdown â”€â”€
             try
             {
                 var cacheStore = Services?.GetService<Data.Caching.liveQueriesCacheStore>();
@@ -414,14 +336,14 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
                 Log.Warning(ex, "SQLite WAL checkpoint failed on exit");
             }
 
-            // ── Explicitly stop all background services before DI dispose ──
+            // â”€â”€ Explicitly stop all background services before DI dispose â”€â”€
             // This prevents deadlocks from IAsyncDisposable services waiting
             // on active timer callbacks or Kestrel connections.
             StopBackgroundServices();
 
             // Dispose the DI container with a timeout to prevent hanging.
             // We run the async dispose on a thread-pool task and wait on the Task
-            // directly — no GetAwaiter().GetResult() on the continuation, which
+            // directly â€” no GetAwaiter().GetResult() on the continuation, which
             // avoids the UI-thread deadlock risk if a disposable's continuation
             // captures SynchronizationContext.
             try
@@ -456,7 +378,7 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
         {
             try
             {
-                // Stop server mode (Kestrel) — may already be stopped by MainWindow
+                // Stop server mode (Kestrel) â€” may already be stopped by MainWindow
                 var serverMode = Services?.GetService<Data.Services.ServerModeService>();
                 if (serverMode?.IsRunning == true)
                 {
@@ -474,6 +396,7 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
                 Services?.GetService<MemoryMonitorService>()?.Dispose();
                 Services?.GetService<LogCleanupService>()?.Dispose();
                 Services?.GetService<AutoRefreshService>()?.Dispose();
+                Services?.GetService<Data.Services.DevBridgeService>()?.Stop();
 
                 Log.Information("Background services stopped");
             }
@@ -494,11 +417,11 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
             Log.Error(e.Exception, "Unhandled dispatcher exception occurred");
 
             // If WebView2 is missing, the BlazorWebView throws asynchronously through the
-            // dispatcher as TargetInvocationException → WebView2RuntimeNotFoundException.
+            // dispatcher as TargetInvocationException â†’ WebView2RuntimeNotFoundException.
             // Catch it here and trigger server mode fallback on the main window.
             if (IsWebView2Exception(e.Exception))
             {
-                Log.Warning("WebView2 runtime exception caught — triggering server mode fallback");
+                Log.Warning("WebView2 runtime exception caught â€” triggering server mode fallback");
                 var mainWindow = MainWindow as MainWindow;
                 mainWindow?.FallbackToServerMode();
             }
@@ -524,3 +447,6 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
         }
     }
 }
+
+
+

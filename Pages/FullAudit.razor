@@ -201,7 +201,7 @@
                         <button class="btn btn-primary" @onclick="RunSelectedScripts" disabled="@(_isRunning || _selectedScriptIds.Count == 0)">
                             @(_isRunning ? "Running..." : "Run Selected (" + _selectedScriptIds.Count + ")")
                         </button>
-                        <a href="/editauditscripts" class="btn btn-secondary" title="Edit script configurations">
+                        <a href="RouteConstants.EditAuditScripts" class="btn btn-secondary" title="Edit script configurations">
                             <i class="fa-solid fa-file-pen" style="margin-right: 4px;"></i> Edit Scripts
                         </a>
                     </div>
@@ -270,7 +270,7 @@
                                 var result = GetResultForScript(script.Name)!;
                                 <div class="script-result @(result.Success ? "success" : "error")">
                                     <div class="result-header">
-                                        <span class="status">@(result.Success ? (result.StatusMessage ?? "✓ Success") : "✗ Error")</span>
+                                        <span class="status">@(result.Success ? (result.StatusMessage ?? "Success") : "Error")</span>
                                         <span class="execution-time">@result.ExecutionTime.TotalSeconds.ToString("F2")s</span>
                                         <span class="rows">@result.RowsAffected rows</span>
                                     </div>
@@ -348,7 +348,7 @@
                                 <tr>
                                     <td>@result.ServerName</td>
                                     <td>@result.ScriptName</td>
-                                    <td>@(result.Success ? (result.StatusMessage ?? "✓ Success") : "✗ Error")</td>
+                                    <td>@(result.Success ? (result.StatusMessage ?? "Success") : "Error")</td>
                                     <td>@result.ExecutionTime.TotalSeconds.ToString("F2")s</td>
                                     <td>@result.RowsAffected</td>
                                     <td>
@@ -1094,101 +1094,5 @@
     }
 }
 
-<!-- <style>
-    .run-all-group {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .run-mode-toggle {
-        display: flex;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .run-mode-btn {
-        padding: 5px 11px;
-        font-size: 12px;
-        border: none;
-        background: var(--bg-secondary);
-        color: var(--text-secondary);
-        cursor: pointer;
-        transition: background 0.15s, color 0.15s;
-        white-space: nowrap;
-    }
-
-    .run-mode-btn:first-child {
-        border-right: 1px solid var(--border);
-    }
-
-    .run-mode-btn.active {
-        background: var(--accent);
-        color: #fff;
-    }
-
-    .run-mode-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .delay-input-group {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .fa-modal-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.65);
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .fa-modal {
-        background: var(--bg-panel);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        width: 480px;
-        max-width: 95vw;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .fa-modal-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--border);
-        background: var(--bg-secondary);
-    }
-
-    .fa-modal-header h3 {
-        color: var(--text-primary);
-        font-size: 15px;
-    }
-
-    .fa-modal-body {
-        padding: 20px;
-        font-size: 13px;
-        color: var(--text-primary);
-        line-height: 1.6;
-    }
-
-    .fa-modal-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        padding: 14px 20px;
-        border-top: 1px solid var(--border);
-        background: var(--bg-secondary);
-    }
-</style> -->
+<!-- Styles extracted to wwwroot/css/FullAudit.css 2026-05-11 (CLAUDE.md convention).
+     Imported via app.css @import "FullAudit.css". -->

@@ -84,7 +84,7 @@
                         @foreach (var result in _testResults)
                         {
                             <li class="@(result.Success ? "success" : "error")">
-                                @(result.Success ? "✓" : "✗") @result.ServerName - @(result.Success ? "Connected" : result.Error)
+                                <i class="@(result.Success ? "fa-solid fa-check" : "fa-solid fa-xmark")"></i> @result.ServerName - @(result.Success ? "Connected" : result.Error)
                             </li>
                         }
                     </ul>

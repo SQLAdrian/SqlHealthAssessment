@@ -125,6 +125,20 @@ namespace SQLTriage.Data
             /// <summary>Maximum data points returned per chart series from the SQLite cache. Lower = less memory, faster render.</summary>
             public int ChartDataPointCap { get; set; } = 2000;
 
+            // ── Remediation Cost Estimate ──
+            /// <summary>When true, CIO Dashboard displays the estimated remediation cost block. Off hides the costing entirely.</summary>
+            public bool ShowRemediationCost { get; set; } = true;
+            /// <summary>Hourly rate (USD) used to compute the raw technical labour line.</summary>
+            public double RemediationHourlyRate { get; set; } = 295.0;
+            /// <summary>Compliance tier driving the project-cost multiplier. One of: "None", "SOC2", "ISO27001", "PCI", "SOX", "HIPAA".</summary>
+            public string ComplianceTier { get; set; } = "None";
+            /// <summary>Optional consultancy brand displayed in the dashboard conversion footer. Blank hides the footer entirely.</summary>
+            public string ConsultancyName { get; set; } = "";
+            /// <summary>Typical engagement duration string (e.g. "1-2 weeks"). Shown alongside ConsultancyName. Hidden if blank.</summary>
+            public string EngagementDuration { get; set; } = "";
+            /// <summary>Monthly OPEX per server (NZD) — running costs + ops management + support services. Drives 3-year TCO calculation.</summary>
+            public double MonthlyOpexPerServerNZD { get; set; } = 400.0;
+
             // ── Updates ──
             /// <summary>Optional HTTP/HTTPS proxy URL for update checks. Null = use system proxy.</summary>
             public string? UpdateProxyUrl { get; set; }
@@ -479,6 +493,24 @@ namespace SQLTriage.Data
 
         public int GetChartDataPointCap() { lock (_lock) return _settings.ChartDataPointCap; }
         public void SetChartDataPointCap(int cap) { lock (_lock) _settings.ChartDataPointCap = Math.Clamp(cap, 500, 10000); SaveSettings(); }
+
+        public bool GetShowRemediationCost() { lock (_lock) return _settings.ShowRemediationCost; }
+        public void SetShowRemediationCost(bool enabled) { lock (_lock) _settings.ShowRemediationCost = enabled; SaveSettings(); }
+
+        public double GetRemediationHourlyRate() { lock (_lock) return _settings.RemediationHourlyRate; }
+        public void SetRemediationHourlyRate(double rate) { lock (_lock) _settings.RemediationHourlyRate = Math.Clamp(rate, 50.0, 1000.0); SaveSettings(); }
+
+        public string GetComplianceTier() { lock (_lock) return _settings.ComplianceTier; }
+        public void SetComplianceTier(string tier) { lock (_lock) _settings.ComplianceTier = string.IsNullOrWhiteSpace(tier) ? "None" : tier; SaveSettings(); }
+
+        public string GetConsultancyName() { lock (_lock) return _settings.ConsultancyName; }
+        public void SetConsultancyName(string name) { lock (_lock) _settings.ConsultancyName = name ?? ""; SaveSettings(); }
+
+        public string GetEngagementDuration() { lock (_lock) return _settings.EngagementDuration; }
+        public void SetEngagementDuration(string duration) { lock (_lock) _settings.EngagementDuration = duration ?? ""; SaveSettings(); }
+
+        public double GetMonthlyOpexPerServerNZD() { lock (_lock) return _settings.MonthlyOpexPerServerNZD; }
+        public void SetMonthlyOpexPerServerNZD(double opex) { lock (_lock) _settings.MonthlyOpexPerServerNZD = Math.Clamp(opex, 0, 10000); SaveSettings(); }
 
         public int GetMaxHeavyConcurrent() { lock (_lock) return _settings.MaxHeavyConcurrent; }
         public void SetMaxHeavyConcurrent(int limit) { lock (_lock) _settings.MaxHeavyConcurrent = Math.Clamp(limit, 1, 30); SaveSettings(); }

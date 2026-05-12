@@ -57,6 +57,13 @@ namespace SQLTriage.Data.Models
         public bool SendEmail { get; set; }
     }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum TaskType
+    {
+        SqlQuery,
+        GovernanceReport
+    }
+
     public class ScheduledTaskDefinition
     {
         [JsonPropertyName("id")]
@@ -67,6 +74,9 @@ namespace SQLTriage.Data.Models
 
         [JsonPropertyName("description")]
         public string Description { get; set; } = string.Empty;
+
+        [JsonPropertyName("taskType")]
+        public TaskType TaskType { get; set; } = TaskType.SqlQuery;
 
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;

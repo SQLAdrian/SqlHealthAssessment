@@ -11,7 +11,7 @@
     
     @if (HealthStatus == null)
     {
-        <div class="loading">Loading health status...</div>
+        <PageLoadingSpinner Message="Loading health status..." />
     }
     else
     {
@@ -83,7 +83,7 @@
             <!-- Top Wait -->
             <div class="health-card @GetSeverityClass(HealthStatus.WaitSeverity)">
                 <div class="card-header">
-                    <span class="card-icon">⏳</span>
+                    <span class="card-icon"><i class="fa-solid fa-hourglass"></i></span>
                     <span class="card-title">Top Wait</span>
                 </div>
                 <div class="card-value">@HealthStatus.WaitDisplayText</div>
@@ -93,7 +93,7 @@
             <!-- Overall Health -->
             <div class="health-card overall @GetSeverityClass(HealthStatus.OverallSeverity)">
                 <div class="card-header">
-                    <span class="card-icon">❤️</span>
+                    <span class="card-icon"><i class="fa-solid fa-heart"></i>️</span>
                     <span class="card-title">Overall Health</span>
                 </div>
                 <div class="card-value">@GetSeverityText(HealthStatus.OverallSeverity)</div>

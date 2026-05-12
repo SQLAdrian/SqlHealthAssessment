@@ -1,0 +1,231 @@
+/* Styles extracted to wwwroot/css/BulkEditChecks.css 2026-05-11 (CLAUDE.md convention). */
+.bulk-edit-page {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.filter-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 150px;
+}
+
+.filter-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.selection-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 15px;
+}
+
+.selection-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.bulk-operations {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.bulk-operations h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.operation-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.operation-with-input {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.checks-grid {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+    background: var(--surface);
+    font-weight: 600;
+}
+
+.data-table tr.selected {
+    background: rgba(45, 212, 191, 0.1);
+}
+
+.check-name {
+    font-weight: 500;
+}
+
+.check-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.status-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.status-badge.enabled {
+    background: rgba(33, 201, 122, 0.2);
+    color: var(--green);
+}
+
+.status-badge.disabled {
+    background: rgba(107, 114, 128, 0.2);
+    color: var(--gray);
+}
+
+.alert-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.alert-badge.level-0 {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.alert-badge.level-1 {
+    background: rgba(234, 179, 8, 0.2);
+    color: var(--orange);
+}
+
+.alert-badge.level-2 {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--red);
+}
+
+.checkbox-col,
+.id-col,
+.status-col,
+.alert-col,
+.freq-col,
+.actions-col {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.category-col {
+    width: 15%;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 0;
+}
+
+.bulk-edit-page .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.bulk-edit-page .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.bulk-edit-page .btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.bulk-edit-page .btn-xs {
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.bulk-edit-page .btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.bulk-edit-page .btn-success {
+    background: var(--green);
+    color: white;
+}
+
+.bulk-edit-page .btn-warning {
+    background: var(--orange);
+    color: white;
+}
+
+.bulk-edit-page .btn-danger {
+    background: var(--red);
+    color: white;
+}
+
+.bulk-edit-page .btn-info {
+    background: #3b82f6;
+    color: white;
+}
+
+.bulk-edit-page .btn-secondary {
+    background: var(--border);
+    color: var(--text);
+}
+
+.form-input {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.form-input.small {
+    width: 80px;
+}

@@ -1,0 +1,4014 @@
+{
+  "lastUpdated": "2026-05-11T10:32:27Z",
+  "sources": {
+    "primary": "https://aka.ms/SQLServerbuilds",
+    "lifecycle": "Lifecycle product pages (scraped)",
+    "fallback": "research_output/SQLVersionTable.csv"
+  },
+  "versions": {
+    "2008": {
+      "majorBuild": 10,
+      "mainstreamSupportEnds": "2014-07-08",
+      "extendedSupportEnds": "2019-07-09",
+      "latestBuild": "10.0.6814.4",
+      "latestReleaseDate": "2023-02-14",
+      "builds": [
+        {
+          "build": "10.00.1600.22",
+          "label": "RTM",
+          "releaseDate": "2008-08-06",
+          "type": "RTM"
+        },
+        {
+          "build": "10.00.1763.00",
+          "label": "RTM CU1",
+          "releaseDate": "2008-09-22",
+          "type": "CU",
+          "kb": "KB956717"
+        },
+        {
+          "build": "10.00.1779.00",
+          "label": "RTM CU2",
+          "releaseDate": "2008-11-19",
+          "type": "CU",
+          "kb": "KB958186"
+        },
+        {
+          "build": "10.00.1787.00",
+          "label": "RTM CU3",
+          "releaseDate": "2009-01-19",
+          "type": "CU",
+          "kb": "KB960484"
+        },
+        {
+          "build": "10.00.1798.00",
+          "label": "RTM CU4",
+          "releaseDate": "2009-03-16",
+          "type": "CU",
+          "kb": "KB963036"
+        },
+        {
+          "build": "10.00.1806.00",
+          "label": "RTM CU5",
+          "releaseDate": "2009-05-18",
+          "type": "CU",
+          "kb": "KB969531"
+        },
+        {
+          "build": "10.00.1812.00",
+          "label": "RTM CU6",
+          "releaseDate": "2009-07-20",
+          "type": "CU",
+          "kb": "KB971490"
+        },
+        {
+          "build": "10.00.1818.00",
+          "label": "RTM CU7",
+          "releaseDate": "2009-09-21",
+          "type": "CU",
+          "kb": "KB973601"
+        },
+        {
+          "build": "10.00.1823.00",
+          "label": "RTM CU8",
+          "releaseDate": "2009-11-16",
+          "type": "CU",
+          "kb": "KB975976"
+        },
+        {
+          "build": "10.00.1828.00",
+          "label": "RTM CU9",
+          "releaseDate": "2010-01-18",
+          "type": "CU",
+          "kb": "KB977444"
+        },
+        {
+          "build": "10.00.1835.00",
+          "label": "RTM CU10",
+          "releaseDate": "2010-03-15",
+          "type": "CU",
+          "kb": "KB979064"
+        },
+        {
+          "build": "10.00.2531.00",
+          "label": "SP1",
+          "releaseDate": null,
+          "type": "SP"
+        },
+        {
+          "build": "10.00.2573.00",
+          "label": "SP1 MS11-049",
+          "releaseDate": "2011-06-14",
+          "type": "GDR",
+          "kb": "KB2494096"
+        },
+        {
+          "build": "10.00.2710.00",
+          "label": "SP1 CU1",
+          "releaseDate": "2009-04-16",
+          "type": "CU",
+          "kb": "KB969099"
+        },
+        {
+          "build": "10.00.2714.00",
+          "label": "SP1 CU2",
+          "releaseDate": "2009-05-18",
+          "type": "CU",
+          "kb": "KB970315"
+        },
+        {
+          "build": "10.00.2723.00",
+          "label": "SP1 CU3",
+          "releaseDate": "2009-07-20",
+          "type": "CU",
+          "kb": "KB971491"
+        },
+        {
+          "build": "10.00.2734.00",
+          "label": "SP1 CU4",
+          "releaseDate": "2009-09-21",
+          "type": "CU",
+          "kb": "KB973602"
+        },
+        {
+          "build": "10.00.2746.00",
+          "label": "SP1 CU5",
+          "releaseDate": "2009-11-16",
+          "type": "CU",
+          "kb": "KB975977"
+        },
+        {
+          "build": "10.00.2757.00",
+          "label": "SP1 CU6",
+          "releaseDate": "2010-01-18",
+          "type": "CU",
+          "kb": "KB977443"
+        },
+        {
+          "build": "10.00.2766.00",
+          "label": "SP1 CU7",
+          "releaseDate": "2010-03-26",
+          "type": "CU",
+          "kb": "KB979065"
+        },
+        {
+          "build": "10.00.2775.00",
+          "label": "SP1 CU8",
+          "releaseDate": "2010-05-17",
+          "type": "CU",
+          "kb": "KB981702"
+        },
+        {
+          "build": "10.00.2789.00",
+          "label": "SP1 CU9",
+          "releaseDate": "2010-07-19",
+          "type": "CU",
+          "kb": "KB2083921"
+        },
+        {
+          "build": "10.00.2799.00",
+          "label": "SP1 CU10",
+          "releaseDate": "2010-09-20",
+          "type": "CU",
+          "kb": "KB2279604"
+        },
+        {
+          "build": "10.00.2804.00",
+          "label": "SP1 CU11",
+          "releaseDate": "2010-11-15",
+          "type": "CU",
+          "kb": "KB2413738"
+        },
+        {
+          "build": "10.00.2808.00",
+          "label": "SP1 CU12",
+          "releaseDate": "2011-01-17",
+          "type": "CU",
+          "kb": "KB2467236"
+        },
+        {
+          "build": "10.00.2816.00",
+          "label": "SP1 CU13",
+          "releaseDate": "2011-02-17",
+          "type": "CU",
+          "kb": "KB2497673"
+        },
+        {
+          "build": "10.00.2821.00",
+          "label": "SP1 CU14",
+          "releaseDate": "2011-05-16",
+          "type": "CU",
+          "kb": "KB2527187"
+        },
+        {
+          "build": "10.00.2841.0",
+          "label": "SP1 MS11-049",
+          "releaseDate": "2011-06-14",
+          "type": "CU",
+          "kb": "KB2494100"
+        },
+        {
+          "build": "10.00.2847.0",
+          "label": "SP1 CU15",
+          "releaseDate": "2011-07-18",
+          "type": "CU",
+          "kb": "KB2555406"
+        },
+        {
+          "build": "10.00.2850.0",
+          "label": "SP1 CU16",
+          "releaseDate": "2011-09-19",
+          "type": "CU",
+          "kb": "KB2582282"
+        },
+        {
+          "build": "10.00.4000.00",
+          "label": "SP2",
+          "releaseDate": "2010-09-29",
+          "type": "SP",
+          "kb": "KB2285068"
+        },
+        {
+          "build": "10.00.4064.00",
+          "label": "SP2 MS11-049",
+          "releaseDate": "2011-06-14",
+          "type": "GDR",
+          "kb": "KB2494089"
+        },
+        {
+          "build": "10.00.4067.00",
+          "label": "SP2 MS12-070",
+          "releaseDate": "2012-10-09",
+          "type": "GDR",
+          "kb": "KB2716434"
+        },
+        {
+          "build": "10.00.4266.00",
+          "label": "SP2 CU1",
+          "releaseDate": "2010-11-15",
+          "type": "CU",
+          "kb": "KB2289254"
+        },
+        {
+          "build": "10.00.4272.00",
+          "label": "SP2 CU2",
+          "releaseDate": "2011-01-17",
+          "type": "CU",
+          "kb": "KB2467239"
+        },
+        {
+          "build": "10.00.4279.00",
+          "label": "SP2 CU3",
+          "releaseDate": "2011-03-17",
+          "type": "CU",
+          "kb": "KB2498535"
+        },
+        {
+          "build": "10.00.4285.00",
+          "label": "SP2 CU4",
+          "releaseDate": "2011-05-16",
+          "type": "CU",
+          "kb": "KB2527180"
+        },
+        {
+          "build": "10.00.4311.00",
+          "label": "SP2 MS11-049",
+          "releaseDate": "2011-06-14",
+          "type": "CU",
+          "kb": "KB2494094"
+        },
+        {
+          "build": "10.00.4316.00",
+          "label": "SP2 CU5",
+          "releaseDate": "2011-07-18",
+          "type": "CU",
+          "kb": "KB2555408"
+        },
+        {
+          "build": "10.00.4321.00",
+          "label": "SP2 CU6",
+          "releaseDate": "2011-09-19",
+          "type": "CU",
+          "kb": "KB2582285"
+        },
+        {
+          "build": "10.00.4323.00",
+          "label": "SP2 CU7",
+          "releaseDate": "2011-11-21",
+          "type": "CU",
+          "kb": "KB2617148"
+        },
+        {
+          "build": "10.00.4326.00",
+          "label": "SP2 CU8",
+          "releaseDate": "2012-01-16",
+          "type": "CU",
+          "kb": "KB2648096"
+        },
+        {
+          "build": "10.00.4330.00",
+          "label": "SP2 CU9",
+          "releaseDate": "2012-03-19",
+          "type": "CU",
+          "kb": "KB2673382"
+        },
+        {
+          "build": "10.00.4332.00",
+          "label": "SP2 CU10",
+          "releaseDate": "2012-05-21",
+          "type": "CU",
+          "kb": "KB2696625"
+        },
+        {
+          "build": "10.00.4333.00",
+          "label": "SP2 CU11",
+          "releaseDate": "2012-07-16",
+          "type": "CU",
+          "kb": "KB2715951"
+        },
+        {
+          "build": "10.00.4371.00",
+          "label": "SP2 MS12-070",
+          "releaseDate": "2012-10-09",
+          "type": "CU",
+          "kb": "KB2716433"
+        },
+        {
+          "build": "10.00.5500.00",
+          "label": "SP3",
+          "releaseDate": "2011-10-06",
+          "type": "SP",
+          "kb": "KB2546951"
+        },
+        {
+          "build": "10.00.5512.00",
+          "label": "SP3 MS12-070",
+          "releaseDate": "2012-10-09",
+          "type": "GDR",
+          "kb": "KB2716436"
+        },
+        {
+          "build": "10.00.5520.00",
+          "label": "SP3 MS14-044",
+          "releaseDate": "2014-08-12",
+          "type": "GDR",
+          "kb": "KB2977321"
+        },
+        {
+          "build": "10.00.5538.00",
+          "label": "SP3 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045305"
+        },
+        {
+          "build": "10.00.5766.00",
+          "label": "SP3 CU1",
+          "releaseDate": "2011-10-17",
+          "type": "CU",
+          "kb": "KB2617146"
+        },
+        {
+          "build": "10.00.5768.00",
+          "label": "SP3 CU2",
+          "releaseDate": "2011-11-21",
+          "type": "CU",
+          "kb": "KB2633143"
+        },
+        {
+          "build": "10.00.5770.00",
+          "label": "SP3 CU3",
+          "releaseDate": "2012-01-16",
+          "type": "CU",
+          "kb": "KB2648098"
+        },
+        {
+          "build": "10.00.5775.00",
+          "label": "SP3 CU4",
+          "releaseDate": "2012-03-19",
+          "type": "CU",
+          "kb": "KB2673383"
+        },
+        {
+          "build": "10.00.5785.00",
+          "label": "SP3 CU5",
+          "releaseDate": "2012-05-21",
+          "type": "CU",
+          "kb": "KB2696626"
+        },
+        {
+          "build": "10.00.5788.00",
+          "label": "SP3 CU6",
+          "releaseDate": "2012-07-16",
+          "type": "CU",
+          "kb": "KB2715953"
+        },
+        {
+          "build": "10.00.5794.00",
+          "label": "SP3 CU7",
+          "releaseDate": "2012-09-17",
+          "type": "CU",
+          "kb": "KB2738350"
+        },
+        {
+          "build": "10.00.5826.00",
+          "label": "SP3 MS12-070",
+          "releaseDate": "2012-10-09",
+          "type": "CU",
+          "kb": "KB2716435"
+        },
+        {
+          "build": "10.00.5828.00",
+          "label": "SP3 CU8",
+          "releaseDate": "2012-11-19",
+          "type": "CU",
+          "kb": "KB2771833"
+        },
+        {
+          "build": "10.00.5829.00",
+          "label": "SP3 CU9",
+          "releaseDate": "2013-01-21",
+          "type": "CU",
+          "kb": "KB2799883"
+        },
+        {
+          "build": "10.00.5835.00",
+          "label": "SP3 CU10",
+          "releaseDate": "2013-03-18",
+          "type": "CU",
+          "kb": "KB2814783"
+        },
+        {
+          "build": "10.00.5840.00",
+          "label": "SP3 CU11",
+          "releaseDate": "2013-05-20",
+          "type": "CU",
+          "kb": "KB2834048"
+        },
+        {
+          "build": "10.00.5844.00",
+          "label": "SP3 CU12",
+          "releaseDate": "2013-07-15",
+          "type": "CU",
+          "kb": "KB2863205"
+        },
+        {
+          "build": "10.00.5846.00",
+          "label": "SP3 CU13",
+          "releaseDate": "2013-09-16",
+          "type": "CU",
+          "kb": "KB2880350"
+        },
+        {
+          "build": "10.00.5848.00",
+          "label": "SP3 CU14",
+          "releaseDate": "2013-11-18",
+          "type": "CU",
+          "kb": "KB2893410"
+        },
+        {
+          "build": "10.00.5850.00",
+          "label": "SP3 CU15",
+          "releaseDate": "2014-01-20",
+          "type": "CU",
+          "kb": "KB2923520"
+        },
+        {
+          "build": "10.00.5852.00",
+          "label": "SP3 CU16",
+          "releaseDate": "2014-03-17",
+          "type": "CU",
+          "kb": "KB2936421"
+        },
+        {
+          "build": "10.00.5861.00",
+          "label": "SP3 CU17",
+          "releaseDate": "2014-05-19",
+          "type": "CU",
+          "kb": "KB2958696"
+        },
+        {
+          "build": "10.00.5867.00",
+          "label": "NA",
+          "releaseDate": null,
+          "type": "Other",
+          "kb": "KB2877204"
+        },
+        {
+          "build": "10.00.5869.00",
+          "label": "MS14-044",
+          "releaseDate": "2014-08-12",
+          "type": "CU",
+          "kb": "KB2984340, 2977322"
+        },
+        {
+          "build": "10.00.5890.00",
+          "label": "SP3 MS15-060",
+          "releaseDate": "2015-07-14",
+          "type": "CU",
+          "kb": "KB3045303"
+        },
+        {
+          "build": "10.00.6000.29",
+          "label": "SP4",
+          "releaseDate": "2014-09-30",
+          "type": "SP",
+          "kb": "KB2979596"
+        },
+        {
+          "build": "10.00.6241.00",
+          "label": "SP4 MS15-059",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045311"
+        },
+        {
+          "build": "10.00.6535.00",
+          "label": "SP4 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "CU",
+          "kb": "KB3045308"
+        },
+        {
+          "build": "10.00.6556.0",
+          "label": "SP4 GDR",
+          "releaseDate": "2018-01-12",
+          "type": "GDR",
+          "kb": "KB4057114"
+        },
+        {
+          "build": "10.0.6814.4",
+          "label": "SP4 GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5020863"
+        }
+      ]
+    },
+    "2008R2": {
+      "majorBuild": 10,
+      "mainstreamSupportEnds": "2014-07-08",
+      "extendedSupportEnds": "2019-07-09",
+      "latestBuild": "10.50.6785.2",
+      "latestReleaseDate": "2023-02-14",
+      "builds": [
+        {
+          "build": "10.50.1600.1",
+          "label": "RTM",
+          "releaseDate": "2010-05-10",
+          "type": "RTM"
+        },
+        {
+          "build": "10.50.1617.00",
+          "label": "RTM MS11-049",
+          "releaseDate": "2011-06-14",
+          "type": "GDR",
+          "kb": "KB2494088"
+        },
+        {
+          "build": "10.50.1702.00",
+          "label": "RTM CU1",
+          "releaseDate": "2010-05-18",
+          "type": "CU",
+          "kb": "KB981355"
+        },
+        {
+          "build": "10.50.1720.00",
+          "label": "RTM CU2",
+          "releaseDate": "2010-06-21",
+          "type": "CU",
+          "kb": "KB2072493"
+        },
+        {
+          "build": "10.50.1734.00",
+          "label": "RTM CU3",
+          "releaseDate": "2010-08-16",
+          "type": "CU",
+          "kb": "KB2261464"
+        },
+        {
+          "build": "10.50.1746.00",
+          "label": "RTM CU4",
+          "releaseDate": "2010-10-18",
+          "type": "CU",
+          "kb": "KB2345451"
+        },
+        {
+          "build": "10.50.1753.00",
+          "label": "RTM CU5",
+          "releaseDate": "2010-12-20",
+          "type": "CU",
+          "kb": "KB2438347"
+        },
+        {
+          "build": "10.50.1765.00",
+          "label": "RTM CU6",
+          "releaseDate": "2011-02-21",
+          "type": "CU",
+          "kb": "KB2489376"
+        },
+        {
+          "build": "10.50.1777.00",
+          "label": "RTM CU7",
+          "releaseDate": "2011-04-18",
+          "type": "CU",
+          "kb": "KB2507770"
+        },
+        {
+          "build": "10.50.1790.00",
+          "label": "RTM MS11-049",
+          "releaseDate": "2011-06-14",
+          "type": "CU",
+          "kb": "KB2494086"
+        },
+        {
+          "build": "10.50.1797.00",
+          "label": "RTM CU8",
+          "releaseDate": "2011-06-21",
+          "type": "CU",
+          "kb": "KB2534352"
+        },
+        {
+          "build": "10.50.1804.00",
+          "label": "RTM CU9",
+          "releaseDate": "2011-08-15",
+          "type": "CU",
+          "kb": "KB2567713"
+        },
+        {
+          "build": "10.50.1807.00",
+          "label": "RTM CU10",
+          "releaseDate": "2011-10-17",
+          "type": "CU",
+          "kb": "KB2591746"
+        },
+        {
+          "build": "10.50.1809.00",
+          "label": "RTM CU11",
+          "releaseDate": "2011-12-19",
+          "type": "CU",
+          "kb": "KB2633145"
+        },
+        {
+          "build": "10.50.1810.00",
+          "label": "RTM CU12",
+          "releaseDate": "2012-02-21",
+          "type": "CU",
+          "kb": "KB2659692"
+        },
+        {
+          "build": "10.50.1815.00",
+          "label": "RTM CU13",
+          "releaseDate": "2012-04-16",
+          "type": "CU",
+          "kb": "KB2679366"
+        },
+        {
+          "build": "10.50.2500.0",
+          "label": "SP1",
+          "releaseDate": "2011-07-12",
+          "type": "SP",
+          "kb": "KB2528583"
+        },
+        {
+          "build": "10.50.2550.00",
+          "label": "MS12-070",
+          "releaseDate": "2012-10-09",
+          "type": "GDR",
+          "kb": "KB2754849"
+        },
+        {
+          "build": "10.50.2769.00",
+          "label": "SP1 CU1",
+          "releaseDate": "2011-07-18",
+          "type": "CU",
+          "kb": "KB2544793"
+        },
+        {
+          "build": "10.50.2772.00",
+          "label": "SP1 CU2",
+          "releaseDate": "2011-08-15",
+          "type": "CU",
+          "kb": "KB2567714"
+        },
+        {
+          "build": "10.50.2789.00",
+          "label": "SP1 CU3",
+          "releaseDate": "2011-10-17",
+          "type": "CU",
+          "kb": "KB2591748"
+        },
+        {
+          "build": "10.50.2796.00",
+          "label": "SP1 CU4",
+          "releaseDate": "2011-12-19",
+          "type": "CU",
+          "kb": "KB2633146"
+        },
+        {
+          "build": "10.50.2806.00",
+          "label": "SP1 CU5",
+          "releaseDate": "2012-02-22",
+          "type": "CU",
+          "kb": "KB2659694"
+        },
+        {
+          "build": "10.50.2811.00",
+          "label": "SP1 CU6",
+          "releaseDate": "2012-04-16",
+          "type": "CU",
+          "kb": "KB2679367"
+        },
+        {
+          "build": "10.50.2817.00",
+          "label": "SP1 CU7",
+          "releaseDate": "2012-06-18",
+          "type": "CU",
+          "kb": "KB2703282"
+        },
+        {
+          "build": "10.50.2822.00",
+          "label": "SP1 CU8",
+          "releaseDate": "2012-08-31",
+          "type": "CU",
+          "kb": "KB2723743"
+        },
+        {
+          "build": "10.50.2861.00",
+          "label": "SP1 MS12-070",
+          "releaseDate": "2012-09-09",
+          "type": "CU",
+          "kb": "KB2716439"
+        },
+        {
+          "build": "10.50.2866.00",
+          "label": "SP1 CU9",
+          "releaseDate": "2012-10-15",
+          "type": "CU",
+          "kb": "KB2756574"
+        },
+        {
+          "build": "10.50.2868.00",
+          "label": "SP1 CU10",
+          "releaseDate": "2012-12-17",
+          "type": "CU",
+          "kb": "KB2783135"
+        },
+        {
+          "build": "10.50.2869.00",
+          "label": "SP1 CU11",
+          "releaseDate": "2013-02-18",
+          "type": "CU",
+          "kb": "KB2812683"
+        },
+        {
+          "build": "10.50.2874.00",
+          "label": "SP1 CU12",
+          "releaseDate": "2013-04-15",
+          "type": "CU",
+          "kb": "KB2828727"
+        },
+        {
+          "build": "10.50.2876.00",
+          "label": "SP1 CU13",
+          "releaseDate": "2013-06-17",
+          "type": "CU",
+          "kb": "KB2855792"
+        },
+        {
+          "build": "10.50.2881.00",
+          "label": "SP1 CU14",
+          "releaseDate": "2013-08-08",
+          "type": "CU",
+          "kb": "KB2868244"
+        },
+        {
+          "build": "10.50.4000.0",
+          "label": "SP2",
+          "releaseDate": "2012-07-26",
+          "type": "SP",
+          "kb": "KB2630458"
+        },
+        {
+          "build": "10.50.4033.00",
+          "label": "SP2 MS14-044",
+          "releaseDate": "2014-08-12",
+          "type": "GDR",
+          "kb": "KB2977320"
+        },
+        {
+          "build": "10.50.4042.00",
+          "label": "SP2 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045313"
+        },
+        {
+          "build": "10.50.4260.00",
+          "label": "SP2 CU1",
+          "releaseDate": "2012-07-24",
+          "type": "CU",
+          "kb": "KB2720425"
+        },
+        {
+          "build": "10.50.4263.00",
+          "label": "SP2 CU2",
+          "releaseDate": "2012-08-31",
+          "type": "CU",
+          "kb": "KB2740411"
+        },
+        {
+          "build": "10.50.4266.00",
+          "label": "SP2 CU3",
+          "releaseDate": "2012-10-15",
+          "type": "CU",
+          "kb": "KB2754552"
+        },
+        {
+          "build": "10.50.4270.00",
+          "label": "SP2 CU4",
+          "releaseDate": "2012-12-17",
+          "type": "CU",
+          "kb": "KB2777358"
+        },
+        {
+          "build": "10.50.4276.00",
+          "label": "SP2 CU5",
+          "releaseDate": "2013-02-18",
+          "type": "CU",
+          "kb": "KB2797460"
+        },
+        {
+          "build": "10.50.4279.0",
+          "label": "SP2 CU6",
+          "releaseDate": "2013-04-15",
+          "type": "CU",
+          "kb": "KB2830140"
+        },
+        {
+          "build": "10.50.4286.0",
+          "label": "SP2 CU7",
+          "releaseDate": "2013-06-17",
+          "type": "CU",
+          "kb": "KB2844090"
+        },
+        {
+          "build": "10.50.4290.00",
+          "label": "SP2 CU8",
+          "releaseDate": "2013-08-22",
+          "type": "CU",
+          "kb": "KB2871401"
+        },
+        {
+          "build": "10.50.4295.00",
+          "label": "SP2 CU9",
+          "releaseDate": "2013-10-28",
+          "type": "CU",
+          "kb": "KB2887606"
+        },
+        {
+          "build": "10.50.4297.00",
+          "label": "SP2 CU10",
+          "releaseDate": "2013-12-17",
+          "type": "CU",
+          "kb": "KB2908087"
+        },
+        {
+          "build": "10.50.4302.00",
+          "label": "SP2 CU11",
+          "releaseDate": "2014-02-18",
+          "type": "CU",
+          "kb": "KB2926028"
+        },
+        {
+          "build": "10.50.4305.00",
+          "label": "SP2 CU12",
+          "releaseDate": "2014-08-21",
+          "type": "CU",
+          "kb": "KB2938478"
+        },
+        {
+          "build": "10.50.4319.00",
+          "label": "SP2 CU13",
+          "releaseDate": "2014-06-30",
+          "type": "CU",
+          "kb": "KB2967540"
+        },
+        {
+          "build": "10.50.4321.00",
+          "label": "SP2 MS14-044",
+          "releaseDate": "2014-08-14",
+          "type": "CU",
+          "kb": "KB2977319"
+        },
+        {
+          "build": "10.50.4339.00",
+          "label": "SP2 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "CU",
+          "kb": "KB3045312"
+        },
+        {
+          "build": "10.50.6000.34",
+          "label": "SP3",
+          "releaseDate": "2014-09-26",
+          "type": "SP",
+          "kb": "KB2979597"
+        },
+        {
+          "build": "10.50.6220.0",
+          "label": "SP3 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045316"
+        },
+        {
+          "build": "10.50.6529.0",
+          "label": "SP3 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "CU",
+          "kb": "KB3045314"
+        },
+        {
+          "build": "10.50.6560.0",
+          "label": "SP3 ADV180002",
+          "releaseDate": "2018-01-06",
+          "type": "GDR",
+          "kb": "KB4057113"
+        },
+        {
+          "build": "10.50.6785.2",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021112"
+        }
+      ]
+    },
+    "2012": {
+      "majorBuild": 11,
+      "mainstreamSupportEnds": "2017-07-11",
+      "extendedSupportEnds": "2022-07-12",
+      "latestBuild": "11.0.7512.11",
+      "latestReleaseDate": "2023-02-14",
+      "builds": [
+        {
+          "build": "11.0.2100.60",
+          "label": "RTM",
+          "releaseDate": "2012-03-06",
+          "type": "RTM"
+        },
+        {
+          "build": "11.0.2218.00",
+          "label": "RTM MS12-070",
+          "releaseDate": "2012-10-09",
+          "type": "GDR",
+          "kb": "KB2716442"
+        },
+        {
+          "build": "11.0.2316.00",
+          "label": "RTM CU1",
+          "releaseDate": "2012-04-12",
+          "type": "CU",
+          "kb": "KB2679368"
+        },
+        {
+          "build": "11.0.2325.00",
+          "label": "RTM CU2",
+          "releaseDate": "2012-06-18",
+          "type": "CU",
+          "kb": "KB2703275"
+        },
+        {
+          "build": "11.0.2332.00",
+          "label": "RTM CU3",
+          "releaseDate": "2012-08-31",
+          "type": "CU",
+          "kb": "KB2723749"
+        },
+        {
+          "build": "11.0.2376.00",
+          "label": "RTM MS12-070",
+          "releaseDate": "2012-10-09",
+          "type": "CU",
+          "kb": "KB2716441"
+        },
+        {
+          "build": "11.0.2383.00",
+          "label": "RTM CU4",
+          "releaseDate": "2012-10-15",
+          "type": "CU",
+          "kb": "KB2758687"
+        },
+        {
+          "build": "11.0.2395.00",
+          "label": "RTM CU5",
+          "releaseDate": "2012-12-17",
+          "type": "CU",
+          "kb": "KB2777772"
+        },
+        {
+          "build": "11.0.2401.00",
+          "label": "RTM CU6",
+          "releaseDate": "2013-02-18",
+          "type": "CU",
+          "kb": "KB2728897"
+        },
+        {
+          "build": "11.0.2405.00",
+          "label": "RTM CU7",
+          "releaseDate": "2013-04-15",
+          "type": "CU",
+          "kb": "KB2823247"
+        },
+        {
+          "build": "11.0.2410.00",
+          "label": "RTM CU8",
+          "releaseDate": "2013-06-17",
+          "type": "CU",
+          "kb": "KB2844205"
+        },
+        {
+          "build": "11.0.2419.00",
+          "label": "RTM CU9",
+          "releaseDate": "2013-08-20",
+          "type": "CU",
+          "kb": "KB2867319"
+        },
+        {
+          "build": "11.0.2420.00",
+          "label": "RTM CU10",
+          "releaseDate": "2013-10-21",
+          "type": "CU",
+          "kb": "KB2891666"
+        },
+        {
+          "build": "11.0.2424.00",
+          "label": "RTM CU11",
+          "releaseDate": "2013-12-16",
+          "type": "CU",
+          "kb": "KB2908007"
+        },
+        {
+          "build": "11.0.3000.00",
+          "label": "SP1",
+          "releaseDate": "2012-11-07",
+          "type": "SP",
+          "kb": "KB2674319"
+        },
+        {
+          "build": "11.0.3153.00",
+          "label": "SP1 MS14-044",
+          "releaseDate": "2014-08-12",
+          "type": "GDR",
+          "kb": "KB2977326"
+        },
+        {
+          "build": "11.0.3156.00",
+          "label": "SP1 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045318"
+        },
+        {
+          "build": "11.0.3321.00",
+          "label": "SP1 CU1",
+          "releaseDate": "2012-11-20",
+          "type": "CU",
+          "kb": "KB2765331"
+        },
+        {
+          "build": "11.0.3339.00",
+          "label": "SP1 CU2",
+          "releaseDate": "2013-01-21",
+          "type": "CU",
+          "kb": "KB2790947"
+        },
+        {
+          "build": "11.0.3349.00",
+          "label": "SP1 CU3",
+          "releaseDate": "2013-03-18",
+          "type": "CU",
+          "kb": "KB2812412"
+        },
+        {
+          "build": "11.0.3368.00",
+          "label": "SP1 CU4",
+          "releaseDate": "2013-05-30",
+          "type": "CU",
+          "kb": "KB2833645"
+        },
+        {
+          "build": "11.0.3373.00",
+          "label": "SP1 CU5",
+          "releaseDate": "2013-07-15",
+          "type": "CU",
+          "kb": "KB2861107"
+        },
+        {
+          "build": "11.0.3381.00",
+          "label": "SP1 CU6",
+          "releaseDate": "2013-09-16",
+          "type": "CU",
+          "kb": "KB2874879"
+        },
+        {
+          "build": "11.0.3393.00",
+          "label": "SP1 CU7",
+          "releaseDate": "2013-11-18",
+          "type": "CU",
+          "kb": "KB2894115"
+        },
+        {
+          "build": "11.0.3401.00",
+          "label": "SP1 CU8",
+          "releaseDate": "2014-01-20",
+          "type": "CU",
+          "kb": "KB2917531"
+        },
+        {
+          "build": "11.0.3412.00",
+          "label": "SP1 CU9",
+          "releaseDate": "2014-03-17",
+          "type": "CU",
+          "kb": "KB2931078"
+        },
+        {
+          "build": "11.0.3431.00",
+          "label": "SP1 CU10",
+          "releaseDate": "2014-05-19",
+          "type": "CU",
+          "kb": "KB2954099"
+        },
+        {
+          "build": "11.0.3449.00",
+          "label": "SP1 CU11",
+          "releaseDate": "2014-07-21",
+          "type": "CU",
+          "kb": "KB2975396"
+        },
+        {
+          "build": "11.0.3460.0",
+          "label": "SP1 MS14-044",
+          "releaseDate": "2014-08-12",
+          "type": "CU",
+          "kb": "KB2977325"
+        },
+        {
+          "build": "11.0.3470.00",
+          "label": "SP1 CU12",
+          "releaseDate": "2014-09-15",
+          "type": "CU",
+          "kb": "KB2991533"
+        },
+        {
+          "build": "11.0.3482.00",
+          "label": "SP1 CU13",
+          "releaseDate": "2014-11-17",
+          "type": "CU",
+          "kb": "KB3002044"
+        },
+        {
+          "build": "11.0.3513.0",
+          "label": "SP1 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "CU",
+          "kb": "KB3045317"
+        },
+        {
+          "build": "11.0.5058.0",
+          "label": "SP2",
+          "releaseDate": "2015-06-10",
+          "type": "SP",
+          "kb": "KB2958429"
+        },
+        {
+          "build": "11.0.5343.0",
+          "label": "SP2 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045321"
+        },
+        {
+          "build": "11.0.5388.0",
+          "label": "SP2 MS16-136",
+          "releaseDate": "2016-11-08",
+          "type": "GDR",
+          "kb": "KB3194719"
+        },
+        {
+          "build": "11.0.5532.0",
+          "label": "SP2 CU1",
+          "releaseDate": "2014-07-23",
+          "type": "CU",
+          "kb": "KB2976982"
+        },
+        {
+          "build": "11.0.5548.0",
+          "label": "SP2 CU2",
+          "releaseDate": "2014-09-15",
+          "type": "CU",
+          "kb": "KB2983175"
+        },
+        {
+          "build": "11.0.5556.0",
+          "label": "SP2 CU3",
+          "releaseDate": "2014-11-17",
+          "type": "CU",
+          "kb": "KB3002049"
+        },
+        {
+          "build": "11.0.5569.0",
+          "label": "SP2 CU4",
+          "releaseDate": "2015-01-19",
+          "type": "CU",
+          "kb": "KB3007556"
+        },
+        {
+          "build": "11.0.5582.0",
+          "label": "SP2 CU5",
+          "releaseDate": "2015-03-16",
+          "type": "CU",
+          "kb": "KB3037255"
+        },
+        {
+          "build": "11.0.5592.0",
+          "label": "SP2 CU6",
+          "releaseDate": "2015-05-08",
+          "type": "CU",
+          "kb": "KB3052468"
+        },
+        {
+          "build": "11.0.5613.0",
+          "label": "SP2 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045319"
+        },
+        {
+          "build": "11.0.5623.0",
+          "label": "SP2 CU7",
+          "releaseDate": "2015-07-20",
+          "type": "CU",
+          "kb": "KB3072100"
+        },
+        {
+          "build": "11.0.5634.1",
+          "label": "SP2 CU8",
+          "releaseDate": "2015-09-21",
+          "type": "CU",
+          "kb": "KB3082561"
+        },
+        {
+          "build": "11.0.5641.0",
+          "label": "SP2 CU9",
+          "releaseDate": "2015-11-16",
+          "type": "CU",
+          "kb": "KB3098512"
+        },
+        {
+          "build": "11.0.5644.2",
+          "label": "SP2 CU10",
+          "releaseDate": "2016-01-20",
+          "type": "CU",
+          "kb": "KB3120313"
+        },
+        {
+          "build": "11.0.5646.0",
+          "label": "SP2 CU11",
+          "releaseDate": "2016-03-21",
+          "type": "CU",
+          "kb": "KB3137745"
+        },
+        {
+          "build": "11.0.5649.0",
+          "label": "SP2 CU12",
+          "releaseDate": "2016-05-16",
+          "type": "CU",
+          "kb": "KB3152637"
+        },
+        {
+          "build": "11.0.5655.0",
+          "label": "SP2 CU13",
+          "releaseDate": "2016-07-18",
+          "type": "CU",
+          "kb": "KB3165266"
+        },
+        {
+          "build": "11.0.5657.0",
+          "label": "SP2 CU14",
+          "releaseDate": "2016-09-20",
+          "type": "CU",
+          "kb": "KB3180914"
+        },
+        {
+          "build": "11.0.5676.0",
+          "label": "SP2 CU15",
+          "releaseDate": "2016-11-17",
+          "type": "CU",
+          "kb": "KB3205416"
+        },
+        {
+          "build": "11.0.5678.0",
+          "label": "SP2 CU16",
+          "releaseDate": "2017-01-18",
+          "type": "CU",
+          "kb": "KB3205054"
+        },
+        {
+          "build": "11.0.6020.0",
+          "label": "SP3",
+          "releaseDate": "2015-11-20",
+          "type": "SP",
+          "kb": "KB3072779"
+        },
+        {
+          "build": "11.0.6248.0",
+          "label": "SP3 MS16-136",
+          "releaseDate": "2016-11-08",
+          "type": "GDR",
+          "kb": "KB3194721"
+        },
+        {
+          "build": "11.0.6251.0",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2017-08-08",
+          "type": "GDR",
+          "kb": "KB4019092"
+        },
+        {
+          "build": "11.0.6260.1",
+          "label": "SP3 ADV180002",
+          "releaseDate": "2018-01-16",
+          "type": "GDR",
+          "kb": "KB4057115"
+        },
+        {
+          "build": "11.0.6518.0",
+          "label": "SP3 CU1",
+          "releaseDate": "2016-01-20",
+          "type": "CU",
+          "kb": "KB3123299"
+        },
+        {
+          "build": "11.0.6523.0",
+          "label": "SP3 CU2",
+          "releaseDate": "2016-03-21",
+          "type": "CU",
+          "kb": "KB3137746"
+        },
+        {
+          "build": "11.0.6537.0",
+          "label": "SP3 CU3",
+          "releaseDate": "2016-05-16",
+          "type": "CU",
+          "kb": "KB3152635"
+        },
+        {
+          "build": "11.0.6540.0",
+          "label": "SP3 CU4",
+          "releaseDate": "2016-07-18",
+          "type": "CU",
+          "kb": "KB3165264"
+        },
+        {
+          "build": "11.0.6544.0",
+          "label": "SP3 CU5",
+          "releaseDate": "2016-09-21",
+          "type": "CU",
+          "kb": "KB3180915"
+        },
+        {
+          "build": "11.0.6567.0",
+          "label": "SP3 CU6",
+          "releaseDate": "2016-11-17",
+          "type": "CU",
+          "kb": "KB3194992"
+        },
+        {
+          "build": "11.0.6579.0",
+          "label": "SP3 CU7",
+          "releaseDate": "2017-01-18",
+          "type": "CU",
+          "kb": "KB3205051"
+        },
+        {
+          "build": "11.0.6594.0",
+          "label": "SP3 CU8",
+          "releaseDate": "2017-03-21",
+          "type": "CU",
+          "kb": "KB4013104"
+        },
+        {
+          "build": "11.0.6598.0",
+          "label": "SP3 CU9",
+          "releaseDate": "2017-05-16",
+          "type": "CU",
+          "kb": "KB4016762"
+        },
+        {
+          "build": "11.0.6607.3",
+          "label": "SP3 CU10",
+          "releaseDate": "2017-08-08",
+          "type": "CU",
+          "kb": "KB4025925"
+        },
+        {
+          "build": "11.0.6614.2",
+          "label": "SP3 ADV180002",
+          "releaseDate": "2018-01-16",
+          "type": "CU",
+          "kb": "KB4057121"
+        },
+        {
+          "build": "11.0.7001.0",
+          "label": "SP4",
+          "releaseDate": "2017-10-04",
+          "type": "SP",
+          "kb": "KB4018073"
+        },
+        {
+          "build": "11.0.7462.6",
+          "label": "SP4 ADV180002",
+          "releaseDate": "2018-01-16",
+          "type": "GDR",
+          "kb": "KB4057116"
+        },
+        {
+          "build": "11.0.7493.4",
+          "label": "SP4 SP4 + GDR",
+          "releaseDate": "2020-02-11",
+          "type": "GDR",
+          "kb": "KB4532098"
+        },
+        {
+          "build": "11.0.7507.2",
+          "label": "SP4 SP4 + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583465"
+        },
+        {
+          "build": "11.0.7512.11",
+          "label": "SP4 SP4 + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021123"
+        }
+      ]
+    },
+    "2014": {
+      "majorBuild": 12,
+      "mainstreamSupportEnds": "2019-07-09",
+      "extendedSupportEnds": "2024-07-09",
+      "latestBuild": "12.0.6449.1",
+      "latestReleaseDate": "2023-10-10",
+      "builds": [
+        {
+          "build": "12.0.2000.8",
+          "label": "RTM",
+          "releaseDate": "2014-04-01",
+          "type": "RTM"
+        },
+        {
+          "build": "12.0.2254.0",
+          "label": "RTM MS14-044",
+          "releaseDate": "2014-08-12",
+          "type": "GDR",
+          "kb": "KB2977315"
+        },
+        {
+          "build": "12.0.2269.0",
+          "label": "RTM MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3045324"
+        },
+        {
+          "build": "12.0.2342.0",
+          "label": "RTM CU1",
+          "releaseDate": "2014-04-21",
+          "type": "CU",
+          "kb": "KB2931693"
+        },
+        {
+          "build": "12.0.2370.0",
+          "label": "RTM CU2",
+          "releaseDate": "2014-06-27",
+          "type": "CU",
+          "kb": "KB2967546"
+        },
+        {
+          "build": "12.0.2381.0",
+          "label": "RTM MS14-044",
+          "releaseDate": "2014-08-12",
+          "type": "CU",
+          "kb": "KB2977316"
+        },
+        {
+          "build": "12.0.2402.0",
+          "label": "RTM CU3",
+          "releaseDate": "2014-08-18",
+          "type": "CU",
+          "kb": "KB2984923"
+        },
+        {
+          "build": "12.0.2430.0",
+          "label": "RTM CU4",
+          "releaseDate": "2014-10-21",
+          "type": "CU",
+          "kb": "KB2999197"
+        },
+        {
+          "build": "12.0.2456.0",
+          "label": "RTM CU5",
+          "releaseDate": "2014-12-17",
+          "type": "CU",
+          "kb": "KB3011055"
+        },
+        {
+          "build": "12.0.2480.0",
+          "label": "RTM CU6",
+          "releaseDate": "2015-02-16",
+          "type": "CU",
+          "kb": "KB3031047"
+        },
+        {
+          "build": "12.0.2495.0",
+          "label": "RTM CU7",
+          "releaseDate": "2015-04-20",
+          "type": "CU",
+          "kb": "KB3046038"
+        },
+        {
+          "build": "12.0.2546.0",
+          "label": "RTM CU8",
+          "releaseDate": "2015-06-19",
+          "type": "CU",
+          "kb": "KB3067836"
+        },
+        {
+          "build": "12.0.2548.0",
+          "label": "RTM MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "CU",
+          "kb": "KB3045323"
+        },
+        {
+          "build": "12.0.2553.0",
+          "label": "RTM CU9",
+          "releaseDate": "2015-08-17",
+          "type": "CU",
+          "kb": "KB3075949"
+        },
+        {
+          "build": "12.0.2556.4",
+          "label": "RTM CU10",
+          "releaseDate": "2015-10-19",
+          "type": "CU",
+          "kb": "KB3094220"
+        },
+        {
+          "build": "12.0.2560.0",
+          "label": "RTM CU11",
+          "releaseDate": "2015-12-21",
+          "type": "CU",
+          "kb": "KB3106659"
+        },
+        {
+          "build": "12.0.2564.0",
+          "label": "RTM CU12",
+          "releaseDate": "2016-02-22",
+          "type": "CU",
+          "kb": "KB3130923"
+        },
+        {
+          "build": "12.0.2568.0",
+          "label": "RTM CU13",
+          "releaseDate": "2016-04-18",
+          "type": "CU",
+          "kb": "KB3144517"
+        },
+        {
+          "build": "12.0.2569.0",
+          "label": "RTM CU14",
+          "releaseDate": "2016-06-20",
+          "type": "CU",
+          "kb": "KB3158271"
+        },
+        {
+          "build": "12.0.4100.1",
+          "label": "SP1",
+          "releaseDate": "2015-05-04",
+          "type": "SP",
+          "kb": "KB3058865"
+        },
+        {
+          "build": "12.0.4213.0",
+          "label": "SP1 MS15-058",
+          "releaseDate": "2015-07-14",
+          "type": "GDR",
+          "kb": "KB3070446"
+        },
+        {
+          "build": "12.0.4232.0",
+          "label": "SP1 MS16-136",
+          "releaseDate": "2016-11-08",
+          "type": "GDR",
+          "kb": "KB3194720"
+        },
+        {
+          "build": "12.0.4237.0",
+          "label": "SP1 SP1 + GDR",
+          "releaseDate": "2017-08-08",
+          "type": "GDR",
+          "kb": "KB4019091"
+        },
+        {
+          "build": "12.0.4416.0",
+          "label": "SP1 CU1",
+          "releaseDate": "2015-06-19",
+          "type": "CU",
+          "kb": "KB3067839"
+        },
+        {
+          "build": "12.0.4422.0",
+          "label": "SP1 CU2",
+          "releaseDate": "2015-08-17",
+          "type": "CU",
+          "kb": "KB3075950"
+        },
+        {
+          "build": "12.0.4427.24",
+          "label": "SP1 CU3",
+          "releaseDate": "2015-10-19",
+          "type": "CU",
+          "kb": "KB3094221"
+        },
+        {
+          "build": "12.0.4436.0",
+          "label": "SP1 CU4",
+          "releaseDate": "2015-12-21",
+          "type": "CU",
+          "kb": "KB3106660"
+        },
+        {
+          "build": "12.0.4439.1",
+          "label": "SP1 CU5",
+          "releaseDate": "2016-02-22",
+          "type": "CU",
+          "kb": "KB3130926"
+        },
+        {
+          "build": "12.0.4457.0",
+          "label": "SP1 CU6",
+          "releaseDate": "2016-04-18",
+          "type": "CU",
+          "kb": "KB3167392"
+        },
+        {
+          "build": "12.0.4459.0",
+          "label": "SP1 CU7",
+          "releaseDate": "2016-06-20",
+          "type": "CU",
+          "kb": "KB3162659"
+        },
+        {
+          "build": "12.0.4468.0",
+          "label": "SP1 CU8",
+          "releaseDate": "2016-08-16",
+          "type": "CU",
+          "kb": "KB3174038"
+        },
+        {
+          "build": "12.0.4474.0",
+          "label": "SP1 CU9",
+          "releaseDate": "2016-10-18",
+          "type": "CU",
+          "kb": "KB3186964"
+        },
+        {
+          "build": "12.0.4487.0",
+          "label": "SP1 MS16-136",
+          "releaseDate": "2016-11-08",
+          "type": "CU",
+          "kb": "KB3194722"
+        },
+        {
+          "build": "12.0.4491.0",
+          "label": "SP1 CU10",
+          "releaseDate": "2016-12-27",
+          "type": "CU",
+          "kb": "KB3204399"
+        },
+        {
+          "build": "12.0.4502.0",
+          "label": "SP1 CU11",
+          "releaseDate": "2017-02-21",
+          "type": "CU",
+          "kb": "KB4010392"
+        },
+        {
+          "build": "12.0.4511.0",
+          "label": "SP1 CU12",
+          "releaseDate": "2017-04-17",
+          "type": "CU",
+          "kb": "KB4017793"
+        },
+        {
+          "build": "12.0.4522.0",
+          "label": "SP1 CU13",
+          "releaseDate": "2017-08-08",
+          "type": "CU",
+          "kb": "KB4019099"
+        },
+        {
+          "build": "12.0.5000.0",
+          "label": "SP2",
+          "releaseDate": "2016-07-11",
+          "type": "SP",
+          "kb": "KB3171021"
+        },
+        {
+          "build": "12.0.5203.0",
+          "label": "SP2 MS16-136",
+          "releaseDate": "2016-11-08",
+          "type": "GDR",
+          "kb": "KB3194714"
+        },
+        {
+          "build": "12.0.5207.0",
+          "label": "SP2 SP2 + GDR",
+          "releaseDate": "2017-08-08",
+          "type": "GDR",
+          "kb": "KB4019093"
+        },
+        {
+          "build": "12.0.5214.6",
+          "label": "SP2 ADV180002",
+          "releaseDate": "2018-01-16",
+          "type": "GDR",
+          "kb": "KB4057120"
+        },
+        {
+          "build": "12.0.5223.6",
+          "label": "SP2 SP2 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505217"
+        },
+        {
+          "build": "12.0.5511.0",
+          "label": "SP2 CU1",
+          "releaseDate": "2016-08-25",
+          "type": "CU",
+          "kb": "KB3178925"
+        },
+        {
+          "build": "12.0.5522.0",
+          "label": "SP2 CU2",
+          "releaseDate": "2016-10-18",
+          "type": "CU",
+          "kb": "KB3188778"
+        },
+        {
+          "build": "12.0.5532.0",
+          "label": "SP2 MS16-136",
+          "releaseDate": "2016-11-08",
+          "type": "CU",
+          "kb": "KB3194718"
+        },
+        {
+          "build": "12.0.5538.0",
+          "label": "SP2 CU3",
+          "releaseDate": "2016-12-28",
+          "type": "CU",
+          "kb": "KB3204388"
+        },
+        {
+          "build": "12.0.5540.0",
+          "label": "SP2 CU4",
+          "releaseDate": "2017-02-21",
+          "type": "CU",
+          "kb": "KB4010394"
+        },
+        {
+          "build": "12.0.5546.0",
+          "label": "SP2 CU5",
+          "releaseDate": "2017-02-21",
+          "type": "CU",
+          "kb": "KB4013098"
+        },
+        {
+          "build": "12.0.5553.0",
+          "label": "SP2 CU6",
+          "releaseDate": "2017-08-08",
+          "type": "CU",
+          "kb": "KB4019094"
+        },
+        {
+          "build": "12.0.5556.0",
+          "label": "SP2 CU7",
+          "releaseDate": "2017-08-28",
+          "type": "CU",
+          "kb": "KB4032541"
+        },
+        {
+          "build": "12.0.5557.0",
+          "label": "SP2 CU8",
+          "releaseDate": "2017-10-16",
+          "type": "CU",
+          "kb": "KB4037356"
+        },
+        {
+          "build": "12.0.5563.0",
+          "label": "SP2 CU9",
+          "releaseDate": "2017-12-24",
+          "type": "CU",
+          "kb": "KB4055557"
+        },
+        {
+          "build": "12.0.5571.0",
+          "label": "SP2 CU10 + ADV180002",
+          "releaseDate": "2018-01-16",
+          "type": "GDR",
+          "kb": "KB4052725"
+        },
+        {
+          "build": "12.0.5579.0",
+          "label": "SP2 CU11",
+          "releaseDate": "2018-03-19",
+          "type": "CU",
+          "kb": "KB4077063"
+        },
+        {
+          "build": "12.0.5589.7",
+          "label": "SP2 CU12",
+          "releaseDate": "2018-06-19",
+          "type": "CU",
+          "kb": "KB4130489"
+        },
+        {
+          "build": "12.0.5590.1",
+          "label": "SP2 CU13",
+          "releaseDate": "2018-08-27",
+          "type": "CU",
+          "kb": "KB4456287"
+        },
+        {
+          "build": "12.0.5600.1",
+          "label": "SP2 CU14",
+          "releaseDate": "2018-10-15",
+          "type": "CU",
+          "kb": "KB4459860"
+        },
+        {
+          "build": "12.0.5605.1",
+          "label": "SP2 CU15",
+          "releaseDate": "2018-12-12",
+          "type": "CU",
+          "kb": "KB4469137"
+        },
+        {
+          "build": "12.0.5626.1",
+          "label": "SP2 CU16",
+          "releaseDate": "2019-02-19",
+          "type": "CU",
+          "kb": "KB4482967"
+        },
+        {
+          "build": "12.0.5632.1",
+          "label": "SP2 CU17",
+          "releaseDate": "2019-04-16",
+          "type": "CU",
+          "kb": "KB4491540"
+        },
+        {
+          "build": "12.0.5659.1",
+          "label": "SP2 CU17 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505419"
+        },
+        {
+          "build": "12.0.5687.1",
+          "label": "SP2 CU18",
+          "releaseDate": "2019-07-29",
+          "type": "CU",
+          "kb": "KB4500180"
+        },
+        {
+          "build": "12.0.6024.0",
+          "label": "SP3",
+          "releaseDate": "2018-10-30",
+          "type": "SP",
+          "kb": "KB4022619"
+        },
+        {
+          "build": "12.0.6108.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505218"
+        },
+        {
+          "build": "12.0.6118.4",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2020-02-11",
+          "type": "GDR",
+          "kb": "KB4532095"
+        },
+        {
+          "build": "12.0.6164.21",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583463"
+        },
+        {
+          "build": "12.0.6169.19",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014165"
+        },
+        {
+          "build": "12.0.6174.8",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021037"
+        },
+        {
+          "build": "12.0.6179.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029184"
+        },
+        {
+          "build": "12.0.6205.1",
+          "label": "SP3 CU1",
+          "releaseDate": "2018-12-12",
+          "type": "CU",
+          "kb": "KB4470220"
+        },
+        {
+          "build": "12.0.6214.1",
+          "label": "SP3 CU2",
+          "releaseDate": "2019-02-19",
+          "type": "CU",
+          "kb": "KB4482960"
+        },
+        {
+          "build": "12.0.6259.0",
+          "label": "SP3 CU3",
+          "releaseDate": "2019-04-16",
+          "type": "CU",
+          "kb": "KB4491539"
+        },
+        {
+          "build": "12.0.6293.0",
+          "label": "SP3 CU3 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505422"
+        },
+        {
+          "build": "12.0.6329.1",
+          "label": "SP3 CU4",
+          "releaseDate": "2019-07-29",
+          "type": "CU",
+          "kb": "KB4500181"
+        },
+        {
+          "build": "12.0.6372.1",
+          "label": "SP3 CU4 + GDR",
+          "releaseDate": "2020-02-11",
+          "type": "GDR",
+          "kb": "KB4535288"
+        },
+        {
+          "build": "12.0.6433.1",
+          "label": "SP3 CU4 + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583462"
+        },
+        {
+          "build": "12.0.6439.10",
+          "label": "SP3 CU4 + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014164"
+        },
+        {
+          "build": "12.0.6444.4",
+          "label": "SP3 CU4 + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021045"
+        },
+        {
+          "build": "12.0.6449.1",
+          "label": "SP3 CU4 + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029185"
+        }
+      ]
+    },
+    "2016": {
+      "majorBuild": 13,
+      "mainstreamSupportEnds": "2021-07-13",
+      "extendedSupportEnds": "2026-07-14",
+      "latestBuild": "13.0.7080.1",
+      "latestReleaseDate": "2026-04-14",
+      "builds": [
+        {
+          "build": "13.0.1601.5",
+          "label": "RTM",
+          "releaseDate": "2016-06-01",
+          "type": "RTM"
+        },
+        {
+          "build": "13.0.1708.0",
+          "label": "RTM RTM + GDR",
+          "releaseDate": "2016-06-03",
+          "type": "GDR",
+          "kb": "KB3164398"
+        },
+        {
+          "build": "13.0.1722.0",
+          "label": "RTM MS16-136",
+          "releaseDate": "2016-11-08",
+          "type": "GDR",
+          "kb": "KB3194716"
+        },
+        {
+          "build": "13.0.1728.2",
+          "label": "RTM CU3",
+          "releaseDate": "2016-12-16",
+          "type": "GDR",
+          "kb": "KB3210111"
+        },
+        {
+          "build": "13.0.1742.0",
+          "label": "RTM",
+          "releaseDate": "2017-08-08",
+          "type": "GDR",
+          "kb": "KB3164398"
+        },
+        {
+          "build": "13.0.1745.2",
+          "label": "RTM ADV180002",
+          "releaseDate": "2018-01-16",
+          "type": "GDR",
+          "kb": "KB4058560"
+        },
+        {
+          "build": "13.0.2149.0",
+          "label": "RTM CU1",
+          "releaseDate": "2016-06-01",
+          "type": "CU",
+          "kb": "KB3164674"
+        },
+        {
+          "build": "13.0.2164.0",
+          "label": "RTM CU2",
+          "releaseDate": "2016-09-22",
+          "type": "CU",
+          "kb": "KB3182270"
+        },
+        {
+          "build": "13.0.2186.6",
+          "label": "RTM CU3",
+          "releaseDate": "2016-11-17",
+          "type": "CU",
+          "kb": "KB3205413"
+        },
+        {
+          "build": "13.0.2193.0",
+          "label": "RTM CU4",
+          "releaseDate": "2017-01-18",
+          "type": "CU",
+          "kb": "KB3205052"
+        },
+        {
+          "build": "13.0.2197.0",
+          "label": "RTM CU5",
+          "releaseDate": "2017-03-20",
+          "type": "CU",
+          "kb": "KB4013105"
+        },
+        {
+          "build": "13.0.2204.0",
+          "label": "RTM CU6",
+          "releaseDate": "2017-05-15",
+          "type": "CU",
+          "kb": "KB4019914"
+        },
+        {
+          "build": "13.0.2210.0",
+          "label": "RTM CU7",
+          "releaseDate": "2017-08-08",
+          "type": "CU",
+          "kb": "KB4024304"
+        },
+        {
+          "build": "13.0.2213.0",
+          "label": "RTM CU8",
+          "releaseDate": "2017-09-18",
+          "type": "CU",
+          "kb": "KB4040713"
+        },
+        {
+          "build": "13.0.2216.0",
+          "label": "RTM CU9",
+          "releaseDate": "2017-11-30",
+          "type": "CU",
+          "kb": "KB4037357"
+        },
+        {
+          "build": "13.0.2218.0",
+          "label": "RTM CU9 + ADV180002",
+          "releaseDate": "2018-01-16",
+          "type": "CU",
+          "kb": "KB4058559"
+        },
+        {
+          "build": "13.0.4001.0",
+          "label": "SP1",
+          "releaseDate": "2016-11-15",
+          "type": "SP",
+          "kb": "KB3182545"
+        },
+        {
+          "build": "13.0.4202.2",
+          "label": "SP1 SP1 + GDR",
+          "releaseDate": "2016-12-16",
+          "type": "GDR",
+          "kb": "KB3210089"
+        },
+        {
+          "build": "13.0.4206.0",
+          "label": "SP1 SP1 + GDR",
+          "releaseDate": "2017-08-08",
+          "type": "GDR",
+          "kb": "KB4019089"
+        },
+        {
+          "build": "13.0.4210.6",
+          "label": "SP1 ADV180002",
+          "releaseDate": "2018-01-15",
+          "type": "GDR",
+          "kb": "KB4057118"
+        },
+        {
+          "build": "13.0.4224.16",
+          "label": "SP1 GDR",
+          "releaseDate": "2018-08-22",
+          "type": "GDR",
+          "kb": "KB4458842"
+        },
+        {
+          "build": "13.0.4259.0",
+          "label": "SP1 SP1 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505219"
+        },
+        {
+          "build": "13.0.4411.0",
+          "label": "SP1 CU1",
+          "releaseDate": "2017-01-18",
+          "type": "CU",
+          "kb": "KB3208177"
+        },
+        {
+          "build": "13.0.4422.0",
+          "label": "SP1 CU2",
+          "releaseDate": "2017-03-20",
+          "type": "CU",
+          "kb": "KB4013106"
+        },
+        {
+          "build": "13.0.4435.0",
+          "label": "SP1 CU3",
+          "releaseDate": "2017-05-16",
+          "type": "CU",
+          "kb": "KB4019916"
+        },
+        {
+          "build": "13.0.4446.0",
+          "label": "SP1 CU4",
+          "releaseDate": "2017-08-08",
+          "type": "CU",
+          "kb": "KB4024305"
+        },
+        {
+          "build": "13.0.4451.0",
+          "label": "SP1 CU5",
+          "releaseDate": "2017-09-18",
+          "type": "CU",
+          "kb": "KB4040714"
+        },
+        {
+          "build": "13.0.4457.0",
+          "label": "SP1 CU6",
+          "releaseDate": "2017-11-30",
+          "type": "CU",
+          "kb": "KB4037354"
+        },
+        {
+          "build": "13.0.4466.4",
+          "label": "SP1 ADV180002 + CU7",
+          "releaseDate": "2018-01-15",
+          "type": "CU",
+          "kb": "KB4057119"
+        },
+        {
+          "build": "13.0.4474.0",
+          "label": "SP1 CU8",
+          "releaseDate": "2018-03-19",
+          "type": "CU",
+          "kb": "KB4077064"
+        },
+        {
+          "build": "13.0.4502.0",
+          "label": "SP1 CU9",
+          "releaseDate": "2018-05-30",
+          "type": "CU",
+          "kb": "KB4100997"
+        },
+        {
+          "build": "13.0.4514.0",
+          "label": "SP1 CU10",
+          "releaseDate": "2018-07-17",
+          "type": "CU",
+          "kb": "KB4341569"
+        },
+        {
+          "build": "13.0.4522.0",
+          "label": "SP1 CU10 + GDR",
+          "releaseDate": "2018-08-14",
+          "type": "GDR",
+          "kb": "KB4293808"
+        },
+        {
+          "build": "13.0.4528.0",
+          "label": "SP1 CU11",
+          "releaseDate": "2018-09-17",
+          "type": "CU",
+          "kb": "KB4459676"
+        },
+        {
+          "build": "13.0.4541.0",
+          "label": "SP1 CU12",
+          "releaseDate": "2018-11-13",
+          "type": "CU",
+          "kb": "KB4464343"
+        },
+        {
+          "build": "13.0.4550.1",
+          "label": "SP1 CU13",
+          "releaseDate": "2019-01-23",
+          "type": "CU",
+          "kb": "KB4475775"
+        },
+        {
+          "build": "13.0.4560.0",
+          "label": "SP1 CU14",
+          "releaseDate": "2019-03-19",
+          "type": "CU",
+          "kb": "KB4488535"
+        },
+        {
+          "build": "13.0.4574.0",
+          "label": "SP1 CU15",
+          "releaseDate": "2019-05-16",
+          "type": "CU",
+          "kb": "KB4495257"
+        },
+        {
+          "build": "13.0.4604.0",
+          "label": "SP1 CU15 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505221"
+        },
+        {
+          "build": "13.0.5026.0",
+          "label": "SP2",
+          "releaseDate": "2018-04-24",
+          "type": "SP",
+          "kb": "KB4052908"
+        },
+        {
+          "build": "13.0.5081.1",
+          "label": "SP2 SP2 + GDR",
+          "releaseDate": "2018-08-14",
+          "type": "GDR",
+          "kb": "KB4293802"
+        },
+        {
+          "build": "13.0.5101.9",
+          "label": "SP2 SP2 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505220"
+        },
+        {
+          "build": "13.0.5102.14",
+          "label": "SP2 SP2 + GDR",
+          "releaseDate": "2020-02-11",
+          "type": "GDR",
+          "kb": "KB4532097"
+        },
+        {
+          "build": "13.0.5103.6",
+          "label": "SP2 SP2 + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583460"
+        },
+        {
+          "build": "13.0.5108.50",
+          "label": "SP2 SP2 + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014365"
+        },
+        {
+          "build": "13.0.5149.0",
+          "label": "SP2 CU1",
+          "releaseDate": "2018-05-30",
+          "type": "CU",
+          "kb": "KB4135048"
+        },
+        {
+          "build": "13.0.5153.0",
+          "label": "SP2 CU2",
+          "releaseDate": "2018-07-17",
+          "type": "CU",
+          "kb": "KB4340355"
+        },
+        {
+          "build": "13.0.5161.0",
+          "label": "SP2 CU2 + GDR",
+          "releaseDate": "2018-08-21",
+          "type": "GDR",
+          "kb": "KB4458621"
+        },
+        {
+          "build": "13.0.5216.0",
+          "label": "SP2 CU3",
+          "releaseDate": "2018-09-20",
+          "type": "CU",
+          "kb": "KB4458871"
+        },
+        {
+          "build": "13.0.5233.0",
+          "label": "SP2 CU4",
+          "releaseDate": "2018-11-13",
+          "type": "CU",
+          "kb": "KB4464106"
+        },
+        {
+          "build": "13.0.5264.1",
+          "label": "SP2 CU5",
+          "releaseDate": "2019-01-23",
+          "type": "CU",
+          "kb": "KB4475776"
+        },
+        {
+          "build": "13.0.5292.0",
+          "label": "SP2 CU6",
+          "releaseDate": "2019-03-19",
+          "type": "CU",
+          "kb": "KB4488536"
+        },
+        {
+          "build": "13.0.5337.0",
+          "label": "SP2 CU7",
+          "releaseDate": "2019-05-22",
+          "type": "CU",
+          "kb": "KB4495256"
+        },
+        {
+          "build": "13.0.5366.0",
+          "label": "SP2 CU7 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505222"
+        },
+        {
+          "build": "13.0.5426.0",
+          "label": "SP2 CU8",
+          "releaseDate": "2019-07-31",
+          "type": "CU",
+          "kb": "KB4505830"
+        },
+        {
+          "build": "13.0.5492.2",
+          "label": "SP2 CU10",
+          "releaseDate": "2019-10-08",
+          "type": "CU",
+          "kb": "KB4524334"
+        },
+        {
+          "build": "13.0.5598.27",
+          "label": "SP2 CU11",
+          "releaseDate": "2019-12-09",
+          "type": "CU",
+          "kb": "KB4527378"
+        },
+        {
+          "build": "13.0.5622.0",
+          "label": "SP2 CU11 + GDR",
+          "releaseDate": "2020-02-11",
+          "type": "GDR",
+          "kb": "KB4535706"
+        },
+        {
+          "build": "13.0.5698.0",
+          "label": "SP2 CU12",
+          "releaseDate": "2020-02-25",
+          "type": "CU",
+          "kb": "KB4536648"
+        },
+        {
+          "build": "13.0.5820.21",
+          "label": "SP2 CU13",
+          "releaseDate": "2020-05-28",
+          "type": "CU",
+          "kb": "KB4549825"
+        },
+        {
+          "build": "13.0.5830.85",
+          "label": "SP2 CU14",
+          "releaseDate": "2020-08-06",
+          "type": "CU",
+          "kb": "KB4564903"
+        },
+        {
+          "build": "13.0.5850.14",
+          "label": "SP2 CU15",
+          "releaseDate": "2020-09-28",
+          "type": "CU",
+          "kb": "KB4577775"
+        },
+        {
+          "build": "13.0.5865.1",
+          "label": "SP2 CU15 + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583461"
+        },
+        {
+          "build": "13.0.5882.1",
+          "label": "SP2 CU16",
+          "releaseDate": "2021-02-11",
+          "type": "CU",
+          "kb": "KB5000645"
+        },
+        {
+          "build": "13.0.5888.11",
+          "label": "SP2 CU17",
+          "releaseDate": "2021-03-29",
+          "type": "CU",
+          "kb": "KB5001092"
+        },
+        {
+          "build": "13.0.5893.48",
+          "label": "SP2 CU17 + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014351"
+        },
+        {
+          "build": "13.0.6300.2",
+          "label": "SP3",
+          "releaseDate": "2021-09-15",
+          "type": "SP",
+          "kb": "KB5003279"
+        },
+        {
+          "build": "13.0.6419.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014355"
+        },
+        {
+          "build": "13.0.6430.49",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021129"
+        },
+        {
+          "build": "13.0.6435.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029186"
+        },
+        {
+          "build": "13.0.6441.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040946"
+        },
+        {
+          "build": "13.0.6445.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042207"
+        },
+        {
+          "build": "13.0.6450.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046063"
+        },
+        {
+          "build": "13.0.6455.2",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046855"
+        },
+        {
+          "build": "13.0.6460.7",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058718"
+        },
+        {
+          "build": "13.0.6465.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063762"
+        },
+        {
+          "build": "13.0.6470.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065226"
+        },
+        {
+          "build": "13.0.6475.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068401"
+        },
+        {
+          "build": "13.0.6480.4",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077474"
+        },
+        {
+          "build": "13.0.6485.1",
+          "label": "SP3 SP3 + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5084821"
+        },
+        {
+          "build": "13.0.7000.253",
+          "label": "SP3 SP3 Azure Connect Feature Pack",
+          "releaseDate": "2022-05-19",
+          "type": "SP",
+          "kb": "KB5014242"
+        },
+        {
+          "build": "13.0.7016.1",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5015371"
+        },
+        {
+          "build": "13.0.7024.30",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021128"
+        },
+        {
+          "build": "13.0.7029.3",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029187"
+        },
+        {
+          "build": "13.0.7037.1",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040944"
+        },
+        {
+          "build": "13.0.7040.1",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042209"
+        },
+        {
+          "build": "13.0.7045.2",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046062"
+        },
+        {
+          "build": "13.0.7050.2",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046856"
+        },
+        {
+          "build": "13.0.7055.9",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058717"
+        },
+        {
+          "build": "13.0.7060.1",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063761"
+        },
+        {
+          "build": "13.0.7065.1",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065227"
+        },
+        {
+          "build": "13.0.7070.1",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068400"
+        },
+        {
+          "build": "13.0.7075.5",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077473"
+        },
+        {
+          "build": "13.0.7080.1",
+          "label": "SP3 Azure Connect Feature Pack SP3 Azure Connect Feature Pack + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5084820"
+        }
+      ]
+    },
+    "2017": {
+      "majorBuild": 14,
+      "mainstreamSupportEnds": "2022-10-11",
+      "extendedSupportEnds": "2027-10-12",
+      "latestBuild": "14.0.3525.1",
+      "latestReleaseDate": "2026-04-14",
+      "builds": [
+        {
+          "build": "14.0.1000.169",
+          "label": "RTM",
+          "releaseDate": "2017-09-29",
+          "type": "RTM"
+        },
+        {
+          "build": "14.0.2000.63",
+          "label": "RTM + GDR",
+          "releaseDate": "2018-01-03",
+          "type": "GDR",
+          "kb": "KB4057122"
+        },
+        {
+          "build": "14.0.2002.14",
+          "label": "RTM + GDR",
+          "releaseDate": "2018-08-14",
+          "type": "GDR",
+          "kb": "KB4293803"
+        },
+        {
+          "build": "14.0.2014.14",
+          "label": "RTM + GDR",
+          "releaseDate": "2019-05-14",
+          "type": "GDR",
+          "kb": "KB4494351"
+        },
+        {
+          "build": "14.0.2027.2",
+          "label": "RTM + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505224"
+        },
+        {
+          "build": "14.0.2037.2",
+          "label": "RTM + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583456"
+        },
+        {
+          "build": "14.0.2042.3",
+          "label": "RTM + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014354"
+        },
+        {
+          "build": "14.0.2047.8",
+          "label": "RTM + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021127"
+        },
+        {
+          "build": "14.0.2052.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029375"
+        },
+        {
+          "build": "14.0.2056.2",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040942"
+        },
+        {
+          "build": "14.0.2060.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042217"
+        },
+        {
+          "build": "14.0.2065.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046058"
+        },
+        {
+          "build": "14.0.2070.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046857"
+        },
+        {
+          "build": "14.0.2075.8",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058716"
+        },
+        {
+          "build": "14.0.2080.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063760"
+        },
+        {
+          "build": "14.0.2085.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065224"
+        },
+        {
+          "build": "14.0.2095.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068403"
+        },
+        {
+          "build": "14.0.2100.4",
+          "label": "RTM + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077472"
+        },
+        {
+          "build": "14.0.2105.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5084819"
+        },
+        {
+          "build": "14.0.3006.16",
+          "label": "CU1",
+          "releaseDate": "2017-10-25",
+          "type": "CU",
+          "kb": "KB4038634"
+        },
+        {
+          "build": "14.0.3008.27",
+          "label": "CU2",
+          "releaseDate": "2017-12-05",
+          "type": "CU",
+          "kb": "KB4052574"
+        },
+        {
+          "build": "14.0.3015.40",
+          "label": "CU3",
+          "releaseDate": "2018-01-03",
+          "type": "CU",
+          "kb": "KB4052987"
+        },
+        {
+          "build": "14.0.3022.28",
+          "label": "CU4",
+          "releaseDate": "2018-02-20",
+          "type": "CU",
+          "kb": "KB4056498"
+        },
+        {
+          "build": "14.0.3023.8",
+          "label": "CU5",
+          "releaseDate": "2018-03-21",
+          "type": "CU",
+          "kb": "KB4092643"
+        },
+        {
+          "build": "14.0.3025.34",
+          "label": "CU6",
+          "releaseDate": "2018-04-18",
+          "type": "CU",
+          "kb": "KB4101464"
+        },
+        {
+          "build": "14.0.3026.27",
+          "label": "CU7",
+          "releaseDate": "2018-05-24",
+          "type": "CU",
+          "kb": "KB4229789"
+        },
+        {
+          "build": "14.0.3029.16",
+          "label": "CU8",
+          "releaseDate": "2018-05-24",
+          "type": "CU",
+          "kb": "KB4338363"
+        },
+        {
+          "build": "14.0.3030.27",
+          "label": "CU9",
+          "releaseDate": "2018-07-17",
+          "type": "CU",
+          "kb": "KB4341265"
+        },
+        {
+          "build": "14.0.3035.2",
+          "label": "CU9 + GDR",
+          "releaseDate": "2018-08-14",
+          "type": "GDR",
+          "kb": "KB4293805"
+        },
+        {
+          "build": "14.0.3037.1",
+          "label": "CU10",
+          "releaseDate": "2018-08-27",
+          "type": "CU",
+          "kb": "KB4342123"
+        },
+        {
+          "build": "14.0.3038.14",
+          "label": "CU11",
+          "releaseDate": "2018-09-20",
+          "type": "CU",
+          "kb": "KB4462262"
+        },
+        {
+          "build": "14.0.3045.24",
+          "label": "CU12",
+          "releaseDate": "2018-10-24",
+          "type": "CU",
+          "kb": "KB4464082"
+        },
+        {
+          "build": "14.0.3048.4",
+          "label": "CU13",
+          "releaseDate": "2018-12-18",
+          "type": "CU",
+          "kb": "KB4466404"
+        },
+        {
+          "build": "14.0.3076.1",
+          "label": "CU14",
+          "releaseDate": "2019-03-25",
+          "type": "CU",
+          "kb": "KB4484710"
+        },
+        {
+          "build": "14.0.3103.1",
+          "label": "CU14 + GDR",
+          "releaseDate": "2019-05-14",
+          "type": "GDR",
+          "kb": "KB4494352"
+        },
+        {
+          "build": "14.0.3162.1",
+          "label": "CU15",
+          "releaseDate": "2019-05-23",
+          "type": "CU",
+          "kb": "KB4498951"
+        },
+        {
+          "build": "14.0.3192.2",
+          "label": "CU15 + GDR",
+          "releaseDate": "2019-07-09",
+          "type": "GDR",
+          "kb": "KB4505225"
+        },
+        {
+          "build": "14.0.3223.3",
+          "label": "CU16",
+          "releaseDate": "2019-08-01",
+          "type": "CU",
+          "kb": "KB4508218"
+        },
+        {
+          "build": "14.0.3238.1",
+          "label": "CU17",
+          "releaseDate": "2019-10-08",
+          "type": "CU",
+          "kb": "KB4515579"
+        },
+        {
+          "build": "14.0.3257.3",
+          "label": "CU18",
+          "releaseDate": "2019-12-09",
+          "type": "CU",
+          "kb": "KB4527377"
+        },
+        {
+          "build": "14.0.3281.6",
+          "label": "CU19",
+          "releaseDate": "2020-02-05",
+          "type": "CU",
+          "kb": "KB4535007"
+        },
+        {
+          "build": "14.0.3294.2",
+          "label": "CU20",
+          "releaseDate": "2020-04-07",
+          "type": "CU",
+          "kb": "KB4541283"
+        },
+        {
+          "build": "14.0.3335.7",
+          "label": "CU21",
+          "releaseDate": "2020-07-01",
+          "type": "CU",
+          "kb": "KB4557397"
+        },
+        {
+          "build": "14.0.3356.20",
+          "label": "CU22",
+          "releaseDate": "2020-09-10",
+          "type": "CU",
+          "kb": "KB4577467"
+        },
+        {
+          "build": "14.0.3370.1",
+          "label": "CU22 + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583457"
+        },
+        {
+          "build": "14.0.3381.3",
+          "label": "CU23",
+          "releaseDate": "2021-02-24",
+          "type": "CU",
+          "kb": "KB5000685"
+        },
+        {
+          "build": "14.0.3391.2",
+          "label": "CU24",
+          "releaseDate": "2021-05-10",
+          "type": "CU",
+          "kb": "KB5001228"
+        },
+        {
+          "build": "14.0.3401.7",
+          "label": "CU25",
+          "releaseDate": "2021-07-12",
+          "type": "CU",
+          "kb": "KB5003830"
+        },
+        {
+          "build": "14.0.3411.3",
+          "label": "CU26",
+          "releaseDate": "2021-09-14",
+          "type": "CU",
+          "kb": "KB5005226"
+        },
+        {
+          "build": "14.0.3421.10",
+          "label": "CU27",
+          "releaseDate": "2021-10-27",
+          "type": "CU",
+          "kb": "KB5006944"
+        },
+        {
+          "build": "14.0.3430.2",
+          "label": "CU28",
+          "releaseDate": "2022-01-13",
+          "type": "CU",
+          "kb": "KB5008084"
+        },
+        {
+          "build": "14.0.3436.1",
+          "label": "CU29",
+          "releaseDate": "2022-03-30",
+          "type": "CU",
+          "kb": "KB5010786"
+        },
+        {
+          "build": "14.0.3445.2",
+          "label": "CU29 + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014553"
+        },
+        {
+          "build": "14.0.3451.2",
+          "label": "CU30",
+          "releaseDate": "2022-07-13",
+          "type": "CU",
+          "kb": "KB5013756"
+        },
+        {
+          "build": "14.0.3456.2",
+          "label": "CU31",
+          "releaseDate": "2022-09-20",
+          "type": "CU",
+          "kb": "KB5016884"
+        },
+        {
+          "build": "14.0.3460.9",
+          "label": "CU31 + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021126"
+        },
+        {
+          "build": "14.0.3465.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029376"
+        },
+        {
+          "build": "14.0.3471.2",
+          "label": "CU31 + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040940"
+        },
+        {
+          "build": "14.0.3475.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042215"
+        },
+        {
+          "build": "14.0.3480.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046061"
+        },
+        {
+          "build": "14.0.3485.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046858"
+        },
+        {
+          "build": "14.0.3490.10",
+          "label": "Azure Connect Feature Pack",
+          "releaseDate": "2025-03-06",
+          "type": "Azure",
+          "kb": "KB5050533"
+        },
+        {
+          "build": "14.0.3495.9",
+          "label": "CU31 + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058714"
+        },
+        {
+          "build": "14.0.3500.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063759"
+        },
+        {
+          "build": "14.0.3505.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065225"
+        },
+        {
+          "build": "14.0.3515.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068402"
+        },
+        {
+          "build": "14.0.3520.4",
+          "label": "CU31 + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077471"
+        },
+        {
+          "build": "14.0.3525.1",
+          "label": "CU31 + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5084818"
+        }
+      ]
+    },
+    "2019": {
+      "majorBuild": 15,
+      "mainstreamSupportEnds": "2025-02-28",
+      "extendedSupportEnds": "2030-01-08",
+      "latestBuild": "15.0.4465.1",
+      "latestReleaseDate": "2026-04-14",
+      "builds": [
+        {
+          "build": "15.0.2000.5",
+          "label": "RTM",
+          "releaseDate": "2019-11-04",
+          "type": "RTM"
+        },
+        {
+          "build": "15.0.2070.41",
+          "label": "RTM + GDR",
+          "releaseDate": "2019-11-04",
+          "type": "GDR",
+          "kb": "KB4517790"
+        },
+        {
+          "build": "15.0.2080.9",
+          "label": "RTM + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583458"
+        },
+        {
+          "build": "15.0.2095.3",
+          "label": "RTM + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014356"
+        },
+        {
+          "build": "15.0.2101.7",
+          "label": "RTM + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021125"
+        },
+        {
+          "build": "15.0.2104.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029377"
+        },
+        {
+          "build": "15.0.2110.4",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-04-09",
+          "type": "GDR",
+          "kb": "KB5035434"
+        },
+        {
+          "build": "15.0.2116.2",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040986"
+        },
+        {
+          "build": "15.0.2120.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042214"
+        },
+        {
+          "build": "15.0.2125.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046056"
+        },
+        {
+          "build": "15.0.2130.3",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046859"
+        },
+        {
+          "build": "15.0.2135.5",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058713"
+        },
+        {
+          "build": "15.0.2140.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063758"
+        },
+        {
+          "build": "15.0.2145.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065223"
+        },
+        {
+          "build": "15.0.2155.2",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068405"
+        },
+        {
+          "build": "15.0.2160.4",
+          "label": "RTM + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077470"
+        },
+        {
+          "build": "15.0.2165.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5084817"
+        },
+        {
+          "build": "15.0.4003.23",
+          "label": "CU1",
+          "releaseDate": "2020-01-07",
+          "type": "CU",
+          "kb": "KB4527376"
+        },
+        {
+          "build": "15.0.4013.40",
+          "label": "CU2",
+          "releaseDate": "2020-02-13",
+          "type": "CU",
+          "kb": "KB4536075"
+        },
+        {
+          "build": "15.0.4023.6",
+          "label": "CU3",
+          "releaseDate": "2020-03-12",
+          "type": "CU",
+          "kb": "KB4538853"
+        },
+        {
+          "build": "15.0.4033.1",
+          "label": "CU4",
+          "releaseDate": "2020-03-31",
+          "type": "CU",
+          "kb": "KB4548597"
+        },
+        {
+          "build": "15.0.4043.16",
+          "label": "CU5",
+          "releaseDate": "2020-06-22",
+          "type": "CU",
+          "kb": "KB4552255"
+        },
+        {
+          "build": "15.0.4053.23",
+          "label": "CU6",
+          "releaseDate": "2020-08-04",
+          "type": "CU",
+          "kb": "KB4563110"
+        },
+        {
+          "build": "15.0.4063.15",
+          "label": "CU7",
+          "releaseDate": "2020-09-02",
+          "type": "CU",
+          "kb": "KB4570012"
+        },
+        {
+          "build": "15.0.4073.23",
+          "label": "CU8",
+          "releaseDate": "2020-10-01",
+          "type": "CU",
+          "kb": "KB4577194"
+        },
+        {
+          "build": "15.0.4083.2",
+          "label": "CU8 + GDR",
+          "releaseDate": "2021-01-12",
+          "type": "GDR",
+          "kb": "KB4583459"
+        },
+        {
+          "build": "15.0.4102.2",
+          "label": "CU9",
+          "releaseDate": "2021-02-11",
+          "type": "CU",
+          "kb": "KB5000642"
+        },
+        {
+          "build": "15.0.4123.1",
+          "label": "CU10",
+          "releaseDate": "2021-04-06",
+          "type": "CU",
+          "kb": "KB5001090"
+        },
+        {
+          "build": "15.0.4138.2",
+          "label": "CU11",
+          "releaseDate": "2021-06-10",
+          "type": "CU",
+          "kb": "KB5003249"
+        },
+        {
+          "build": "15.0.4153.1",
+          "label": "CU12",
+          "releaseDate": "2021-08-04",
+          "type": "CU",
+          "kb": "KB5004524"
+        },
+        {
+          "build": "15.0.4178.1",
+          "label": "CU13",
+          "releaseDate": "2021-10-05",
+          "type": "CU",
+          "kb": "KB5005679"
+        },
+        {
+          "build": "15.0.4188.2",
+          "label": "CU14",
+          "releaseDate": "2021-11-22",
+          "type": "CU",
+          "kb": "KB5007182"
+        },
+        {
+          "build": "15.0.4198.2",
+          "label": "CU15",
+          "releaseDate": "2022-01-27",
+          "type": "CU",
+          "kb": "KB5008996"
+        },
+        {
+          "build": "15.0.4223.1",
+          "label": "CU16",
+          "releaseDate": "2022-04-18",
+          "type": "CU",
+          "kb": "KB5011644"
+        },
+        {
+          "build": "15.0.4236.7",
+          "label": "CU16 + GDR",
+          "releaseDate": "2022-06-14",
+          "type": "GDR",
+          "kb": "KB5014353"
+        },
+        {
+          "build": "15.0.4249.2",
+          "label": "CU17",
+          "releaseDate": "2022-08-11",
+          "type": "CU",
+          "kb": "KB5016394"
+        },
+        {
+          "build": "15.0.4261.1",
+          "label": "CU18",
+          "releaseDate": "2022-09-28",
+          "type": "CU",
+          "kb": "KB5017593"
+        },
+        {
+          "build": "15.0.4280.7",
+          "label": "CU18 + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021124"
+        },
+        {
+          "build": "15.0.4298.1",
+          "label": "CU19",
+          "releaseDate": "2023-02-16",
+          "type": "CU",
+          "kb": "KB5023049"
+        },
+        {
+          "build": "15.0.4312.2",
+          "label": "CU20",
+          "releaseDate": "2023-04-13",
+          "type": "CU",
+          "kb": "KB5024276"
+        },
+        {
+          "build": "15.0.4316.3",
+          "label": "CU21",
+          "releaseDate": "2023-06-15",
+          "type": "CU",
+          "kb": "KB5025808"
+        },
+        {
+          "build": "15.0.4322.2",
+          "label": "CU22",
+          "releaseDate": "2023-08-14",
+          "type": "CU",
+          "kb": "KB5027702"
+        },
+        {
+          "build": "15.0.4326.1",
+          "label": "CU22 + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029378"
+        },
+        {
+          "build": "15.0.4335.1",
+          "label": "CU23",
+          "releaseDate": "2023-10-12",
+          "type": "CU",
+          "kb": "KB5030333"
+        },
+        {
+          "build": "15.0.4345.5",
+          "label": "CU24",
+          "releaseDate": "2023-12-14",
+          "type": "CU",
+          "kb": "KB5031908"
+        },
+        {
+          "build": "15.0.4355.3",
+          "label": "CU25",
+          "releaseDate": "2024-02-15",
+          "type": "CU",
+          "kb": "KB5033688"
+        },
+        {
+          "build": "15.0.4360.2",
+          "label": "CU25 + GDR",
+          "releaseDate": "2024-04-09",
+          "type": "GDR",
+          "kb": "KB5036335"
+        },
+        {
+          "build": "15.0.4365.2",
+          "label": "CU26",
+          "releaseDate": "2024-04-11",
+          "type": "CU",
+          "kb": "KB5035123"
+        },
+        {
+          "build": "15.0.4375.4",
+          "label": "CU27",
+          "releaseDate": "2024-06-13",
+          "type": "CU",
+          "kb": "KB5037331"
+        },
+        {
+          "build": "15.0.4382.1",
+          "label": "CU27 + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040948"
+        },
+        {
+          "build": "15.0.4385.2",
+          "label": "CU28",
+          "releaseDate": "2024-08-01",
+          "type": "CU",
+          "kb": "KB5039747"
+        },
+        {
+          "build": "15.0.4390.2",
+          "label": "CU28 + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042749"
+        },
+        {
+          "build": "15.0.4395.2",
+          "label": "CU28 + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046060"
+        },
+        {
+          "build": "15.0.4405.4",
+          "label": "CU29",
+          "releaseDate": "2024-10-31",
+          "type": "CU",
+          "kb": "KB5046365"
+        },
+        {
+          "build": "15.0.4410.1",
+          "label": "CU29 + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046860"
+        },
+        {
+          "build": "15.0.4415.2",
+          "label": "CU30",
+          "releaseDate": "2024-12-12",
+          "type": "CU",
+          "kb": "KB5049235"
+        },
+        {
+          "build": "15.0.4420.2",
+          "label": "CU31",
+          "releaseDate": "2025-02-13",
+          "type": "CU",
+          "kb": "KB5049296"
+        },
+        {
+          "build": "15.0.4430.1",
+          "label": "CU32",
+          "releaseDate": "2025-02-27",
+          "type": "CU",
+          "kb": "KB5054833"
+        },
+        {
+          "build": "15.0.4435.7",
+          "label": "CU32 + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058722"
+        },
+        {
+          "build": "15.0.4440.1",
+          "label": "CU32 + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063757"
+        },
+        {
+          "build": "15.0.4445.1",
+          "label": "CU32 + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065222"
+        },
+        {
+          "build": "15.0.4455.2",
+          "label": "CU32 + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068404"
+        },
+        {
+          "build": "15.0.4460.4",
+          "label": "CU32 + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077469"
+        },
+        {
+          "build": "15.0.4465.1",
+          "label": "CU32 + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5084816"
+        }
+      ]
+    },
+    "2022": {
+      "majorBuild": 16,
+      "mainstreamSupportEnds": "2028-01-11",
+      "extendedSupportEnds": "2033-01-11",
+      "latestBuild": "16.0.4250.1",
+      "latestReleaseDate": "2026-04-14",
+      "builds": [
+        {
+          "build": "16.0.1000.6",
+          "label": "RTM",
+          "releaseDate": "2022-11-16",
+          "type": "RTM"
+        },
+        {
+          "build": "16.0.1050.5",
+          "label": "RTM + GDR",
+          "releaseDate": "2023-02-14",
+          "type": "GDR",
+          "kb": "KB5021522"
+        },
+        {
+          "build": "16.0.1105.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029379"
+        },
+        {
+          "build": "16.0.1110.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-01-09",
+          "type": "GDR",
+          "kb": "KB5032968"
+        },
+        {
+          "build": "16.0.1115.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-04-09",
+          "type": "GDR",
+          "kb": "KB5035432"
+        },
+        {
+          "build": "16.0.1121.4",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040936"
+        },
+        {
+          "build": "16.0.1125.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042211"
+        },
+        {
+          "build": "16.0.1130.5",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046057"
+        },
+        {
+          "build": "16.0.1135.2",
+          "label": "RTM + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046861"
+        },
+        {
+          "build": "16.0.1140.6",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058712"
+        },
+        {
+          "build": "16.0.1145.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063756"
+        },
+        {
+          "build": "16.0.1150.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065221"
+        },
+        {
+          "build": "16.0.1160.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068407"
+        },
+        {
+          "build": "16.0.1165.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2026-01-13",
+          "type": "GDR",
+          "kb": "KB5073031"
+        },
+        {
+          "build": "16.0.1170.5",
+          "label": "RTM + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077465"
+        },
+        {
+          "build": "16.0.1175.1",
+          "label": "RTM + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5084815"
+        },
+        {
+          "build": "16.0.4003.1",
+          "label": "CU1",
+          "releaseDate": "2023-02-16",
+          "type": "CU",
+          "kb": "KB5022375"
+        },
+        {
+          "build": "16.0.4015.1",
+          "label": "CU2",
+          "releaseDate": "2023-03-15",
+          "type": "CU",
+          "kb": "KB5023127"
+        },
+        {
+          "build": "16.0.4025.1",
+          "label": "CU3",
+          "releaseDate": "2023-04-13",
+          "type": "CU",
+          "kb": "KB5024396"
+        },
+        {
+          "build": "16.0.4035.4",
+          "label": "CU4",
+          "releaseDate": "2023-05-11",
+          "type": "CU",
+          "kb": "KB5026717"
+        },
+        {
+          "build": "16.0.4045.3",
+          "label": "CU5",
+          "releaseDate": "2023-06-15",
+          "type": "CU",
+          "kb": "KB5026806"
+        },
+        {
+          "build": "16.0.4055.4",
+          "label": "CU6",
+          "releaseDate": "2023-07-13",
+          "type": "CU",
+          "kb": "KB5027505"
+        },
+        {
+          "build": "16.0.4065.3",
+          "label": "CU7",
+          "releaseDate": "2023-08-10",
+          "type": "CU",
+          "kb": "KB5028743"
+        },
+        {
+          "build": "16.0.4075.1",
+          "label": "CU8",
+          "releaseDate": "2023-09-14",
+          "type": "CU",
+          "kb": "KB5029666"
+        },
+        {
+          "build": "16.0.4080.1",
+          "label": "CU8 + GDR",
+          "releaseDate": "2023-10-10",
+          "type": "GDR",
+          "kb": "KB5029503"
+        },
+        {
+          "build": "16.0.4085.2",
+          "label": "CU9",
+          "releaseDate": "2023-10-12",
+          "type": "CU",
+          "kb": "KB5030731"
+        },
+        {
+          "build": "16.0.4095.4",
+          "label": "CU10",
+          "releaseDate": "2023-11-16",
+          "type": "CU",
+          "kb": "KB5031778"
+        },
+        {
+          "build": "16.0.4100.1",
+          "label": "CU10 + GDR",
+          "releaseDate": "2024-01-09",
+          "type": "GDR",
+          "kb": "KB5033592"
+        },
+        {
+          "build": "16.0.4105.2",
+          "label": "CU11",
+          "releaseDate": "2024-01-11",
+          "type": "CU",
+          "kb": "KB5032679"
+        },
+        {
+          "build": "16.0.4115.5",
+          "label": "CU12",
+          "releaseDate": "2024-03-14",
+          "type": "CU",
+          "kb": "KB5033663"
+        },
+        {
+          "build": "16.0.4120.1",
+          "label": "CU12 + GDR",
+          "releaseDate": "2024-04-09",
+          "type": "GDR",
+          "kb": "KB5036343"
+        },
+        {
+          "build": "16.0.4125.3",
+          "label": "CU13",
+          "releaseDate": "2024-05-16",
+          "type": "CU",
+          "kb": "KB5036432"
+        },
+        {
+          "build": "16.0.4131.2",
+          "label": "CU13 + GDR",
+          "releaseDate": "2024-07-09",
+          "type": "GDR",
+          "kb": "KB5040939"
+        },
+        {
+          "build": "16.0.4135.4",
+          "label": "CU14",
+          "releaseDate": "2024-07-23",
+          "type": "CU",
+          "kb": "KB5038325"
+        },
+        {
+          "build": "16.0.4140.3",
+          "label": "CU14 + GDR",
+          "releaseDate": "2024-09-10",
+          "type": "GDR",
+          "kb": "KB5042578"
+        },
+        {
+          "build": "16.0.4145.4",
+          "label": "CU15",
+          "releaseDate": "2024-09-25",
+          "type": "CU",
+          "kb": "KB5041321"
+        },
+        {
+          "build": "16.0.4150.1",
+          "label": "CU15 + GDR",
+          "releaseDate": "2024-10-08",
+          "type": "GDR",
+          "kb": "KB5046059"
+        },
+        {
+          "build": "16.0.4155.4",
+          "label": "CU15 + GDR",
+          "releaseDate": "2024-11-12",
+          "type": "GDR",
+          "kb": "KB5046862"
+        },
+        {
+          "build": "16.0.4165.4",
+          "label": "CU16",
+          "releaseDate": "2024-11-14",
+          "type": "CU",
+          "kb": "KB5048033"
+        },
+        {
+          "build": "16.0.4175.1",
+          "label": "CU17",
+          "releaseDate": "2025-01-16",
+          "type": "CU",
+          "kb": "KB5048038"
+        },
+        {
+          "build": "16.0.4185.3",
+          "label": "CU18",
+          "releaseDate": "2025-03-13",
+          "type": "CU",
+          "kb": "KB5050771"
+        },
+        {
+          "build": "16.0.4195.2",
+          "label": "CU19",
+          "releaseDate": "2025-05-15",
+          "type": "CU",
+          "kb": "KB5054531"
+        },
+        {
+          "build": "16.0.4200.1",
+          "label": "CU19 + GDR",
+          "releaseDate": "2025-07-08",
+          "type": "GDR",
+          "kb": "KB5058721"
+        },
+        {
+          "build": "16.0.4205.1",
+          "label": "CU20",
+          "releaseDate": "2025-07-10",
+          "type": "CU",
+          "kb": "KB5059390"
+        },
+        {
+          "build": "16.0.4210.1",
+          "label": "CU20 + GDR",
+          "releaseDate": "2025-08-12",
+          "type": "GDR",
+          "kb": "KB5063814"
+        },
+        {
+          "build": "16.0.4212.1",
+          "label": "CU20 + GDR",
+          "releaseDate": "2025-09-09",
+          "type": "GDR",
+          "kb": "KB5065220"
+        },
+        {
+          "build": "16.0.4215.2",
+          "label": "CU21",
+          "releaseDate": "2025-09-11",
+          "type": "CU",
+          "kb": "KB5065865"
+        },
+        {
+          "build": "16.0.4222.2",
+          "label": "CU21 + GDR",
+          "releaseDate": "2025-11-11",
+          "type": "GDR",
+          "kb": "KB5068406"
+        },
+        {
+          "build": "16.0.4225.2",
+          "label": "CU22",
+          "releaseDate": "2025-11-13",
+          "type": "CU",
+          "kb": "KB5068450"
+        },
+        {
+          "build": "16.0.4230.2",
+          "label": "CU22 + GDR",
+          "releaseDate": "2026-01-13",
+          "type": "GDR",
+          "kb": "KB5072936"
+        },
+        {
+          "build": "16.0.4236.2",
+          "label": "CU23",
+          "releaseDate": "2026-01-29",
+          "type": "CU",
+          "kb": "KB5078297"
+        },
+        {
+          "build": "16.0.4240.4",
+          "label": "CU23 + GDR",
+          "releaseDate": "2026-03-10",
+          "type": "GDR",
+          "kb": "KB5077464"
+        },
+        {
+          "build": "16.0.4245.2",
+          "label": "CU24",
+          "releaseDate": "2026-03-12",
+          "type": "CU",
+          "kb": "KB5080999"
+        },
+        {
+          "build": "16.0.4250.1",
+          "label": "CU24 + GDR",
+          "releaseDate": "2026-04-14",
+          "type": "GDR",
+          "kb": "KB5083252"
+        }
+      ]
+    }
+  }
+}

@@ -513,6 +513,11 @@ namespace SQLTriage
                 var printService = App.Services?.GetService<Data.Services.PrintService>();
                 printService?.SetWebView(_coreWebView2);
 
+                // Hand the live WebView2 to DevBridge (only present when --devbridge was set).
+                // GetService returns null if the service wasn't registered, which is the
+                // off-by-default state — no behaviour change for normal users.
+                App.Services?.GetService<Data.Services.DevBridgeService>()?.SetWebView(_coreWebView2);
+
                 // Enable Ctrl+scroll zoom and sync back to settings
                 _coreWebView2.Settings.IsZoomControlEnabled = true;
                 _coreWebView2.Settings.IsPinchZoomEnabled = true;

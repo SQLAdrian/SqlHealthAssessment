@@ -27,6 +27,7 @@ Before reading source files, check if an index covers your task:
 | Coding style, commit rules, naming | `.claude/docs/conventions.md` |
 | Architectural patterns, idioms | `.claude/docs/patterns.md` |
 | Project state, scope, decisions, weeks remaining | `.ignore/SQLTriage_Context_Caveman.md` |
+| Driving the running app (LLM-iterating UI bugs via nav + screenshot) | `.claude/docs/DEVBRIDGE.md` |
 
 **Hard rule:** If the task can be answered from an index, **do not read the source files**. Grep the index, then read only the single file you need to edit.
 
@@ -97,6 +98,7 @@ See: https://github.com/afsultan/llm-context-kit
 - DI: nullable optional params (`Service? svc = null`)
 - Background: `_ = Task.Run(async () => { … })`
 - Commits: `feat:`/`fix:`/`docs:`; co-author `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`; branch `main` → PR `master`
+- **Colour-blind safety (non-negotiable):** Never hard-code red/green/orange/yellow hex values for status, severity, or heat. Use canonical CSS vars (`--green`, `--red`, `--orange`, `--yellow`, `--purple`) so `body.colorblind-mode` (toggled in NavMenu) auto-remaps to a Wong (2011) blue/orange palette via `wwwroot/css/Accessibility.css`. For multi-stop heat gradients (e.g. cold→hot), define page-local vars (`--hot-cold` … `--hot-hot`) under `:root` AND `body.colorblind-mode`; emit `var(--hot-X)` from the C#/JS side, never literal hex. Test by toggling the switch in the nav.
 
 ## Build
 ```
@@ -140,3 +142,25 @@ Flag if current model seems mismatched — one line only, no interruption:
 3. **Warning budget.** After any change, `dotnet build` warning count must not increase. If it does, fix or explain in one line before finishing.
 4. **OS-gated APIs.** Windows-only APIs (`EventLog`, registry, DPAPI, WMI) go behind `[SupportedOSPlatform("windows")]` helpers. Pass cross-platform enums across the boundary. Do not sprinkle `OperatingSystem.IsWindows()` at call sites.
 5. **Constant-time on secrets.** Password, HMAC, and token comparisons use `CryptographicOperations.FixedTimeEquals`. Never `==` or `SequenceEqual`.
+
+## Engineering Doctrine (decision methodology — read before any architectural choice)
+
+**Built to last 15 years.** Every choice is judged against that horizon. If a principle below ever conflicts with shipping faster, the principle wins — pause and ask the user before deviating.
+
+1. **Robust > flashy.** Proven > bleeding edge. "Established" includes new tech that is rock-solid and well-documented. Boring is a feature. Robust can always be skinned to look modern.
+2. **Build, don't rent.** Paid services and external APIs are a last resort. If a mature open-source solution exists, use it. If not, build it. External dependencies are liabilities measured in years.
+3. **Security and reliability are gating, not optional.** If a design isn't secure, reliable, and robust, it isn't on the shortlist. Inform the user, then propose the secure path.
+4. **Modular and fault-tolerant by construction.** Each module survives its neighbours failing. Failures are isolated, contained, observable. No silent failures, ever.
+5. **Loopback / objective self-interrogation.** Every build step produces measurable output the system itself can verify against measurable parameters. The system proves it works — no "looks good to me".
+6. **Smoke test and validate every step.** Not at the end. Every step.
+7. **Plan → Plan → Plan → Plan → small build → feedback → big build → feedback → repeat.** Never skip the small build. Never skip the feedback. Four planning passes is not a typo.
+8. **Fail fast, fail early, fail safely.** Failure is inevitable. Find it in 5 minutes, not 5 months. Make failure surfaces visible and cheap. The build is a safe space to make mistakes — but only because the loopback catches them.
+9. **Document comprehensively and frequently.** More is better, better is best. Storage, effort, tokens are cheap; bad builds are painful. Update workfiles after every completed step. Document every user decision verbatim.
+10. **Write for the weakest reader.** Workfile prose must be picked up successfully by a 9B-parameter local model (e.g. Gemma 4 9B) or a junior dev with ≥95% probability of success. No frontier-LLM shorthand. Spell out every implicit step.
+11. **Time is not the constraint; quality is.** An extra hour beats a painful mistake. An extra 6 months beats a non-world-class result.
+12. **Reversibility / blast-radius awareness.** Classify every action: local file = freely; schema migration = with a back-out; production write = explicit gate. Match caution to consequence.
+13. **Determinism and reproducibility.** Same input → same output. Pin versions. Seed randomness. Record exact model + prompt + temperature for every LLM call. A build you cannot reproduce in 2 years is not built to last 15.
+14. **Observability is not optional.** Logs, metrics, audit trails — designed in, not bolted on. Future-you (or a 9B model) must be able to answer "what happened and why" from artefacts alone.
+15. **Idempotency by default.** Every operation is safe to re-run. "Run this once or your data is corrupted" is a bug.
+16. **The contract beats the implementation.** Define inputs, outputs, invariants, and failure modes *before* writing code. The contract is what makes a module swappable in 5 years when the implementation rots.
+17. **The principles apply to themselves.** This section is versioned, reviewed, and updated like any other artefact. See `memory/feedback_engineering_doctrine.md` for the canonical, cross-session copy.

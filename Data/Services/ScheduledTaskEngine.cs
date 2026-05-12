@@ -21,6 +21,7 @@ namespace SQLTriage.Data.Services
         private readonly ServerConnectionManager _connections;
         private readonly AzureBlobExportService? _blobExport;
         private readonly NotificationChannelService? _notifications;
+        private readonly ReportService? _reportService;
         private readonly ToastService _toast;
         private readonly IQueryOrchestrator _orchestrator;
         private readonly System.Timers.Timer _timer;
@@ -42,7 +43,8 @@ namespace SQLTriage.Data.Services
             ToastService toast,
             IQueryOrchestrator orchestrator,
             AzureBlobExportService? blobExport = null,
-            NotificationChannelService? notifications = null)
+            NotificationChannelService? notifications = null,
+            ReportService? reportService = null)
         {
             _logger = logger;
             _definitions = definitions;
@@ -52,6 +54,7 @@ namespace SQLTriage.Data.Services
             _orchestrator = orchestrator;
             _blobExport = blobExport;
             _notifications = notifications;
+            _reportService = reportService;
 
             // Tick every 60 seconds, check which tasks are due
             _timer = new System.Timers.Timer(60_000);
@@ -218,6 +221,12 @@ namespace SQLTriage.Data.Services
 
             try
             {
+                if (task.TaskType == TaskType.GovernanceReport)
+                {
+                    await ExecuteGovernanceReportAsync(task, serverName, exec, sw);
+                    return;
+                }
+
                 var connString = conn.GetConnectionString(serverName, task.Database);
                 using var sqlConn = new SqlConnection(connString);
                 await sqlConn.OpenAsync();
@@ -228,8 +237,8 @@ namespace SQLTriage.Data.Services
                 };
 
                 using var reader = await cmd.ExecuteReaderAsync();
-                var dt = new DataTable();
-                await Task.Run(() => dt.Load(reader));
+                using var dt = new DataTable();
+                dt.Load(reader);
 
                 sw.Stop();
                 exec.RowCount = dt.Rows.Count;
@@ -298,6 +307,75 @@ namespace SQLTriage.Data.Services
                 _toast.ShowError(task.Name, $"Failed on {serverName}: {ex.Message}", 6000);
                 _logger.LogWarning(ex, "Scheduled task '{Name}' failed on {Server}", task.Name, LogAnon.S(serverName));
             }
+        }
+
+        private async Task ExecuteGovernanceReportAsync(ScheduledTaskDefinition task, string serverName, ScheduledTaskExecution exec, System.Diagnostics.Stopwatch sw)
+        {
+            if (_reportService == null)
+            {
+                throw new InvalidOperationException("ReportService not available — governance reports require QuestPDF");
+            }
+
+            var checkResults = new List<SQLTriage.Data.Models.CheckResult>();
+            var pdfBytes = await _reportService.GenerateGovernanceReportAsync(serverName, checkResults);
+
+            sw.Stop();
+            exec.RowCount = 1;
+            exec.DurationSeconds = sw.Elapsed.TotalSeconds;
+            exec.Status = "Success";
+            exec.CompletedAt = DateTime.UtcNow;
+
+            // Save PDF to disk
+            var outputFolder = Path.Combine(AppContext.BaseDirectory, "output");
+            if (!Directory.Exists(outputFolder))
+                Directory.CreateDirectory(outputFolder);
+
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var safeServer = SanitizeFileName(serverName);
+            var pdfPath = Path.Combine(outputFolder, $"{safeServer}_GovernanceReport_{timestamp}.pdf");
+            await File.WriteAllBytesAsync(pdfPath, pdfBytes);
+            exec.CsvFilePath = pdfPath;
+
+            // Azure Blob upload
+            if (task.Output.UploadToAzureBlob && _blobExport is { IsConfigured: true })
+            {
+                try
+                {
+                    var blobResult = await _blobExport.UploadLocalCsvAsync(pdfPath, serverName);
+                    if (blobResult.Success)
+                        exec.BlobUri = blobResult.BlobUri;
+                }
+                catch (Exception blobEx)
+                {
+                    _logger.LogWarning(blobEx, "Azure upload failed for governance report on {Server}", serverName);
+                }
+            }
+
+            // Email notification with PDF attachment hint
+            if (task.Output.SendEmail && _notifications != null)
+            {
+                try
+                {
+                    var notification = new AlertNotification
+                    {
+                        AlertName = $"Governance Report: {serverName}",
+                        Metric = task.Id,
+                        Severity = "info",
+                        InstanceName = serverName,
+                        Message = $"Governance report generated for {serverName}: {pdfBytes.Length / 1024} KB. Saved to: {pdfPath}"
+                    };
+                    await _notifications.DispatchAsync(notification);
+                    exec.EmailSent = true;
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogWarning(emailEx, "Email dispatch failed for governance report on {Server}", serverName);
+                }
+            }
+
+            _history.UpdateExecution(exec);
+            _toast.ShowSuccess(task.Name, $"Governance report generated for {serverName} ({sw.Elapsed.TotalSeconds:F1}s)", 4000);
+            _logger.LogInformation("Governance report generated for {Server} in {Duration:F1}s", LogAnon.S(serverName), sw.Elapsed.TotalSeconds);
         }
 
         private string? ExportToCsv(ScheduledTaskDefinition task, string serverName, DataTable dt)

@@ -28,7 +28,10 @@ namespace SQLTriage.Data.Models
         public string? SqlQuery { get; set; }
 
         [JsonPropertyName("expectedValue")]
-        public int ExpectedValue { get; set; } = 0;
+        public int ExpectedValue { get; set; }
+
+        [JsonPropertyName("effortHours")]
+        public double EffortHours { get; set; }
 
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;

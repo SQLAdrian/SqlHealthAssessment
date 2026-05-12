@@ -2,23 +2,21 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
-    /// <summary>
-    /// Service for loading and managing unified health checks from .ignore/checks/categories_unified/
-    /// Provides integration between development checks and live application
-    /// </summary>
     public class UnifiedCheckService
     {
         private readonly ILogger<UnifiedCheckService> _logger;
-        private List<SqlCheck> _unifiedChecks = new();
+        private ImmutableList<SqlCheck> _unifiedChecks = ImmutableList<SqlCheck>.Empty;
         private readonly string _unifiedChecksPath;
 
         public UnifiedCheckService(ILogger<UnifiedCheckService> logger)
@@ -27,9 +25,6 @@ namespace SQLTriage.Data.Services
             _unifiedChecksPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".ignore", "checks", "categories_unified");
         }
 
-        /// <summary>
-        /// Load all unified checks from the categories_unified directory
-        /// </summary>
         public async Task<List<SqlCheck>> LoadUnifiedChecksAsync()
         {
             var checks = new List<SqlCheck>();
@@ -40,14 +35,11 @@ namespace SQLTriage.Data.Services
                 return checks;
             }
 
-            // Get all category directories
             var categoryDirs = Directory.GetDirectories(_unifiedChecksPath);
 
             foreach (var categoryDir in categoryDirs)
             {
                 var categoryName = Path.GetFileName(categoryDir);
-
-                // Get all JSON files in this category
                 var jsonFiles = Directory.GetFiles(categoryDir, "*.json");
 
                 foreach (var jsonFile in jsonFiles)
@@ -62,7 +54,6 @@ namespace SQLTriage.Data.Services
 
                         if (check != null)
                         {
-                            // Ensure category matches directory name
                             check.Category = categoryName;
                             checks.Add(check);
                         }
@@ -74,46 +65,38 @@ namespace SQLTriage.Data.Services
                 }
             }
 
-            _unifiedChecks = checks.OrderBy(c => c.Id).ToList();
+            var snapshot = checks.OrderBy(c => c.Id).ToImmutableList();
+            Interlocked.Exchange(ref _unifiedChecks, snapshot);
             _logger.LogInformation("Loaded {Count} unified checks from {Categories} categories",
-                _unifiedChecks.Count,
-                categoryDirs.Length);
+                snapshot.Count, categoryDirs.Length);
 
-            return _unifiedChecks;
+            return checks;
         }
 
-        /// <summary>
-        /// Get checks by category
-        /// </summary>
         public IEnumerable<SqlCheck> GetChecksByCategory(string category)
         {
-            return _unifiedChecks.Where(c => c.Category.Equals(category, StringComparison.OrdinalIgnoreCase));
+            var snapshot = _unifiedChecks;
+            return snapshot.Where(c => (c.Category ?? "").Equals(category, StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>
-        /// Get check by ID
-        /// </summary>
         public SqlCheck? GetCheckById(string id)
         {
-            return _unifiedChecks.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+            var snapshot = _unifiedChecks;
+            return snapshot.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>
-        /// Get all categories
-        /// </summary>
         public IEnumerable<string> GetCategories()
         {
-            return _unifiedChecks.Select(c => c.Category).Distinct().OrderBy(c => c);
+            var snapshot = _unifiedChecks;
+            return snapshot.Select(c => c.Category ?? "").Distinct().OrderBy(c => c);
         }
 
-        /// <summary>
-        /// Import unified checks to the live CheckRepositoryService
-        /// </summary>
         public async Task<int> ImportToLiveRepositoryAsync(CheckRepositoryService liveRepo, IEnumerable<string>? categoryFilter = null)
         {
+            var snapshot = _unifiedChecks;
             var checksToImport = categoryFilter != null
-                ? _unifiedChecks.Where(c => categoryFilter.Contains(c.Category, StringComparer.OrdinalIgnoreCase))
-                : _unifiedChecks;
+                ? snapshot.Where(c => categoryFilter.Contains(c.Category ?? "", StringComparer.OrdinalIgnoreCase))
+                : snapshot;
 
             var importedCount = 0;
 

@@ -12,12 +12,42 @@ Config/panel-metrics.json
 # Local backup files (timestamped) — never commit
 *.backup-*
 
+# Local working area (session notes, video asset stashes, scratch)
+.workfiles/
+
 # Scratch / draft CSS and notes
 unique-styles.txt
 wwwroot/css/appreworked.css
 
 # Sibling repo for RAG corpus building — local-only, never push from this repo
 SQLTriage-RAG-Builder/
+
+# ── Freemium-corpus IP protection (added 2026-05-11) ───────────────────────
+# The repo is public. Plaintext Full corpus or any wrapping/private keys MUST
+# NEVER be committed. Encrypted-at-rest envelopes (*.aesgcm) are fine — they
+# require a valid license JWT to decrypt. See .ignore/FREEMIUM_PLAN_2026-05-11.md.
+
+# Full plaintext corpus and source-of-truth working copies — never commit.
+Config/Ignore/
+Config/*-source-of-truth.json
+Config/*-full.json
+Config/sql-checks-FREE.json
+Config/roadmap-mapping-FREE.json
+
+# License issuer private key material — never commit.
+*.aesgcm.key
+*.ed25519.key
+*.ed25519.pem
+license-issuer/secrets/
+license-issuer/*.env
+license-issuer/db/
+
+# YAML corpus source-of-truth (already happens to not be tracked — formalise)
+research_output/
+research_logs/
+
+# Quick Assessment per-server run files (worklist 2026-05-12 #4)
+output/quickcheck/
 
 # User-specific files
 *.rsuser
@@ -460,6 +490,16 @@ Tests/**/bin/
 Tests/SQLTriage.Tests/bin/*
 LiveMonitor/.claude/*
 
-.ignore/
+
 
 wwwroot/css - Copy/
+corpus/
+SESSION_SUMMARY.md
+.ignore/
+
+LLM1_deepseek/
+!research_output\LLM1_deepseek
+.playwright-mcp/
+docs/llm1_deepseek_recovery.md
+.kilo/
+pallet_photo_2215.png

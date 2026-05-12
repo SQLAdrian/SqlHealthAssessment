@@ -20,6 +20,9 @@ namespace SQLTriage.Data.Services
         /// <summary>Ctrl+E — CSV export on the active page.</summary>
         public event Func<System.Threading.Tasks.Task>? OnExportCsvRequested;
 
+        /// <summary>Ctrl+K — Command palette.</summary>
+        public event Func<System.Threading.Tasks.Task>? OnCommandPaletteRequested;
+
         public async System.Threading.Tasks.Task TriggerRun()
         {
             if (OnRunRequested != null)

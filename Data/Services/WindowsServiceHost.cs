@@ -1,4 +1,4 @@
-/* In the name of God, the Merciful, the Compassionate */
+﻿/* In the name of God, the Merciful, the Compassionate */
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -24,10 +24,10 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-#pragma warning disable CA1416 // Windows-only API — project targets net8.0-windows
+#pragma warning disable CA1416 // Windows-only API â€” project targets net8.0-windows
 namespace SQLTriage.Data.Services
 {
-    // BM:WindowsServiceHost.Class — runs the Blazor Server UI as a headless Windows Service
+    // BM:WindowsServiceHost.Class â€” runs the Blazor Server UI as a headless Windows Service
     /// <summary>
     /// Runs the Blazor Server UI as a headless Windows Service (no WPF).
     /// Shares the same service registration as the WPF app.
@@ -36,7 +36,7 @@ namespace SQLTriage.Data.Services
     {
         public const string ServiceName = "SQLTriage";
         public const string ServiceDisplayName = "SQLTriage Server";
-        public const string ServiceDescription = "SQLTriage — Blazor Server monitoring dashboard";
+        public const string ServiceDescription = "SQLTriage â€” Blazor Server monitoring dashboard";
 
         public static void Run(string[] args)
         {
@@ -81,6 +81,7 @@ namespace SQLTriage.Data.Services
                 var configuration = new ConfigurationBuilder()
                     .SetBasePath(AppContext.BaseDirectory)
                     .AddJsonFile("config/appsettings.json", optional: false, reloadOnChange: true)
+                    .AddJsonFile("config/governance-weights.json", optional: false, reloadOnChange: true)
                     .Build();
 
                 // Read port from config or default to 5150
@@ -97,7 +98,7 @@ namespace SQLTriage.Data.Services
                 // Try to use static web assets (dev mode)
                 try { builder.WebHost.UseStaticWebAssets(); } catch (Exception ex) { Log.Debug(ex, "[ServiceHost] UseStaticWebAssets not available"); }
 
-                // Configure Kestrel — HTTP + HTTPS with ephemeral self-signed cert
+                // Configure Kestrel â€” HTTP + HTTPS with ephemeral self-signed cert
                 var httpsPort = FindAvailablePort(port + 1);
                 X509Certificate2? selfSignedCert = null;
                 builder.WebHost.ConfigureKestrel(kestrel =>
@@ -115,7 +116,7 @@ namespace SQLTriage.Data.Services
                     }
                     catch (Exception certEx)
                     {
-                        Log.Warning(certEx, "Failed to configure HTTPS for service — HTTP only");
+                        Log.Warning(certEx, "Failed to configure HTTPS for service â€” HTTP only");
                     }
                 });
 
@@ -139,6 +140,7 @@ namespace SQLTriage.Data.Services
                 builder.Services.AddRazorComponents()
                     .AddInteractiveServerComponents();
                 builder.Services.AddRadzenComponents();
+                builder.Services.AddScoped<Radzen.DialogService>();
 
                 // Register all app services (same as App.xaml.cs)
                 RegisterAllServices(builder.Services, configuration);
@@ -183,7 +185,7 @@ namespace SQLTriage.Data.Services
         }
 
         /// <summary>
-        /// Registers all application services — mirrors App.xaml.cs but for headless mode.
+        /// Registers all application services â€” mirrors App.xaml.cs but for headless mode.
         /// </summary>
         internal static void RegisterAllServices(IServiceCollection services, IConfiguration configuration)
         {
@@ -248,44 +250,8 @@ namespace SQLTriage.Data.Services
             services.AddSingleton<PowerShellService>();
 
             // DI parity: services registered in App.xaml.cs but missing here
-            services.AddSingleton<IServerConnectionManager>(sp => sp.GetRequiredService<ServerConnectionManager>());
-            services.AddSingleton<UserSettingsService>();
-            services.AddSingleton<Data.Services.IUserSettingsService>(sp => sp.GetRequiredService<UserSettingsService>());
-            services.AddSingleton<QueryRegistry>();
-            services.AddSingleton<QueryScheduler>();
-            services.AddSingleton<SchedulerRegistryService>();
-            services.AddSingleton<IQueryOrchestrator, QueryOrchestrator>();
-            services.AddMemoryCache();
-            services.AddSingleton<ICacheHotTier, CacheHotTier>();
-            services.AddSingleton<Data.Services.AlertDefinitionService>();
-            services.AddSingleton<Data.Services.AlertTemplateService>();
-            services.AddSingleton<Data.Services.AlertHistoryService>();
-            services.AddSingleton<Data.Services.AlertBaselineService>();
-            services.AddSingleton<Data.Services.AlertEvaluationService>();
-            services.AddSingleton<Data.Services.ScheduledTaskDefinitionService>();
-            services.AddSingleton<Data.Services.ScheduledTaskHistoryService>();
-            services.AddSingleton<Data.Services.ScheduledTaskEngine>();
-            services.AddSingleton<SQLTriage.Data.Services.ExecutiveHealthService>();
-            services.AddSingleton<IChartThemeService, ChartThemeService>();
-            services.AddSingleton<CacheMetricsService>();
-            services.AddSingleton<Data.Services.ConnectionHealthService>();
-            services.AddSingleton<Data.Services.BenchmarkService>();
-            services.AddSingleton<Data.Services.ForecastService>();
-            services.AddSingleton<Data.Services.RbacService>();
-            services.AddSingleton<RateLimiter>();
-            services.AddScoped<Data.Services.AppUserState>();
-            services.AddSingleton<StartupService>();
-
-            // Caching layer
-            services.AddSingleton<liveQueriesCacheStore>();
-            services.AddSingleton<CacheStateTracker>();
-            services.AddSingleton<CachingQueryExecutor>();
-            services.AddSingleton<CacheEvictionService>();
-            services.AddSingleton<liveQueriesMaintenanceService>();
-
-            // WebView2Helper stub for service mode (not used but injected by some components)
-            services.AddSingleton<WebView2Helper>();
-        }
+            services.AddSharedServices(configuration); /* BM: shared services registered via AddSharedServices */
+                    }
 
         private static void InitializeBackgroundServices(IServiceProvider services)
         {
@@ -516,3 +482,5 @@ namespace SQLTriage.Data.Services
     }
 }
 #pragma warning restore CA1416
+
+

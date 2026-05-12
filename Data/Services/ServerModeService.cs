@@ -117,6 +117,7 @@ namespace SQLTriage.Data.Services
                 builder.Services.AddRazorComponents()
                     .AddInteractiveServerComponents();
                 builder.Services.AddRadzenComponents();
+                builder.Services.AddScoped<Radzen.DialogService>();
 
                 // Logging — reuse Serilog
                 builder.Services.AddLogging(lb =>
@@ -199,7 +200,8 @@ namespace SQLTriage.Data.Services
 
                 app.UseAntiforgery();
 
-                // REST API endpoints for RMM/PSA integration
+                // REST API with structured error handling
+                app.Use(ApiEndpoints.ExceptionHandler);
                 app.MapApiEndpoints();
 
                 app.MapRazorComponents<Components.ServerApp>()

@@ -1,0 +1,148 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog.Core;
+using Serilog.Events;
+using SQLTriage.Data.Caching;
+using SQLTriage.Data.Models;
+using SQLTriage.Data.Scheduling;
+using SQLTriage.Data.Services;
+
+namespace SQLTriage.Data;
+
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers all services shared between WPF Desktop (App.xaml.cs)
+    /// and Kestrel Server (WindowsServiceHost.cs) modes.
+    /// Call this once in each container to prevent accidental drift.
+    /// </summary>
+    public static IServiceCollection AddSharedServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Radzen DialogService — required by RadzenComponents in layout
+        services.AddScoped<Radzen.DialogService>();
+
+        // ── Server connection infrastructure ──
+        services.AddSingleton<ServerConnectionManager>();
+        services.AddSingleton<IServerConnectionManager>(sp => sp.GetRequiredService<ServerConnectionManager>());
+        services.AddSingleton<GlobalInstanceSelector>();
+
+        var connStr = configuration.GetConnectionString("SqlServer") ?? "Server=.;Database=SQLWATCH;Integrated Security=true;";
+        var trustServerCert = configuration.GetValue<bool>("TrustServerCertificate", false);
+        services.AddSingleton<IDbConnectionFactory>(sp =>
+        {
+            var sm = sp.GetRequiredService<ServerConnectionManager>();
+            var ins = sp.GetRequiredService<GlobalInstanceSelector>();
+            return new SqlServerConnectionFactory(sm, ins, connStr, trustServerCert);
+        });
+        services.AddSingleton<SqlServerConnectionFactory>(sp =>
+        {
+            var sm = sp.GetRequiredService<ServerConnectionManager>();
+            var ins = sp.GetRequiredService<GlobalInstanceSelector>();
+            return new SqlServerConnectionFactory(sm, ins, connStr, trustServerCert);
+        });
+
+        // ── Core infrastructure ──
+        services.AddSingleton<ResilienceService>();
+        services.AddSingleton<DashboardConfigService>();
+        services.AddSingleton<QueryRegistry>();
+        services.AddSingleton<IQueryOrchestrator, QueryOrchestrator>();
+        services.AddMemoryCache();
+        services.AddSingleton<ICacheHotTier, CacheHotTier>();
+        services.AddSingleton<QueryExecutor>();
+        services.AddScoped<DashboardDataService>();
+        services.AddSingleton<AutoRefreshService>();
+        services.AddSingleton<CheckRepositoryService>();
+        services.AddSingleton<BPScriptService>();
+        services.AddSingleton<DiagnosticScriptRunner>();
+        services.AddSingleton<FullAuditStateService>();
+        services.AddSingleton<AuditLogService>();
+        services.AddSingleton<NotificationChannelService>();
+
+        // ── Alerting ──
+        services.AddSingleton<AlertingService>();
+        services.AddSingleton<AlertDefinitionService>();
+        services.AddSingleton<AlertTemplateService>();
+        services.AddSingleton<AlertHistoryService>();
+        services.AddSingleton<AlertBaselineService>();
+        services.AddSingleton<AlertEvaluationService>();
+
+        // ── Unified checks / governance / reporting ──
+        services.AddSingleton<UnifiedCheckService>();
+        services.AddSingleton<ISqlQueryRepository, SqlQueryRepository>();
+        services.AddSingleton<IFindingTranslator, FindingTranslator>();
+        services.AddSingleton<IGovernanceService, GovernanceService>();
+        services.Configure<GovernanceWeights>(configuration);
+        services.AddSingleton<GovernanceHistoryService>();
+        services.AddSingleton<RemediationCostEstimator>();
+        services.AddSingleton<LicensingEstimator>();
+        services.AddSingleton<BuildCatalogueService>();
+        services.AddSingleton<QuickCheckResultStore>();
+        services.AddSingleton<RemediationWeightStore>();
+        services.AddSingleton<IErrorCatalog, ErrorCatalog>();
+        services.AddSingleton<IReportService, ReportService>();
+        services.AddSingleton<IQuickCheckRunner, QuickCheckRunner>();
+
+        // ── Scheduled tasks ──
+        services.AddSingleton<ScheduledTaskDefinitionService>();
+        services.AddSingleton<ScheduledTaskHistoryService>();
+        services.AddSingleton<ScheduledTaskEngine>();
+
+        // ── Dashboard / session / state ──
+        services.AddSingleton<HealthCheckService>();
+        services.AddSingleton<ExecutiveHealthService>();
+        services.AddSingleton<CodeHotspotsService>();
+        services.AddSingleton<RateLimiter>();
+        services.AddSingleton<CheckExecutionService>();
+        services.AddSingleton<liveQueriesTableService>();
+        services.AddSingleton<SessionManager>();
+        services.AddSingleton<UserSettingsService>();
+        services.AddSingleton<IUserSettingsService>(sp => sp.GetRequiredService<UserSettingsService>());
+        services.AddSingleton<IChartThemeService, ChartThemeService>();
+        services.AddSingleton<SessionDataService>();
+        services.AddSingleton<ToastService>();
+        services.AddSingleton<LogCleanupService>();
+        services.AddSingleton<MemoryMonitorService>();
+        services.AddSingleton<ConfigurationValidator>();
+        services.AddSingleton<AutoUpdateService>();
+        services.AddSingleton<DatabaseAvailabilityService>();
+        services.AddSingleton<StartupService>();
+        services.AddSingleton<PrintService>();
+        services.AddSingleton<IPrintService>(sp => sp.GetRequiredService<PrintService>());
+        services.AddSingleton<ConnectionHealthService>();
+        services.AddSingleton<KeyboardShortcutService>();
+        services.AddSingleton<SqlAssessmentService>();
+        services.AddSingleton<ReportPageConfigService>();
+        services.AddSingleton<XEventService>();
+        services.AddSingleton<AdminAuthService>();
+        services.AddSingleton<QuickCheckStateService>();
+        services.AddSingleton<VulnerabilityAssessmentStateService>();
+
+        // ── Audit / observability ──
+        // CorrelationIdAccessor stores its value in an AsyncLocal (see class doc),
+        // so the singleton enricher reads it without needing a captive Scoped
+        // dependency — that captive resolve crashed Blazor Server scope validation.
+        services.AddScoped<CorrelationIdAccessor>();
+        services.AddSingleton<ILogEventEnricher, CorrelationIdEnricher>();
+        services.AddSingleton<ThemeService>();
+        services.AddSingleton<ServerModeService>();
+        services.AddSingleton<DataProtectionService>();
+        services.AddSingleton<AzureBlobExportService>();
+        services.AddSingleton<ProcessGuard>();
+        services.AddSingleton<ForecastService>();
+        services.AddSingleton<ProductionReadinessGate>();
+        services.AddSingleton<RbacService>();
+        services.AddScoped<AppUserState>();
+        services.AddSingleton<LocalLogService>();
+        services.AddSingleton<PowerShellService>();
+
+        // ── liveQueries caching layer ──
+        services.AddSingleton<liveQueriesCacheStore>();
+        services.AddSingleton<CacheStateTracker>();
+        services.AddSingleton<CachingQueryExecutor>();
+        services.AddSingleton<CacheEvictionService>();
+        services.AddSingleton<liveQueriesMaintenanceService>();
+        services.AddSingleton<CacheMetricsService>();
+
+        return services;
+    }
+}

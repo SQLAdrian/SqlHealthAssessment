@@ -53,12 +53,26 @@
 
     private void Refresh()
     {
-        _pct    = Baseline.SeedingProgress * 100.0;
-        _seeded = Baseline.SeededCount;
-        _total  = Baseline.TotalPairCount;
-        // Show while seeding, hide 10s after complete (briefly show 100%)
-        _show   = !Baseline.SeedingComplete || _pct < 100;
+        // Snapshot all three properties in a single pass to avoid torn reads
+        // when Baseline updates between property accesses
+        int seeded = Baseline.SeededCount;
+        int total  = Baseline.TotalPairCount;
+        bool done  = Baseline.SeedingComplete;
+
+        _pct    = total > 0 ? seeded * 100.0 / total : 0;
+        _seeded = seeded;
+        _total  = total;
+        _show   = !done;
+
+        // Once seeding completes, unsubscribe to stop consuming CPU on every baseline tick
+        if (done)
+        {
+            Baseline.OnProgressChanged -= OnProgress;
+        }
     }
 
-    public void Dispose() => Baseline.OnProgressChanged -= OnProgress;
+    public void Dispose()
+    {
+        Baseline.OnProgressChanged -= OnProgress;
+    }
 }

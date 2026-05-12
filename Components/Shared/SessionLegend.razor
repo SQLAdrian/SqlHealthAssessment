@@ -4,7 +4,7 @@
 <div class="session-legend">
     <div class="session-legend-header">
         <strong>Legend</strong>
-        <button class="session-legend-close" @onclick="Close" title="Close">✕</button>
+        <button class="session-legend-close" @onclick="Close" title="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="session-legend-body">
@@ -70,7 +70,7 @@
             </div>
             <div class="legend-note">
                 Gold border = open transaction.<br />
-                <strong style="color: #f44336;">Thick red border</strong> = idle in transaction (dangerous).
+                <strong style="color: var(--red);">Thick red border</strong> = idle in transaction (dangerous).
             </div>
         </div>
     </div>

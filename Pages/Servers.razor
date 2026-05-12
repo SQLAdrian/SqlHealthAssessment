@@ -2,6 +2,8 @@
 @page "/servers"
 @inject ServerConnectionManager ConnectionManager
 @inject SQLTriage.Data.Services.AppUserState UserState
+@inject SQLTriage.Data.Services.BuildCatalogueService BuildCatalogue
+@inject SQLTriage.Data.Services.LicensingEstimator LicensingEstimator
 @using Microsoft.Data.SqlClient
 @using SQLTriage.Data
 @using SQLTriage.Data.Models
@@ -93,7 +95,7 @@ else
                             var serverCount = conn.GetServerCount();
                             @if (conn.SuccessfulServers.Count == serverCount)
                             {
-                                <span class="status-badge connected"><i class="fa-solid fa-circle"></i> Connected (@conn.SuccessfulServers.Count/@serverCount)</span>
+                                <span class="status-badge connected"><i class="fa-solid fa-circle"></i> Connected</span>
                             }
                             else
                             {
@@ -136,7 +138,7 @@ else
                     {
                         <div class="detail-row">
                             <span class="detail-label">Status:</span>
-                            <span class="detail-value" style="color: #999;">Disabled</span>
+                            <span class="detail-value" style="color: var(--text-muted);">Disabled</span>
                         </div>
                     }
                     @if (!string.IsNullOrEmpty(conn.Environment))
@@ -190,6 +192,56 @@ else
                             </span>
                         </div>
                     }
+
+                    @* Build status per successful server *@
+                    @if (BuildCatalogue.IsAvailable && conn.SuccessfulServers.Count > 0)
+                    {
+                        <div class="server-build-block">
+                            <div class="server-build-header">
+                                <i class="fa-solid fa-shield-halved"></i> Patch &amp; lifecycle
+                            </div>
+                            @foreach (var srvName in conn.SuccessfulServers)
+                            {
+                                if (!_buildStatusByServer.ContainsKey(srvName))
+                                {
+                                    <div class="server-build-row pending">
+                                        <span class="server-build-name">@srvName</span>
+                                        <span class="server-build-pending"><i class="fa-solid fa-spinner fa-spin"></i> probing...</span>
+                                    </div>
+                                    continue;
+                                }
+                                var bs = _buildStatusByServer[srvName];
+                                if (bs == null)
+                                {
+                                    <div class="server-build-row unknown">
+                                        <span class="server-build-name">@srvName</span>
+                                        <span class="server-build-unknown">Build not recognised</span>
+                                    </div>
+                                    continue;
+                                }
+                                var statusClass = bs.LifecycleStatus.ToString().ToLowerInvariant();
+                                <div class="server-build-row @statusClass" @onclick="() => ShowPatchesModal(srvName, bs)" style="cursor:pointer;" title="Click for missed-patch detail">
+                                    <span class="server-build-name">@srvName</span>
+                                    <span class="server-build-version">SQL @bs.MajorVersion</span>
+                                    <span class="server-build-patches">
+                                        @if (bs.PatchesBehind == 0)
+                                        {
+                                            <i class="fa-solid fa-check"></i> <text>Current</text>
+                                        }
+                                        else
+                                        {
+                                            <text>@bs.PatchesBehind CUs behind</text>
+                                            @if (bs.AgeYears.HasValue)
+                                            {
+                                                <span class="server-build-age"> · @bs.AgeYears y old</span>
+                                            }
+                                        }
+                                    </span>
+                                    <span class="server-build-lifecycle">@bs.LifecycleLabel</span>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
         }
@@ -198,7 +250,7 @@ else
         {
             <div class="empty-state">
                 <p>No servers configured. Click "Add Server" to add your first server.</p>
-                <button class="btn btn-primary" @onclick="ShowAddDialog">➕ Add Your First Server</button>
+                <button class="btn btn-primary" @onclick="ShowAddDialog"><i class="fa-solid fa-plus"></i> Add Your First Server</button>
             </div>
         }
     </div>
@@ -323,6 +375,76 @@ else
             </div>
         </div>
     }
+
+    @if (_showPatchesModal && _modalStatus != null)
+    {
+        <div class="dialog-overlay" @onclick="ClosePatchesModal">
+            <div class="dialog-content" @onclick:stopPropagation="true" style="max-width:680px;">
+                <h3><i class="fa-solid fa-shield-halved"></i> Patch &amp; lifecycle &mdash; @_modalServerName</h3>
+
+                <div class="patches-modal-summary">
+                    <div class="patches-modal-row">
+                        <span class="patches-modal-label">Installed:</span>
+                        <span><strong>@_modalStatus.InstalledBuild</strong> @(_modalStatus.InstalledLabel ?? "") (@_modalStatus.InstalledReleaseDate?.ToString("yyyy-MM-dd"))</span>
+                    </div>
+                    <div class="patches-modal-row">
+                        <span class="patches-modal-label">Latest:</span>
+                        <span><strong>@_modalStatus.LatestBuild</strong> (@_modalStatus.LatestReleaseDate?.ToString("yyyy-MM-dd"))</span>
+                    </div>
+                    <div class="patches-modal-row">
+                        <span class="patches-modal-label">Behind by:</span>
+                        <span>@_modalStatus.PatchesBehind CUs · @_modalStatus.DaysBehind days · approx @_modalStatus.AgeYears years old</span>
+                    </div>
+                    <div class="patches-modal-row">
+                        <span class="patches-modal-label">Support status:</span>
+                        <span class="patches-modal-lifecycle patches-modal-lifecycle-@_modalStatus.LifecycleStatus.ToString().ToLowerInvariant()">@_modalStatus.LifecycleLabel</span>
+                    </div>
+                    @if (_modalStatus.MainstreamSupportEnds.HasValue)
+                    {
+                        <div class="patches-modal-row">
+                            <span class="patches-modal-label">Mainstream ends:</span>
+                            <span>@_modalStatus.MainstreamSupportEnds.Value.ToString("yyyy-MM-dd")</span>
+                        </div>
+                    }
+                    @if (_modalStatus.ExtendedSupportEnds.HasValue)
+                    {
+                        <div class="patches-modal-row">
+                            <span class="patches-modal-label">Extended ends:</span>
+                            <span>@_modalStatus.ExtendedSupportEnds.Value.ToString("yyyy-MM-dd")</span>
+                        </div>
+                    }
+                </div>
+
+                <h4 style="margin-top:18px;">Risk story</h4>
+                <p style="color:var(--text-secondary);font-size:13px;line-height:1.55;">
+                    @PatchRiskStory(_modalStatus)
+                </p>
+
+                @if (_modalStatus.MissedPatchesSample.Count > 0)
+                {
+                    <h4 style="margin-top:18px;">Sample of missed CUs</h4>
+                    <div class="patches-modal-list">
+                        @foreach (var p in _modalStatus.MissedPatchesSample)
+                        {
+                            <div class="patches-modal-patch">
+                                <span class="patches-modal-patch-build">@p.Build</span>
+                                <span class="patches-modal-patch-label">@p.Label</span>
+                                <span class="patches-modal-patch-date">@p.ReleaseDate?.ToString("yyyy-MM-dd")</span>
+                                @if (!string.IsNullOrEmpty(p.Kb))
+                                {
+                                    <span class="patches-modal-patch-kb">@p.Kb</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="dialog-actions" style="margin-top:18px;">
+                    <button class="btn btn-secondary" @onclick="ClosePatchesModal">Close</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 } @* end RBAC else *@
@@ -331,6 +453,10 @@ else
     private List<ServerConnection> Connections = new();
     private Dictionary<string, bool> SqlWatchStatus = new();
     private Dictionary<string, bool> PerformanceMonitorStatus = new();
+    private Dictionary<string, BuildStatus?> _buildStatusByServer = new(StringComparer.OrdinalIgnoreCase);
+    private bool _showPatchesModal;
+    private BuildStatus? _modalStatus;
+    private string? _modalServerName;
     private string? StatusMessage;
     private bool IsSuccess;
     private bool ShowDialog;
@@ -365,6 +491,61 @@ else
         LoadConnections();
     }
 
+    private void ShowPatchesModal(string serverName, BuildStatus status)
+    {
+        _showPatchesModal = true;
+        _modalStatus = status;
+        _modalServerName = serverName;
+    }
+
+    private void ClosePatchesModal()
+    {
+        _showPatchesModal = false;
+        _modalStatus = null;
+        _modalServerName = null;
+    }
+
+    private async Task ProbeServerBuildAsync(string serverName)
+    {
+        if (_buildStatusByServer.ContainsKey(serverName)) return;
+        try
+        {
+            var facts = await LicensingEstimator.ProbeServerAsync(serverName);
+            if (facts == null || string.IsNullOrEmpty(facts.ProductVersion))
+            {
+                _buildStatusByServer[serverName] = null;
+                return;
+            }
+            _buildStatusByServer[serverName] = BuildCatalogue.Lookup(facts.ProductVersion);
+        }
+        catch
+        {
+            _buildStatusByServer[serverName] = null;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string PatchRiskStory(BuildStatus s)
+    {
+        var parts = new List<string>();
+        if (s.LifecycleStatus == LifecycleStatusKind.OutOfSupport)
+            parts.Add("Out of Microsoft support entirely — no security patches, no fixes, no escalation path with Microsoft.");
+        else if (s.LifecycleStatus == LifecycleStatusKind.ExtendedSupportOnly)
+            parts.Add("In Extended Support only — security patches still issued, but no feature work or design changes.");
+        else if (s.LifecycleStatus == LifecycleStatusKind.MainstreamEndingSoon)
+            parts.Add("Mainstream support ends within 12 months.");
+
+        if (s.PatchesBehind > 0)
+            parts.Add($"Missing {s.PatchesBehind} cumulative updates, including potentially security and performance fixes released over the last {s.DaysBehind} days.");
+        if (s.AgeYears is > 5)
+            parts.Add($"The installed version is approximately {s.AgeYears} years old.");
+
+        if (parts.Count == 0)
+            return "Build is current. Continue scheduled patching cadence.";
+
+        return string.Join(" ", parts);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -379,6 +560,18 @@ else
             {
                 _isTestingAll = true;
                 await TestAllConnectionsSilently();
+
+                // After connection tests resolve, probe each successful server for build status
+                if (BuildCatalogue.IsAvailable)
+                {
+                    foreach (var conn in Connections)
+                    {
+                        foreach (var srv in conn.SuccessfulServers)
+                        {
+                            _ = ProbeServerBuildAsync(srv);
+                        }
+                    }
+                }
             }
         }
     }
@@ -646,7 +839,7 @@ else
                 LoadConnections();
 
                 StatusMessage = successfulServers.Count == serverList.Count
-                    ? $"Successfully connected to all {successfulServers.Count} server(s)!"
+                    ? "Successfully connected"
                     : $"Connected to {successfulServers.Count} of {serverList.Count} servers";
                 IsSuccess = true;
             }
@@ -848,7 +1041,9 @@ else
 
         if (successfulConnections == totalConnections && successfulServers == totalServers)
         {
-            StatusMessage = $"Successfully connected to all {totalServers} server(s)!";
+            StatusMessage = totalServers == 1
+                ? "Successfully connected"
+                : $"Successfully connected to all {totalServers} servers";
             IsSuccess = true;
         }
         else if (successfulServers > 0)

@@ -418,10 +418,12 @@ public class SqlAssessmentService
                                         ? (Enum.GetName(severityVal.GetType(), severityVal) ?? severityVal.ToString() ?? "Information")
                                         : (severityVal.ToString() ?? "Information");
                     var helpLink = rType.GetProperty("HelpLink")?.GetValue(r)?.ToString() ?? "";
-                    bool passed = severityStr is "Ok" or "Pass" or "Note" or "Information";
+                    bool passed = severityStr is "Ok" or "Pass" or "Note" or "Information" or "Low"
+                                  || MapEngineSeverity(severityStr) is "Pass" or "Information"
+                                  || (int.TryParse(severityStr, out int sevNum) && sevNum <= 1); // 0=Pass, 1=Information
 
-                    _logger.LogDebug("Result [{CheckId}] raw severity type={Type} value={Value} → mapped={Mapped}",
-                        checkId, severityVal?.GetType()?.Name ?? "null", severityStr, MapEngineSeverity(severityStr));
+                    _logger.LogWarning("Result [{CheckId}] raw severity type={Type} value={Value} → mapped={Mapped} → passed={Passed}",
+                        checkId, severityVal?.GetType()?.Name ?? "null", severityStr, MapEngineSeverity(severityStr), passed);
 
                     var foundInRuleset = _checkDefById.TryGetValue(checkId, out var defForResult);
                     if (!foundInRuleset)

@@ -1,0 +1,331 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/compliance-map"
+@using System.Text.Json
+@inject ServerConnectionManager ConnectionManager
+@inject IQuickCheckRunner QuickCheckRunner
+@inject IGovernanceService GovernanceService
+@inject ToastService Toast
+
+<PageTitle>Compliance Framework Coverage - SQLTriage</PageTitle>
+
+@if (!_pageAuthorised)
+{
+    <AccessDenied Message="Compliance Map is currently restricted to the maintainer workstation." />
+    return;
+}
+
+<div class="compliance-map-container">
+    <div class="compliance-map-header">
+        <i class="fa-solid fa-shield-halved"></i>
+        <h1>Compliance Framework Coverage</h1>
+    </div>
+    <p class="compliance-map-subtitle">Map SQLTriage checks to compliance frameworks</p>
+
+    @if (_loading)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <span class="loading-text">Loading compliance data...</span>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="error-banner">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            @_error
+        </div>
+    }
+    else
+    {
+        <div class="framework-tabs">
+            @foreach (var fw in _frameworks)
+            {
+                <button class="framework-tab @(fw == _selectedFramework ? "active" : "")"
+                        @onclick="() => SelectFramework(fw)">
+                    @fw
+                </button>
+            }
+        </div>
+
+        @if (_coverageData != null)
+        {
+            <div class="coverage-summary-bar">
+                <div class="coverage-stat">
+                    <span class="coverage-stat-label">Controls Covered</span>
+                    <span class="coverage-stat-value">@_coverageData.CoveredCount of @_coverageData.TotalControls</span>
+                </div>
+                <div class="coverage-bar-track">
+                    <div class="coverage-bar-fill" style="width: @(_coverageData.CoveragePercent.ToString("F0"))%"></div>
+                </div>
+                <div class="coverage-percentage">@_coverageData.CoveragePercent.ToString("F1")%</div>
+                <div class="coverage-stat">
+                    <span class="coverage-stat-label">Checks Mapped</span>
+                    <span class="coverage-stat-value">@_coverageData.TotalChecksMapped</span>
+                </div>
+            </div>
+
+            <div class="controls-table-wrapper">
+                <div class="section-count-label">@_coverageData.ControlRows.Count controls &middot; @(_coverageData.GapControls.Count) gaps</div>
+                <table class="controls-table">
+                    <thead>
+                        <tr>
+                            <th class="col-id">Control ID</th>
+                            <th>Control Name</th>
+                            <th class="col-mapping">Mapping Type</th>
+                            <th class="col-checks">Checks Mapped</th>
+                            <th class="col-status">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _coverageData.ControlRows)
+                        {
+                            <tr>
+                                <td class="control-id-cell">@row.ControlId</td>
+                                <td>@row.ControlName</td>
+                                <td>
+                                    @if (row.MappingTypes.Contains("direct_match"))
+                                    {
+                                        <span class="mapping-type-badge mapping-direct">direct_match</span>
+                                    }
+                                    else if (row.MappingTypes.Contains("related"))
+                                    {
+                                        <span class="mapping-type-badge mapping-related">related</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="mapping-type-badge mapping-supplementary">supplementary</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (row.Checks.Count > 0)
+                                    {
+                                        @foreach (var chk in row.Checks)
+                                        {
+                                            <span class="check-pill" title="@chk.Name">@chk.Id</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="no-checks-placeholder">&mdash;</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (row.IsCovered)
+                                    {
+                                        <span class="status-badge status-covered"><i class="fa-solid fa-check"></i> Covered</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-badge status-gap"><i class="fa-solid fa-xmark"></i> Gap</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="gap-analysis-section">
+                <div class="gap-analysis-header">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <h3>Gap Analysis</h3>
+                </div>
+
+                <p class="gap-compliance-line">
+                    You're <strong>@_coverageData.CoveragePercent.ToString("F1")%</strong> @_selectedFramework compliant based on check coverage.
+                </p>
+
+                @if (_coverageData.GapControls.Count > 0)
+                {
+                    <p class="gap-missing-label">Missing these @_coverageData.GapControls.Count controls:</p>
+                    <div class="gap-control-list">
+                        @foreach (var gap in _coverageData.GapControls)
+                        {
+                            <div class="gap-control-item">
+                                <span class="gap-id">@gap.ControlId</span>
+                                <span class="gap-name">@gap.ControlName</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="no-gaps-message">
+                        <i class="fa-solid fa-circle-check"></i>
+                        All controls in this framework are covered by at least one SQLTriage check.
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    // Gate: page is hidden from nav/palette + redirects unauthorised users (2026-05-12).
+    private static readonly bool _pageAuthorised =
+        string.Equals(Environment.MachineName, "MSI",   StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Environment.UserName,    "afsul", StringComparison.OrdinalIgnoreCase);
+
+    private bool _loading = true;
+    private string? _error;
+    private string _selectedFramework = "NIST SP 800-53 Rev 5";
+    private CoverageResult? _coverageData;
+
+    private readonly string[] _frameworks = new[]
+    {
+        "NIST SP 800-53 Rev 5",
+        "SOC 2 (2017 TSC)",
+        "ISO 27001:2022",
+        "CIS Controls v8",
+        "HIPAA",
+        "PCI-DSS v4.0"
+    };
+
+    private List<CheckEntry> _allChecks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var path = Path.Combine(baseDir, "Config", "sql-checks.json");
+            if (!File.Exists(path)) path = Path.Combine(baseDir, "config", "sql-checks.json");
+            if (!File.Exists(path))
+            {
+                _error = "Config/sql-checks.json not found.";
+                _loading = false;
+                return;
+            }
+
+            var json = await File.ReadAllTextAsync(path);
+            var opts = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            };
+            _allChecks = JsonSerializer.Deserialize<List<CheckEntry>>(json, opts) ?? new();
+            ComputeCoverage();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load sql-checks.json: {ex.Message}";
+            Toast.ShowError("Compliance Map", $"Failed to load checks: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectFramework(string framework)
+    {
+        _selectedFramework = framework;
+        ComputeCoverage();
+    }
+
+    private void ComputeCoverage()
+    {
+        var controlMap = new Dictionary<string, ControlRowData>(StringComparer.OrdinalIgnoreCase);
+        var checksMapped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var check in _allChecks)
+        {
+            if (check.FrameworkMappings == null) continue;
+
+            foreach (var mapping in check.FrameworkMappings)
+            {
+                if (!string.Equals(mapping.Framework, _selectedFramework, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                checksMapped.Add(check.Id ?? "");
+
+                if (!controlMap.TryGetValue(mapping.ControlId ?? "", out var row))
+                {
+                    row = new ControlRowData
+                    {
+                        ControlId = mapping.ControlId ?? "",
+                        ControlName = mapping.ControlName ?? ""
+                    };
+                    controlMap[mapping.ControlId ?? ""] = row;
+                }
+
+                if (!row.MappingTypes.Contains(mapping.MappingType ?? ""))
+                    row.MappingTypes.Add(mapping.MappingType ?? "");
+
+                if (!row.Checks.Any(c => c.Id == check.Id))
+                    row.Checks.Add(new CheckRef { Id = check.Id ?? "", Name = check.Name ?? "" });
+            }
+        }
+
+        var controlRows = controlMap.Values
+            .OrderBy(r => r.ControlId, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var row in controlRows)
+            row.IsCovered = row.Checks.Count > 0;
+
+        var coveredCount = controlRows.Count(r => r.IsCovered);
+        var totalControls = controlRows.Count;
+        var gapControls = controlRows.Where(r => !r.IsCovered)
+            .Select(r => new GapControl { ControlId = r.ControlId, ControlName = r.ControlName })
+            .ToList();
+
+        _coverageData = new CoverageResult
+        {
+            ControlRows = controlRows,
+            CoveredCount = coveredCount,
+            TotalControls = totalControls,
+            CoveragePercent = totalControls > 0 ? (coveredCount * 100.0 / totalControls) : 0,
+            TotalChecksMapped = checksMapped.Count,
+            GapControls = gapControls
+        };
+    }
+
+    private class CheckEntry
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Category { get; set; }
+        public List<FrameworkMappingEntry>? FrameworkMappings { get; set; }
+    }
+
+    private class FrameworkMappingEntry
+    {
+        public string? Framework { get; set; }
+        public string? ControlId { get; set; }
+        public string? ControlName { get; set; }
+        public string? MappingType { get; set; }
+    }
+
+    private class ControlRowData
+    {
+        public string ControlId { get; set; } = "";
+        public string ControlName { get; set; } = "";
+        public List<string> MappingTypes { get; set; } = new();
+        public List<CheckRef> Checks { get; set; } = new();
+        public bool IsCovered { get; set; }
+    }
+
+    private class CheckRef
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+
+    private class CoverageResult
+    {
+        public List<ControlRowData> ControlRows { get; set; } = new();
+        public int CoveredCount { get; set; }
+        public int TotalControls { get; set; }
+        public double CoveragePercent { get; set; }
+        public int TotalChecksMapped { get; set; }
+        public List<GapControl> GapControls { get; set; } = new();
+    }
+
+    private class GapControl
+    {
+        public string ControlId { get; set; } = "";
+        public string ControlName { get; set; } = "";
+    }
+}

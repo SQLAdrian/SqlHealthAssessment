@@ -424,5 +424,59 @@ namespace SQLTriage.Data.Services
             // Allow it since there's no browser context for CSRF to exploit
             return true;
         }
+
+        // ── Structured JSON error envelope ──
+        /// <summary>Wraps all API errors in a consistent JSON envelope.</summary>
+        internal static IResult ApiError(HttpContext ctx, string error, int statusCode, string? detail = null)
+        {
+            var correlationId = ctx.TraceIdentifier ?? Guid.NewGuid().ToString("N")[..12];
+            var envelope = new
+            {
+                error,
+                detail,
+                correlationId,
+                status = statusCode,
+                path = ctx.Request.Path.Value,
+                timestamp = DateTime.UtcNow.ToString("o"),
+            };
+            return Results.Json(envelope, statusCode: statusCode);
+        }
+
+        /// <summary>Catches unhandled exceptions in API pipeline and returns consistent JSON.</summary>
+        internal static async Task ExceptionHandler(HttpContext ctx, Func<Task> next)
+        {
+            try
+            {
+                await next();
+            }
+            catch (Exception ex)
+            {
+                var corrId = ctx.TraceIdentifier ?? Guid.NewGuid().ToString("N")[..12];
+                Console.Error.WriteLine($"[API] Unhandled exception {corrId}: {ex}");
+                var envelope = new
+                {
+                    error = "Internal server error",
+                    detail = ex.Message,
+                    correlationId = corrId,
+                    status = 500,
+                    path = ctx.Request.Path.Value,
+                    timestamp = DateTime.UtcNow.ToString("o"),
+                };
+                ctx.Response.StatusCode = 500;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(envelope));
+            }
+        }
+
+        /// <summary>Validates that required query parameters are present and non-empty.</summary>
+        internal static IResult? ValidateRequiredQuery(HttpContext ctx, params string[] paramNames)
+        {
+            foreach (var name in paramNames)
+            {
+                if (string.IsNullOrWhiteSpace(ctx.Request.Query[name]))
+                    return ApiError(ctx, $"Missing required parameter: '{name}'", 400);
+            }
+            return null;
+        }
     }
 }

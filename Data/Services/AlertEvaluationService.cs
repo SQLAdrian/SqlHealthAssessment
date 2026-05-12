@@ -543,7 +543,9 @@ namespace SQLTriage.Data.Services
                 if (isWarning || isCritical)
                 {
                     var severity = isCritical ? "Critical" : "Warning";
-                    var thresholdUsed = isCritical ? alert.Thresholds.Critical!.Value : alert.Thresholds.Warning!.Value;
+                    var thresholdUsed = isCritical
+                        ? alert.Thresholds.Critical ?? 0
+                        : alert.Thresholds.Warning ?? 0;
 
                     // Record this hit for escalation window tracking. Trim to the longest
                     // escalation window we care about so the queue can't grow forever

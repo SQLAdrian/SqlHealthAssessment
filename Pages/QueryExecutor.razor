@@ -24,11 +24,11 @@
 
     @if (Messages.Any())
     {
-        <div style="background: #2a2a2a; padding: 12px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px;">
+        <div style="background: var(--bg-secondary); padding: 12px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px;">
             <strong>Messages:</strong>
             @foreach (var msg in Messages)
             {
-                <div style="color: @(msg.IsError ? "#f44336" : "#4caf50");">@msg.Text</div>
+                <div style="color: @(msg.IsError ? "var(--red)" : "var(--green)");">@msg.Text</div>
             }
         </div>
     }
@@ -38,26 +38,26 @@
         <div style="overflow-x: auto;">
             <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                 <thead>
-                    <tr style="background: #333;">
+                    <tr style="background: var(--border);">
                         @foreach (DataColumn col in Results.Columns)
                         {
-                            <th style="padding: 8px; border: 1px solid #555; text-align: left;">@col.ColumnName</th>
+                            <th style="padding: 8px; border: 1px solid var(--border); text-align: left;">@col.ColumnName</th>
                         }
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (DataRow row in Results.Rows)
                     {
-                        <tr style="border-bottom: 1px solid #444;">
+                        <tr style="border-bottom: 1px solid var(--border);">
                             @foreach (DataColumn col in Results.Columns)
                             {
-                                <td style="padding: 8px; border: 1px solid #555;">@row[col]</td>
+                                <td style="padding: 8px; border: 1px solid var(--border);">@row[col]</td>
                             }
                         </tr>
                     }
                 </tbody>
             </table>
-            <div style="margin-top: 8px; color: #888;">@Results.Rows.Count row(s) returned</div>
+            <div style="margin-top: 8px; color: var(--text-muted);">@Results.Rows.Count row(s) returned</div>
         </div>
     }
 </div>

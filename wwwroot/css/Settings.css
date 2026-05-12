@@ -82,20 +82,36 @@
     border-color: var(--accent);
 }
 
-/* Buttons */
+/* Buttons — base is the secondary/ghost treatment; .settings-btn-primary
+ * promotes to the accent. Updated 2026-05-11 for the audit-first design
+ * system: teal accent needs dark foreground (white-on-teal fails WCAG AA). */
 .settings-btn {
-    background: var(--accent);
-    color: #fff;
-    border: 0;
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
     padding: 7px 14px;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background 120ms;
+    transition: background var(--t-quick), border-color var(--t-quick), color var(--t-quick);
 }
 
 .settings-btn:hover:not(:disabled) {
-    background: rgba(0, 122, 204, 0.85);
+    background: var(--bg-hover);
+    border-color: var(--border-strong);
+}
+
+.settings-btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+    border-color: var(--accent);
+}
+
+.settings-btn-primary:hover:not(:disabled) {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    color: var(--bg-primary);
 }
 
 .settings-btn:disabled {

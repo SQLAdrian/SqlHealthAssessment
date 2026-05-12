@@ -3,35 +3,27 @@
 @inject NavigationManager Navigation
 
 <div class="guide-container">
-    <h1>Component Guide</h1>
-    <p>This guide explains the major components of the navigation menu and what you can do in each section.</p>
+    <h1>SQLTriage — SQL Server Audit &amp; Compliance Platform</h1>
+    <p>Point SQLTriage at your servers for an instant compliance assessment. 577 checks mapped to CIS Controls v8, ISO 27001, SOC 2, and NIST CSF 2.0. Generates signed audit PDFs with attestation.</p>
 
     <!-- ── Feedback / Report section — first thing ── -->
-    <div class="guide-section" style="border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.05);border-radius:8px;padding:18px 20px;margin-bottom:24px;">
-        <h2 style="margin-top:0;"><i class="fa-solid fa-flag" style="color:var(--accent);"></i> Found a bug? Have a suggestion?</h2>
-        <p style="margin-bottom:14px;color:var(--text-secondary);">
+    <div class="guide-section">
+        <h2><i class="fa-solid fa-flag guide-link-icon"></i> Found a bug? Have a suggestion?</h2>
+        <p>
             This is free software built by one person. Feedback, bug reports, and feature requests are always welcome — they genuinely shape what gets built next.
         </p>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;">
-            <a href="https://github.com/SQLAdrian/SQLTriage/issues/new" target="_blank"
-               style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;background:rgba(255,255,255,0.06);border:1px solid var(--border-color);border-radius:6px;text-decoration:none;color:var(--text-primary);font-size:13px;transition:background 0.15s;"
-               onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
-                <i class="fa-brands fa-github" style="color:var(--accent);"></i> Report a Bug (GitHub)
+        <div class="guide-links">
+            <a href="https://github.com/SQLAdrian/SQLTriage/issues/new" target="_blank" class="guide-link">
+                <i class="fa-brands fa-github guide-link-icon"></i> Report a Bug (GitHub)
             </a>
-            <a href="https://github.com/SQLAdrian/SQLTriage/discussions/new?category=ideas" target="_blank"
-               style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;background:rgba(255,255,255,0.06);border:1px solid var(--border-color);border-radius:6px;text-decoration:none;color:var(--text-primary);font-size:13px;transition:background 0.15s;"
-               onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
-                <i class="fa-regular fa-lightbulb" style="color:var(--accent);"></i> Feature Request
+            <a href="https://github.com/SQLAdrian/SQLTriage/discussions/new?category=ideas" target="_blank" class="guide-link">
+                <i class="fa-regular fa-lightbulb guide-link-icon"></i> Feature Request
             </a>
-            <a href="mailto:adrian@sqldba.org?subject=SQLTriage Feedback" target="_blank"
-               style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;background:rgba(255,255,255,0.06);border:1px solid var(--border-color);border-radius:6px;text-decoration:none;color:var(--text-primary);font-size:13px;transition:background 0.15s;"
-               onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
-                <i class="fa-solid fa-envelope" style="color:var(--accent);"></i> Email Adrian
+            <a href="mailto:adrian@sqldba.org?subject=SQLTriage Feedback" target="_blank" class="guide-link">
+                <i class="fa-solid fa-envelope guide-link-icon"></i> Email Adrian
             </a>
-            <a href="https://www.linkedin.com/in/milliondollardba/" target="_blank"
-               style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;background:rgba(255,255,255,0.06);border:1px solid var(--border-color);border-radius:6px;text-decoration:none;color:var(--text-primary);font-size:13px;transition:background 0.15s;"
-               onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
-                <i class="fa-brands fa-linkedin" style="color:#0a66c2;"></i> LinkedIn
+            <a href="https://www.linkedin.com/in/milliondollardba/" target="_blank" class="guide-link">
+                <i class="fa-brands fa-linkedin guide-link-icon-linkedin"></i> LinkedIn
             </a>
         </div>
     </div>
@@ -39,27 +31,27 @@
     <!-- Nav Map: inline replica of the sidebar grouped by section -->
     <div class="guide-section nav-map-section">
         <h2><i class="fa-solid fa-map"></i> Navigation Map</h2>
-        <p style="color:var(--text-secondary); margin-bottom: 16px;">
+        <p class="guide-description">
             Everything available in the sidebar — click any item to go there directly.
         </p>
         <div class="nav-map-grid">
 
             <div class="nav-map-group">
                 <div class="nav-map-label">Audits</div>
-                <a href="/servers" class="nav-map-item"><i class="fa-solid fa-server"></i><span>Servers</span><span class="nav-map-hint">Manage connections</span></a>
-                <a href="/quickcheck" class="nav-map-item"><i class="fa-solid fa-bolt"></i><span>Quick Check</span><span class="nav-map-hint">Instant health scan · Ctrl+Q</span></a>
-                <a href="/fullaudit" class="nav-map-item"><i class="fa-solid fa-clipboard-check"></i><span>Full Audit</span><span class="nav-map-hint">Deep-dive assessment · Ctrl+4</span></a>
-                <a href="/vulnerabilityassessment" class="nav-map-item"><i class="fa-solid fa-shield-halved"></i><span>Vulnerability Assessment</span><span class="nav-map-hint">Security vulnerability scan</span></a>
-                <a href="/environment" class="nav-map-item"><i class="fa-solid fa-diagram-project"></i><span>Environment View</span><span class="nav-map-hint">Network topology graph</span></a>
-                <a href="/diagnostics-roadmap" class="nav-map-item"><i class="fa-solid fa-road"></i><span>Diagnostics Roadmap</span><span class="nav-map-hint">Maturity level analysis</span></a>
+                <a href="RouteConstants.Servers" class="nav-map-item"><i class="fa-solid fa-server"></i><span>Servers</span><span class="nav-map-hint">Manage connections</span></a>
+                <a href="RouteConstants.QuickCheck" class="nav-map-item"><i class="fa-solid fa-bolt"></i><span>Quick Check</span><span class="nav-map-hint">Instant health scan · Ctrl+Q</span></a>
+                <a href="RouteConstants.FullAudit" class="nav-map-item"><i class="fa-solid fa-clipboard-check"></i><span>Full Audit</span><span class="nav-map-hint">Deep-dive assessment · Ctrl+4</span></a>
+                <a href="RouteConstants.VulnerabilityAssessment" class="nav-map-item"><i class="fa-solid fa-shield-halved"></i><span>Vulnerability Assessment</span><span class="nav-map-hint">Security vulnerability scan</span></a>
+                <a href="RouteConstants.Environment" class="nav-map-item"><i class="fa-solid fa-diagram-project"></i><span>Environment View</span><span class="nav-map-hint">Network topology graph</span></a>
+                <a href="RouteConstants.DiagnosticsRoadmap" class="nav-map-item"><i class="fa-solid fa-road"></i><span>Diagnostics Roadmap</span><span class="nav-map-hint">Maturity level analysis</span></a>
             </div>
 
             <div class="nav-map-group">
                 <div class="nav-map-label">Tools</div>
-                <a href="/bestpractice" class="nav-map-item"><i class="fa-solid fa-star"></i><span>Best Practice</span><span class="nav-map-hint">SQL Server best practices</span></a>
-                <a href="/dbatools" class="nav-map-item"><i class="fa-solid fa-wrench"></i><span>DBA Tools</span><span class="nav-map-hint">Diagnostic scripts</span></a>
-                <a href="/capacity" class="nav-map-item"><i class="fa-solid fa-chart-line"></i><span>Capacity Planning</span><span class="nav-map-hint">Disk &amp; CPU forecasts</span></a>
-                <a href="/xevents" class="nav-map-item"><i class="fa-solid fa-circle-nodes"></i><span>XEvents</span><span class="nav-map-hint">Extended event sessions</span></a>
+                <a href="RouteConstants.BestPractice" class="nav-map-item"><i class="fa-solid fa-star"></i><span>Best Practice</span><span class="nav-map-hint">SQL Server best practices</span></a>
+                <a href="RouteConstants.DbaTools" class="nav-map-item"><i class="fa-solid fa-wrench"></i><span>DBA Tools</span><span class="nav-map-hint">Diagnostic scripts</span></a>
+                <a href="RouteConstants.Capacity" class="nav-map-item"><i class="fa-solid fa-chart-line"></i><span>Capacity Planning</span><span class="nav-map-hint">Disk &amp; CPU forecasts</span></a>
+                <a href="RouteConstants.XEvents" class="nav-map-item"><i class="fa-solid fa-circle-nodes"></i><span>XEvents</span><span class="nav-map-hint">Extended event sessions</span></a>
             </div>
 
             <div class="nav-map-group">
@@ -71,30 +63,30 @@
 
             <div class="nav-map-group">
                 <div class="nav-map-label">SQLWATCH</div>
-                <a href="/dashboard/repository" class="nav-map-item"><i class="fa-solid fa-table-list"></i><span>Repository</span><span class="nav-map-hint">Server health overview</span></a>
+                <a href="RouteConstants.DashboardRepository" class="nav-map-item"><i class="fa-solid fa-table-list"></i><span>Repository</span><span class="nav-map-hint">Server health overview</span></a>
                 <a href="/dashboard/resourcehealth" class="nav-map-item"><i class="fa-solid fa-chart-pie"></i><span>Resource Health</span><span class="nav-map-hint">CPU, memory, disk trends</span></a>
-                <a href="/dashboard/security" class="nav-map-item"><i class="fa-solid fa-lock"></i><span>Security</span><span class="nav-map-hint">Logins, permissions, alerts</span></a>
+                <a href="RouteConstants.DashboardSecurity" class="nav-map-item"><i class="fa-solid fa-lock"></i><span>Security</span><span class="nav-map-hint">Logins, permissions, alerts</span></a>
             </div>
 
             <div class="nav-map-group">
                 <div class="nav-map-label">Performance Monitor</div>
                 <a href="/dashboard/expensivequeries" class="nav-map-item"><i class="fa-solid fa-sliders"></i><span>Expensive Queries</span><span class="nav-map-hint">CPU, reads, writes analysis</span></a>
                 <a href="/dashboard/indexhealth" class="nav-map-item"><i class="fa-solid fa-list-check"></i><span>Index Health</span><span class="nav-map-hint">Missing, unused, fragmented</span></a>
-                <a href="/dashboard/querystore" class="nav-map-item"><i class="fa-solid fa-layer-group"></i><span>Query Store</span><span class="nav-map-hint">Plan regressions, trends</span></a>
+                <a href="RouteConstants.DashboardQueryStore" class="nav-map-item"><i class="fa-solid fa-layer-group"></i><span>Query Store</span><span class="nav-map-hint">Plan regressions, trends</span></a>
             </div>
 
             <div class="nav-map-group">
                 <div class="nav-map-label">Configure</div>
-                <a href="/settings" class="nav-map-item"><i class="fa-solid fa-gear"></i><span>Settings</span><span class="nav-map-hint">App preferences · Ctrl+6</span></a>
-                <a href="/dashboard-editor" class="nav-map-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard Editor</span><span class="nav-map-hint">Custom dashboards · Ctrl+7</span></a>
-                <a href="/alerts" class="nav-map-item"><i class="fa-solid fa-bell"></i><span>Alert Rules</span><span class="nav-map-hint">Thresholds &amp; notifications</span></a>
-                <a href="/alerting-config" class="nav-map-item"><i class="fa-solid fa-sliders"></i><span>Alerting Config</span><span class="nav-map-hint">Alert channel settings</span></a>
-                <a href="/service-management" class="nav-map-item"><i class="fa-solid fa-microchip"></i><span>Service &amp; Updates</span><span class="nav-map-hint">Background service, updates</span></a>
+                <a href="RouteConstants.Settings" class="nav-map-item"><i class="fa-solid fa-gear"></i><span>Settings</span><span class="nav-map-hint">App preferences · Ctrl+6</span></a>
+                <a href="RouteConstants.DashboardEditor" class="nav-map-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard Editor</span><span class="nav-map-hint">Custom dashboards · Ctrl+7</span></a>
+                <a href="RouteConstants.Alerts" class="nav-map-item"><i class="fa-solid fa-bell"></i><span>Alert Rules</span><span class="nav-map-hint">Thresholds &amp; notifications</span></a>
+                <a href="RouteConstants.AlertingConfig" class="nav-map-item"><i class="fa-solid fa-sliders"></i><span>Alerting Config</span><span class="nav-map-hint">Alert channel settings</span></a>
+                <a href="RouteConstants.ServiceManagement" class="nav-map-item"><i class="fa-solid fa-microchip"></i><span>Service &amp; Updates</span><span class="nav-map-hint">Background service, updates</span></a>
             </div>
 
             <div class="nav-map-group">
                 <div class="nav-map-label">Deploy</div>
-                <a href="/deploysqlwatch" class="nav-map-item"><i class="fa-solid fa-cloud-arrow-up"></i><span>Deploy SQLWATCH</span><span class="nav-map-hint">Install monitoring framework</span></a>
+                <a href="RouteConstants.DeploySqlWatch" class="nav-map-item"><i class="fa-solid fa-cloud-arrow-up"></i><span>Deploy SQLWATCH</span><span class="nav-map-hint">Install monitoring framework</span></a>
                 <a href="/deploydarlingPM" class="nav-map-item"><i class="fa-solid fa-chart-simple"></i><span>Deploy Perf Monitor</span><span class="nav-map-hint">Install Darling tools</span></a>
             </div>
 
@@ -131,7 +123,7 @@
 
     <div class="guide-section">
         <h2><i class="fa-solid fa-database"></i> SQLWATCH Monitoring</h2>
-        <p>Built on the SQLWATCH framework, these dashboards provide comprehensive health monitoring based on collected metrics.</p>
+        <p>Built on the SQLWATCH framework, these dashboards monitor server health from collected metrics.</p>
         <div class="guide-cards">
             <div class="guide-card">
                 <h3><i class="fa-solid fa-table-list"></i> Repository</h3>
@@ -368,26 +360,26 @@
 </style> -->
 
 @code {
-    private void GoToSQLTriage() => Navigation.NavigateTo("/dashboard/SQLTriage");
-    private void GoToInstanceOverview() => Navigation.NavigateTo("/dashboard/instanceoverview");
-    private void GoToWaitEvents() => Navigation.NavigateTo("/dashboard/waitstats");
-    private void GoToRepository() => Navigation.NavigateTo("/dashboard/repository");
-    private void GoToResourceHealth() => Navigation.NavigateTo("/dashboard/resourcehealth");
-    private void GoToSecurity() => Navigation.NavigateTo("/dashboard/security");
-    private void GoToExpensiveQueries() => Navigation.NavigateTo("/dashboard/expensivequeries");
-    private void GoToIndexHealth() => Navigation.NavigateTo("/dashboard/indexhealth");
-    private void GoToQueryStore() => Navigation.NavigateTo("/dashboard/querystore");
-    private void GoToQuickCheck() => Navigation.NavigateTo("/quickcheck");
-    private void GoToFullAudit() => Navigation.NavigateTo("/fullaudit");
-    private void GoToVulnerabilityAssessment() => Navigation.NavigateTo("/vulnerabilityassessment");
-    private void GoToDeploySqlwatch() => Navigation.NavigateTo("/deploysqlwatch");
-    private void GoToDeployDarlingPm() => Navigation.NavigateTo("/deploydarlingpm");
-    private void GoToSettings() => Navigation.NavigateTo("/settings");
-    private void GoToDashboardEditor() => Navigation.NavigateTo("/dashboard-editor");
-    private void GoToServers() => Navigation.NavigateTo("/servers");
-    private void GoToAlerting() => Navigation.NavigateTo("/alerting-config");
-    private void GoToServiceManagement() => Navigation.NavigateTo("/service-management");
-    private void GoToAbout() => Navigation.NavigateTo("/about");
+    private void GoToSQLTriage() => Navigation.NavigateTo("/dashboard/live");
+    private void GoToInstanceOverview() => Navigation.NavigateTo(RouteConstants.DashboardInstance);
+    private void GoToWaitEvents() => Navigation.NavigateTo(RouteConstants.DashboardLiveWaits);
+    private void GoToRepository() => Navigation.NavigateTo(RouteConstants.DashboardRepository);
+    private void GoToResourceHealth() => Navigation.NavigateTo(RouteConstants.DashboardPmHealth);
+    private void GoToSecurity() => Navigation.NavigateTo(RouteConstants.DashboardSecurity);
+    private void GoToExpensiveQueries() => Navigation.NavigateTo(RouteConstants.DashboardLongQueries);
+    private void GoToIndexHealth() => Navigation.NavigateTo(RouteConstants.DashboardLiveIndexes);
+    private void GoToQueryStore() => Navigation.NavigateTo(RouteConstants.DashboardQueryStore);
+    private void GoToQuickCheck() => Navigation.NavigateTo(RouteConstants.QuickCheck);
+    private void GoToFullAudit() => Navigation.NavigateTo(RouteConstants.FullAudit);
+    private void GoToVulnerabilityAssessment() => Navigation.NavigateTo(RouteConstants.VulnerabilityAssessment);
+    private void GoToDeploySqlwatch() => Navigation.NavigateTo(RouteConstants.DeploySqlWatch);
+    private void GoToDeployDarlingPm() => Navigation.NavigateTo(RouteConstants.DeployDarlingPm);
+    private void GoToSettings() => Navigation.NavigateTo(RouteConstants.Settings);
+    private void GoToDashboardEditor() => Navigation.NavigateTo(RouteConstants.DashboardEditor);
+    private void GoToServers() => Navigation.NavigateTo(RouteConstants.Servers);
+    private void GoToAlerting() => Navigation.NavigateTo(RouteConstants.AlertingConfig);
+    private void GoToServiceManagement() => Navigation.NavigateTo(RouteConstants.ServiceManagement);
+    private void GoToAbout() => Navigation.NavigateTo(RouteConstants.About);
 }
 
 <!-- <style>

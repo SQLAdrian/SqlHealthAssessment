@@ -11,15 +11,14 @@ using System.Threading.Tasks;
 namespace SQLTriage.Data.Services
 {
     // BM:SqlWatchDeploymentService.Class — deploys SQLWATCH database from DACPAC/SQL scripts
-    public class SqlWatchDeploymentService
+    public class SqlWatchDeploymentService : IDisposable
     {
         private readonly string _connectionString;
         private readonly string _databaseName;
-        private CancellationTokenSource _cancellationTokenSource;
+        private CancellationTokenSource? _cancellationTokenSource;
 
         public SqlWatchDeploymentService(string connectionString, string databaseName)
         {
-            // Modify connection string to trust server certificate (fixes encryption errors)
             var builder = new SqlConnectionStringBuilder(connectionString)
             {
                 TrustServerCertificate = true,
@@ -27,6 +26,12 @@ namespace SQLTriage.Data.Services
             };
             _connectionString = builder.ConnectionString;
             _databaseName = databaseName;
+        }
+
+        public void Dispose()
+        {
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
         }
 
         public async Task<DeploymentResult> TestConnectionAsync(IProgress<DeploymentProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -57,6 +62,7 @@ namespace SQLTriage.Data.Services
         public async Task<DeploymentResult> DeployDatabaseAsync(string sqlScriptPath, IProgress<DeploymentProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             var result = new DeploymentResult { Success = false };
+            _cancellationTokenSource?.Dispose();
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             try
@@ -115,11 +121,15 @@ namespace SQLTriage.Data.Services
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync(cancellationToken);
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = $"SELECT COUNT(1) FROM sys.databases WHERE name = N'{databaseName.Replace("'", "''")}'";
+            cmd.CommandText = "SELECT COUNT(1) FROM sys.databases WHERE name = @name";
+            cmd.Parameters.AddWithValue("@name", databaseName);
             var exists = (int)await cmd.ExecuteScalarAsync(cancellationToken) > 0;
             if (exists)
             {
                 progress?.Report(new DeploymentProgress { Status = $"Dropping existing {databaseName} database...", Percentage = 5 });
+                // Validate database name does not contain bracket-breaking characters
+                if (databaseName.Contains(']') || databaseName.Contains('[') || databaseName.Contains('\0'))
+                    throw new ArgumentException($"Invalid database name: {databaseName}");
                 cmd.CommandText = $"ALTER DATABASE [{databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{databaseName}];";
                 await cmd.ExecuteNonQueryAsync(cancellationToken);
             }

@@ -29,7 +29,7 @@
     <div class="cv-header">
         <div class="cv-header-title">
             <h1>
-                <i class="fa-solid fa-vial" style="color:#ef4444;"></i>
+                <i class="fa-solid fa-vial" style="color:var(--red);"></i>
                 Check Validator
                 <span class="cv-nopants-badge">NO PANTS</span>
             </h1>
@@ -173,7 +173,7 @@
                     }
                     else if (_noPantsMode && !string.IsNullOrEmpty(_modalQuery) && _dangerousPattern.IsMatch(_modalQuery))
                     {
-                        <div class="cv-danger-warn" style="border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.08);color:#f59e0b;">
+                        <div class="cv-danger-warn" style="border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.08);color:var(--orange);">
                             <i class="fa-solid fa-triangle-exclamation"></i>
                             No-Pants Mode — SQL safety bypassed. Query contains potentially destructive keywords.
                         </div>

@@ -2292,7 +2292,7 @@
       "route": "/querystore",
       "enabled": true,
       "source": "PerformanceMonitor",
-      "defaultDatabase": "PerformanceMonitor",
+      "defaultDatabase": "SQLWATCH",
       "showAllOption": true,
       "panels": [],
       "tabs": [
@@ -8000,8 +8000,8 @@
                 "spanColumns": false
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT CAST(COUNT(*) AS FLOAT) AS [Value] FROM sys.databases WHERE is_encrypted=0 AND database_id>4 AND state=0 AND name NOT IN ('master','model','msdb','tempdb')",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8037,8 +8037,8 @@
                 "spanColumns": false
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT CAST(COUNT(*) AS FLOAT) AS [Value] FROM sys.server_audits WHERE is_state_enabled=0",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8074,8 +8074,8 @@
                 "spanColumns": false
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT CAST(COUNT(*) AS FLOAT) AS [Value] FROM sys.syslogins WHERE sysadmin=1 AND hasaccess=1 AND isntname=0 AND password IS NOT NULL AND is_policy_checked=0",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8111,8 +8111,8 @@
                 "spanColumns": false
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT CAST(COUNT(*) AS FLOAT) AS [Value] FROM sys.dm_exec_sessions WHERE login_time > DATEADD(HOUR,-1,GETDATE()) AND login_name IS NOT NULL AND original_login_name IS NOT NULL AND login_name <> original_login_name",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8148,17 +8148,24 @@
                 "spanColumns": false
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT CASE WHEN CONVERT(INT, value_in_use) = 1 THEN 1 ELSE 0 END AS [Value] FROM sys.configurations WHERE name = 'xp_cmdshell'",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
               "statUnit": "",
               "statThresholdKey": null,
               "barGaugeThresholdKey": null,
-              "barGaugeUnitSuffix": "%",
-              "valueFormat": "",
-              "colorThresholds": [],
+              "barGaugeUnitSuffix": "",
+              "valueFormat": "N0",
+              "colorThresholds": [
+                {
+                  "operator": ">=",
+                  "value": 1,
+                  "color": "#ef4444",
+                  "label": "Enabled"
+                }
+              ],
               "dataGridIsClickable": false,
               "dataGridMaxRows": 500,
               "dataGridTopRows": 0,
@@ -8172,7 +8179,7 @@
             {
               "id": "security.orphaned_users",
               "title": "Orphaned Users by Database",
-              "description": "Per-DB count of users without login. TODO: SQL.",
+              "description": "Per-DB count of users without a corresponding server login. These users cannot authenticate and represent stale security principals.",
               "enabled": true,
               "source": "",
               "panelType": "HorizontalBar",
@@ -8185,8 +8192,8 @@
                 "spanColumns": true
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT DB_NAME() AS [Label], COUNT(*) AS [Value] FROM sys.database_principals WHERE type IN ('S','U') AND sid IS NOT NULL AND sid <> 0x0 AND LEN(sid) > 16 AND sid NOT IN (SELECT sid FROM sys.server_principals) GROUP BY DB_NAME() ORDER BY COUNT(*) DESC",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8229,8 +8236,8 @@
                 "spanColumns": true
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT name AS [Label], CASE WHEN is_encrypted=1 THEN 'Encrypted' ELSE 'Not Encrypted' END AS [Value] FROM sys.databases WHERE database_id>4 AND state=0 ORDER BY name",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8266,8 +8273,8 @@
                 "spanColumns": true
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT name AS [Label], CASE WHEN is_state_enabled=1 THEN 'Running' ELSE 'Stopped' END AS [Status], audit_file_path AS [Path] FROM sys.server_audits ORDER BY name",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8303,8 +8310,8 @@
                 "spanColumns": true
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT p.name AS [Label], p.type_desc AS [Type], p.create_date AS [Created], LOGINPROPERTY(p.name,'DaysUntilExpiration') AS [DaysUntilExpiration] FROM sys.server_principals p WHERE p.sysadmin=1 AND p.type IN('S','U') AND p.name NOT LIKE 'NT %' ORDER BY p.name",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8340,8 +8347,8 @@
                 "spanColumns": true
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT TOP 20 CAST(CONVERT(DATE,event_time) AS VARCHAR) AS [Label], COUNT(*) AS [Value] FROM sys.fn_get_audit_file('*.sqlaudit',DEFAULT,DEFAULT) WHERE action_id='LGIF' AND succeeded=0 AND event_time > DATEADD(DAY,-7,GETDATE()) GROUP BY CONVERT(DATE,event_time) ORDER BY CONVERT(DATE,event_time) DESC",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8377,8 +8384,8 @@
                 "spanColumns": true
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT DB_NAME() AS [Database], name AS [Assembly], permission_set_desc AS [PermissionSet], create_date AS [Created] FROM sys.assemblies WHERE is_user_defined=1 ORDER BY DB_NAME(), name",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8414,8 +8421,8 @@
                 "spanColumns": true
               },
               "query": {
-                "source": "sqlwatch",
-                "sqlServer": "",
+                "source": "",
+                "sqlServer": "SELECT DB_NAME() AS [Database], o.name AS [Object], p.permission_name AS [Permission] FROM sys.database_permissions p JOIN sys.objects o ON p.major_id=o.object_id WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID('public') AND p.state_desc='GRANT' AND o.type NOT IN('S','IT') ORDER BY DB_NAME(), o.name",
                 "sqlServerLegacy": null
               },
               "defaultDatabase": "master",
@@ -8452,7 +8459,7 @@
       "enabled": true,
       "experimentalOnly": true,
       "source": "",
-      "defaultDatabase": "master",
+      "defaultDatabase": "SQLWATCH",
       "showAllOption": false,
       "tabs": [
         {

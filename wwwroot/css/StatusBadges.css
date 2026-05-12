@@ -1,9 +1,12 @@
-/* Bottom-right discreet status badges (mute, no-pants, etc.) */
-/* Right-aligned column; each badge is a small icon-only chip with hover tooltip. */
-/* All badges share the same right-edge anchor and consistent size so they stack
-   cleanly when more than one is visible. Spacing between badges is fixed (8px). */
+/* Bottom-right discreet status badges (mute, no-pants, etc.). */
+/* IMPORTANT: rules below MUST be scoped to the .status-badge--mute /
+   .status-badge--nopants modifier classes. Plain .status-badge is used as
+   a generic inline chip across ~15 pages (Servers, QuickCheck, ComplianceMap,
+   etc.) — applying position:fixed to it yanks every per-row chip out of its
+   container and pins it to the viewport. */
 
-.status-badge {
+.status-badge--mute,
+.status-badge--nopants {
     position: fixed;
     right: 16px;
     display: inline-flex;
@@ -25,14 +28,17 @@
     transition: background 120ms, border-color 120ms, color 120ms;
 }
 
-.status-badge i,
-.status-badge svg {
+.status-badge--mute i,
+.status-badge--mute svg,
+.status-badge--nopants i,
+.status-badge--nopants svg {
     font-size: 12px;
     flex-shrink: 0;
     display: block;
 }
 
-.status-badge-count {
+.status-badge--mute .status-badge-count,
+.status-badge--nopants .status-badge-count {
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -66,11 +72,14 @@
     background: rgba(225, 29, 72, 0.08);
 }
 
-/* Hide all corner badges when generating PDFs (CoreWebView2.PrintToPdfAsync
+/* Hide corner badges when generating PDFs (CoreWebView2.PrintToPdfAsync
  * honours @media print). Without this, the No-Pants chip + mute chip render
- * on every page of the exported PDF since they use position:fixed. */
+ * on every page of the exported PDF since they use position:fixed.
+ * Scoped to the corner modifier classes only — plain .status-badge is used
+ * as an inline chip on many pages and must remain visible in print. */
 @media print {
-    .status-badge,
+    .status-badge--mute,
+    .status-badge--nopants,
     .health-badge,
     .ratelimit-badge,
     .server-mode-toggle {

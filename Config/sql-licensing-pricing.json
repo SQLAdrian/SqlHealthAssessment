@@ -1,0 +1,70 @@
+{
+  "lastUpdated": "2026-05-11T10:44:49Z",
+  "currency": "USD",
+  "version": "2022",
+  "source": "https://www.microsoft.com/en-us/sql-server/sql-server-2022-pricing",
+  "perpetualPerCoreUSD": {
+    "Enterprise": 15123,
+    "Standard": 3945,
+    "Web": 0,
+    "Express": 0,
+    "Developer": 0
+  },
+  "annualSAFactor": 0.5833,
+  "minimumCoresPerServer": 4,
+  "minimumCoresPerVM": 4,
+  "editionCaps": {
+    "Express": {
+      "cores": 4,
+      "memoryMB": 1410,
+      "dbSizeGB": 10
+    },
+    "Standard": {
+      "cores": 24,
+      "memoryMB": 131072,
+      "dbSizeGB": null
+    },
+    "Enterprise": {
+      "cores": null,
+      "memoryMB": null,
+      "dbSizeGB": null
+    }
+  },
+  "passiveReplicas": {
+    "haReplicasAllowedFree": 1,
+    "drReplicasAllowedFree": 1,
+    "drInAzureAllowedFree": 1,
+    "requiresSA": true
+  },
+  "editionNormalisation": {
+    "Enterprise Edition": "Enterprise",
+    "Enterprise Edition: Core-based Licensing": "Enterprise",
+    "Enterprise Edition (64-bit)": "Enterprise",
+    "Enterprise Evaluation Edition": "Enterprise",
+    "Datacenter": "Enterprise",
+    "Datacenter Edition": "Enterprise",
+    "Business Intelligence": "Enterprise",
+    "Business Intelligence Edition": "Enterprise",
+    "Standard Edition": "Standard",
+    "Standard Edition (64-bit)": "Standard",
+    "Standard Edition for Small Business": "Standard",
+    "Workgroup": "Standard",
+    "Workgroup Edition": "Standard",
+    "Web": "Web",
+    "Web Edition": "Web",
+    "Express": "Express",
+    "Express Edition": "Express",
+    "Express Edition with Advanced Services": "Express",
+    "Developer": "Developer",
+    "Developer Edition": "Developer",
+    "Developer Edition (64-bit)": "Developer",
+    "Evaluation": "Enterprise"
+  },
+  "notes": [
+    "OV+SA annual rate = perpetual price x 0.5833 (amortised over 3 years + 25% SA)",
+    "Core licences sold in 2-packs -- total must be even",
+    "All physical cores must be licensed on a physical OSE",
+    "Hyper-threading does not increase licensed core count for physical OSE",
+    "Passive replicas free under OV+SA (max 1 HA + 1 DR + 1 DR-in-Azure)"
+  ]
+}

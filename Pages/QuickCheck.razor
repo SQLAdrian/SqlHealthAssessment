@@ -1,4 +1,4 @@
-<!--/* In the name of God, the Merciful, the Compassionate */-->
+﻿<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/quickcheck"
 
 @using SQLTriage.Data
@@ -15,6 +15,7 @@
 @inject SQLTriage.Data.Services.KeyboardShortcutService ShortcutSvc
 @inject IJSRuntime JSRuntime
 @inject SQLTriage.Data.Services.AppUserState UserState
+@inject AuditLogService AuditLog
 @implements IDisposable
 
 <PdfExportModal @ref="_pdfModal"
@@ -35,9 +36,15 @@
     OnAdd="HandleSectionAdded"
     OnCancel="() => _showAddSection = false" />
 
+@if (!_initialized)
+{
+    <PageLoadingSpinner Message="Loading Quick Assessment..." />
+}
+else
+{
 <div class="quickcheck-page">
     <EditPageToolbar EditMode="_editMode"
-        PageTitle="Quick Check"
+        PageTitle="Quick Assessment"
         HasUnsavedChanges="false"
         OnAddSection="() => _showAddSection = true"
         OnDone="() => _editMode = false"
@@ -45,7 +52,7 @@
 
     <div class="page-header">
         <div>
-            <h2>Quick Check</h2>
+            <h2>Quick Assessment</h2>
             <p class="page-description">
                 Run SQL health checks from sql-checks.json against configured servers.
             </p>
@@ -110,7 +117,7 @@
                             <div style="padding:32px; text-align:center;">
                                 <i class="fa-solid fa-server" style="font-size:32px; color:var(--text-muted); margin-bottom:12px; display:block;"></i>
                                 <div style="font-size:14px; color:var(--text-secondary); margin-bottom:16px;">No server connections configured.</div>
-                                <a href="/servers" style="display:inline-flex; align-items:center; gap:8px; padding:8px 20px; background:var(--primary); color:#fff; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
+                                <a href="RouteConstants.Servers" style="display:inline-flex; align-items:center; gap:8px; padding:8px 20px; background:var(--primary); color:var(--text-primary); border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
                                     <i class="fa-solid fa-plus"></i> Add Server
                                 </a>
                             </div>
@@ -195,9 +202,9 @@
                             <div class="server-summary-card @(summary.Failed > 0 ? "has-failures" : summary.Errors > 0 ? "has-errors" : "all-passed")">
                                 <div class="server-summary-name">@summary.InstanceName</div>
                                 <div class="server-summary-stats">
-                                    <span class="ss-passed" title="Passed">✅ @summary.Passed</span>
-                                    <span class="ss-failed" title="Failed">❌ @summary.Failed</span>
-                                    <span class="ss-errors" title="Errors">⚠️ @summary.Errors</span>
+                                    <span class="ss-passed" title="Passed"><i class="fa-solid fa-check"></i> @summary.Passed</span>
+                                    <span class="ss-failed" title="Failed"><i class="fa-solid fa-xmark"></i> @summary.Failed</span>
+                                    <span class="ss-errors" title="Errors"><i class="fa-solid fa-triangle-exclamation"></i> @summary.Errors</span>
                                     <span class="ss-duration" title="Duration">@summary.Duration.TotalSeconds.ToString("F1")s</span>
                                 </div>
                             </div>
@@ -209,19 +216,19 @@
                 <div class="results-summary">
                     <div class="summary-card passed @(State.SelectedFilter == "passed" ? "active-filter" : "")"
                          @onclick='() => SetFilterFromCard("passed")'>
-                        <span class="summary-icon">✅</span>
+                        <span class="summary-icon"><i class="fa-solid fa-check"></i></span>
                         <span class="summary-count">@PassedCount</span>
                         <span class="summary-label">Passed</span>
                     </div>
                     <div class="summary-card failed @(State.SelectedFilter == "failed" ? "active-filter" : "")"
                          @onclick='() => SetFilterFromCard("failed")'>
-                        <span class="summary-icon">❌</span>
+                        <span class="summary-icon"><i class="fa-solid fa-xmark"></i></span>
                         <span class="summary-count">@FailedCount</span>
                         <span class="summary-label">Failed</span>
                     </div>
                     <div class="summary-card errors @(State.SelectedFilter == "errors" ? "active-filter" : "")"
                          @onclick='() => SetFilterFromCard("errors")'>
-                        <span class="summary-icon">⚠️</span>
+                        <span class="summary-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
                         <span class="summary-count">@ErrorCount</span>
                         <span class="summary-label">Errors</span>
                     </div>
@@ -294,15 +301,15 @@
                                     <td class="status-cell">
                                         @if (!string.IsNullOrEmpty(result.ErrorMessage))
                                         {
-                                            <span class="status-badge error">⚠️ Error</span>
+                                            <span class="status-badge error"><i class="fa-solid fa-triangle-exclamation"></i> Error</span>
                                         }
                                         else if (result.Passed)
                                         {
-                                            <span class="status-badge passed">✅ Pass</span>
+                                            <span class="status-badge passed"><i class="fa-solid fa-check"></i> Pass</span>
                                         }
                                         else
                                         {
-                                            <span class="status-badge failed">❌ Fail</span>
+                                            <span class="status-badge failed"><i class="fa-solid fa-xmark"></i> Fail</span>
                                         }
                                     </td>
                                     <td class="server-cell">@result.InstanceName</td>
@@ -386,6 +393,7 @@
         }
     </div>
 </div>
+}
 
 @code {
     // Page-local UI only — not worth persisting across navigation
@@ -394,6 +402,7 @@
     private HashSet<string>  _expandedResults = new();
     private bool             ShowDiagnosticPane;
     private bool             _disposed;
+    private bool             _initialized;
 
     // ── Report Page Editor ────────────────────────────────────────────────
     private bool              _editMode;
@@ -569,6 +578,8 @@
         if (State.Categories.Count == 0)
             State.Categories = CheckRepo.GetEnabledChecks()
                 .Select(c => c.Category).Distinct().OrderBy(c => c).ToList();
+
+        _initialized = true;
     }
 
     public void Dispose()
@@ -766,10 +777,7 @@
 
             State.AddDiagEntry($"Targets: {targets.Count} server(s)", "info");
 
-            Func<SqlCheck, bool> filter = c =>
-                c.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
-                c.Severity.Equals("Warning",  StringComparison.OrdinalIgnoreCase) ||
-                c.Severity.Equals("Info",     StringComparison.OrdinalIgnoreCase);
+            Func<SqlCheck, bool> filter = c => true;
 
             var checksToRun = CheckRepo.GetEnabledChecks().Where(filter).ToList();
             State.AddDiagEntry($"Checks to execute per server: {checksToRun.Count}", "info");
@@ -836,6 +844,12 @@
             }
 
             State.AddDiagEntry($"=== Complete: {State.Results.Count} total results in {State.ExecutionDuration} ===", "info");
+
+            var overallDuration = DateTime.UtcNow - overallStart;
+            var anyFailures = FailedCount > 0 || ErrorCount > 0;
+            AuditLog.LogScriptExecution("QuickCheck", string.Join(",", targets.Select(t => t.Server)),
+                !anyFailures, overallDuration,
+                anyFailures ? $"{FailedCount} failed, {ErrorCount} errors" : null);
 
             await AutoExportQuickCheckResults();
         }
@@ -927,3 +941,4 @@
             _          => "severity-default"
         };
 }
+

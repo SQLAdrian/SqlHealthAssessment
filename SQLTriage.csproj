@@ -5,7 +5,7 @@
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;publish\**;release\**;lib\**;BPScripts\Ignore\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);PerformanceMonitor-main\**;PerformanceMonitor_db\**;Tests\**;BenchmarkSuite1\**;Data\DashboardPreloaderService.cs;Data\OptimizedDashboardLoader.cs;publish\**;release\**;lib\**;BPScripts\\Ignore\\*\\*;SQLTriage-RAG-Builder\\*\\***</DefaultItemExcludes>
     <NoWarn>$(NoWarn);CS0169;CS0414;BL0007</NoWarn>
     <RootNamespace>SQLTriage</RootNamespace>
     <AssemblyName>SQLTriage</AssemblyName>
@@ -41,13 +41,15 @@
     <!-- Suppress duplicate AssemblyInfo attributes in the WPF hot-reload temp project -->
     <GenerateAssemblyInfo Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</GenerateTargetFrameworkAttribute>
+    <!-- Specify entry point for WPF temp project to avoid CS0017 -->
+    <StartupObject Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">SQLTriage.Program</StartupObject>
     <!-- Suppress Razor compilation in the WPF hot-reload temp project -->
     <RazorCompileOnBuild Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</RazorCompileOnBuild>
     <RazorCompileOnPublish Condition="$(MSBuildProjectFile.Contains('_wpftmp'))">false</RazorCompileOnPublish>
     <!-- Suppress the Razor SDK's duplicate AssemblyInfo generation � standard .NET SDK handles this -->
     <GenerateRazorTargetAssemblyInfo>false</GenerateRazorTargetAssemblyInfo>
     <!-- Custom entry point: Program.Main handles both WPF and service modes -->
-    <StartupObject>SQLTriage.Program</StartupObject>
+    <StartupObject Condition="!$(MSBuildProjectFile.Contains('_wpftmp'))">SQLTriage.Program</StartupObject>
   </PropertyGroup>
 
   <!-- ASP.NET Core framework for Blazor Server mode (Kestrel, SignalR) -->
@@ -74,6 +76,10 @@
     <Content Remove="research_logs\**" />
     <EmbeddedResource Remove="research_logs\**" />
     <None Remove="research_logs\**" />
+    <Compile Remove="DdgTest\**" />
+    <Content Remove="DdgTest\**" />
+    <EmbeddedResource Remove="DdgTest\**" />
+    <None Remove="DdgTest\**" />
   </ItemGroup>
 
   <!-- Release Build Optimizations -->
@@ -125,7 +131,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MailKit" Version="4.16.0" />
+    <PackageReference Include="MailKit" Version="4.11.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="8.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.*" />
@@ -207,8 +213,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="BPScripts\Ignore\**" />
-    <Content Remove="BPScripts\Ignore\**" />
+    <None Remove="BPScripts\\Ignore\\*\\*;SQLTriage-RAG-Builder\\*\\***" />
+    <Content Remove="BPScripts\\Ignore\\*\\*;SQLTriage-RAG-Builder\\*\\***" />
     <None Update="BPScripts\01. MaintenanceSolution.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -338,7 +344,7 @@
     </PropertyGroup>
     <RemoveDir Directories="$(PublishDir)bin" ContinueOnError="true" />
     <!-- Strip dev/research artefacts that must never ship in a release -->
-    <RemoveDir Directories="$(PublishDir)BPScripts\Ignore" ContinueOnError="true" />
+    <RemoveDir Directories="$(PublishDir)BPScripts\\Ignore\\*\\*;SQLTriage-RAG-Builder\\*\\*" ContinueOnError="true" />
     <RemoveDir Directories="$(PublishDir)research_output" ContinueOnError="true" />
     <RemoveDir Directories="$(PublishDir)research_logs" ContinueOnError="true" />
     <RemoveDir Directories="$(PublishDir)temp" ContinueOnError="true" />

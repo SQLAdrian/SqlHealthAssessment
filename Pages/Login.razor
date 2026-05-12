@@ -3,13 +3,16 @@
 
 @using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
+@using SQLTriage.Data
 @inject NavigationManager Nav
 @inject ServerModeService ServerMode
 @inject RbacService RbacService
+@inject AuditLogService AuditLog
 
 @code {
     protected override void OnInitialized()
     {
+        AuditLog.LogSessionEvent("login");
         if (ServerMode.IsRunning && RbacService.Config.Enabled)
         {
             // Hand off to the raw auth endpoint which shows OAuth provider buttons
@@ -31,7 +34,7 @@
         {
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:24px;">
                 RBAC is not enabled. Enable it in
-                <a href="/settings" style="color:var(--accent);">Settings → Access Control</a>.
+                <a href="RouteConstants.Settings" style="color:var(--accent);">Settings → Access Control</a>.
             </p>
         }
         else
@@ -39,7 +42,7 @@
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:24px;">
                 This application is running in desktop (WPF) mode. Authentication is managed by Windows.
             </p>
-            <a href="/" style="display:inline-block;padding:8px 20px;background:var(--accent);color:#fff;border-radius:6px;text-decoration:none;font-size:13px;">
+            <a href="/" style="display:inline-block;padding:8px 20px;background:var(--accent);color:var(--text-primary);border-radius:6px;text-decoration:none;font-size:13px;">
                 Go to Dashboard
             </a>
         }

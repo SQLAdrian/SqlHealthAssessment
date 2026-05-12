@@ -33,7 +33,7 @@
         <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
             @if (_criticalCount > 0)
             {
-                <span style="background: var(--red); color: #fff; border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 600;">
+                <span style="background: var(--red); color: var(--text-primary); border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 600;">
                     <i class="fa-solid fa-circle-exclamation" style="margin-right: 5px;"></i>@_criticalCount Critical
                 </span>
             }
@@ -45,7 +45,7 @@
             }
             @if (_criticalCount == 0 && _warningCount == 0)
             {
-                <span style="background: var(--green); color: #fff; border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 600;">
+                <span style="background: var(--green); color: var(--text-primary); border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 600;">
                     <i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>All Clear
                 </span>
             }
@@ -129,7 +129,7 @@
                 @if (server.HasEscalated)
                 {
                     <div style="position: absolute; top: 8px; right: 8px;">
-                        <span style="background: var(--red); color: #fff; font-size: 9px; font-weight: 700;
+                        <span style="background: var(--red); color: var(--text-primary); font-size: 9px; font-weight: 700;
                                       padding: 2px 6px; border-radius: 3px; letter-spacing: 0.05em;">ESC</span>
                     </div>
                 }

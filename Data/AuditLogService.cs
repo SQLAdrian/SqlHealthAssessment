@@ -131,6 +131,10 @@ namespace SQLTriage.Data
                 var latest = GetCurrentLogFile();
                 if (!File.Exists(latest)) return;
 
+                // Load last-known-chain-break marker to avoid repeating the error on every restart
+                var breakMarkerPath = Path.Combine(_logDirectory, ".chain-break-marker");
+                var previousBreak = File.Exists(breakMarkerPath) ? File.ReadAllText(breakMarkerPath).Trim() : null;
+
                 // Seed with the first entry's PreviousHash so cross-file rotations
                 // don't register as chain breaks. Chain integrity within a single
                 // file is what we actually verify.
@@ -151,10 +155,15 @@ namespace SQLTriage.Data
                     if (!string.Equals(recomputed, entry.Signature, StringComparison.Ordinal))
                     {
                         ChainBroken = true;
-                        Serilog.Log.Error("Audit log chain break detected at {Timestamp} in {File}",
-                            entry.Timestamp, Path.GetFileName(latest));
-                        WriteEventLog("Audit log chain integrity check failed. Investigate tampering.",
-                            AuditSeverity.Error);
+                        var breakId = $"{entry.Timestamp}_{recomputed[..16]}";
+
+                        // Only log the first time this specific break is detected
+                        if (previousBreak != breakId)
+                        {
+                            Serilog.Log.Warning("Audit log chain break detected at {Timestamp} in {File} (logged once per break)",
+                                entry.Timestamp, Path.GetFileName(latest));
+                            try { File.WriteAllText(breakMarkerPath, breakId); } catch { }
+                        }
                         break;
                     }
                     previousSig = entry.Signature;

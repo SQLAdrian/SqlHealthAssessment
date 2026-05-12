@@ -28,8 +28,8 @@
                      @onclick="() => ToggleExpand(chain.HeadSpid)">
                     <i class="fa-solid @(_expandedSpids.Contains(chain.HeadSpid) ? "fa-chevron-down" : "fa-chevron-right")"
                        style="font-size: 10px; color: var(--text-muted); width: 12px; flex-shrink: 0;"></i>
-                    <i class="fa-solid fa-skull-crossbones" style="color: #f44336; font-size: 11px;"></i>
-                    <span style="font-weight: 600; color: #f44336; font-size: 12px;">SPID @chain.HeadSpid</span>
+                    <i class="fa-solid fa-skull-crossbones" style="color: var(--red); font-size: 11px;"></i>
+                    <span style="font-weight: 600; color: var(--red); font-size: 12px;">SPID @chain.HeadSpid</span>
                     <span class="severity-badge severity-high" style="font-size: 10px;">HEAD BLOCKER</span>
                     @if (!string.IsNullOrEmpty(chain.HeadDatabase))
                     {

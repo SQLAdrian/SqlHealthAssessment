@@ -1,0 +1,385 @@
+/* In the name of God, the Merciful, the Compassionate */
+/* Compliance Map — extracted inline styles + <style> block */
+
+.compliance-map-container {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.compliance-map-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.compliance-map-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.compliance-map-header i {
+    color: var(--accent);
+    font-size: 24px;
+}
+
+.compliance-map-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    padding-left: 36px;
+}
+
+.framework-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+}
+
+.framework-tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.framework-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.framework-tab.active {
+    color: var(--accent);
+    background: var(--bg-panel);
+    border-color: var(--border);
+    border-bottom-color: var(--bg-panel);
+    margin-bottom: -1px;
+    font-weight: 600;
+}
+
+.coverage-summary-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 16px 20px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.coverage-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.coverage-stat-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.coverage-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.coverage-bar-track {
+    flex: 1;
+    min-width: 200px;
+    height: 10px;
+    background: var(--bg-primary);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.coverage-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), var(--green));
+    border-radius: 5px;
+    transition: width 0.4s ease;
+}
+
+.coverage-percentage {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--green);
+    min-width: 60px;
+    text-align: right;
+}
+
+.controls-table-wrapper {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.controls-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.controls-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+}
+
+.controls-table th.col-id { width: 120px; }
+.controls-table th.col-mapping { width: 130px; }
+.controls-table th.col-checks { width: 280px; }
+.controls-table th.col-status { width: 100px; }
+
+.controls-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    vertical-align: top;
+}
+
+.controls-table td.control-id-cell {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.controls-table td .no-checks-placeholder {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.controls-table tr:last-child td {
+    border-bottom: none;
+}
+
+.controls-table tr:hover td {
+    background: var(--bg-hover);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status-covered {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.status-gap {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.mapping-type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.mapping-direct {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--accent);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.mapping-related {
+    background: rgba(156, 163, 175, 0.15);
+    color: var(--text-secondary);
+    border: 1px solid rgba(156, 163, 175, 0.25);
+}
+
+.mapping-supplementary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.check-pill {
+    display: inline-block;
+    padding: 2px 7px;
+    margin: 2px 3px 2px 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
+
+.check-pill-name {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 2px;
+    font-family: inherit;
+}
+
+.gap-analysis-section {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.gap-analysis-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.gap-analysis-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.gap-analysis-header i {
+    color: var(--orange);
+}
+
+.gap-compliance-line {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.gap-compliance-line strong {
+    color: var(--green);
+}
+
+.gap-missing-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.gap-control-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.gap-control-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.gap-control-item .gap-id {
+    font-weight: 600;
+    color: var(--red);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
+
+.gap-control-item .gap-name {
+    color: var(--text-secondary);
+}
+
+.no-gaps-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 6px;
+    color: var(--green);
+    font-size: 13px;
+}
+
+.section-count-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    gap: 16px;
+}
+
+.loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: compliance-spin 0.8s linear infinite;
+}
+
+@keyframes compliance-spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.error-banner {
+    padding: 12px 16px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 6px;
+    color: var(--red);
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

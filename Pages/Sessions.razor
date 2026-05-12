@@ -21,7 +21,7 @@
         <div class="query-plan-modal-content" style="max-width:800px;" @onclick:stopPropagation>
             <div class="panel-maximize-header">
                 <span class="panel-maximize-title">Session Performance Charts</span>
-                <button class="panel-maximize-close" @onclick="HideCharts" title="Close">✕</button>
+                <button class="panel-maximize-close" @onclick="HideCharts" title="Close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="panel-maximize-body">
                 <canvas id="cpuChart" width="400" height="200"></canvas>
@@ -164,7 +164,7 @@
     @* Error display *@
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="chart-empty" style="color: #f44336; background: #2a1a1a; border: 1px solid #f44336; padding: 12px; margin: 8px; border-radius: 4px;">
+        <div class="chart-empty" style="color: var(--red); background: var(--bg-secondary); border: 1px solid var(--red); padding: 12px; margin: 8px; border-radius: 4px;">
             @ErrorMessage
         </div>
     }

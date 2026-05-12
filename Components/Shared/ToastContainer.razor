@@ -12,7 +12,7 @@
     {
         <div class="toast toast-@toast.Type.ToString().ToLower() @(toast.IsVisible ? "show" : "") @(toast.IsAlert ? "toast-alert-size" : "")"
              @key="toast.Id">
-            <div class="toast-icon">@GetIcon(toast.Type)</div>
+            <i class="toast-icon @GetIcon(toast.Type)"></i>
             <div class="toast-content">
                 <div class="toast-title">@toast.Title</div>
                 @if (!string.IsNullOrEmpty(toast.Message))
@@ -145,11 +145,11 @@
 
     private static string GetIcon(ToastType type) => type switch
     {
-        ToastType.Success => "✓",
-        ToastType.Error   => "✕",
-        ToastType.Warning => "⚠",
-        ToastType.Info    => "ℹ",
-        _                 => "ℹ"
+        ToastType.Success => "fa-solid fa-check",
+        ToastType.Error   => "fa-solid fa-xmark",
+        ToastType.Warning => "fa-solid fa-triangle-exclamation",
+        ToastType.Info    => "fa-solid fa-circle-info",
+        _                 => "fa-solid fa-circle-info"
     };
 
     public void Dispose()

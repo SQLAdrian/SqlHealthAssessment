@@ -221,7 +221,7 @@
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="chart-empty" style="color: #f44336; background: #2a1a1a; border: 1px solid #f44336; padding: 12px; margin: 8px; border-radius: 4px;">
+        <div class="chart-empty" style="color: var(--red); background: var(--bg-secondary); border: 1px solid var(--red); padding: 12px; margin: 8px; border-radius: 4px;">
             @ErrorMessage
         </div>
     }
@@ -230,7 +230,7 @@
     @if (CachingExecutor.IsServingStaleData)
     {
         <div class="db-stale-banner">
-            <span>⚠ Serving cached data</span>
+            <span><i class="fa-solid fa-triangle-exclamation"></i> Serving cached data</span>
             @if (CachingExecutor.LastSuccessfulFetch.HasValue)
             {
                 <span class="db-stale-age">Last live fetch: @CachingExecutor.LastSuccessfulFetch.Value.ToString("HH:mm:ss")</span>
@@ -245,7 +245,7 @@
             <i class="fa-solid fa-server" style="font-size:36px; color:var(--text-muted); margin-bottom:16px; display:block;"></i>
             <div style="font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:8px;">No servers configured</div>
             <div style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">Add a server connection to start monitoring.</div>
-            <a href="/servers" style="display:inline-flex; align-items:center; gap:8px; padding:8px 20px; background:var(--primary); color:#fff; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
+            <a href="/servers" style="display:inline-flex; align-items:center; gap:8px; padding:8px 20px; background:var(--primary); color:var(--text-primary); border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
                 <i class="fa-solid fa-plus"></i> Add Server
             </a>
         </div>
@@ -268,7 +268,7 @@
     @if (RequiresSqlWatch && !CurrentServerHasSqlWatch)
     {
         <div class="sqlwatch-required-banner">
-            <span class="sqlwatch-required-icon">⚠️</span>
+            <span class="sqlwatch-required-icon"><i class="fa-solid fa-triangle-exclamation"></i>️</span>
             <div>
                 <strong>SQLWATCH is not installed on this server</strong>
                 <div class="sqlwatch-required-detail">
@@ -282,7 +282,7 @@
     @if (RequiredDbMissing)
     {
         <div class="sqlwatch-required-banner">
-            <span class="sqlwatch-required-icon">⚠️</span>
+            <span class="sqlwatch-required-icon"><i class="fa-solid fa-triangle-exclamation"></i>️</span>
             <div>
                 <strong>@RequiredDbBannerText</strong>
                 <div class="sqlwatch-required-detail">
@@ -376,7 +376,7 @@
                     if (_barGaugeResults.TryGetValue(panel.Id, out var gaugeData))
                     {
                         <div class="chart-grid-item" style="position: relative;">
-                            <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
+                            <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                             <DynamicPanel Panel="panel" BarGaugeData="gaugeData" TimezoneOffsetHours="@TimezoneOffsetHours" IsCached="_cachedPanelIds.ContainsKey(panel.Id)" />
                         </div>
                     }
@@ -390,7 +390,7 @@
                     <div class="panel-maximize-content" @onclick:stopPropagation>
                         <div class="panel-maximize-header">
                             <span class="panel-maximize-title">@_maximizedPanel.Title</span>
-                            <button class="panel-maximize-close" @onclick="RestorePanel" title="Restore">✕</button>
+                            <button class="panel-maximize-close" @onclick="RestorePanel" title="Restore"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                         <div class="panel-maximize-body">
                             <DynamicPanel Panel="@_maximizedPanelExpanded"
@@ -414,14 +414,14 @@
                         @if (panel.Layout.SpanColumns)
                         {
                             <div class="chart-grid-full chart-grid-item">
-                                <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
+                                <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                                 @RenderChartOrGrid(panel)
                             </div>
                         }
                         else
                         {
                             <div class="chart-grid-item">
-                                <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize">⛶</button>
+                                <button class="panel-maximize-btn" @onclick="() => MaximizePanel(panel)" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                                 @RenderChartOrGrid(panel)
                             </div>
                         }

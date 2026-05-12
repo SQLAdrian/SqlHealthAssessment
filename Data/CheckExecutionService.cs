@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SQLTriage.Data.Models;
+using SQLTriage.Data.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -31,6 +32,8 @@ namespace SQLTriage.Data
         private readonly CheckRepositoryService _checkRepo;
         private readonly ServerConnectionManager _connectionManager;
         private readonly IConfiguration _configuration;
+        private readonly GovernanceHistoryService? _historyService;
+        private readonly QuickCheckResultStore? _resultStore;
 
         /// <summary>Max concurrent queries per instance (mirrors PerformanceMonitor's SemaphoreSlim(7)).</summary>
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _instanceThrottles = new();
@@ -57,13 +60,20 @@ namespace SQLTriage.Data
             ILogger<CheckExecutionService> logger,
             CheckRepositoryService checkRepo,
             ServerConnectionManager connectionManager,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            GovernanceHistoryService? historyService = null,
+            QuickCheckResultStore? resultStore = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _checkRepo = checkRepo ?? throw new ArgumentNullException(nameof(checkRepo));
             _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-            _maxResultsPerInstance = _configuration.GetValue("CheckExecution:MaxResultsPerInstance", 500);
+            _historyService = historyService;
+            _resultStore = resultStore;
+            // 2026-05-12: lowered hot cache from 500→50 per instance to cut RAM pressure
+            // on 25-server runs (~3 GB resident observed). SQLite history retains the full
+            // record via GovernanceHistoryService; consumers re-hydrate from disk on demand.
+            _maxResultsPerInstance = _configuration.GetValue("CheckExecution:MaxResultsPerInstance", 50);
         }
 
         // ────────────────────── Execution ──────────────────────
@@ -116,6 +126,10 @@ namespace SQLTriage.Data
 
             summary.CompletedAt = DateTime.UtcNow;
             _lastSummary[serverName] = summary;
+
+            // Persist the full run to disk so consumers can re-hydrate without
+            // keeping the entire result set in RAM (worklist item 2026-05-12 #4).
+            _resultStore?.WriteRun(serverName, results);
 
             _logger.LogInformation("{Server}: {Passed} passed, {Failed} failed, {Errors} errors in {Duration:F1}s",
                 LogAnon.S(serverName), summary.Passed, summary.Failed, summary.Errors, summary.Duration.TotalSeconds);
@@ -173,6 +187,9 @@ namespace SQLTriage.Data
 
             summary.CompletedAt = DateTime.UtcNow;
             _lastSummary[serverName] = summary;
+
+            // Persist the run to disk; consumers re-hydrate via the store.
+            _resultStore?.WriteRun(serverName, results);
 
             _logger.LogInformation("{Server}: {Passed} passed, {Failed} failed, {Errors} errors in {Duration:F1}s",
                 LogAnon.S(serverName), summary.Passed, summary.Failed, summary.Errors, summary.Duration.TotalSeconds);
@@ -232,6 +249,7 @@ namespace SQLTriage.Data
                 Category = check.Category,
                 Severity = check.Severity,
                 ExpectedValue = check.ExpectedValue,
+                EffortHours = check.EffortHours,
                 InstanceName = serverName,
                 RecommendedAction = check.RecommendedAction,
                 Description = check.Description
@@ -271,28 +289,45 @@ namespace SQLTriage.Data
                 }
                 else
                 {
-                    // Scalar / Binary check (default)
-                    // Typical pattern: SELECT CASE WHEN EXISTS (...) THEN 1 ELSE 0 END
-                    // Returns 0 (pass) or 1 (fail), compared to ExpectedValue (usually 0)
-                    var scalar = await cmd.ExecuteScalarAsync(ct);
-                    result.ActualValue = scalar != null && scalar != DBNull.Value
-                        ? Convert.ToInt32(scalar)
-                        : 0;
-
-                    // Info severity always passes
-                    if (check.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase))
+                    // Check if this check has a text-based ResultInterpretation
+                    var ri = check.ResultInterpretation;
+                    if (!string.IsNullOrEmpty(ri) && ri.Contains("Pass", StringComparison.OrdinalIgnoreCase))
                     {
-                        result.Passed = true;
+                        // Text-based result: e.g., PassFail, PassInfo, PassWarnFail, PassFailSkip
+                        // SQL should return a 'result' column with PASS/FAIL/INFO/WARN/SKIP
+                        using var reader = await cmd.ExecuteReaderAsync(ct);
+                        string resultText = "";
+                        if (await reader.ReadAsync(ct))
+                        {
+                            try { resultText = reader["result"]?.ToString() ?? ""; }
+                            catch { resultText = reader[0]?.ToString() ?? ""; }
+                        }
+
+                        result.ActualValue = 0; // text results don't map to numeric
+                        result.Message = resultText;
+                        result.Passed = resultText.Equals("PASS", StringComparison.OrdinalIgnoreCase);
                     }
                     else
                     {
-                        result.Passed = result.ActualValue == check.ExpectedValue;
+                        // Numeric check (default): SELECT CASE WHEN EXISTS (...) THEN 1 ELSE 0 END
+                        var scalar = await cmd.ExecuteScalarAsync(ct);
+                        result.ActualValue = scalar != null && scalar != DBNull.Value
+                            ? Convert.ToInt32(scalar)
+                            : 0;
+
+                        if (check.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase))
+                        {
+                            result.Passed = true;
+                        }
+                        else
+                        {
+                            result.Passed = result.ActualValue == check.ExpectedValue;
+                        }
+                        result.Message = result.Passed
+                            ? $"Check passed (value={result.ActualValue})"
+                            : $"Check failed: got {result.ActualValue}, expected {check.ExpectedValue}";
                     }
                 }
-
-                result.Message = result.Passed
-                    ? $"Check passed (value={result.ActualValue})"
-                    : $"Check failed: got {result.ActualValue}, expected {check.ExpectedValue}";
             }
             catch (Exception ex)
             {
@@ -348,28 +383,76 @@ namespace SQLTriage.Data
                 while (list.Count > _maxResultsPerInstance)
                     list.RemoveAt(list.Count - 1);
             }
+
+            // Persist for restart survival
+            try { _historyService?.RecordCheckResult(instanceName, result); } catch { /* best-effort */ }
         }
 
         // ────────────────────── Queries ──────────────────────
 
         /// <summary>
         /// Gets the most recent results for an instance, optionally filtered.
+        /// Hot cache holds the most recent run; older data is fetched from SQLite
+        /// (GovernanceHistoryService) on demand to keep RAM bounded.
         /// </summary>
         public List<CheckResult> GetResults(string instanceName, int maxCount = 50,
             string? category = null, bool? passedOnly = null)
         {
-            if (!_resultsByInstance.TryGetValue(instanceName, out var list))
-                return new List<CheckResult>();
-
-            lock (list)
+            List<CheckResult> hot;
+            if (_resultsByInstance.TryGetValue(instanceName, out var list))
             {
-                IEnumerable<CheckResult> query = list;
-                if (category != null)
-                    query = query.Where(r => r.Category.Equals(category, StringComparison.OrdinalIgnoreCase));
-                if (passedOnly.HasValue)
-                    query = query.Where(r => r.Passed == passedOnly.Value);
-                return query.Take(maxCount).ToList();
+                lock (list)
+                {
+                    hot = new List<CheckResult>(list);
+                }
             }
+            else
+            {
+                hot = new List<CheckResult>();
+            }
+
+            // Re-hydrate from disk if the hot cache is short of what was asked.
+            // Most consumers ask for 500–1000 to render a dashboard; the hot cache
+            // is capped at 50 to keep RAM down, so the dashboard depends on persisted
+            // data for the rest. Order of preference: JSON file (richest), SQLite (fallback).
+            if (hot.Count < maxCount)
+            {
+                var seen = new HashSet<string>(hot.Select(r => r.CheckId), StringComparer.OrdinalIgnoreCase);
+
+                // Primary: JSON per-server store
+                if (_resultStore != null)
+                {
+                    try
+                    {
+                        var fromJson = _resultStore.ReadLatestRun(instanceName);
+                        if (fromJson != null)
+                        {
+                            foreach (var r in fromJson)
+                                if (seen.Add(r.CheckId)) hot.Add(r);
+                        }
+                    }
+                    catch { /* best-effort */ }
+                }
+
+                // Fallback: SQLite history (used when JSON file is missing for this server)
+                if (hot.Count < maxCount && _historyService != null)
+                {
+                    try
+                    {
+                        var fromHistory = _historyService.LoadLatestCheckResults(instanceName);
+                        foreach (var r in fromHistory)
+                            if (seen.Add(r.CheckId)) hot.Add(r);
+                    }
+                    catch { /* best-effort */ }
+                }
+            }
+
+            IEnumerable<CheckResult> query = hot;
+            if (category != null)
+                query = query.Where(r => r.Category.Equals(category, StringComparison.OrdinalIgnoreCase));
+            if (passedOnly.HasValue)
+                query = query.Where(r => r.Passed == passedOnly.Value);
+            return query.Take(maxCount).ToList();
         }
 
         /// <summary>

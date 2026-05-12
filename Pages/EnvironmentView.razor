@@ -101,7 +101,7 @@
                         <i class="fa-solid fa-desktop"></i>
                         <strong>@_selectedHost.Hostname</strong>
                         <span style="font-size:10px;color:var(--text-muted);margin-left:4px;">via @_selectedHostServer</span>
-                        <button class="env-detail-close" @onclick="() => _selectedHost = null">✕</button>
+                        <button class="env-detail-close" @onclick="() => _selectedHost = null"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="env-detail-badges">
                         <span class="env-badge"><i class="fa-solid fa-plug"></i> @_selectedHost.ConnectionCount conn</span>

@@ -59,6 +59,7 @@
     font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;
+    position: relative !important;
 }
 
 /* Make sure clickable rows don't try to float anything */

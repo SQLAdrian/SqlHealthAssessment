@@ -26,7 +26,7 @@
                     var step = i;
                     <div class="onboarding-step-dot @(step == _step ? "active" : step < _step ? "done" : "")">
                         @if (step < _step)
-                        { <i class="fa-solid fa-check" style="font-size:9px;"></i> }
+                        { <i class="fa-solid fa-circle-check" style="font-size:9px;"></i> }
                         else
                         { @step }
                     </div>
@@ -79,7 +79,7 @@
                 {
                     <div class="onboarding-step-content">
                         <div class="onboarding-step-icon" style="color:var(--green);">
-                            <i class="fa-solid fa-road"></i>
+<i class="fa-solid fa-shield-halved"></i>
                         </div>
                         <h3>Step 3 — View Your Diagnostics Roadmap</h3>
                         <p>
@@ -121,7 +121,7 @@
                     else
                     {
                         <button class="settings-btn settings-btn-primary" @onclick="Finish">
-                            <i class="fa-solid fa-check"></i> Done
+                            <i class="fa-solid fa-circle-check"></i> Done
                         </button>
                     }
                 </div>
@@ -146,18 +146,18 @@
     private async Task GoToServers()
     {
         await OnComplete.InvokeAsync();
-        Navigation.NavigateTo("/servers");
+        Navigation.NavigateTo(RouteConstants.Servers);
     }
 
     private async Task GoToQuickCheck()
     {
         await OnComplete.InvokeAsync();
-        Navigation.NavigateTo("/quickcheck");
+        Navigation.NavigateTo(RouteConstants.QuickCheck);
     }
 
     private async Task GoToRoadmap()
     {
         await OnComplete.InvokeAsync();
-        Navigation.NavigateTo("/diagnostics-roadmap");
+        Navigation.NavigateTo(RouteConstants.DiagnosticsRoadmap);
     }
 }

@@ -59,6 +59,10 @@
             </div>
         </div>
     }
+    else
+    {
+        <PageLoadingSpinner Message="Computing governance score..." />
+    }
 
     <!-- Action Buttons -->
     <div class="action-buttons">
@@ -107,216 +111,8 @@
     }
 </div>
 
-<!-- <style>
-    .governance-container {
-        padding: 20px;
-        max-width: 1200px;
-        margin: 0 auto;
-    }
-
-    .governance-header {
-        text-align: center;
-        margin-bottom: 30px;
-    }
-
-    .governance-header h1 {
-        color: var(--text-primary);
-        margin-bottom: 8px;
-    }
-
-    .governance-header p {
-        color: var(--text-secondary);
-        font-size: 16px;
-    }
-
-    .indicative-banner {
-        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-weight: 500;
-    }
-
-    .score-overview {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-
-    .score-card {
-        background: var(--bg-panel);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 24px;
-        text-align: center;
-    }
-
-    .score-card h3 {
-        color: var(--text-primary);
-        margin: 0 0 16px 0;
-        font-size: 18px;
-    }
-
-    .score-value {
-        font-size: 48px;
-        font-weight: bold;
-        color: var(--accent);
-        margin-bottom: 8px;
-    }
-
-    .score-band {
-        font-size: 20px;
-        color: var(--text-secondary);
-        margin-bottom: 12px;
-    }
-
-    .score-severity {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-
-    .score-severity.severity-critical { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-    .score-severity.severity-high { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-    .score-severity.severity-medium { background: rgba(234, 179, 8, 0.15); color: #eab308; }
-    .score-severity.severity-low { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-
-    .score-details {
-        background: var(--bg-panel);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 24px;
-    }
-
-    .detail-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--border-light);
-    }
-
-    .detail-item:last-child {
-        border-bottom: none;
-    }
-
-    .detail-item .label {
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-
-    .detail-item .value {
-        color: var(--text-primary);
-        font-weight: 600;
-    }
-
-    .action-buttons {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 30px;
-    }
-
-    .action-buttons .btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 20px;
-        font-weight: 500;
-    }
-
-    .findings-section {
-        background: var(--bg-panel);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 24px;
-    }
-
-    .findings-section h3 {
-        color: var(--text-primary);
-        margin: 0 0 20px 0;
-    }
-
-    .findings-list {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }
-
-    .finding-item {
-        border-left: 4px solid var(--border);
-        padding: 16px;
-        background: var(--bg-primary);
-        border-radius: 8px;
-    }
-
-    .finding-item.severity-critical { border-left-color: #ef4444; }
-    .finding-item.severity-high { border-left-color: #f59e0b; }
-    .finding-item.severity-medium { border-left-color: #eab308; }
-    .finding-item.severity-low { border-left-color: #22c55e; }
-
-    .finding-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-    }
-
-    .finding-title {
-        color: var(--text-primary);
-        font-weight: 600;
-        font-size: 16px;
-    }
-
-    .finding-severity {
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-
-    .finding-severity.severity-critical { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-    .finding-severity.severity-high { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-    .finding-severity.severity-medium { background: rgba(234, 179, 8, 0.15); color: #eab308; }
-    .finding-severity.severity-low { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-
-    .finding-description {
-        color: var(--text-secondary);
-        font-size: 14px;
-        margin-bottom: 8px;
-        line-height: 1.4;
-    }
-
-    .finding-action {
-        color: var(--accent);
-        font-size: 13px;
-        font-weight: 500;
-    }
-
-    .loading-state {
-        text-align: center;
-        padding: 40px;
-        color: var(--text-secondary);
-    }
-
-    .spinner {
-        width: 40px;
-        height: 40px;
-        border: 3px solid var(--border);
-        border-top: 3px solid var(--accent);
-        border-radius: 50%;
-        margin: 0 auto 16px;
-    }
-</style> -->
+<!-- Styles extracted to wwwroot/css/Governance.css 2026-05-11 (CLAUDE.md convention).
+     Imported via app.css @import "Governance.css". -->
 
 @code {
     private bool _isIndicative = false;
@@ -400,7 +196,7 @@
         if (connection == null)
         {
             Toast.ShowWarning("No server connection", "Please configure a server connection first.");
-            Navigation.NavigateTo("/servers");
+            Navigation.NavigateTo(RouteConstants.Servers);
             return;
         }
 
@@ -434,11 +230,11 @@
     private void RunFullAssessment()
     {
         // Navigate to full vulnerability assessment
-        Navigation.NavigateTo("/vulnerability-assessment");
+        Navigation.NavigateTo(RouteConstants.VulnerabilityAssessment);
     }
 
     private void NavigateToValidator()
     {
-        Navigation.NavigateTo("/check-validator");
+        Navigation.NavigateTo(RouteConstants.CheckValidator);
     }
 }

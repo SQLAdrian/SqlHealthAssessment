@@ -32,6 +32,10 @@
                         <i class="fa-solid fa-file-code"></i>
                     </button>
                     <button class="panel-maximize-btn" style="position:static;opacity:1;"
+                            @onclick="OpenInPlanExplorer" title="Open in Plan Explorer">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i>
+                    </button>
+                    <button class="panel-maximize-btn" style="position:static;opacity:1;"
                             @onclick="ShowOptimizationTips" title="Show Optimization Tips">
                         <i class="fa-solid fa-lightbulb"></i>
                     </button>
@@ -46,7 +50,7 @@
                             SQL
                         </button>
                     }
-                    <button class="panel-maximize-close" @onclick="Close" title="Close">✕</button>
+                    <button class="panel-maximize-close" @onclick="Close" title="Close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
 
@@ -317,9 +321,33 @@
 
     private async Task DownloadSqlplan()
     {
-        if (string.IsNullOrEmpty(PlanXml)) return;
         try { await JS.InvokeVoidAsync("queryPlanInteropV2.downloadSqlplan", PlanXml); }
-        catch { /* JS not available */ }
+        catch { Toast.ShowError("Download failed", "Could not save .sqlplan file"); }
+    }
+
+    private void OpenInPlanExplorer()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(PlanXml))
+            {
+                Toast.ShowWarning("No plan available", "Load a query plan first");
+                return;
+            }
+            var tmpDir = Path.GetTempPath();
+            var filePath = Path.Combine(tmpDir, $"SQLTriage_Plan_{DateTime.Now:yyyyMMdd_HHmmss}.sqlplan");
+            File.WriteAllText(filePath, PlanXml);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
+            Toast.ShowSuccess("Plan opened", "Plan Explorer should launch with the execution plan");
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Failed to open Plan Explorer", ex.Message);
+        }
     }
 
     private async Task SavePlan()

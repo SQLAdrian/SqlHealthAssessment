@@ -3,7 +3,7 @@
    does not satisfy the required permission. Keeps the page layout intact. *@
 
 <div class="rbac-denied">
-    <span class="rbac-denied-icon">🔒</span>
+    <span class="rbac-denied-icon"><i class="fa-solid fa-lock"></i></span>
     <span class="rbac-denied-text">
         @if (!string.IsNullOrEmpty(Message))
         {
@@ -16,21 +16,7 @@
     </span>
 </div>
 
-<!-- <style>
-    .rbac-denied {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        background: var(--bg-secondary, #1a1a2e);
-        border: 1px solid var(--border-warning, #664400);
-        border-radius: 4px;
-        color: var(--text-muted, #888);
-        font-size: 12px;
-        opacity: 0.85;
-    }
-    .rbac-denied-icon { font-size: 13px; }
-</style> -->
+<!-- Styles extracted to wwwroot/css/AccessDenied.css 2026-05-11 (CLAUDE.md convention). -->
 
 @code {
     /// <summary>Custom message to display. If empty, a generic message is shown.</summary>

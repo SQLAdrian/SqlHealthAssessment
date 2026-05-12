@@ -25,6 +25,8 @@ namespace SQLTriage.Data.Models
         /// </summary>
         public string InstanceName { get; set; } = string.Empty;
 
+        public double EffortHours { get; set; }
+
         /// <summary>
         /// Duration of the check execution in milliseconds.
         /// </summary>

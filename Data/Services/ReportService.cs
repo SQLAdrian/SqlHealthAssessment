@@ -31,17 +31,20 @@ namespace SQLTriage.Data.Services
         private readonly IFindingTranslator _translator;
         private readonly IErrorCatalog _errorCatalog;
         private readonly ILogger<ReportService> _logger;
+        private readonly GovernanceHistoryService? _history;
 
         public ReportService(
             IGovernanceService governance,
             IFindingTranslator translator,
             IErrorCatalog errorCatalog,
-            ILogger<ReportService> logger)
+            ILogger<ReportService> logger,
+            GovernanceHistoryService? history = null)
         {
             _governance = governance ?? throw new ArgumentNullException(nameof(governance));
             _translator = translator ?? throw new ArgumentNullException(nameof(translator));
             _errorCatalog = errorCatalog ?? throw new ArgumentNullException(nameof(errorCatalog));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _history = history;
         }
 
         public async Task<byte[]> GenerateGovernanceReportAsync(
@@ -51,6 +54,9 @@ namespace SQLTriage.Data.Services
         {
             var results = checkResults?.ToList() ?? new List<CheckResult>();
             var score = await _governance.ComputeFullAsync(results, cancellationToken).ConfigureAwait(false);
+
+            // Record to history for trending
+            try { _history?.RecordGovernanceScore(serverName, score); } catch { /* best-effort */ }
 
             // Translate top 10 failed findings
             var failedFindings = results.Where(r => !r.Passed).Take(10).ToList();

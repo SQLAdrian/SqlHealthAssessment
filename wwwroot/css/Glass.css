@@ -79,15 +79,27 @@ body.has-ambient-bg::before {
     content: "";
     position: fixed;
     inset: 0;
-    /* Lighter, neutral overlay — no longer a heavy dark gradient.
-     * Keeps the photo visible but knocks back saturation/brightness so
-     * it reads as ambience, not foreground. */
+    /* Heavy dim — ambient photo should read as a muted texture behind
+     * the audit content, never as a competing foreground. Sweep on
+     * 2026-05-11 found the photo bleeding through at ~60% perceived
+     * brightness across all 57 pages; this clamps it. Override per-page
+     * with `body.has-ambient-bg.bg-prominent::before` if a specific page
+     * wants the photo stronger (e.g. login, hero/marketing surfaces). */
     background:
-        linear-gradient(180deg, rgba(0, 0, 0, 0.75), rgba(0, 0, 0,0.85));
-    backdrop-filter: saturate(0.7) brightness(0.85);
-    -webkit-backdrop-filter: saturate(0.7) brightness(0.85);
+        linear-gradient(180deg, rgba(8, 12, 16, 0.92), rgba(8, 12, 16, 0.96));
+    backdrop-filter: saturate(0.4) brightness(0.55);
+    -webkit-backdrop-filter: saturate(0.4) brightness(0.55);
     pointer-events: none;
     z-index: -1;
+}
+
+/* Opt-in: pages that genuinely benefit from a more visible ambient photo.
+ * Add `<body class="bg-prominent">` (or toggle from a page) to override. */
+body.has-ambient-bg.bg-prominent::before {
+    background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.85));
+    backdrop-filter: saturate(0.7) brightness(0.85);
+    -webkit-backdrop-filter: saturate(0.7) brightness(0.85);
 }
 
 /* Belt-and-braces: app shell wrappers explicitly sit above the dim layer */
@@ -249,16 +261,23 @@ body.has-ambient-bg .feature-card {
     flex-wrap: nowrap;
 }
 
-.server-card .server-status { flex: 0 1 auto; min-width: 0; }
+.server-card .server-status { flex: 0 0 auto; }
 .server-card .server-actions { flex: 0 0 auto; gap: 6px; }
 .server-card .server-actions .btn-icon {
     background: transparent;
     border: 0;
     color: var(--text-secondary);
-    padding: 4px 6px;
+    padding: 4px 8px;
     border-radius: 4px;
     cursor: pointer;
+    font-size: 14px;
+    min-width: 30px;
+    text-align: center;
     transition: background 120ms, color 120ms;
+}
+.server-card .server-actions .btn-icon:hover {
+    background: var(--bg-hover);
+    color: var(--accent);
 }
 .server-card .server-actions .btn-icon:hover {
     background: var(--bg-hover);

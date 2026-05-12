@@ -100,9 +100,9 @@
                         <td style="font-size:11px; color:var(--text-secondary); white-space:nowrap;" title="Warning / Critical">
                             @if (row.ThresholdWarning.HasValue || row.ThresholdCritical.HasValue)
                             {
-                                <span style="color:#f59e0b;">@(row.ThresholdWarning?.ToString("G") ?? "—")</span>
+                                <span style="color:var(--orange);">@(row.ThresholdWarning?.ToString("G") ?? "—")</span>
                                 <span style="color:var(--text-secondary);"> / </span>
-                                <span style="color:#ef4444;">@(row.ThresholdCritical?.ToString("G") ?? "—")</span>
+                                <span style="color:var(--red);">@(row.ThresholdCritical?.ToString("G") ?? "—")</span>
                             }
                             else
                             {

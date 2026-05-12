@@ -55,7 +55,7 @@
 
     <div class="toolbar-group">
         <button class="toolbar-btn @(AutoRefresh ? "active" : "")" @onclick="ToggleAutoRefresh">
-            @(AutoRefresh ? "⏸ Pause" : "▶ Auto-Refresh")
+            @if (AutoRefresh) { <i class="fa-solid fa-pause"></i> <text>Pause</text> } else { <i class="fa-solid fa-play"></i> <text>Auto-Refresh</text> }
         </button>
         <button class="toolbar-btn" @onclick="() => OnRefreshRequested.InvokeAsync()">
             <i class="fa-solid fa-rotate"></i> Refresh
@@ -290,6 +290,6 @@
 
     private void OpenSettings()
     {
-        Navigation.NavigateTo("/settings");
+        Navigation.NavigateTo(RouteConstants.Settings);
     }
 }
