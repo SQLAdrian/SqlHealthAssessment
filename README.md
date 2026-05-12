@@ -1,219 +1,135 @@
-# SQLTriage — Agentless SQL Server Triage That Actually Holds Up at Scale
+# SQLTriage — SQL Server Audit & Compliance Platform
 
-**Diagnose production issues across 200+ SQL Server instances in seconds — agentless for live monitoring, optional SQLWATCH for history.**
+**500+ checks. Framework-mapped findings. Governance scores. Remediation costs. All in seconds — agentless.**
 
-**Latest**: v0.85.2 (17 Apr 2026) • [Download →](https://github.com/SQLAdrian/SQLTriage/releases)
-
-**Demo**: [60s SQLTriage Demo](docs/sql-server-dba-monitoring-demo.gif)
+**Latest**: v0.85.3 (May 2026) • [Download →](https://github.com/SQLAdrian/SQLTriage/releases)
 
 ---
 
 ## Screenshots
 
-| Live Sessions                                     | Wait Stats                                  | Query Plans                                         | Multi-Instance View                                   |
-| ------------------------------------------------- | ------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+| Audit Dashboard | Compliance Map | Query Plans | Multi-Instance |
+| --- | --- | --- | --- |
 | ![Sessions](docs/screenshots/4-live-sessions.jpg) | ![Waits](docs/screenshots/3-wait-state.jpg) | ![Plans](docs/screenshots/14-query-plan-viewer.jpg) | ![Overview](docs/screenshots/6-instance-overview.jpg) |
 
 Full gallery → `/docs/screenshots`
+
+---
+
+## What It Is
+
+SQLTriage is an **audit-first SQL Server compliance platform** for DBAs, DBA firms, and MSPs.
+
+Run it against a SQL Server. In seconds you get:
+
+- A **governance score** (Bronze → Silver → Gold → Platinum) backed by 500+ checks
+- **Framework gap analysis** — which findings map to NIST SP 800-53, CIS Controls v8, SOC 2, ISO 27001, STIG
+- A **remediation cost estimate** — effort hours × failed checks × your hourly rate
+- A **PDF report** the CIO can read — not a script output a DBA has to translate
+
+Live monitoring runs in the background while you work. It's the "while you wait" companion, not the main event.
+
+---
+
+## The 15-Minute Assessment
+
+1. Add the SQL Server — no agent, no install on the target
+2. Run Quick Assessment — 500+ checks execute in under 2 seconds
+3. Read the governance score — Security: 15/100. Backup: 0/100. Compliance gaps visible immediately
+4. Export the PDF — governance score, top findings, framework gaps, remediation estimate
+5. Present the proposal — the report IS the proposal
 
 ---
 
 ## Comparison
 
-| Capability                | SQLTriage             | sp_Blitz | SQLWATCH | dbwatch | SolarWinds DPA |
-| ------------------------- | --------------------- | -------- | -------- | ------- | -------------- |
-| Cost                      | Free                  | Free     | Free     | $$$     | $$$            |
-| Agents Required           | No (optional SQLWATCH)| No       | Yes      | No      | Yes            |
-| Interactive Plan Viewer   | Yes (V2)              | No       | No       | Yes     | Yes            |
-| Runs as Windows Service   | Yes                   | No       | Partial  | Yes     | Yes            |
-| Multi-Instance Visibility | Yes (designed for it) | No       | Yes      | Yes     | Yes            |
-| Historical Trending       | Short-term            | No       | Yes      | Yes     | Yes            |
-| Compliance Mapping        | Basic VA              | No       | No       | Yes     | Yes            |
-| Automated Maintenance     | No                    | No       | No       | Yes     | Yes            |
-| Threshold Alerts          | IQR-based             | No       | Basic    | Yes     | Yes            |
-| MSP/Multi-Tenant          | No                    | No       | No       | Yes     | Yes            |
+| Capability | SQLTriage | sp_Blitz | SQLWATCH | MS Vulnerability Assessment | SolarWinds DPA |
+| --- | --- | --- | --- | --- | --- |
+| Cost | Free | Free | Free | Free (SSMS only) | $$$ |
+| Agents Required | No | No | Yes | No | Yes |
+| Checks | 500+ | ~150 | — | ~100 | — |
+| Framework Mapping | NIST / CIS / SOC 2 / ISO / STIG | No | No | Partial | No |
+| Governance Score | Yes (maturity bands) | No | No | No | No |
+| Remediation Costing | Yes (effort × rate) | No | No | No | No |
+| PDF Report (CIO-facing) | Yes | No | No | No | Yes |
+| Interactive Plan Viewer | Yes (V2) | No | No | No | Yes |
+| Multi-Instance | Yes | No | Yes | No | Yes |
+| Historical Trending | Yes (short-term) | No | Yes | No | Yes |
+| Adaptive Alerting | Yes (IQR-based) | No | Basic | No | Yes |
+| Runs as Windows Service | Yes | No | Partial | No | Yes |
+| Single EXE | Yes | No | No | No | No |
 
-**Positioning**: SQLTriage = Fast, agentless triage across SQL estates. Script kits = Manual troubleshooting. SQLWATCH = History. Enterprise tools = Full observability.
-
----
-
-## Why This Exists
-
-Most SQL Server monitoring tools:
-
-* take hours (or days) to deploy
-* require agents on every server
-* overwhelm you with dashboards instead of answers
-
-At 2AM, none of that helps.
-
-When CPU spikes, blocking explodes, or queries go rogue — you don’t need more data.
-
-You need clarity.
+**Positioning**: SQLTriage = audit-first compliance evidence with live monitoring built in. sp_Blitz = one-time health check. SQLWATCH = continuous history. MS VA = basic vulnerability scan. Enterprise tools = full observability.
 
 ---
 
-## What It Does (In Practice)
+## Why Not Just Use sp_Blitz or MS Vulnerability Assessment?
 
-SQLTriage gives you immediate visibility into:
+| sp_Blitz / MS VA Output | SQLTriage Output |
+| --- | --- |
+| `Priority 1: Backups not performed in 7 days` | Security: 15/100 — NIST CP-9 gap, SOC 2 A1.2 non-compliant |
+| CLI output in SSMS | Branded PDF with governance score |
+| DBA reads it, fixes it, done | CIO reads it, schedules a budget meeting |
+| One-time finding | Ongoing compliance evidence with trend history |
+| Technical language | Audit-ready framework language |
 
-* Active sessions across all instances
-* Blocking chains and wait stats
-* Top resource-consuming queries
-* Execution plans you can drill into instantly
-
-No RDP hopping. No scripts. No guessing.
-
----
-
-![SQLTriage Demo](docs/sql-server-dba-monitoring-demo.gif)
+The CIO doesn't act on `sys.databases.last_backup > 7 days`. They act on NIST CP-9 and SOC 2 A1.2 non-compliance. SQLTriage makes that translation automatically — every check maps to the frameworks your auditors care about.
 
 ---
 
-## Real-World Performance
+## Key Capabilities
 
-Tested in production-like environments:
+### Audit & Compliance
+- 500+ checks across Security, Backup, Performance, Configuration, Reliability
+- Framework mapping: NIST SP 800-53 Rev 5, CIS Controls v8, SOC 2 (2017 TSC), ISO 27001:2022, STIG
+- Maturity roadmap: Bronze → Silver → Gold → Platinum progression with actionable gap list
+- Governance scoring with weighted categories and trend history
+- Compliance Map — visual heatmap of control coverage vs gaps
 
-* **200+ SQL Server instances monitored**
-* **~800MB RAM usage (service mode, full monitoring enabled)**
-* Sub-second dashboard refresh under load
-* No agents deployed to monitored servers
+### Remediation Intelligence
+- Per-check effort-hours weighting (tunable via Cost Tuner)
+- Estate-wide remediation cost estimate: effort × failed-check count × hourly rate
+- Remediation playbooks with prioritised action steps
+- CIO Dashboard: licensing cost analysis, TCO, remediation investment summary
 
-Built for DBAs managing large estates without enterprise overhead.
+### Live Monitoring (while you work)
+- Active sessions across all instances — no RDP, no scripts
+- Blocking chains, wait stats, top resource consumers
+- Adaptive alerting (IQR-based thresholds, low noise)
+- XEvent integration for deadlock analysis
 
----
+### Reporting
+- PDF export: governance score, top findings, framework gaps, remediation estimate
+- Executive summary suitable for CIO / board presentation
+- Scheduled report delivery
+- CSV / JSON export for integration with other tools
 
-## Why It Scales
-
-* Lightweight polling (targeted DMV queries only)
-* SQLite WAL cache for fast concurrent reads
-* Minimal retention focused on real-time triage
-* Efficient batching across multiple instances
-
-This is not a data warehouse.
-
-It is a **live diagnostic tool**.
-
----
-
-## Typical 2AM Scenario
-
-* CPU spike alert across multiple servers
-* Open SQLTriage
-* Instantly see blocking chains + top queries
-* Drill into execution plan
-* Identify root cause in minutes
-
-No scripts. No switching tools. No delay.
+### Deployment
+- Single EXE — no installation, no agent on monitored servers
+- Optional Windows service mode for always-on monitoring
+- Role-based access: Admin / Operator / Viewer
+- Azure Blob export for secure sharing
 
 ---
 
-## How It Compares
+## Real-World Scale
 
-| Capability                | SQLTriage             | Script Kits (sp_Blitz, etc.) | SQLWATCH | Enterprise Tools |
-| ------------------------- | --------------------- | ---------------------------- | -------- | ---------------- |
-| Setup Time                | Seconds (single EXE)  | Minutes (manual)             | Hours    | Hours–Days       |
-| Agents Required           | No                    | No                           | Yes      | Usually          |
-| Multi-Instance Visibility | Yes (designed for it) | No                           | Yes      | Yes              |
-| Real-Time Triage          | Strong focus          | Manual                       | Moderate | Strong           |
-| Historical Trending       | Short-term            | None                         | Yes      | Extensive        |
-| Alerting                  | Adaptive, low-noise   | None                         | Basic    | Advanced         |
-| Execution Plan Analysis   | Interactive           | None                         | Limited  | Advanced         |
-| Overhead                  | Very low              | Low                          | Moderate | Varies           |
-| Long-Term Warehousing     | No (by design)        | No                           | Yes      | Yes              |
+Tested in production environments:
 
-**Positioning:**
-
-* SQLTriage → Fast, agentless triage across SQL Server estates
-* Script kits → Manual, reactive troubleshooting
-* SQLWATCH → Continuous monitoring with history
-* Enterprise tools → Full observability platforms
-
-SQLTriage focuses on the moment that matters most:
-**when something breaks and you need answers immediately.**
-
----
-
-## Capabilities at a Glance
-
-| Area                 | What You Get                                  |
-| -------------------- | --------------------------------------------- |
-| Real-Time Visibility | Sessions, waits, queries across all instances |
-| Diagnosis            | Interactive execution plans + drill-down      |
-| Alerting             | Adaptive thresholds, low-noise design         |
-| Health Checks        | Built-in vulnerability & risk assessment      |
-| Deployment           | Single EXE, no agents, optional service mode  |
-
----
-
-## What You Can Do With It
-
-### 🔍 See What’s Happening Right Now
-
-* Live sessions across all instances
-* Blocking chains and wait stats
-* Top CPU, IO, and memory consumers
-
----
-
-### ⚡ Diagnose Problems Fast
-
-* Interactive execution plans with hover details
-* Drill from instance → query → plan in seconds
-* Identify root cause quickly
-
----
-
-### 🚨 Get Alerts Without the Noise
-
-* Adaptive thresholds (IQR-based, not fixed rules)
-* Reduced alert fatigue
-* Multi-channel notifications when it matters
-
----
-
-### 🧪 Run Health & Risk Checks
-
-* Built-in vulnerability assessment (CIS-aligned)
-* Instance health snapshots
-* Useful for audits and incident response
-
----
-
-### 🖥️ Run It Your Way
-
-* Single EXE — no installation required
-* Optional Windows service mode
-* Role-based access (Admin / Operator / Viewer)
-
----
-
-### ☁️ Export and Share
-
-* Export to PDF, CSV, JSON
-* Upload securely to Azure Blob Storage
-* Share diagnostics without direct server access
-
----
-
-## Screenshots
-
-Real UI from production usage:
-
-| Live Sessions                                     | Wait Stats                                  | Query Plans                                         | Multi-Instance View                                   |
-| ------------------------------------------------- | ------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
-| ![Sessions](docs/screenshots/4-live-sessions.jpg) | ![Waits](docs/screenshots/3-wait-state.jpg) | ![Plans](docs/screenshots/14-query-plan-viewer.jpg) | ![Overview](docs/screenshots/6-instance-overview.jpg) |
-
-Full gallery → `/docs/screenshots`
+- **200+ SQL Server instances monitored**
+- **500+ checks in under 2 seconds**
+- ~800MB RAM (service mode, full monitoring enabled)
+- No agents deployed to monitored servers
 
 ---
 
 ## Quick Start (60 seconds)
 
-1. Download SQLTriage.exe
-2. Run it (no install required)
+1. Download `SQLTriage.exe`
+2. Run it — no installation required
 3. Add your SQL Server instances
-4. Start diagnosing immediately
+4. Run Quick Assessment
+5. Export PDF
 
 Full guide → `QUICKSTART.md`
 
@@ -221,10 +137,10 @@ Full guide → `QUICKSTART.md`
 
 ## Architecture
 
-* Agentless polling model (configurable intervals)
-* Local SQLite (WAL) cache for fast reads
-* Lightweight instance batching
-* Designed for low overhead in large environments
+- Agentless polling (targeted DMV queries, configurable intervals)
+- Local SQLite WAL cache for fast concurrent reads
+- Blazor Hybrid WPF (.NET 8) — single-exe desktop, optional Blazor Server mode
+- Lightweight batching across large instance estates
 
 ---
 
@@ -232,19 +148,17 @@ Full guide → `QUICKSTART.md`
 
 SQLTriage is not designed for:
 
-* Long-term performance warehousing
-* Cross-platform database monitoring (Oracle, MySQL, etc.)
-* Full enterprise observability platforms
-
-For those scenarios, enterprise tools may be more appropriate.
+- Long-term performance data warehousing
+- Cross-platform monitoring (Oracle, MySQL, PostgreSQL)
+- Full enterprise observability (use enterprise tools for that)
 
 ---
 
 ## Built With
 
-.NET 8, Blazor, SQLite, Serilog, ApexCharts, Radzen, Azure SDK
+.NET 8 · Blazor · WPF · SQLite · Serilog · ApexCharts · Radzen · QuestPDF · Azure SDK
 
-Powered by community tooling including sp_Blitz, SQLWATCH, and performance scripts from the SQL Server community.
+Standing on the shoulders of: sp_Blitz (Brent Ozar), SQLWATCH (Marcin Gminski), sp_triage (sqldba.org), PerformanceMonitor (Erik Darling), MadeiraToolbox (Eitan Blumin), TigerToolbox (Pedro Lopes), Ola Hallengren Maintenance Solution.
 
 ---
 
