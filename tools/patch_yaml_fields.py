@@ -33,6 +33,7 @@ FIELDS = [
     ("CheckNr", None),
     ("RedoYAMLCheck", "0"),
     ("UpdateCheckFileName", "0"),
+    ("score_weight", "1"),
 ]
 
 # Regex: matches a top-level YAML key at the start of a line.

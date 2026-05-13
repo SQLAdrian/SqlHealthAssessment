@@ -12,9 +12,35 @@ using SQLTriage.Data.Models;
 namespace SQLTriage.Data.Services
 {
     /// <summary>
-    /// Computes governance scores from check results with configurable weights,
-    /// per-finding caps, and per-category ceilings. Supports both indicative
-    /// (quick-check) and full (vulnerability-assessment) scoring modes.
+    /// Computes governance scores using a weighted-ratio model.
+    ///
+    /// SCORING MODEL (read this before changing anything):
+    ///   Each check has two tuning fields that flow from YAML → sql-checks.json → CheckResult:
+    ///     ScoreWeight  (YAML: score_weight, default 1, range 1-25) — importance of this check
+    ///     EffortHours  (YAML: effort_hours, default 0)             — remediation effort
+    ///
+    ///   check_value  = max(ScoreWeight, 1) × max(EffortHours, 1.0)
+    ///   Score        = Σ(check_value for PASS or INFO) / Σ(check_value for non-SKIP) × 100
+    ///
+    /// RULES:
+    ///   - INFO result  → counts as PASS  (informational, not a finding)
+    ///   - SKIP result  → excluded from BOTH numerator and denominator
+    ///                    (check not applicable to this server; neither penalises nor rewards)
+    ///   - WARN/FAIL    → excluded from numerator only (pulls score down)
+    ///   - IsBad        → costing only; does NOT affect pass/fail classification here
+    ///   - EffortHours=0→ treated as 1 for score calc so zero-effort checks still count
+    ///
+    /// CATEGORY SCORE:
+    ///   Same ratio computed per governance dimension (Security/Performance/Reliability/Cost/Compliance).
+    ///   Overall = weighted average of category ratios using GovernanceWeights.Categories weights.
+    ///
+    /// TUNING:
+    ///   Set score_weight in the YAML, regenerate sql-checks.json via
+    ///   research_output/LLM1_deepseek/regenerate_checks_json.py.
+    ///   Effort-hour overrides can be set per-check in /remediation-tuner (writes to
+    ///   Config/sql-check-weights-override.json, read by RemediationWeightStore).
+    ///   NOTE: RemediationWeightStore overrides are used for COSTING only; to affect
+    ///   the governance score, update EffortHours in the YAML and regenerate.
     /// </summary>
     public interface IGovernanceService
     {
@@ -34,10 +60,9 @@ namespace SQLTriage.Data.Services
     }
 
     /// <summary>
-    /// Governance scoring implementation with three-level clamping:
-    /// 1. Per-finding score capped at <see cref="GovernanceWeights.Caps.PerFinding"/>.
-    /// 2. Per-category sum capped at <see cref="GovernanceWeights.Caps.PerCategory"/> × weight.
-    /// 3. Overall sum capped at <see cref="GovernanceWeights.Caps.Overall"/>.
+    /// Governance scoring implementation. See <see cref="IGovernanceService"/> for the
+    /// full model description. GovernanceWeights (appsettings / Config/) controls only
+    /// category weights and band thresholds — the per-check tuning lives in the YAML corpus.
     /// </summary>
     public sealed class GovernanceService : IGovernanceService
     {
@@ -84,56 +109,71 @@ namespace SQLTriage.Data.Services
                 };
             }
 
-            // 1. Compute base score per finding
-            var findingScores = new List<(string Dimension, double Score)>();
-            foreach (var r in list)
-            {
-                var dim = MapCategory(r.Category, weights.CategoryMapping);
-                var baseScore = GetBaseScore(r);
-                var capped = Math.Min(baseScore, weights.Caps.PerFinding);
-                findingScores.Add((dim, r.Passed ? capped : 0.0));
-            }
+            // Weighted ratio model:
+            //   check_value = score_weight × max(effort_hours, 1)
+            //   Score = Σ(check_value for PASS/INFO) / Σ(check_value for non-SKIP) × 100
+            //
+            // INFO counts as pass. SKIP is excluded from both sides.
+            // IsBad and EffortHours=0 do not affect fail/pass classification — only costing.
 
-            // 2. Aggregate per category with cap
+            static double CheckValue(CheckResult r) =>
+                Math.Max(r.ScoreWeight, 1) * Math.Max(r.EffortHours, 1.0);
+
+            static bool IsSkip(CheckResult r) =>
+                r.Message.StartsWith("SKIP", StringComparison.OrdinalIgnoreCase) ||
+                r.ErrorMessage != null;
+
+            static bool CountsAsPass(CheckResult r) =>
+                r.Passed || string.Equals(r.Severity, "INFO", StringComparison.OrdinalIgnoreCase);
+
+            // 1. Per-finding values (exclude SKIPs)
+            var scorable = list.Where(r => !IsSkip(r)).ToList();
+
+            // 2. Per-category weighted ratio
             var categoryScores = new Dictionary<string, CategoryScore>(StringComparer.OrdinalIgnoreCase);
             foreach (var dim in weights.Categories.Keys)
             {
-                var sum = findingScores.Where(f => f.Dimension.Equals(dim, StringComparison.OrdinalIgnoreCase)).Sum(f => f.Score);
-                var weight = weights.Categories[dim];
-                var ceiling = weights.Caps.PerCategory * weight;
-                var capped = Math.Min(sum, ceiling);
+                var inDim = scorable.Where(r => MapCategory(r.Category, weights.CategoryMapping)
+                                .Equals(dim, StringComparison.OrdinalIgnoreCase)).ToList();
+                var denominator = inDim.Sum(CheckValue);
+                var numerator   = inDim.Where(CountsAsPass).Sum(CheckValue);
+                var ratio       = denominator > 0 ? (numerator / denominator) * 100.0 : 100.0;
+                var catWeight   = weights.Categories[dim];
 
                 categoryScores[dim] = new CategoryScore
                 {
-                    Dimension = dim,
-                    Weight = weight,
-                    RawScore = sum,
-                    CappedScore = capped,
-                    Ceiling = ceiling,
-                    FindingCount = findingScores.Count(f => f.Dimension.Equals(dim, StringComparison.OrdinalIgnoreCase)),
-                    PassedCount = list.Count(r => MapCategory(r.Category, weights.CategoryMapping).Equals(dim, StringComparison.OrdinalIgnoreCase) && r.Passed)
+                    Dimension    = dim,
+                    Weight       = catWeight,
+                    RawScore     = ratio,
+                    CappedScore  = ratio * catWeight,
+                    Ceiling      = 100.0 * catWeight,
+                    FindingCount = inDim.Count,
+                    PassedCount  = inDim.Count(CountsAsPass)
                 };
             }
 
-            // 3. Overall score with cap
-            var overallRaw = categoryScores.Values.Sum(c => c.CappedScore);
-            var overall = Math.Min(overallRaw, weights.Caps.Overall);
+            // 3. Overall = weighted average of category ratios
+            var totalWeight = categoryScores.Values.Sum(c => c.Weight);
+            var overall = totalWeight > 0
+                ? categoryScores.Values.Sum(c => c.RawScore * c.Weight) / totalWeight
+                : 0.0;
+            overall = Math.Round(Math.Clamp(overall, 0.0, 100.0), 1);
 
             var band = GetBand(overall, weights.Bands);
 
             _logger.LogInformation(
-                "Governance score computed: Overall={Overall:F1}, Band={Band}, IsIndicative={IsIndicative}, Findings={Count}",
-                overall, band, isIndicative, list.Count);
+                "Governance score computed: Overall={Overall:F1}, Band={Band}, IsIndicative={IsIndicative}, Scorable={Scorable}/{Total}",
+                overall, band, isIndicative, scorable.Count, list.Count);
 
             return new GovernanceScore
             {
-                IsIndicative = isIndicative,
-                Overall = overall,
-                Band = band,
-                Categories = categoryScores,
-                TotalFindings = list.Count,
-                PassedFindings = list.Count(r => r.Passed),
-                FailedFindings = list.Count(r => !r.Passed)
+                IsIndicative   = isIndicative,
+                Overall        = overall,
+                Band           = band,
+                Categories     = categoryScores,
+                TotalFindings  = list.Count,
+                PassedFindings = scorable.Count(CountsAsPass),
+                FailedFindings = scorable.Count(r => !CountsAsPass(r))
             };
         }
 
@@ -151,24 +191,6 @@ namespace SQLTriage.Data.Services
                 return checkCategory;
 
             return "Reliability";
-        }
-
-        /// <summary>
-        /// Derive a base score from the check result severity.
-        /// These values are chosen so that 3 critical findings spread across
-        /// high-weight categories respect the ≤60 indicative ceiling under default caps.
-        /// </summary>
-        private static double GetBaseScore(CheckResult result)
-        {
-            return result.Severity?.ToUpperInvariant() switch
-            {
-                "CRITICAL" => 20.0,
-                "HIGH" => 15.0,
-                "MEDIUM" => 10.0,
-                "LOW" => 5.0,
-                "INFO" => 2.0,
-                _ => 10.0
-            };
         }
 
         private static ScoreBand GetBand(double overall, Dictionary<string, int[]> bands)

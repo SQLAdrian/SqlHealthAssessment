@@ -13,7 +13,7 @@
 
 <PageTitle>Server Documentation - SQLTriage</PageTitle>
 
-@if (!Rbac.HasPermission(UserState.Role, "manage_servers"))
+@if (!RbacService.HasPermission(UserState.Role, "manage_servers"))
 {
     <div style="padding: 32px;">
         <AccessDenied RequiredRole="Admin" Message="Server documentation is restricted to Admin users." />

@@ -250,6 +250,8 @@ namespace SQLTriage.Data
                 Severity = check.Severity,
                 ExpectedValue = check.ExpectedValue,
                 EffortHours = check.EffortHours,
+                IsBad = check.IsBad,
+                ScoreWeight = check.ScoreWeight > 0 ? check.ScoreWeight : 1,
                 InstanceName = serverName,
                 RecommendedAction = check.RecommendedAction,
                 Description = check.Description

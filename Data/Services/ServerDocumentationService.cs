@@ -68,7 +68,7 @@ public class ServerDocumentationService
             {
                 using var sqlConn = new SqlConnection(connStr);
                 sqlConn.Open();
-                var serverConn = new ServerConnection(sqlConn) { StatementTimeout = DefaultTimeoutSeconds };
+                var serverConn = new Microsoft.SqlServer.Management.Common.ServerConnection(sqlConn) { StatementTimeout = DefaultTimeoutSeconds };
                 var smo = new SmoServer(serverConn);
                 TuneInitFields(smo);
 
@@ -280,7 +280,7 @@ public class ServerDocumentationService
         try
         {
             s.Rows.Add(new DocRow { Label = "Server name",       Value = smo.Information.NetName ?? "" });
-            s.Rows.Add(new DocRow { Label = "Instance",          Value = smo.Information.InstanceName ?? "(default)" });
+            s.Rows.Add(new DocRow { Label = "Instance",          Value = smo.InstanceName ?? "(default)" });
             s.Rows.Add(new DocRow { Label = "Version",           Value = smo.Information.VersionString ?? "" });
             s.Rows.Add(new DocRow { Label = "Edition",           Value = smo.Information.Edition ?? "" });
             s.Rows.Add(new DocRow { Label = "Product level",     Value = smo.Information.ProductLevel ?? "" });
@@ -428,13 +428,17 @@ public class ServerDocumentationService
                 {
                     foreach (Smo.AvailabilityReplica r in ag.AvailabilityReplicas)
                     {
+                        var connMode = r.ConnectionModeInSecondaryRole.ToString();
+                        var readable = connMode.Contains("All", StringComparison.OrdinalIgnoreCase) ? "Yes"
+                                     : connMode.Contains("Read", StringComparison.OrdinalIgnoreCase) ? "Read-only"
+                                     : "No";
                         replicaRows.Add(new()
                         {
                             r.Name ?? "",
                             r.AvailabilityMode.ToString(),
                             r.FailoverMode.ToString(),
-                            r.ReadableSecondary.ToString(),
-                            r.ConnectionModeInSecondaryRole.ToString(),
+                            readable,
+                            connMode,
                         });
                     }
                 }

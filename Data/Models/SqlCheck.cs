@@ -33,6 +33,12 @@ namespace SQLTriage.Data.Models
         [JsonPropertyName("effortHours")]
         public double EffortHours { get; set; }
 
+        [JsonPropertyName("isBad")]
+        public bool IsBad { get; set; }
+
+        [JsonPropertyName("scoreWeight")]
+        public int ScoreWeight { get; set; } = 1;
+
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;
 

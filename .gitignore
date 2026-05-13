@@ -19,6 +19,8 @@ Config/panel-metrics.json
 # Scratch / draft CSS and notes
 unique-styles.txt
 wwwroot/css/appreworked.css
+BPScripts/
+SQLTriage_fixed.csproj
 
 # Sibling repo for RAG corpus building — local-only, never push from this repo
 SQLTriage-RAG-Builder/

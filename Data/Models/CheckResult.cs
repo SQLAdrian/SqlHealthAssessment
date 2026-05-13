@@ -26,6 +26,8 @@ namespace SQLTriage.Data.Models
         public string InstanceName { get; set; } = string.Empty;
 
         public double EffortHours { get; set; }
+        public bool IsBad { get; set; }
+        public int ScoreWeight { get; set; } = 1;
 
         /// <summary>
         /// Duration of the check execution in milliseconds.
