@@ -11,6 +11,7 @@ Config/panel-metrics.json
 
 # Local backup files (timestamped) — never commit
 *.backup-*
+*.backup_*
 
 # Local working area (session notes, video asset stashes, scratch)
 .workfiles/
@@ -432,7 +433,6 @@ Runtimes/
 MEMORY_OPTIMIZATION_RECOMMENDATIONS.md
 dashboard-config - Copy.json
 sp_blitz*local*.rdl
-/.claude
 /.continue
 $null
 
@@ -495,11 +495,16 @@ LiveMonitor/.claude/*
 wwwroot/css - Copy/
 corpus/
 SESSION_SUMMARY.md
-.ignore/
+.ignore
 
 LLM1_deepseek/
 !research_output\LLM1_deepseek
 .playwright-mcp/
 docs/llm1_deepseek_recovery.md
-.kilo/
 pallet_photo_2215.png
+.claude/
+.kilo/
+.kilocode/
+.ignore/archive/Architecture_Recommendations.md
+.ignore/archive/CODE_QUALITY_FINDINGS_2026-04-18.md
+.ignore/archive/DASHBOARD_ANALYSIS.md
