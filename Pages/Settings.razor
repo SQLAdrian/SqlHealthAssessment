@@ -1,4 +1,4 @@
-<!--/* In the name of God, the Merciful, the Compassionate */-->
+﻿<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/settings"
 
 @using Microsoft.Extensions.Configuration
@@ -39,7 +39,47 @@
 <div class="settings-page">
     <h2>Settings</h2>
 
-    <div style="display: flex; flex-direction: column; gap: 16px;">
+    <div class="settings-layout">
+        <nav class="settings-rail" aria-label="Settings sections">
+            <div class="settings-rail-group">
+                <div class="settings-rail-heading">General</div>
+                <a href="#set-reporting">Reporting</a>
+                <a href="#set-refresh">Refresh</a>
+                <a href="#set-configuration">Configuration</a>
+                <a href="#set-updates">Updates</a>
+                <a href="#set-modes">Modes</a>
+                <a href="#set-appearance">Appearance</a>
+            </div>
+            <div class="settings-rail-group">
+                <div class="settings-rail-heading">Performance</div>
+                <a href="#set-performance">Performance</a>
+                <a href="#set-cache">Cache Management</a>
+                <a href="#set-perf-diag">Performance Diagnostics</a>
+                <a href="#set-orchestrator">Orchestrator Tuning</a>
+                <a href="#set-alerts">Alert Baseline</a>
+            </div>
+            <div class="settings-rail-group">
+                <div class="settings-rail-heading">Diagnostics</div>
+                <a href="#set-quick-check">Quick Check</a>
+                <a href="#set-diagnostics">Diagnostics</a>
+                <a href="#set-query-plan">Query Plan Viewer</a>
+                <a href="#set-default-dashboard">Default Dashboard</a>
+            </div>
+            <div class="settings-rail-group">
+                <div class="settings-rail-heading">Security &amp; Access</div>
+                <a href="#set-credentials">Server Credentials</a>
+                <a href="#set-access-control">Access Control</a>
+                <a href="#set-notifications">Notifications</a>
+            </div>
+            <div class="settings-rail-group">
+                <div class="settings-rail-heading">Integrations</div>
+                <a href="#set-azure-blob">Azure Blob Export</a>
+                <a href="#set-auto-export">Auto-Export Reports</a>
+                <a href="#set-preview">Preview Features</a>
+            </div>
+        </nav>
+
+        <div class="settings-content" style="display: flex; flex-direction: column; gap: 16px;">
 
 
 <!-- Should use this connection
@@ -92,7 +132,7 @@
     </div>
     -->
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-reporting">
         <h3>Reporting</h3>
         <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="showRemediationCost" checked="@_showRemediationCost"
@@ -150,10 +190,19 @@
                            placeholder="e.g. 1-2 weeks, 3-5 days" style="width: 320px;" />
                 </div>
             }
+
+            <div class="settings-field">
+                <label>Monthly OPEX per server (NZD) <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">(3-year TCO line)</span></label>
+                <input type="number" min="0" max="10000" step="50"
+                       value="@_monthlyOpexPerServerNZD" @oninput="OnMonthlyOpexChanged" style="width: 320px;" />
+                <small style="display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px;">
+                    Running costs + ops management + support per server. Default NZ$400. Drop toward NZ$150–250 for shared-infrastructure shops where DBA cost amortises.
+                </small>
+            </div>
         }
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-refresh">
         <h3>Refresh</h3>
         <div class="settings-field">
             <label>Auto-Refresh Interval (seconds)</label>
@@ -172,7 +221,7 @@
         </div>
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-performance">
         <h3>Performance</h3>
 
         <div class="settings-field">
@@ -264,7 +313,7 @@
 
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-configuration">
         <h3>Configuration</h3>
         <div class="settings-field">
             <label>Environment</label>
@@ -286,7 +335,7 @@
         }
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-updates">
         <h3>Updates</h3>
         <div class="settings-field">
             <label>Proxy URL <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">(optional — leave blank to use system proxy)</span></label>
@@ -337,7 +386,7 @@
         }
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-quick-check">
         <h3>Quick Check</h3>
         <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="showDiagnosticPane" checked="@ShowDiagnosticPane"
@@ -348,7 +397,7 @@
         </div>
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-modes">
         <h3>Modes</h3>
         <div class="settings-field" style="display: flex; align-items: center; gap: 10px;">
             <button type="button" @onclick="OnNoPantsModeChanged"
@@ -373,7 +422,7 @@
         </div>
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-diagnostics">
         <h3>Diagnostics</h3>
         <div class="settings-field" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
             <button class="settings-btn" style="color:var(--red,#cc3333);"
@@ -398,7 +447,7 @@
         </div>
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-query-plan">
         <h3>Query Plan Viewer</h3>
         <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="useV2PlanIcons" checked="@_useV2PlanIcons"
@@ -409,7 +458,7 @@
         </div>
     </div>
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-default-dashboard">
         <h3>Default Dashboard</h3>
         <div class="settings-field">
             <label>Dashboard to Display First</label>
@@ -429,7 +478,7 @@
     </div>
 
     <!-- Appearance Section -->
-     <div class="settings-group">
+     <div class="settings-group" id="set-appearance">
          <h3>Appearance</h3>
          <div class="settings-field">
              <label>UI Theme</label>
@@ -461,7 +510,7 @@
 
     </div>@* ── end 2-column grid ── *@
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-cache">
         <h3>Cache Management</h3>
         <div class="settings-field">
             <label>sqlite Dashboard Cache</label>
@@ -517,7 +566,7 @@
     </div>
 
 
-    <div class="settings-group">
+    <div class="settings-group" id="set-credentials">
         <h3>Server Credentials</h3>
         <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
             Export all server connections (including SQL auth passwords) to a portable <code>.lmcreds</code> file
@@ -575,7 +624,7 @@
     </div>
 
     <!-- Azure Blob Export Section -->
-    <div class="settings-group">
+    <div class="settings-group" id="set-azure-blob">
         <h3>Azure Blob Export</h3>
 
         <div style="margin-bottom: 12px; padding: 10px 14px; background: var(--bg-hover); border-radius: 6px; border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -685,7 +734,7 @@
     </div>
 
     <!-- Auto-Export Settings -->
-    <div class="settings-group">
+    <div class="settings-group" id="set-auto-export">
         <h3>Auto-Export Reports</h3>
         <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
             Automatically save reports to the <code>./output/</code> folder when checks complete.
@@ -737,7 +786,7 @@
     </div>
 
     <!-- Alert Baseline -->
-    <div class="settings-group">
+    <div class="settings-group" id="set-alerts">
         <h3>Alert Baseline</h3>
         <div class="settings-row">
             <label class="settings-label">
@@ -767,7 +816,7 @@
     </div>
 
     <!-- Notifications -->
-    <div class="settings-group">
+    <div class="settings-group" id="set-notifications">
         <h3>Notifications</h3>
         <div class="settings-row">
             <label class="settings-label">Show "What's New" on update</label>
@@ -779,7 +828,7 @@
     </div>
 
     <!-- RBAC / Access Control -->
-    <div class="settings-group">
+    <div class="settings-group" id="set-access-control">
         <h3>Access Control <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(Server Mode only)</span></h3>
 
         <div class="settings-row">
@@ -950,7 +999,7 @@
     </div>
 
     <!-- Preview Features -->
-    <div class="settings-group">
+    <div class="settings-group" id="set-preview">
         <h3>Preview Features</h3>
         <div class="settings-row">
             <label class="settings-label">
@@ -969,7 +1018,7 @@
     </div>
 
     <!-- Performance Diagnostics -->
-    <div class="settings-group">
+    <div class="settings-group" id="set-perf-diag">
         <h3>Performance Diagnostics</h3>
         <div class="settings-row">
             <label class="settings-label">
@@ -989,7 +1038,7 @@
     @if (_enablePerfInspector)
     {
         <!-- Orchestrator tuning — only knobs that actually take effect (on app restart) -->
-        <div class="settings-group">
+        <div class="settings-group" id="set-orchestrator">
             <h3>Orchestrator Tuning <span style="font-size:11px;color:var(--orange);margin-left:6px;">(restart required)</span></h3>
             <p style="color:var(--text-muted);font-size:12px;margin-bottom:16px;">
                 Backend query orchestrator concurrency. Changes here are written to <code>appsettings.json</code>
@@ -1014,6 +1063,8 @@
         </div>
     }
 
+        </div> @* /.settings-content *@
+    </div> @* /.settings-layout *@
 </div>
 
 @* ── SQLDBA.ORG Consent Modal ── *@

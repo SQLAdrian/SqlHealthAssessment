@@ -18,6 +18,12 @@
 }
 
 <div class="remediation-tuner">
+@if (_loading)
+{
+    <PageLoadingSpinner Message="Loading remediation tuner..." />
+}
+else
+{
     <div class="remediation-tuner-header">
         <div>
             <h2><i class="fa-solid fa-sliders"></i> Remediation Cost Tuner</h2>
@@ -112,12 +118,14 @@
             </div>
         }
     </div>
+}
 </div>
 
 @code {
     private const string AllowedMachine = "MSI";
     private const string AllowedUser    = "afsul";
     private bool _authorised;
+    private bool _loading = true;
 
     private List<TunerRow> _allChecks = new();
     private List<TunerRow> _filteredRows = new();
@@ -134,37 +142,44 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _authorised = string.Equals(Environment.MachineName, AllowedMachine, StringComparison.OrdinalIgnoreCase)
-                   && string.Equals(Environment.UserName,    AllowedUser,    StringComparison.OrdinalIgnoreCase);
-        if (!_authorised) return;
-
-        _hourlyRate = UserSettings.GetRemediationHourlyRate();
-
-        if (CheckRepo.GetAllChecks().Count == 0)
-            await CheckRepo.LoadChecksAsync();
-
-        // Build estate failure map: checkId -> total fail count across all server runs.
-        var failureMap = BuildFailureMap();
-        _serversWithRuns = RunStore.GetServersWithRuns().Count;
-
-        var checks = CheckRepo.GetAllChecks();
-        foreach (var c in checks)
+        try
         {
-            var ovr = Weights.GetOverride(c.Id);
-            var failed = failureMap.TryGetValue(c.Id, out var f) ? f : 0;
-            _allChecks.Add(new TunerRow
-            {
-                Id = c.Id,
-                Name = c.Name,
-                Severity = c.Severity ?? "Warning",
-                Baseline = c.EffortHours,
-                Override = ovr,
-                TimesFailed = failed,
-            });
-        }
+            _authorised = string.Equals(Environment.MachineName, AllowedMachine, StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(Environment.UserName,    AllowedUser,    StringComparison.OrdinalIgnoreCase);
+            if (!_authorised) return;
 
-        RecomputeAggregates();
-        ApplyFilter();
+            _hourlyRate = UserSettings.GetRemediationHourlyRate();
+
+            if (CheckRepo.GetAllChecks().Count == 0)
+                await CheckRepo.LoadChecksAsync();
+
+            // Build estate failure map: checkId -> total fail count across all server runs.
+            var failureMap = BuildFailureMap();
+            _serversWithRuns = RunStore.GetServersWithRuns().Count;
+
+            var checks = CheckRepo.GetAllChecks();
+            foreach (var c in checks)
+            {
+                var ovr = Weights.GetOverride(c.Id);
+                var failed = failureMap.TryGetValue(c.Id, out var f) ? f : 0;
+                _allChecks.Add(new TunerRow
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Severity = c.Severity ?? "Warning",
+                    Baseline = c.EffortHours,
+                    Override = ovr,
+                    TimesFailed = failed,
+                });
+            }
+
+            RecomputeAggregates();
+            ApplyFilter();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private Dictionary<string, int> BuildFailureMap()

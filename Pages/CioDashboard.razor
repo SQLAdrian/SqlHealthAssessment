@@ -15,6 +15,7 @@
 @inject ToastService Toast
 @inject UserSettingsService UserSettings
 @inject LicensingEstimator LicensingEstimator
+@inject RemediationWeightStore WeightStore
 
 <PageTitle>CIO Dashboard - SQLTriage</PageTitle>
 
@@ -464,20 +465,12 @@
     private Dictionary<string, ExecutiveHealthScore> _serverScores = new(StringComparer.OrdinalIgnoreCase);
     private List<CheckResult> _topRisks = new();
     private List<CategoryScore> _orderedCategories = new();
-    // ─── Pricing model ──────────────────────────────────────────────
-    // Anchor: 5 servers, score 50, no compliance => ~$20k midpoint.
-    // Validated against historical NZ DBA engagement quotes 2026-05-11.
+    // ─── Pricing model (2026-05-13: replaces reverse-from-governance) ──
+    // Project cost = Σ(EffortHours_override_or_baseline × HourlyRate) × ComplianceFactor.
+    // Per-check effort tuned in /remediation-tuner → Config/sql-check-weights-override.json.
+    // Compliance tier still multiplies (audit overhead, change mgmt, evidence).
     // Methodology: .claude/docs/pricing-methodology.md
-    private const double BaseRatePerServer = 12_000.0;
     private const double RangeSpread = 0.35;          // ±35% around midpoint (per pricing-methodology.md)
-    private const double ServerFactorCoeff = 1.27;    // sqrt(n) × this
-    private const double ServerFactorCap = 7.0;       // cap for n>30
-
-    private static double ServerFactor(int n) =>
-        n <= 0 ? 0 : Math.Min(ServerFactorCap, Math.Sqrt(n) * ServerFactorCoeff);
-
-    private static double SeverityFactor(double score) =>
-        Math.Pow(Math.Max(0, (100.0 - score)) / 100.0, 2);
 
     private static double ComplianceFactor(string tier) => tier switch
     {
@@ -508,24 +501,23 @@
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .Count();
 
-    private double _projectMidpoint
-    {
-        get
-        {
-            var score = _governanceScore?.Overall ?? 0;
-            var sev = SeverityFactor(score);
-            var srv = ServerFactor(_serversInLastRun);
-            var comp = ComplianceFactor(UserSettings.GetComplianceTier());
-            return BaseRatePerServer * sev * srv * comp;
-        }
-    }
+    // Σ(effort × times-failed) — each row in _failed is one (server, check) failure,
+    // so summing per-row effort is mathematically equivalent to grouping by CheckId
+    // and multiplying by TimesFailed. WeightStore returns override if set, else baseline.
+    private double _remediationLabourHours =>
+        _failed.Sum(r => WeightStore.GetEffort(r.CheckId, r.EffortHours));
+
+    private double _remediationLabourCost => _remediationLabourHours * HourlyRate;
+
+    private double _projectMidpoint =>
+        _remediationLabourCost * ComplianceFactor(UserSettings.GetComplianceTier());
 
     private double _costLow  => _projectMidpoint * (1 - RangeSpread);
     private double _costHigh => _projectMidpoint * (1 + RangeSpread);
 
-    // Raw technical labour line — independent of project model, uses CSV-driven EffortHours
-    private double _rawLabourHours => _failed.Sum(r => Math.Max(1.0, r.EffortHours));
-    private double _rawLabourCost  => _rawLabourHours * HourlyRate;
+    // Raw technical labour line — same labour figure without the compliance multiplier
+    private double _rawLabourHours => _remediationLabourHours;
+    private double _rawLabourCost  => _remediationLabourCost;
 
     private int _pricedCheckCount => _failed.Count();
     private DateTime _lastUpdated = DateTime.Now;

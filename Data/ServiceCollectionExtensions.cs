@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Serilog.Core;
 using Serilog.Events;
 using SQLTriage.Data.Caching;
@@ -72,12 +73,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFindingTranslator, FindingTranslator>();
         services.AddSingleton<IGovernanceService, GovernanceService>();
         services.Configure<GovernanceWeights>(configuration);
-        services.AddSingleton<GovernanceHistoryService>();
+        services.AddSingleton<GovernanceHistoryService>(sp =>
+            new GovernanceHistoryService(sp.GetRequiredService<ILogger<GovernanceHistoryService>>(), retentionDays: 90));
         services.AddSingleton<RemediationCostEstimator>();
         services.AddSingleton<LicensingEstimator>();
         services.AddSingleton<BuildCatalogueService>();
         services.AddSingleton<QuickCheckResultStore>();
         services.AddSingleton<RemediationWeightStore>();
+        services.AddSingleton<ServerDocumentationService>();
+        services.AddSingleton<WaitStatsHistoryService>();
+        services.AddSingleton<WaitStatsService>();
         services.AddSingleton<IErrorCatalog, ErrorCatalog>();
         services.AddSingleton<IReportService, ReportService>();
         services.AddSingleton<IQuickCheckRunner, QuickCheckRunner>();

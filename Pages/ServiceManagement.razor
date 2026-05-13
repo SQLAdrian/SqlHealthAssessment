@@ -36,7 +36,7 @@
 
         @if (_status == null)
         {
-            <p style="font-size: 13px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> Checking service status...</p>
+            <PageLoadingSpinner Message="Checking service status..." MinHeight="120" />
         }
         else if (!_status.Value.Installed)
         {

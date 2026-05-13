@@ -50,6 +50,7 @@ namespace SQLTriage.Data.Services
         private CancellationTokenSource? _cts;
         private Thread? _acceptThread;
         private CoreWebView2? _webView;
+        private IServiceProvider? _services;
         private string _token = "";
         private int _port;
         private string? _tokenFilePath;
@@ -58,6 +59,9 @@ namespace SQLTriage.Data.Services
         {
             _logger = logger;
         }
+
+        /// <summary>Hand the DI provider to the bridge so /state can resolve services.</summary>
+        public void SetServiceProvider(IServiceProvider services) => _services = services;
 
         public bool IsRunning => _listener?.IsListening == true;
         public int Port => _port;
@@ -173,6 +177,7 @@ namespace SQLTriage.Data.Services
                     case "/eval":       await HandleEvalAsync(ctx); break;
                     case "/print-pdf":  await HandlePrintPdfAsync(ctx); break;
                     case "/render-pdf": await HandleRenderPdfAsync(ctx); break;
+                    case "/state":      await HandleStateAsync(ctx); break;
                     case "/shutdown":   await HandleShutdownAsync(ctx); break;
                     default:            await WriteJsonAsync(ctx, 404, new { error = "unknown endpoint", path }); break;
                 }
@@ -185,6 +190,98 @@ namespace SQLTriage.Data.Services
         }
 
         // ── Endpoints ───────────────────────────────────────────────────────
+
+        // GET/POST /state — structured snapshot of in-process diagnostic data
+        // (memory + caches + servers + routes). Lets external diagnostic
+        // sessions (e.g. Claude via DevBridge) read app state without JS eval.
+        private async Task HandleStateAsync(System.Net.HttpListenerContext ctx)
+        {
+            try
+            {
+                var proc = System.Diagnostics.Process.GetCurrentProcess();
+                var gc = System.GC.GetGCMemoryInfo();
+                var genInfo = gc.GenerationInfo.ToArray();
+                var gens = new object[genInfo.Length];
+                for (var i = 0; i < genInfo.Length; i++)
+                {
+                    gens[i] = new
+                    {
+                        gen = i switch { 3 => "LOH", 4 => "POH", _ => "Gen " + i },
+                        sizeAfter = genInfo[i].SizeAfterBytes,
+                        fragmentedAfter = genInfo[i].FragmentationAfterBytes,
+                    };
+                }
+
+                int? hotTierCount = null;
+                int panelMetrics = 0;
+                int weightOverrides = 0;
+                int serverCount = 0;
+                int connectedServers = 0;
+                if (_services != null)
+                {
+                    var memCache = _services.GetService(typeof(Microsoft.Extensions.Caching.Memory.IMemoryCache))
+                                  as Microsoft.Extensions.Caching.Memory.IMemoryCache;
+                    if (memCache is Microsoft.Extensions.Caching.Memory.MemoryCache mc) hotTierCount = mc.Count;
+
+                    var pm = _services.GetService(typeof(PanelMetricsService)) as PanelMetricsService;
+                    if (pm != null) panelMetrics = pm.GetAll().Count;
+
+                    var ws = _services.GetService(typeof(RemediationWeightStore)) as RemediationWeightStore;
+                    if (ws != null) weightOverrides = ws.OverrideCount;
+
+                    var conn = _services.GetService(typeof(SQLTriage.Data.ServerConnectionManager))
+                              as SQLTriage.Data.ServerConnectionManager;
+                    if (conn != null)
+                    {
+                        var connections = conn.GetConnections();
+                        serverCount = connections.Count;
+                        connectedServers = connections.Count(c => c.IsConnected);
+                    }
+                }
+
+                await WriteJsonAsync(ctx, 200, new
+                {
+                    timestamp = DateTime.UtcNow.ToString("o"),
+                    process = new
+                    {
+                        workingSet = proc.WorkingSet64,
+                        privateBytes = proc.PrivateMemorySize64,
+                        virtualBytes = proc.VirtualMemorySize64,
+                        threadCount = proc.Threads.Count,
+                        handleCount = proc.HandleCount,
+                        uptimeSeconds = (int)(DateTime.Now - proc.StartTime).TotalSeconds,
+                    },
+                    gc = new
+                    {
+                        totalCommitted = gc.TotalCommittedBytes,
+                        heapSize = gc.HeapSizeBytes,
+                        fragmented = gc.FragmentedBytes,
+                        promoted = gc.PromotedBytes,
+                        gen0Collections = System.GC.CollectionCount(0),
+                        gen1Collections = System.GC.CollectionCount(1),
+                        gen2Collections = System.GC.CollectionCount(2),
+                        generations = gens,
+                    },
+                    caches = new
+                    {
+                        hotTierItems = hotTierCount,
+                        panelMetrics,
+                        weightOverrides,
+                    },
+                    servers = new
+                    {
+                        total = serverCount,
+                        connected = connectedServers,
+                    },
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "DevBridge /state failed");
+                await WriteJsonAsync(ctx, 500, new { error = ex.Message });
+            }
+        }
+
 
         private async Task HandlePingAsync(HttpListenerContext ctx)
         {

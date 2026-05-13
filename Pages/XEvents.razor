@@ -94,9 +94,7 @@
 
                 @if (IsLoading)
                 {
-                    <div class="loading">
-                        <p>Loading sessions...</p>
-                    </div>
+                    <PageLoadingSpinner Message="Loading sessions..." />
                 }
                 else if (Sessions.Any())
                 {

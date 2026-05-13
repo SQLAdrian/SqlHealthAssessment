@@ -41,6 +41,9 @@
             <NavLink href="@RouteConstants.Servers" class="nav-link" title="Ctrl+8">
                 <span class="nav-icon"><i class="fa-solid fa-server"></i></span><span class="nav-link-text"> Servers</span>
             </NavLink>
+            <NavLink href="@RouteConstants.ServerDocs" class="nav-link">
+                <span class="nav-icon"><i class="fa-solid fa-file-lines"></i></span><span class="nav-link-text"> Server Docs</span>
+            </NavLink>
             <NavLink href="@RouteConstants.QuickCheck" class="nav-link" title="Ctrl+0">
                 <span class="nav-icon"><i class="fa-solid fa-bolt-lightning"></i></span><span class="nav-link-text"> Quick Assessment</span>
             </NavLink>
@@ -213,6 +216,9 @@
             </NavLink>
             <NavLink href="@RouteConstants.AuditLogViewer" class="nav-link">
                 <span class="nav-icon"><i class="fa-solid fa-clipboard-list"></i></span><span class="nav-link-text"> Audit Log</span>
+            </NavLink>
+            <NavLink href="@RouteConstants.MemoryProfile" class="nav-link" title="In-app memory breakdown">
+                <span class="nav-icon"><i class="fa-solid fa-microchip"></i></span><span class="nav-link-text"> Memory Profile</span>
             </NavLink>
             @if (UserSettings.GetEnablePerfInspector())
             {

@@ -1,4 +1,7 @@
 /* In the name of God, the Merciful, the Compassionate */
+@import "CheckTrend.css";
+@import "ServerDocs.css";
+@import "MemoryProfile.css";
 @import "PerfInspector.css";
 @import "DynamicDashboard.css";
 @import "NavMenu.css";

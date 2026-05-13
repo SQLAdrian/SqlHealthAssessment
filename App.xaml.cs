@@ -153,7 +153,9 @@ namespace SQLTriage
                 if (eq > 0 && int.TryParse(devBridgeArg.AsSpan(eq + 1), out var p) && p > 0 && p < 65536)
                     port = p;
 
-                Services.GetService<Data.Services.DevBridgeService>()?.Start(port);
+                var devBridge = Services.GetService<Data.Services.DevBridgeService>();
+                devBridge?.SetServiceProvider(Services);
+                devBridge?.Start(port);
             }
 
             // Wire up debug logging toggle â€” switches Serilog level at runtime without restart
@@ -241,6 +243,10 @@ Log.Information("[STARTUP] AlertBaselineService starting async...");
             // Start connection health monitor (30s ping per enabled server)
             Services.GetService<Data.Services.ConnectionHealthService>()?.Start();
             Log.Information("[STARTUP] ConnectionHealthService started");
+
+            // Start wait-stats background snapshot loop (30s cadence per server)
+            Services.GetService<Data.Services.WaitStatsService>()?.StartBackgroundLoop();
+            Log.Information("[STARTUP] WaitStatsService background loop started");
 
             // Apply persisted perf inspector toggle so it's active before any dashboard loads
             var perfInspector = Services.GetService<PerformanceInspectorService>();

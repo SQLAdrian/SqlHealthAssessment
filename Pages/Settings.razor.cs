@@ -146,6 +146,7 @@ private string? TestResult;
     private string _complianceTier = "None";
     private string _consultancyName = "";
     private string _engagementDuration = "";
+    private double _monthlyOpexPerServerNZD = 400.0;
 
     private void LoadSettings()
     {
@@ -166,6 +167,7 @@ private string? TestResult;
         _complianceTier = UserSettings.GetComplianceTier();
         _consultancyName = UserSettings.GetConsultancyName();
         _engagementDuration = UserSettings.GetEngagementDuration();
+        _monthlyOpexPerServerNZD = UserSettings.GetMonthlyOpexPerServerNZD();
     }
 
     private void ToggleShowRemediationCost(ChangeEventArgs e)
@@ -197,6 +199,15 @@ private string? TestResult;
     {
         _engagementDuration = e.Value?.ToString() ?? "";
         UserSettings.SetEngagementDuration(_engagementDuration);
+    }
+
+    private void OnMonthlyOpexChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var opex))
+        {
+            _monthlyOpexPerServerNZD = opex;
+            UserSettings.SetMonthlyOpexPerServerNZD(opex);
+        }
     }
 
     protected override void OnInitialized()

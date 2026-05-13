@@ -62,6 +62,8 @@ public static class RouteConstants
     // ── Administration ──
     public const string Settings           = "/settings";
     public const string Servers            = "/servers";
+    public const string ServerDocs         = "/server-docs";
+    public const string MemoryProfile      = "/memory-profile";
     public const string Alerts             = "/alerts";
     public const string AlertsNoc          = "/alerts-noc";
     public const string AlertingConfig     = "/alerting-config";
@@ -81,6 +83,7 @@ public static class RouteConstants
     public const string EditAuditScripts   = "/editauditscripts";
     public const string UnifiedChecks      = "/unified-checks";
     public const string Checks             = "/checks";
+    public static string CheckTrend(string checkId) => $"/checks/trend/{checkId}";
 
     // ── Remediation ──
     public const string Playbooks          = "/playbooks";

@@ -463,6 +463,51 @@ namespace SQLTriage.Data.Services
         }
 
         /// <summary>
+        /// Return the recorded history for a single check across all servers, ordered by time.
+        /// Used by the per-check trend drill-down (/checks/trend/{checkId}).
+        /// </summary>
+        public List<CheckHistoryPoint> GetCheckHistory(string checkId, int days = 90)
+        {
+            var points = new List<CheckHistoryPoint>();
+            if (string.IsNullOrWhiteSpace(checkId)) return points;
+            try
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT server_name, recorded_at, passed, actual_value, severity, check_name, category
+                    FROM check_results
+                    WHERE check_id = @cid
+                      AND recorded_at >= datetime('now', @days)
+                    ORDER BY recorded_at ASC;
+                ";
+                cmd.Parameters.AddWithValue("@cid", checkId);
+                cmd.Parameters.AddWithValue("@days", $"-{days} days");
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    points.Add(new CheckHistoryPoint
+                    {
+                        Server      = reader.GetString(0),
+                        RecordedAt  = reader.GetString(1),
+                        Passed      = reader.GetInt32(2) == 1,
+                        ActualValue = reader.IsDBNull(3) ? (double?)null : reader.GetDouble(3),
+                        Severity    = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                        CheckName   = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                        Category    = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read check history for {CheckId}", checkId);
+            }
+            return points;
+        }
+
+        /// <summary>
         /// Verify the integrity chain. Returns list of any broken links.
         /// </summary>
         public List<IntegrityViolation> VerifyIntegrityChain()
@@ -613,6 +658,17 @@ namespace SQLTriage.Data.Services
         public double MinScore { get; set; }
         public double MaxScore { get; set; }
         public int Samples { get; set; }
+    }
+
+    public class CheckHistoryPoint
+    {
+        public string Server { get; set; } = "";
+        public string RecordedAt { get; set; } = "";
+        public bool Passed { get; set; }
+        public double? ActualValue { get; set; }
+        public string Severity { get; set; } = "";
+        public string CheckName { get; set; } = "";
+        public string Category { get; set; } = "";
     }
 
     public class IntegrityViolation

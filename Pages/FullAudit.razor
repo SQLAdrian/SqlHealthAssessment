@@ -201,7 +201,7 @@
                         <button class="btn btn-primary" @onclick="RunSelectedScripts" disabled="@(_isRunning || _selectedScriptIds.Count == 0)">
                             @(_isRunning ? "Running..." : "Run Selected (" + _selectedScriptIds.Count + ")")
                         </button>
-                        <a href="RouteConstants.EditAuditScripts" class="btn btn-secondary" title="Edit script configurations">
+                        <a href="@RouteConstants.EditAuditScripts" class="btn btn-secondary" title="Edit script configurations">
                             <i class="fa-solid fa-file-pen" style="margin-right: 4px;"></i> Edit Scripts
                         </a>
                     </div>

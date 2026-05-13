@@ -172,7 +172,7 @@
     @* Loading indicator *@
     @if (IsLoading && AllSessions.Count == 0)
     {
-        <div class="chart-empty">Loading sessions...</div>
+        <PageLoadingSpinner Message="Loading sessions..." />
     }
 
     @* Main content area *@
@@ -424,6 +424,7 @@
          try
          {
              _refreshing = true;
+             if (AllSessions.Count == 0) IsLoading = true;
              ErrorMessage = null;
 
              // Fetch all sessions with current filters (server-side) into background variable
@@ -459,6 +460,7 @@
          finally
          {
              _refreshing = false;
+             IsLoading = false;
              _loadLock.Release();
          }
      }

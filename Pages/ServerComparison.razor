@@ -41,10 +41,7 @@
 
     @if (_isLoading)
     {
-        <div class="comp-loading">
-            <div class="cio-spinner"></div>
-            <p>Loading metrics...</p>
-        </div>
+        <PageLoadingSpinner Message="Loading metrics..." />
     }
     else if (_selectedServers.Count < 2)
     {

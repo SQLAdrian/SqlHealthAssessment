@@ -714,6 +714,130 @@
           "actionColumnMode": null,
           "dataGridColumns": null,
           "dataGridColumnColors": null
+        },
+        {
+          "id": "instance.disk_space",
+          "title": "Disk Space",
+          "description": "Database file space usage and growth trends. Monitors disk capacity and alerts on low space conditions.",
+          "enabled": true,
+          "source": "",
+          "panelType": "BarGauge",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 29,
+            "spanColumns": true
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "SELECT DISTINCT\n    vs.volume_mount_point AS [Label]\n    ,100-CAST((CAST(vs.available_bytes AS FLOAT) / CAST(vs.total_bytes AS FLOAT)) * 100 AS DECIMAL(18,2)) [Value]\n    , '%' AS [Unit]\n    , @@SERVERNAME [Instance]\nFROM sys.master_files AS f\nCROSS APPLY sys.dm_os_volume_stats(f.database_id, f.file_id) AS vs;",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": "Disk Space Used %",
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [
+            {
+              "operator": ">=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": ">=",
+              "value": 80,
+              "color": "#ff9800",
+              "label": "Warning"
+            },
+            {
+              "operator": ">=",
+              "value": 90,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "instance.checks_detail",
+          "title": "Check Details",
+          "description": "Detailed SQLWATCH check results with failure reasons and recommended actions.",
+          "enabled": false,
+          "source": "",
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 39,
+            "spanColumns": true
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\r\nSELECT\r\n    d.snapshot_time,\r\n    c.check_name,\r\n    c.check_description,\r\n    d.check_value,\r\n    d.check_status,\r\n    d.check_exec_time_ms,\r\n    d.sql_instance\r\nFROM dbo.sqlwatch_logger_check d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN dbo.sqlwatch_meta_check c WITH (NOLOCK)\r\n    ON c.sql_instance = d.sql_instance\r\n    AND c.check_id = d.check_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\r\nORDER BY d.snapshot_time DESC",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "SQLWATCH",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "instance.ks2",
+          "title": "More Key Stats",
+          "description": "Secondary health indicator tracking critical performance thresholds.",
+          "enabled": false,
+          "source": "",
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 49,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\nselect TOP 1\n 'Connection Memory (MB)'\t\t= CONVERT(INT,avg(case when mpc.counter_name = 'Connection Memory (KB)' then pc.[cntr_value_calculated]/1024\telse null end))\n ,'Optimizer Memory (MB)'\t\t= CONVERT(INT,avg(case when mpc.counter_name = 'Optimizer Memory (KB)' then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,'SQL Cache Memory (MB)'\t\t= CONVERT(INT,avg(case when mpc.counter_name = 'SQL Cache Memory (KB)' then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,'Total Server Memory (MB)'\t= CONVERT(INT,avg(case when mpc.counter_name = 'Total Server Memory (KB)' then pc.[cntr_value_calculated]/1024\telse null end))\n ,'Stolen Server Memory (MB)'\t= CONVERT(INT,avg(case when mpc.counter_name = 'Stolen Server Memory (KB)' then pc.[cntr_value_calculated]/1024 else null end))\n ,'Target Server Memory (MB)'\t= CONVERT(INT,avg(case when mpc.counter_name = 'Target Server Memory (KB)' then pc.[cntr_value_calculated]/1024 else null end))\nfrom [dbo].[sqlwatch_logger_perf_os_performance_counters] pc\n\ninner join [dbo].[sqlwatch_meta_performance_counter] mpc\non pc.sql_instance = mpc.sql_instance\nand pc.performance_counter_id = mpc.performance_counter_id\n\nWHERE 1=1--snapshot_time BETWEEN @TimeFrom AND @TimeTo\n\nand pc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\nand mpc.counter_name in ('CPU usage %'\n ,'Batch Requests/sec'\n ,'Logins/sec'\n ,'Transactions/sec'\n ,'User Connections'\n ,'SQL Compilations/sec'\n ,'Bytes Sent to Replica/sec'\n ,'Bytes Received from Replica/sec'\n ,'Processor Time %'\n ,'% Processor Time'\n \n ,'Connection Memory (KB)'\n ,'Optimizer Memory (KB)'\n ,'SQL Cache Memory (KB)'\n ,'Total Server Memory (KB)'\n ,'Stolen Server Memory (KB)'\n , 'Target Server Memory (KB)'\n )\n\ngroup by pc.snapshot_time\norder by pc.snapshot_time DESC",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
         }
       ]
     },
@@ -1325,477 +1449,6 @@
           "dataGridColumnColors": null
         },
         {
-          "id": "sessions.top",
-          "title": "Top Usage Queries",
-          "description": "Top active sessions by CPU, reads, or duration. Shows session_id, login, database, and current query text.",
-          "enabled": true,
-          "source": "",
-          "panelType": "DataGrid",
-          "chartType": "Line",
-          "height": 500,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 1,
-            "order": 12,
-            "spanColumns": true
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "SELECT\n    TMP.Category,\n    [Source],\n    DB_NAME(st.dbid) [DB],\n    TMP.[Total Elapsed Time in S],\n    TMP.[Total Execution Count],\n    TMP.[Total CPU Time in S],\n    TMP.[Total Logical Reads],\n    TMP.[Total Logical Writes],\n    TMP.[Total CLR Time],\n    TMP.[Number of Statements],\n    TMP.[Last Execution Time],\n    TMP.[Plan Handle],\n    st.text AS [Query],\n    qp.query_plan AS [Plan]\nFROM (\n    SELECT * FROM (\n        SELECT TOP 15 'worst I/O' [Category],\n            'Query' [Source],\n            CAST(SUM(s.total_elapsed_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total Elapsed Time in S],\n            SUM(s.execution_count) AS [Total Execution Count],\n            CAST(SUM(s.total_worker_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total CPU Time in S],\n            SUM(s.total_logical_reads) AS [Total Logical Reads],\n            SUM(s.total_logical_writes) AS [Total Logical Writes],\n            SUM(s.total_clr_time) AS [Total CLR Time],\n            COUNT(1) AS [Number of Statements],\n            MAX(s.last_execution_time) AS [Last Execution Time],\n            s.plan_handle AS [Plan Handle]\n        FROM sys.dm_exec_query_stats s WITH (NOLOCK)\n        GROUP BY s.plan_handle ORDER BY SUM(s.total_logical_reads + s.total_logical_writes) DESC\n    ) QS\n    UNION ALL\n        SELECT * FROM (\n        SELECT TOP 15 'worst I/O' [Category],\n            'Procedure' [Source],\n            CAST(SUM(s.total_elapsed_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total Elapsed Time in S],\n            SUM(s.execution_count) AS [Total Execution Count],\n            CAST(SUM(s.total_worker_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total CPU Time in S],\n            SUM(s.total_logical_reads) AS [Total Logical Reads],\n            SUM(s.total_logical_writes) AS [Total Logical Writes],\n            SUM(0e) AS [Total CLR Time],\n            COUNT(1) AS [Number of Statements],\n            MAX(s.last_execution_time) AS [Last Execution Time],\n            s.plan_handle AS [Plan Handle]\n        FROM sys.dm_exec_procedure_stats s WITH (NOLOCK)\n        GROUP BY s.plan_handle ORDER BY SUM(s.total_logical_reads + s.total_logical_writes) DESC\n    ) PS\n) TMP\nOUTER APPLY sys.dm_exec_sql_text(TMP.[Plan Handle]) AS st\nOUTER APPLY sys.dm_exec_query_plan(TMP.[Plan Handle]) AS qp\nORDER BY Category, [Total Logical Reads] DESC\nOPTION (MAXDOP 1)\n\n",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": true,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "instance.disk_space",
-          "title": "Disk Space",
-          "description": "Database file space usage and growth trends. Monitors disk capacity and alerts on low space conditions.",
-          "enabled": true,
-          "source": "",
-          "panelType": "BarGauge",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 13,
-            "spanColumns": true
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "SELECT DISTINCT\n    vs.volume_mount_point AS [Label]\n    ,100-CAST((CAST(vs.available_bytes AS FLOAT) / CAST(vs.total_bytes AS FLOAT)) * 100 AS DECIMAL(18,2)) [Value]\n    , '%' AS [Unit]\n    , @@SERVERNAME [Instance]\nFROM sys.master_files AS f\nCROSS APPLY sys.dm_os_volume_stats(f.database_id, f.file_id) AS vs;",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": "Disk Space Used %",
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [
-            {
-              "operator": ">=",
-              "value": 0,
-              "color": "#1b5e20",
-              "label": "Normal"
-            },
-            {
-              "operator": ">=",
-              "value": 80,
-              "color": "#ff9800",
-              "label": "Warning"
-            },
-            {
-              "operator": ">=",
-              "value": 90,
-              "color": "#f44336",
-              "label": "Critical"
-            }
-          ],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "instance.checks_detail",
-          "title": "Check Details",
-          "description": "Detailed SQLWATCH check results with failure reasons and recommended actions.",
-          "enabled": false,
-          "source": "",
-          "panelType": "DataGrid",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 1,
-            "order": 14,
-            "spanColumns": true
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\r\nSELECT\r\n    d.snapshot_time,\r\n    c.check_name,\r\n    c.check_description,\r\n    d.check_value,\r\n    d.check_status,\r\n    d.check_exec_time_ms,\r\n    d.sql_instance\r\nFROM dbo.sqlwatch_logger_check d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nINNER JOIN dbo.sqlwatch_meta_check c WITH (NOLOCK)\r\n    ON c.sql_instance = d.sql_instance\r\n    AND c.check_id = d.check_id\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\r\nORDER BY d.snapshot_time DESC",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "SQLWATCH",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repo.database_count",
-          "title": "Databases",
-          "description": null,
-          "enabled": true,
-          "source": "",
-          "panelType": "StatCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 15,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\r\nSELECT COUNT(*) AS [Value]\r\nFROM sys.databases WITH (NOLOCK)\r\nWHERE state_desc = 'ONLINE'",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "",
-          "valueFormat": "N0",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repo.process_memory",
-          "title": "SQL Memory",
-          "description": null,
-          "enabled": false,
-          "source": "",
-          "panelType": "StatCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 16,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    'Memory %' AS [Series],\r\n    d.memory_utilization_percentage AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_process_memory d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\r\nORDER BY h.report_time DESC",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "%",
-          "statThresholdKey": "SQL Memory",
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [
-            {
-              "operator": ">=",
-              "value": 0,
-              "color": "#1b5e20",
-              "label": "Normal"
-            },
-            {
-              "operator": ">=",
-              "value": 85,
-              "color": "#ff9800",
-              "label": "Warning"
-            },
-            {
-              "operator": ">=",
-              "value": 95,
-              "color": "#f44336",
-              "label": "Critical"
-            }
-          ],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repo.schedulers",
-          "title": "Pending Queue",
-          "description": null,
-          "enabled": false,
-          "source": "",
-          "panelType": "StatCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 17,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    'Pending' AS [Series],\r\n    d.work_queue_count AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\r\nORDER BY h.report_time DESC",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": "Pending",
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [
-            {
-              "operator": ">=",
-              "value": 0,
-              "color": "#1b5e20",
-              "label": "Normal"
-            },
-            {
-              "operator": ">=",
-              "value": 1,
-              "color": "#f44336",
-              "label": "Critical"
-            }
-          ],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repo.instance_count",
-          "title": "Instances",
-          "description": null,
-          "enabled": false,
-          "source": "",
-          "panelType": "StatCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 18,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\r\nSELECT COUNT(DISTINCT sql_instance) AS [Value]\r\nFROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)\r\nWHERE repo_collector_is_active = 1",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repo.details",
-          "title": "Server Details",
-          "description": "",
-          "enabled": false,
-          "source": "",
-          "panelType": "TextCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 19,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "SELECT \n    @@SERVERNAME AS ServerName,\n    --SERVERPROPERTY('Edition') AS Edition,\n    CASE ServerProperty('EngineEdition')\n \nWHEN 1  THEN 'Desktop'\nWHEN 2  THEN \n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Busi%' THEN 'Business Intelligence'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    ELSE 'Standard'-- (For Standard, Standard Developer, Web, and Business Intelligence.)\n    END\nWHEN 3  THEN \n-- (For Enterprise, Enterprise Developer, Developer, and Evaluation editions.)\n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Evaluation%' THEN 'Evaluation'\n    ELSE 'Enterprise'\n    END\n\nWHEN 4  THEN 'Express'-- (For Express, Express with Tools, and Express with Advanced Services)\nWHEN 5  THEN 'SQL Database'\nWHEN 6  THEN 'Azure Synapse'-- Analytics\nWHEN 8  THEN 'Azure SQL MI'\nWHEN 9  THEN 'Azure SQL Edge'-- (For all editions of Azure SQL Edge)\nWHEN 11 THEN  'Azure Synapse serverless'-- SQL pool, or Microsoft Fabric\nWHEN 12 THEN  'Microsoft Fabric'-- SQL database in Microsoft Fabric.\n    END AS Edition\n    ,\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS VirtualCPUs,\n    (SELECT socket_count FROM sys.dm_os_sys_info) AS Sockets,\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN 'VM' ELSE 'Physical' END AS VMType,\n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS MemoryGB,\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS SqlAllocated,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS UsedBySql,\n    '' AS MemoryState,\n    CASE \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '8%'    THEN '2000'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '9%'    THEN '2005'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.0%' THEN '2008'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.5%' THEN '2008 R2'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '11%'   THEN '2012'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '12%'   THEN '2014'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '13%'   THEN '2016'     \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '14%'   THEN '2017' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '15%'   THEN '2019' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '16%'   THEN '2022' \n     ELSE 'unknown'\n  END \n    --@@VERSION \n    AS [Version],\n    SERVERPROPERTY('ProductVersion') AS BuildNr,\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS OS,\n    CASE WHEN SERVERPROPERTY('IsHadrEnabled') = 1 THEN 'Yes' ELSE 'No' END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = 'sa' AND is_disabled = 0) THEN 'Enabled' ELSE 'Disabled' END AS SA,\n    '' AS [Level]",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repository.text_server_CPU_OS",
-          "title": "Server CPU and OS",
-          "description": "",
-          "enabled": true,
-          "source": "",
-          "panelType": "TextCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 20,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\nSELECT \n    \n    (SELECT socket_count FROM sys.dm_os_sys_info) AS [CPU Sockets],\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS [Virtual CPU Count],\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN 'VM' ELSE 'Physical' END AS [System Type],\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS [Operating System]",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repository.text_servername",
-          "title": "Server",
-          "description": "",
-          "enabled": true,
-          "source": "",
-          "panelType": "TextCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 21,
-            "spanColumns": true
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\nSELECT \nServerName\n, Edition\n, '$ ' + CONVERT(VARCHAR(25),CONVERT(INT,CONVERT(MONEY,\nCASE Edition \nWHEN 'Business Intelligence'\nTHEN 5434  * VirtualCPUs / 2\n  \nWHEN 'Standard'\nTHEN 5434  * VirtualCPUs / 2/ 3.832\n  \nWHEN 'Enterprise'\nTHEN 5434  * VirtualCPUs / 2\nELSE  0\nEND)))\n[licensingRetailUSD]\n, [Version]\n, BuildNr\n, HADR\n, SA [sa state]\n\nFROM (\nSELECT \n    @@SERVERNAME AS ServerName,\n    --SERVERPROPERTY('Edition') AS Edition,\n    CASE ServerProperty('EngineEdition')\n \nWHEN 1  THEN 'Desktop'\nWHEN 2  THEN \n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Busi%' THEN 'Business Intelligence'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    ELSE 'Standard'-- (For Standard, Standard Developer, Web, and Business Intelligence.)\n    END\nWHEN 3  THEN \n-- (For Enterprise, Enterprise Developer, Developer, and Evaluation editions.)\n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Evaluation%' THEN 'Evaluation'\n    ELSE 'Enterprise'\n    END\n\nWHEN 4  THEN 'Express'-- (For Express, Express with Tools, and Express with Advanced Services)\nWHEN 5  THEN 'SQL Database'\nWHEN 6  THEN 'Azure Synapse'-- Analytics\nWHEN 8  THEN 'Azure SQL MI'\nWHEN 9  THEN 'Azure SQL Edge'-- (For all editions of Azure SQL Edge)\nWHEN 11 THEN  'Azure Synapse serverless'-- SQL pool, or Microsoft Fabric\nWHEN 12 THEN  'Microsoft Fabric'-- SQL database in Microsoft Fabric.\n    END AS Edition\n    \n\n    ,\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS VirtualCPUs,\n    (SELECT socket_count FROM sys.dm_os_sys_info) AS Sockets,\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN 'VM' ELSE 'Physical' END AS VMType,\n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS MemoryGB,\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS SqlAllocated,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS UsedBySql,\n    '' AS MemoryState,\n    CASE \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '8%'    THEN '2000'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '9%'    THEN '2005'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.0%' THEN '2008'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.5%' THEN '2008 R2'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '11%'   THEN '2012'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '12%'   THEN '2014'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '13%'   THEN '2016'     \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '14%'   THEN '2017' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '15%'   THEN '2019' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '16%'   THEN '2022' \n     ELSE 'unknown'\n  END \n    --@@VERSION \n    AS [Version],\n    SERVERPROPERTY('ProductVersion') AS BuildNr,\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS OS,\n    CASE WHEN SERVERPROPERTY('IsHadrEnabled') = 1 THEN 'Yes' ELSE 'No' END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = 'sa' AND is_disabled = 0) THEN 'Enabled' ELSE 'Disabled' END AS SA,\n    '' AS [Level]\n) T1\n   \n\n ",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 5,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "instance.ks2",
-          "title": "More Key Stats",
-          "description": "Secondary health indicator tracking critical performance thresholds.",
-          "enabled": false,
-          "source": "",
-          "panelType": "TextCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 22,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\nselect TOP 1\n 'Connection Memory (MB)'\t\t= CONVERT(INT,avg(case when mpc.counter_name = 'Connection Memory (KB)' then pc.[cntr_value_calculated]/1024\telse null end))\n ,'Optimizer Memory (MB)'\t\t= CONVERT(INT,avg(case when mpc.counter_name = 'Optimizer Memory (KB)' then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,'SQL Cache Memory (MB)'\t\t= CONVERT(INT,avg(case when mpc.counter_name = 'SQL Cache Memory (KB)' then pc.[cntr_value_calculated]/1024\t\telse null end))\n ,'Total Server Memory (MB)'\t= CONVERT(INT,avg(case when mpc.counter_name = 'Total Server Memory (KB)' then pc.[cntr_value_calculated]/1024\telse null end))\n ,'Stolen Server Memory (MB)'\t= CONVERT(INT,avg(case when mpc.counter_name = 'Stolen Server Memory (KB)' then pc.[cntr_value_calculated]/1024 else null end))\n ,'Target Server Memory (MB)'\t= CONVERT(INT,avg(case when mpc.counter_name = 'Target Server Memory (KB)' then pc.[cntr_value_calculated]/1024 else null end))\nfrom [dbo].[sqlwatch_logger_perf_os_performance_counters] pc\n\ninner join [dbo].[sqlwatch_meta_performance_counter] mpc\non pc.sql_instance = mpc.sql_instance\nand pc.performance_counter_id = mpc.performance_counter_id\n\nWHERE 1=1--snapshot_time BETWEEN @TimeFrom AND @TimeTo\n\nand pc.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\nand mpc.counter_name in ('CPU usage %'\n ,'Batch Requests/sec'\n ,'Logins/sec'\n ,'Transactions/sec'\n ,'User Connections'\n ,'SQL Compilations/sec'\n ,'Bytes Sent to Replica/sec'\n ,'Bytes Received from Replica/sec'\n ,'Processor Time %'\n ,'% Processor Time'\n \n ,'Connection Memory (KB)'\n ,'Optimizer Memory (KB)'\n ,'SQL Cache Memory (KB)'\n ,'Total Server Memory (KB)'\n ,'Stolen Server Memory (KB)'\n , 'Target Server Memory (KB)'\n )\n\ngroup by pc.snapshot_time\norder by pc.snapshot_time DESC",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
-          "id": "repository.text_server_memory",
-          "title": "Server Memory Usage",
-          "description": "",
-          "enabled": true,
-          "source": "",
-          "panelType": "TextCard",
-          "chartType": "Line",
-          "height": 250,
-          "refreshIntervalSeconds": null,
-          "layout": {
-            "column": 0,
-            "order": 23,
-            "spanColumns": false
-          },
-          "query": {
-            "source": "sqlwatch",
-            "sqlServer": "\nSELECT \n   \n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [System Total Memory GB],\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Allocated to SQL],\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Used By SQL],\n    CONVERT(INT,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))\n    /\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))*100)\n    [SQL Memory usage %]\n    \n",
-            "sqlServerLegacy": null
-          },
-          "defaultDatabase": "master",
-          "statUnit": "",
-          "statThresholdKey": null,
-          "barGaugeThresholdKey": null,
-          "barGaugeUnitSuffix": "%",
-          "valueFormat": "",
-          "colorThresholds": [],
-          "dataGridIsClickable": false,
-          "dataGridMaxRows": 500,
-          "dataGridTopRows": 0,
-          "actionColumn": null,
-          "actionColumnMode": null,
-          "dataGridColumns": null,
-          "dataGridColumnColors": null
-        },
-        {
           "id": "live.app_connections",
           "title": "Active Connections by Application",
           "description": "User sessions grouped by application name and target database — identifies which apps drive the most connections and I/O.",
@@ -2227,6 +1880,318 @@
           "actionColumnMode": null,
           "dataGridColumns": null,
           "dataGridColumnColors": null
+        },
+        {
+          "id": "repo.database_count",
+          "title": "Databases",
+          "description": null,
+          "enabled": true,
+          "source": "",
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 15,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\r\nSELECT COUNT(*) AS [Value]\r\nFROM sys.databases WITH (NOLOCK)\r\nWHERE state_desc = 'ONLINE'",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "",
+          "valueFormat": "N0",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "repo.process_memory",
+          "title": "SQL Memory",
+          "description": null,
+          "enabled": false,
+          "source": "",
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 25,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    'Memory %' AS [Series],\r\n    d.memory_utilization_percentage AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_process_memory d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\r\nORDER BY h.report_time DESC",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "%",
+          "statThresholdKey": "SQL Memory",
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [
+            {
+              "operator": ">=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": ">=",
+              "value": 85,
+              "color": "#ff9800",
+              "label": "Warning"
+            },
+            {
+              "operator": ">=",
+              "value": 95,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "repo.schedulers",
+          "title": "Pending Queue",
+          "description": null,
+          "enabled": false,
+          "source": "",
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 35,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\r\nSELECT TOP 1\r\n    h.report_time AS [Time],\r\n    'Pending' AS [Series],\r\n    d.work_queue_count AS [Value]\r\nFROM dbo.sqlwatch_logger_perf_os_schedulers d WITH (NOLOCK)\r\nINNER JOIN dbo.sqlwatch_logger_snapshot_header h WITH (NOLOCK)\r\n    ON h.snapshot_time = d.snapshot_time\r\n    AND h.snapshot_type_id = d.snapshot_type_id\r\n    AND h.sql_instance = d.sql_instance\r\nWHERE h.report_time BETWEEN @TimeFrom AND @TimeTo\r\n    AND d.sql_instance IN (SELECT value FROM STRING_SPLIT(@SqlInstance, ','))\r\nORDER BY h.report_time DESC",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": "Pending",
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [
+            {
+              "operator": ">=",
+              "value": 0,
+              "color": "#1b5e20",
+              "label": "Normal"
+            },
+            {
+              "operator": ">=",
+              "value": 1,
+              "color": "#f44336",
+              "label": "Critical"
+            }
+          ],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "repo.instance_count",
+          "title": "Instances",
+          "description": null,
+          "enabled": false,
+          "source": "",
+          "panelType": "StatCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 45,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\r\nSELECT COUNT(DISTINCT sql_instance) AS [Value]\r\nFROM dbo.sqlwatch_config_sql_instance WITH (NOLOCK)\r\nWHERE repo_collector_is_active = 1",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "repo.details",
+          "title": "Server Details",
+          "description": "",
+          "enabled": false,
+          "source": "",
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 55,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "SELECT \n    @@SERVERNAME AS ServerName,\n    --SERVERPROPERTY('Edition') AS Edition,\n    CASE ServerProperty('EngineEdition')\n \nWHEN 1  THEN 'Desktop'\nWHEN 2  THEN \n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Busi%' THEN 'Business Intelligence'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    ELSE 'Standard'-- (For Standard, Standard Developer, Web, and Business Intelligence.)\n    END\nWHEN 3  THEN \n-- (For Enterprise, Enterprise Developer, Developer, and Evaluation editions.)\n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Evaluation%' THEN 'Evaluation'\n    ELSE 'Enterprise'\n    END\n\nWHEN 4  THEN 'Express'-- (For Express, Express with Tools, and Express with Advanced Services)\nWHEN 5  THEN 'SQL Database'\nWHEN 6  THEN 'Azure Synapse'-- Analytics\nWHEN 8  THEN 'Azure SQL MI'\nWHEN 9  THEN 'Azure SQL Edge'-- (For all editions of Azure SQL Edge)\nWHEN 11 THEN  'Azure Synapse serverless'-- SQL pool, or Microsoft Fabric\nWHEN 12 THEN  'Microsoft Fabric'-- SQL database in Microsoft Fabric.\n    END AS Edition\n    ,\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS VirtualCPUs,\n    (SELECT socket_count FROM sys.dm_os_sys_info) AS Sockets,\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN 'VM' ELSE 'Physical' END AS VMType,\n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS MemoryGB,\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS SqlAllocated,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS UsedBySql,\n    '' AS MemoryState,\n    CASE \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '8%'    THEN '2000'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '9%'    THEN '2005'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.0%' THEN '2008'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.5%' THEN '2008 R2'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '11%'   THEN '2012'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '12%'   THEN '2014'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '13%'   THEN '2016'     \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '14%'   THEN '2017' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '15%'   THEN '2019' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '16%'   THEN '2022' \n     ELSE 'unknown'\n  END \n    --@@VERSION \n    AS [Version],\n    SERVERPROPERTY('ProductVersion') AS BuildNr,\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS OS,\n    CASE WHEN SERVERPROPERTY('IsHadrEnabled') = 1 THEN 'Yes' ELSE 'No' END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = 'sa' AND is_disabled = 0) THEN 'Enabled' ELSE 'Disabled' END AS SA,\n    '' AS [Level]",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "repository.text_server_CPU_OS",
+          "title": "Server CPU and OS",
+          "description": "",
+          "enabled": true,
+          "source": "",
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 65,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\nSELECT \n    \n    (SELECT socket_count FROM sys.dm_os_sys_info) AS [CPU Sockets],\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS [Virtual CPU Count],\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN 'VM' ELSE 'Physical' END AS [System Type],\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS [Operating System]",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "repository.text_servername",
+          "title": "Server",
+          "description": "",
+          "enabled": true,
+          "source": "",
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 75,
+            "spanColumns": true
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\nSELECT \nServerName\n, Edition\n, '$ ' + CONVERT(VARCHAR(25),CONVERT(INT,CONVERT(MONEY,\nCASE Edition \nWHEN 'Business Intelligence'\nTHEN 5434  * VirtualCPUs / 2\n  \nWHEN 'Standard'\nTHEN 5434  * VirtualCPUs / 2/ 3.832\n  \nWHEN 'Enterprise'\nTHEN 5434  * VirtualCPUs / 2\nELSE  0\nEND)))\n[licensingRetailUSD]\n, [Version]\n, BuildNr\n, HADR\n, SA [sa state]\n\nFROM (\nSELECT \n    @@SERVERNAME AS ServerName,\n    --SERVERPROPERTY('Edition') AS Edition,\n    CASE ServerProperty('EngineEdition')\n \nWHEN 1  THEN 'Desktop'\nWHEN 2  THEN \n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Busi%' THEN 'Business Intelligence'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    ELSE 'Standard'-- (For Standard, Standard Developer, Web, and Business Intelligence.)\n    END\nWHEN 3  THEN \n-- (For Enterprise, Enterprise Developer, Developer, and Evaluation editions.)\n    CASE \n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Developer%' THEN 'Developer'\n    WHEN CONVERT(VARCHAR(50),SERVERPROPERTY('Edition')) LIKE '%Evaluation%' THEN 'Evaluation'\n    ELSE 'Enterprise'\n    END\n\nWHEN 4  THEN 'Express'-- (For Express, Express with Tools, and Express with Advanced Services)\nWHEN 5  THEN 'SQL Database'\nWHEN 6  THEN 'Azure Synapse'-- Analytics\nWHEN 8  THEN 'Azure SQL MI'\nWHEN 9  THEN 'Azure SQL Edge'-- (For all editions of Azure SQL Edge)\nWHEN 11 THEN  'Azure Synapse serverless'-- SQL pool, or Microsoft Fabric\nWHEN 12 THEN  'Microsoft Fabric'-- SQL database in Microsoft Fabric.\n    END AS Edition\n    \n\n    ,\n    (SELECT cpu_count FROM sys.dm_os_sys_info) AS VirtualCPUs,\n    (SELECT socket_count FROM sys.dm_os_sys_info) AS Sockets,\n    CASE WHEN (SELECT virtual_machine_type FROM sys.dm_os_sys_info) = 1 THEN 'VM' ELSE 'Physical' END AS VMType,\n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS MemoryGB,\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS SqlAllocated,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS UsedBySql,\n    '' AS MemoryState,\n    CASE \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '8%'    THEN '2000'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '9%'    THEN '2005'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.0%' THEN '2008'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.5%' THEN '2008 R2'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '11%'   THEN '2012'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '12%'   THEN '2014'\n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '13%'   THEN '2016'     \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '14%'   THEN '2017' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '15%'   THEN '2019' \n     WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '16%'   THEN '2022' \n     ELSE 'unknown'\n  END \n    --@@VERSION \n    AS [Version],\n    SERVERPROPERTY('ProductVersion') AS BuildNr,\n    (SELECT windows_release FROM sys.dm_os_windows_info) AS OS,\n    CASE WHEN SERVERPROPERTY('IsHadrEnabled') = 1 THEN 'Yes' ELSE 'No' END AS HADR,\n    CASE WHEN EXISTS(SELECT 1 FROM sys.server_principals WHERE name = 'sa' AND is_disabled = 0) THEN 'Enabled' ELSE 'Disabled' END AS SA,\n    '' AS [Level]\n) T1\n   \n\n ",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 5,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "repository.text_server_memory",
+          "title": "Server Memory Usage",
+          "description": "",
+          "enabled": true,
+          "source": "",
+          "panelType": "TextCard",
+          "chartType": "Line",
+          "height": 250,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 0,
+            "order": 85,
+            "spanColumns": false
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "\nSELECT \n   \n    CAST((SELECT physical_memory_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [System Total Memory GB],\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Allocated to SQL],\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2)) AS [Memory Used By SQL],\n    CONVERT(INT,\n    CAST((SELECT committed_target_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))\n    /\n    CAST((SELECT committed_kb FROM sys.dm_os_sys_info) / 1024.0 / 1024.0 AS DECIMAL(10,2))*100)\n    [SQL Memory usage %]\n    \n",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
         }
       ]
     },
@@ -2272,6 +2237,41 @@
           "valueFormat": "",
           "colorThresholds": [],
           "dataGridIsClickable": false,
+          "dataGridMaxRows": 500,
+          "dataGridTopRows": 0,
+          "actionColumn": null,
+          "actionColumnMode": null,
+          "dataGridColumns": null,
+          "dataGridColumnColors": null
+        },
+        {
+          "id": "sessions.top",
+          "title": "Top Usage Queries",
+          "description": "Top active sessions by CPU, reads, or duration. Shows session_id, login, database, and current query text.",
+          "enabled": true,
+          "source": "",
+          "panelType": "DataGrid",
+          "chartType": "Line",
+          "height": 500,
+          "refreshIntervalSeconds": null,
+          "layout": {
+            "column": 1,
+            "order": 10,
+            "spanColumns": true
+          },
+          "query": {
+            "source": "sqlwatch",
+            "sqlServer": "SELECT\n    TMP.Category,\n    [Source],\n    DB_NAME(st.dbid) [DB],\n    TMP.[Total Elapsed Time in S],\n    TMP.[Total Execution Count],\n    TMP.[Total CPU Time in S],\n    TMP.[Total Logical Reads],\n    TMP.[Total Logical Writes],\n    TMP.[Total CLR Time],\n    TMP.[Number of Statements],\n    TMP.[Last Execution Time],\n    TMP.[Plan Handle],\n    st.text AS [Query],\n    qp.query_plan AS [Plan]\nFROM (\n    SELECT * FROM (\n        SELECT TOP 15 'worst I/O' [Category],\n            'Query' [Source],\n            CAST(SUM(s.total_elapsed_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total Elapsed Time in S],\n            SUM(s.execution_count) AS [Total Execution Count],\n            CAST(SUM(s.total_worker_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total CPU Time in S],\n            SUM(s.total_logical_reads) AS [Total Logical Reads],\n            SUM(s.total_logical_writes) AS [Total Logical Writes],\n            SUM(s.total_clr_time) AS [Total CLR Time],\n            COUNT(1) AS [Number of Statements],\n            MAX(s.last_execution_time) AS [Last Execution Time],\n            s.plan_handle AS [Plan Handle]\n        FROM sys.dm_exec_query_stats s WITH (NOLOCK)\n        GROUP BY s.plan_handle ORDER BY SUM(s.total_logical_reads + s.total_logical_writes) DESC\n    ) QS\n    UNION ALL\n        SELECT * FROM (\n        SELECT TOP 15 'worst I/O' [Category],\n            'Procedure' [Source],\n            CAST(SUM(s.total_elapsed_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total Elapsed Time in S],\n            SUM(s.execution_count) AS [Total Execution Count],\n            CAST(SUM(s.total_worker_time) / 1000000.0 AS DECIMAL(20, 2)) AS [Total CPU Time in S],\n            SUM(s.total_logical_reads) AS [Total Logical Reads],\n            SUM(s.total_logical_writes) AS [Total Logical Writes],\n            SUM(0e) AS [Total CLR Time],\n            COUNT(1) AS [Number of Statements],\n            MAX(s.last_execution_time) AS [Last Execution Time],\n            s.plan_handle AS [Plan Handle]\n        FROM sys.dm_exec_procedure_stats s WITH (NOLOCK)\n        GROUP BY s.plan_handle ORDER BY SUM(s.total_logical_reads + s.total_logical_writes) DESC\n    ) PS\n) TMP\nOUTER APPLY sys.dm_exec_sql_text(TMP.[Plan Handle]) AS st\nOUTER APPLY sys.dm_exec_query_plan(TMP.[Plan Handle]) AS qp\nORDER BY Category, [Total Logical Reads] DESC\nOPTION (MAXDOP 1)\n\n",
+            "sqlServerLegacy": null
+          },
+          "defaultDatabase": "master",
+          "statUnit": "",
+          "statThresholdKey": null,
+          "barGaugeThresholdKey": null,
+          "barGaugeUnitSuffix": "%",
+          "valueFormat": "",
+          "colorThresholds": [],
+          "dataGridIsClickable": true,
           "dataGridMaxRows": 500,
           "dataGridTopRows": 0,
           "actionColumn": null,
