@@ -80,20 +80,20 @@ namespace SQLTriage.Data
                 cmd.CommandTimeout = _commandTimeout;
                 cmd.Connection = conn;
 
-            AddFilterParameters(cmd, filter);
+                AddFilterParameters(cmd, filter);
 
-            if (additionalParams != null)
-            {
-                foreach (var kvp in additionalParams)
+                if (additionalParams != null)
                 {
-                    // Remove existing parameter if already added by AddFilterParameters to avoid duplicates
-                    if (cmd.Parameters.Contains(kvp.Key))
+                    foreach (var kvp in additionalParams)
                     {
-                        cmd.Parameters.RemoveAt(kvp.Key);
+                        // Remove existing parameter if already added by AddFilterParameters to avoid duplicates
+                        if (cmd.Parameters.Contains(kvp.Key))
+                        {
+                            cmd.Parameters.RemoveAt(kvp.Key);
+                        }
+                        AddParameter(cmd, kvp.Key, kvp.Value);
                     }
-                    AddParameter(cmd, kvp.Key, kvp.Value);
                 }
-            }
 
                 using var reader = await cmd.ExecuteReaderAsync(ct);
                 int rowCount = 0;

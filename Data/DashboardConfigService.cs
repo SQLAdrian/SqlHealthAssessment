@@ -313,12 +313,12 @@ namespace SQLTriage.Data
                             IndexPanel(panel);
             }
 
-             // Index all support queries (support queries override panels if there's a collision)
-             foreach (var kvp in config.SupportQueries)
-             {
-                 cache[kvp.Key] = kvp.Value!;
-                 WarnIfUnsafe(kvp.Key, kvp.Value?.SqlServer);
-             }
+            // Index all support queries (support queries override panels if there's a collision)
+            foreach (var kvp in config.SupportQueries)
+            {
+                cache[kvp.Key] = kvp.Value!;
+                WarnIfUnsafe(kvp.Key, kvp.Value?.SqlServer);
+            }
 
             _queryCache = cache;
             _panelTypeCache = typeCache;

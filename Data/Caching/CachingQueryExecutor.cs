@@ -631,50 +631,50 @@ namespace SQLTriage.Data.Caching
                     switch (panel.PanelType)
                     {
                         case "TimeSeries":
-                        {
-                            var from = filter.TimeFrom == default ? DateTime.UtcNow.AddHours(-1) : filter.TimeFrom;
-                            var to   = filter.TimeTo   == default ? DateTime.UtcNow               : filter.TimeTo;
-                            var pts = await _hot.GetTimeSeriesAsync(panel.Id, instanceKey)
-                                ?? await _cache.GetTimeSeriesAsync(panel.Id, instanceKey, from, to);
-                            if (pts?.Count > 0) tsResults[panel.Id] = pts;
-                            break;
-                        }
+                            {
+                                var from = filter.TimeFrom == default ? DateTime.UtcNow.AddHours(-1) : filter.TimeFrom;
+                                var to = filter.TimeTo == default ? DateTime.UtcNow : filter.TimeTo;
+                                var pts = await _hot.GetTimeSeriesAsync(panel.Id, instanceKey)
+                                    ?? await _cache.GetTimeSeriesAsync(panel.Id, instanceKey, from, to);
+                                if (pts?.Count > 0) tsResults[panel.Id] = pts;
+                                break;
+                            }
                         case "StatCard":
                         case "DeltaStatCard":
-                        {
-                            var dt = await _hot.GetDataTableAsync(panel.Id, instanceKey)
-                                ?? await _cache.GetDataTableAsync(panel.Id, instanceKey);
-                            if (dt != null && dt.Rows.Count > 0)
                             {
-                                var row = dt.Rows[0];
-                                double val = 0;
-                                if (dt.Columns.Count > 0 && row[0] != DBNull.Value)
-                                    double.TryParse(row[0]?.ToString(), out val);
-                                statResults[panel.Id] = new StatValue { Value = val };
+                                var dt = await _hot.GetDataTableAsync(panel.Id, instanceKey)
+                                    ?? await _cache.GetDataTableAsync(panel.Id, instanceKey);
+                                if (dt != null && dt.Rows.Count > 0)
+                                {
+                                    var row = dt.Rows[0];
+                                    double val = 0;
+                                    if (dt.Columns.Count > 0 && row[0] != DBNull.Value)
+                                        double.TryParse(row[0]?.ToString(), out val);
+                                    statResults[panel.Id] = new StatValue { Value = val };
+                                }
+                                break;
                             }
-                            break;
-                        }
                         case "BarGauge":
-                        {
-                            var bg = await _hot.GetBarGaugeAsync(panel.Id, instanceKey)
-                                ?? await _cache.GetBarGaugeAsync(panel.Id, instanceKey);
-                            if (bg?.Count > 0) bgResults[panel.Id] = bg;
-                            break;
-                        }
+                            {
+                                var bg = await _hot.GetBarGaugeAsync(panel.Id, instanceKey)
+                                    ?? await _cache.GetBarGaugeAsync(panel.Id, instanceKey);
+                                if (bg?.Count > 0) bgResults[panel.Id] = bg;
+                                break;
+                            }
                         case "DataGrid":
-                        {
-                            var dt = await _hot.GetDataTableAsync(panel.Id, instanceKey)
-                                ?? await _cache.GetDataTableAsync(panel.Id, instanceKey);
-                            if (dt != null) gridResults[panel.Id] = dt;
-                            break;
-                        }
+                            {
+                                var dt = await _hot.GetDataTableAsync(panel.Id, instanceKey)
+                                    ?? await _cache.GetDataTableAsync(panel.Id, instanceKey);
+                                if (dt != null) gridResults[panel.Id] = dt;
+                                break;
+                            }
                         case "CheckStatus":
-                        {
-                            var cs = await _hot.GetCheckStatusAsync(panel.Id, instanceKey)
-                                ?? await _cache.GetCheckStatusAsync(panel.Id, instanceKey);
-                            if (cs?.Count > 0) checkResults[panel.Id] = cs;
-                            break;
-                        }
+                            {
+                                var cs = await _hot.GetCheckStatusAsync(panel.Id, instanceKey)
+                                    ?? await _cache.GetCheckStatusAsync(panel.Id, instanceKey);
+                                if (cs?.Count > 0) checkResults[panel.Id] = cs;
+                                break;
+                            }
                     }
                 }
                 catch { /* non-fatal — panel stays empty until fresh fetch */ }

@@ -161,8 +161,8 @@ namespace SQLTriage
             if (_trayIcon == null || _trayServerModeItem == null || _trayOpenBrowserItem == null) return;
 
             var serverMode = App.Services?.GetService<ServerModeService>();
-            var connMgr    = App.Services?.GetService<ServerConnectionManager>();
-            var version    = App.Services?.GetService<AutoUpdateService>()?.GetCurrentVersion() ?? "";
+            var connMgr = App.Services?.GetService<ServerConnectionManager>();
+            var version = App.Services?.GetService<AutoUpdateService>()?.GetCurrentVersion() ?? "";
 
             // ── Server mode row ──────────────────────────────────────────
             bool running = serverMode?.IsRunning == true;
@@ -196,30 +196,30 @@ namespace SQLTriage
             // ── Connected servers row ────────────────────────────────────
             if (_trayServerCountItem != null && connMgr != null)
             {
-                var all         = connMgr.GetConnections();
-                int total       = all.Count;
-                int connected   = all.Count(c => c.IsConnected);
+                var all = connMgr.GetConnections();
+                int total = all.Count;
+                int connected = all.Count(c => c.IsConnected);
                 int disconnected = total - connected;
 
                 if (total == 0)
                 {
-                    _trayServerCountItem.Text  = "No servers configured";
+                    _trayServerCountItem.Text = "No servers configured";
                     _trayServerCountItem.Image = MakeDotIcon(System.Drawing.Color.FromArgb(120, 120, 120));
                 }
                 else if (disconnected == 0)
                 {
-                    _trayServerCountItem.Text  = $"Servers: {connected}/{total} connected";
+                    _trayServerCountItem.Text = $"Servers: {connected}/{total} connected";
                     _trayServerCountItem.Image = MakeDotIcon(System.Drawing.Color.FromArgb(60, 200, 80));
                 }
                 else if (connected == 0)
                 {
-                    _trayServerCountItem.Text  = $"Servers: 0/{total} connected";
+                    _trayServerCountItem.Text = $"Servers: 0/{total} connected";
                     _trayServerCountItem.Image = MakeDotIcon(System.Drawing.Color.FromArgb(200, 60, 60));
                 }
                 else
                 {
                     // Mixed — amber
-                    _trayServerCountItem.Text  = $"Servers: {connected}/{total} connected  ({disconnected} down)";
+                    _trayServerCountItem.Text = $"Servers: {connected}/{total} connected  ({disconnected} down)";
                     _trayServerCountItem.Image = MakeDotIcon(System.Drawing.Color.FromArgb(220, 160, 30));
                 }
             }
@@ -342,7 +342,7 @@ namespace SQLTriage
             _ = AutoStartServerModeAsync();
         }
 
-/// <summary>
+        /// <summary>
         /// Explicitly disposes the BlazorWebView and its underlying WebView2 control
         /// to prevent zombie msedgewebview2.exe processes that lock the user-data folder
         /// and cause relaunch hangs.
@@ -362,7 +362,7 @@ namespace SQLTriage
                     try { wv.Dispose(); } catch { /* best effort */ }
                 }
 
-// Let WPF shut down naturally - WebView2 will be cleaned up by the OS
+                // Let WPF shut down naturally - WebView2 will be cleaned up by the OS
                 // when the process exits. Force-killing causes issues with other apps.
                 // This is acceptable because we're closing the entire application.
             }
@@ -405,13 +405,13 @@ namespace SQLTriage
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
         {
             _logger?.LogDebug("[MAINWINDOW] OnWindowLoaded started");
-            
+
             // Always attempt WebView2 first, regardless of pre-check result
             try
             {
                 _logger?.LogDebug("[MAINWINDOW] Creating BlazorWebView...");
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                
+
                 BlazorWebView = new Microsoft.AspNetCore.Components.WebView.Wpf.BlazorWebView
                 {
                     HostPage = "wwwroot/index.html",
@@ -430,7 +430,7 @@ namespace SQLTriage
                 BlazorWebView.BlazorWebViewInitialized += OnBlazorWebViewInitialized;
                 BlazorWebView.BlazorWebViewInitializing += OnBlazorWebViewInitializing;
                 WebViewHost.Content = BlazorWebView;
-                
+
                 sw.Stop();
                 _logger?.LogInformation("MainWindow loaded — BlazorWebView created successfully in {ElapsedMs}ms", sw.ElapsedMilliseconds);
             }
@@ -622,7 +622,7 @@ namespace SQLTriage
                 if (monitorW == _lastMonitorW && monitorH == _lastMonitorH &&
                     windowX == _lastWindowX && windowY == _lastWindowY) return;
                 _lastMonitorW = monitorW; _lastMonitorH = monitorH;
-                _lastWindowX = windowX;   _lastWindowY = windowY;
+                _lastWindowX = windowX; _lastWindowY = windowY;
 
                 var json = $"{{\"type\":\"parallax\",\"monitorW\":{monitorW},\"monitorH\":{monitorH},\"windowX\":{windowX},\"windowY\":{windowY}}}";
                 _coreWebView2.PostWebMessageAsString(json);

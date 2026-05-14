@@ -93,18 +93,18 @@ namespace SQLTriage.Data.Services
 
             return new BuildStatus
             {
-                MajorVersion         = version,
-                InstalledBuild       = installed.Build,
-                InstalledLabel       = installed.Label,
+                MajorVersion = version,
+                InstalledBuild = installed.Build,
+                InstalledLabel = installed.Label,
                 InstalledReleaseDate = installed.ReleaseDate,
-                LatestBuild          = versionData.LatestBuild,
-                LatestReleaseDate    = versionData.LatestReleaseDate,
-                PatchesBehind        = patchesBehind,
-                DaysBehind           = daysBehind,
-                LifecycleStatus      = lifecycleStatus,
+                LatestBuild = versionData.LatestBuild,
+                LatestReleaseDate = versionData.LatestReleaseDate,
+                PatchesBehind = patchesBehind,
+                DaysBehind = daysBehind,
+                LifecycleStatus = lifecycleStatus,
                 MainstreamSupportEnds = versionData.MainstreamSupportEnds,
-                ExtendedSupportEnds   = versionData.ExtendedSupportEnds,
-                MissedPatchesSample  = newerBuilds.Take(10)
+                ExtendedSupportEnds = versionData.ExtendedSupportEnds,
+                MissedPatchesSample = newerBuilds.Take(10)
                                                   .Select(b => new MissedPatch
                                                   {
                                                       Build = b.Build,
@@ -132,7 +132,7 @@ namespace SQLTriage.Data.Services
                 11 => "2012",
                 10 when parts.Length > 1 && parts[1] == "50" => "2008R2",
                 10 => "2008",
-                _  => null,
+                _ => null,
             };
         }
 
@@ -187,11 +187,11 @@ namespace SQLTriage.Data.Services
 
         public string LifecycleLabel => LifecycleStatus switch
         {
-            LifecycleStatusKind.Mainstream           => "Mainstream support",
+            LifecycleStatusKind.Mainstream => "Mainstream support",
             LifecycleStatusKind.MainstreamEndingSoon => "Mainstream ending soon",
-            LifecycleStatusKind.ExtendedSupportOnly  => "Extended support only",
-            LifecycleStatusKind.OutOfSupport         => "Out of support",
-            _                                        => "Unknown",
+            LifecycleStatusKind.ExtendedSupportOnly => "Extended support only",
+            LifecycleStatusKind.OutOfSupport => "Out of support",
+            _ => "Unknown",
         };
 
         // Approximate "years old" of the installed version, based on its major-version release

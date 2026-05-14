@@ -251,7 +251,7 @@ namespace SQLTriage.Data.Services
 
             // DI parity: services registered in App.xaml.cs but missing here
             services.AddSharedServices(configuration); /* BM: shared services registered via AddSharedServices */
-                    }
+        }
 
         private static void InitializeBackgroundServices(IServiceProvider services)
         {

@@ -490,13 +490,13 @@ namespace SQLTriage.Data.Services
                 {
                     points.Add(new CheckHistoryPoint
                     {
-                        Server      = reader.GetString(0),
-                        RecordedAt  = reader.GetString(1),
-                        Passed      = reader.GetInt32(2) == 1,
+                        Server = reader.GetString(0),
+                        RecordedAt = reader.GetString(1),
+                        Passed = reader.GetInt32(2) == 1,
                         ActualValue = reader.IsDBNull(3) ? (double?)null : reader.GetDouble(3),
-                        Severity    = reader.IsDBNull(4) ? "" : reader.GetString(4),
-                        CheckName   = reader.IsDBNull(5) ? "" : reader.GetString(5),
-                        Category    = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                        Severity = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                        CheckName = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                        Category = reader.IsDBNull(6) ? "" : reader.GetString(6),
                     });
                 }
             }

@@ -279,17 +279,17 @@ public class ServerDocumentationService
         var s = new DocSection { Id = "instance", Title = "Instance Configuration", Icon = "fa-solid fa-server" };
         try
         {
-            s.Rows.Add(new DocRow { Label = "Server name",       Value = smo.Information.NetName ?? "" });
-            s.Rows.Add(new DocRow { Label = "Instance",          Value = smo.InstanceName ?? "(default)" });
-            s.Rows.Add(new DocRow { Label = "Version",           Value = smo.Information.VersionString ?? "" });
-            s.Rows.Add(new DocRow { Label = "Edition",           Value = smo.Information.Edition ?? "" });
-            s.Rows.Add(new DocRow { Label = "Product level",     Value = smo.Information.ProductLevel ?? "" });
-            s.Rows.Add(new DocRow { Label = "Collation",         Value = smo.Information.Collation ?? "" });
-            s.Rows.Add(new DocRow { Label = "OS version",        Value = smo.Information.OSVersion ?? "" });
-            s.Rows.Add(new DocRow { Label = "Platform",          Value = smo.Information.Platform ?? "" });
-            s.Rows.Add(new DocRow { Label = "Processors",        Value = smo.Information.Processors.ToString() });
-            s.Rows.Add(new DocRow { Label = "Physical memory",   Value = $"{smo.Information.PhysicalMemory:N0} MB" });
-            s.Rows.Add(new DocRow { Label = "Login mode",        Value = smo.Settings.LoginMode.ToString() });
+            s.Rows.Add(new DocRow { Label = "Server name", Value = smo.Information.NetName ?? "" });
+            s.Rows.Add(new DocRow { Label = "Instance", Value = smo.InstanceName ?? "(default)" });
+            s.Rows.Add(new DocRow { Label = "Version", Value = smo.Information.VersionString ?? "" });
+            s.Rows.Add(new DocRow { Label = "Edition", Value = smo.Information.Edition ?? "" });
+            s.Rows.Add(new DocRow { Label = "Product level", Value = smo.Information.ProductLevel ?? "" });
+            s.Rows.Add(new DocRow { Label = "Collation", Value = smo.Information.Collation ?? "" });
+            s.Rows.Add(new DocRow { Label = "OS version", Value = smo.Information.OSVersion ?? "" });
+            s.Rows.Add(new DocRow { Label = "Platform", Value = smo.Information.Platform ?? "" });
+            s.Rows.Add(new DocRow { Label = "Processors", Value = smo.Information.Processors.ToString() });
+            s.Rows.Add(new DocRow { Label = "Physical memory", Value = $"{smo.Information.PhysicalMemory:N0} MB" });
+            s.Rows.Add(new DocRow { Label = "Login mode", Value = smo.Settings.LoginMode.ToString() });
             s.Rows.Add(new DocRow { Label = "Default backup dir", Value = smo.Settings.BackupDirectory ?? "" });
 
             var cfgRows = new List<List<string>>();
@@ -366,11 +366,11 @@ public class ServerDocumentationService
                 Rows = rows,
             });
 
-            s.Rows.Add(new DocRow { Label = "Total logins",       Value = logins.Count.ToString() });
-            s.Rows.Add(new DocRow { Label = "Sysadmin count",     Value = sysadminNames.Count.ToString() });
-            s.Rows.Add(new DocRow { Label = "Disabled logins",    Value = logins.Count(l => l.IsDisabled).ToString() });
-            s.Rows.Add(new DocRow { Label = "Windows logins",     Value = logins.Count(l => l.LoginType is Smo.LoginType.WindowsUser or Smo.LoginType.WindowsGroup).ToString() });
-            s.Rows.Add(new DocRow { Label = "SQL logins",         Value = logins.Count(l => l.LoginType == Smo.LoginType.SqlLogin).ToString() });
+            s.Rows.Add(new DocRow { Label = "Total logins", Value = logins.Count.ToString() });
+            s.Rows.Add(new DocRow { Label = "Sysadmin count", Value = sysadminNames.Count.ToString() });
+            s.Rows.Add(new DocRow { Label = "Disabled logins", Value = logins.Count(l => l.IsDisabled).ToString() });
+            s.Rows.Add(new DocRow { Label = "Windows logins", Value = logins.Count(l => l.LoginType is Smo.LoginType.WindowsUser or Smo.LoginType.WindowsGroup).ToString() });
+            s.Rows.Add(new DocRow { Label = "SQL logins", Value = logins.Count(l => l.LoginType == Smo.LoginType.SqlLogin).ToString() });
 
             // Server audit specifications (just the names + state, not the action defs)
             var auditRows = new List<List<string>>();
@@ -418,7 +418,7 @@ public class ServerDocumentationService
             try { foreach (Smo.AvailabilityGroup ag in smo.AvailabilityGroups) ags.Add(ag); }
             catch (Exception ex) { warnings.Add($"HA/DR/AGs: {ex.Message}"); }
 
-            s.Rows.Add(new DocRow { Label = "AlwaysOn enabled",   Value = smo.IsHadrEnabled ? "yes" : "no" });
+            s.Rows.Add(new DocRow { Label = "AlwaysOn enabled", Value = smo.IsHadrEnabled ? "yes" : "no" });
             s.Rows.Add(new DocRow { Label = "Availability groups", Value = ags.Count.ToString() });
 
             foreach (var ag in ags)
@@ -579,9 +579,9 @@ public class ServerDocumentationService
 
             var user = dbs.Count(d => !d.IsSystemObject);
             var simple = dbs.Count(d => !d.IsSystemObject && d.RecoveryModel == Smo.RecoveryModel.Simple);
-            s.Rows.Add(new DocRow { Label = "User databases",   Value = user.ToString() });
+            s.Rows.Add(new DocRow { Label = "User databases", Value = user.ToString() });
             s.Rows.Add(new DocRow { Label = "System databases", Value = dbs.Count(d => d.IsSystemObject).ToString() });
-            s.Rows.Add(new DocRow { Label = "Simple recovery",  Value = simple.ToString(), Hint = "Outside of staging / scratch, Simple usually means no point-in-time recovery." });
+            s.Rows.Add(new DocRow { Label = "Simple recovery", Value = simple.ToString(), Hint = "Outside of staging / scratch, Simple usually means no point-in-time recovery." });
 
             s.SummaryLine = $"{user} user DB · {dbs.Count(d => d.IsSystemObject)} system";
         }

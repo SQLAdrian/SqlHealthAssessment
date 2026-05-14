@@ -136,19 +136,19 @@ namespace SQLTriage.Data.Services
                 var inDim = scorable.Where(r => MapCategory(r.Category, weights.CategoryMapping)
                                 .Equals(dim, StringComparison.OrdinalIgnoreCase)).ToList();
                 var denominator = inDim.Sum(CheckValue);
-                var numerator   = inDim.Where(CountsAsPass).Sum(CheckValue);
-                var ratio       = denominator > 0 ? (numerator / denominator) * 100.0 : 100.0;
-                var catWeight   = weights.Categories[dim];
+                var numerator = inDim.Where(CountsAsPass).Sum(CheckValue);
+                var ratio = denominator > 0 ? (numerator / denominator) * 100.0 : 100.0;
+                var catWeight = weights.Categories[dim];
 
                 categoryScores[dim] = new CategoryScore
                 {
-                    Dimension    = dim,
-                    Weight       = catWeight,
-                    RawScore     = ratio,
-                    CappedScore  = ratio * catWeight,
-                    Ceiling      = 100.0 * catWeight,
+                    Dimension = dim,
+                    Weight = catWeight,
+                    RawScore = ratio,
+                    CappedScore = ratio * catWeight,
+                    Ceiling = 100.0 * catWeight,
                     FindingCount = inDim.Count,
-                    PassedCount  = inDim.Count(CountsAsPass)
+                    PassedCount = inDim.Count(CountsAsPass)
                 };
             }
 
@@ -167,11 +167,11 @@ namespace SQLTriage.Data.Services
 
             return new GovernanceScore
             {
-                IsIndicative   = isIndicative,
-                Overall        = overall,
-                Band           = band,
-                Categories     = categoryScores,
-                TotalFindings  = list.Count,
+                IsIndicative = isIndicative,
+                Overall = overall,
+                Band = band,
+                Categories = categoryScores,
+                TotalFindings = list.Count,
                 PassedFindings = scorable.Count(CountsAsPass),
                 FailedFindings = scorable.Count(r => !CountsAsPass(r))
             };

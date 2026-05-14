@@ -23,9 +23,9 @@ namespace SQLTriage.Data
     /// </summary>
     public static class CredentialPorter
     {
-        private const int SaltBytes     = 32;
-        private const int KeyBytes      = 32;   // AES-256
-        private const int Pbkdf2Iters   = 310_000; // OWASP 2023 minimum for PBKDF2-HMAC-SHA256
+        private const int SaltBytes = 32;
+        private const int KeyBytes = 32;   // AES-256
+        private const int Pbkdf2Iters = 310_000; // OWASP 2023 minimum for PBKDF2-HMAC-SHA256
 
         // ──────────────────────────────────────────────────────────────────
         //  Export
@@ -58,34 +58,34 @@ namespace SQLTriage.Data
                             "Cannot export credentials that cannot be read on this machine.");
 
                     var plainBytes = Encoding.UTF8.GetBytes(plain);
-                    var encrypted  = AesGcmHelper.Encrypt(plainBytes, passphraseKey);
-                    encPassword    = Convert.ToBase64String(encrypted);
+                    var encrypted = AesGcmHelper.Encrypt(plainBytes, passphraseKey);
+                    encPassword = Convert.ToBase64String(encrypted);
                 }
 
                 entries.Add(new PortableServerEntry
                 {
-                    Id                     = conn.Id,
-                    ServerNames            = conn.ServerNames,
-                    UseWindowsAuth         = conn.UseWindowsAuthentication,
-                    Username               = conn.Username,
-                    EncPassword            = encPassword,
-                    Tags                   = conn.Tags,
-                    HasSqlWatch            = conn.HasSqlWatch,
-                    IsEnabled              = conn.IsEnabled,
-                    Environment            = conn.Environment,
+                    Id = conn.Id,
+                    ServerNames = conn.ServerNames,
+                    UseWindowsAuth = conn.UseWindowsAuthentication,
+                    Username = conn.Username,
+                    EncPassword = encPassword,
+                    Tags = conn.Tags,
+                    HasSqlWatch = conn.HasSqlWatch,
+                    IsEnabled = conn.IsEnabled,
+                    Environment = conn.Environment,
                     TrustServerCertificate = conn.TrustServerCertificate,
-                    Database               = conn.Database,
-                    MultiSubnetFailover    = conn.MultiSubnetFailover,
-                    ConnectionTimeout      = conn.ConnectionTimeout,
+                    Database = conn.Database,
+                    MultiSubnetFailover = conn.MultiSubnetFailover,
+                    ConnectionTimeout = conn.ConnectionTimeout,
                 });
             }
 
             var bundle = new CredentialBundle
             {
-                ExportedAt    = DateTime.UtcNow,
-                ExportedFrom  = Environment.MachineName,
-                Salt          = Convert.ToBase64String(salt),
-                Servers       = entries,
+                ExportedAt = DateTime.UtcNow,
+                ExportedFrom = Environment.MachineName,
+                Salt = Convert.ToBase64String(salt),
+                Servers = entries,
             };
 
             return JsonSerializer.Serialize(bundle, new JsonSerializerOptions { WriteIndented = true });
@@ -117,7 +117,7 @@ namespace SQLTriage.Data
                 throw new FormatException($"Invalid .lmcreds file: {ex.Message}", ex);
             }
 
-            var salt          = Convert.FromBase64String(bundle.Salt ?? throw new FormatException("Missing salt in .lmcreds file."));
+            var salt = Convert.FromBase64String(bundle.Salt ?? throw new FormatException("Missing salt in .lmcreds file."));
             var passphraseKey = DeriveKey(passphrase, salt);
 
             var result = new List<ServerConnection>();
@@ -125,18 +125,18 @@ namespace SQLTriage.Data
             {
                 var conn = new ServerConnection
                 {
-                    Id                       = entry.Id ?? Guid.NewGuid().ToString(),
-                    ServerNames              = entry.ServerNames ?? "",
+                    Id = entry.Id ?? Guid.NewGuid().ToString(),
+                    ServerNames = entry.ServerNames ?? "",
                     UseWindowsAuthentication = entry.UseWindowsAuth,
-                    Username                 = entry.Username,
-                    Tags                     = entry.Tags ?? [],
-                    HasSqlWatch              = entry.HasSqlWatch,
-                    IsEnabled                = entry.IsEnabled,
-                    Environment              = entry.Environment,
-                    TrustServerCertificate   = entry.TrustServerCertificate,
-                    Database                 = entry.Database ?? "master",
-                    MultiSubnetFailover      = entry.MultiSubnetFailover,
-                    ConnectionTimeout        = entry.ConnectionTimeout > 0 ? entry.ConnectionTimeout : 15,
+                    Username = entry.Username,
+                    Tags = entry.Tags ?? [],
+                    HasSqlWatch = entry.HasSqlWatch,
+                    IsEnabled = entry.IsEnabled,
+                    Environment = entry.Environment,
+                    TrustServerCertificate = entry.TrustServerCertificate,
+                    Database = entry.Database ?? "master",
+                    MultiSubnetFailover = entry.MultiSubnetFailover,
+                    ConnectionTimeout = entry.ConnectionTimeout > 0 ? entry.ConnectionTimeout : 15,
                 };
 
                 if (!string.IsNullOrEmpty(entry.EncPassword) && !entry.UseWindowsAuth)
@@ -153,7 +153,7 @@ namespace SQLTriage.Data
 
                     // This throws CryptographicException if the passphrase is wrong
                     var plainBytes = AesGcmHelper.Decrypt(encrypted, passphraseKey);
-                    var plain      = Encoding.UTF8.GetString(plainBytes);
+                    var plain = Encoding.UTF8.GetString(plainBytes);
 
                     // Re-encrypt with this machine's key
                     conn.SetPassword(plain);
@@ -183,27 +183,27 @@ namespace SQLTriage.Data
 
         private sealed class CredentialBundle
         {
-            [JsonPropertyName("exportedAt")]    public DateTime ExportedAt   { get; set; }
-            [JsonPropertyName("exportedFrom")]  public string?  ExportedFrom { get; set; }
-            [JsonPropertyName("salt")]          public string?  Salt         { get; set; }
-            [JsonPropertyName("servers")]       public List<PortableServerEntry>? Servers { get; set; }
+            [JsonPropertyName("exportedAt")] public DateTime ExportedAt { get; set; }
+            [JsonPropertyName("exportedFrom")] public string? ExportedFrom { get; set; }
+            [JsonPropertyName("salt")] public string? Salt { get; set; }
+            [JsonPropertyName("servers")] public List<PortableServerEntry>? Servers { get; set; }
         }
 
         private sealed class PortableServerEntry
         {
-            [JsonPropertyName("id")]                    public string?       Id                     { get; set; }
-            [JsonPropertyName("serverNames")]           public string?       ServerNames            { get; set; }
-            [JsonPropertyName("useWindowsAuth")]        public bool          UseWindowsAuth         { get; set; }
-            [JsonPropertyName("username")]              public string?       Username               { get; set; }
-            [JsonPropertyName("encPassword")]           public string?       EncPassword            { get; set; }
-            [JsonPropertyName("tags")]                  public List<string>? Tags                   { get; set; }
-            [JsonPropertyName("hasSqlWatch")]           public bool          HasSqlWatch            { get; set; }
-            [JsonPropertyName("isEnabled")]             public bool          IsEnabled              { get; set; }
-            [JsonPropertyName("environment")]           public string?       Environment            { get; set; }
-            [JsonPropertyName("trustServerCertificate")]public bool          TrustServerCertificate { get; set; }
-            [JsonPropertyName("database")]              public string?       Database               { get; set; }
-            [JsonPropertyName("multiSubnetFailover")]   public bool          MultiSubnetFailover    { get; set; }
-            [JsonPropertyName("connectionTimeout")]     public int           ConnectionTimeout      { get; set; }
+            [JsonPropertyName("id")] public string? Id { get; set; }
+            [JsonPropertyName("serverNames")] public string? ServerNames { get; set; }
+            [JsonPropertyName("useWindowsAuth")] public bool UseWindowsAuth { get; set; }
+            [JsonPropertyName("username")] public string? Username { get; set; }
+            [JsonPropertyName("encPassword")] public string? EncPassword { get; set; }
+            [JsonPropertyName("tags")] public List<string>? Tags { get; set; }
+            [JsonPropertyName("hasSqlWatch")] public bool HasSqlWatch { get; set; }
+            [JsonPropertyName("isEnabled")] public bool IsEnabled { get; set; }
+            [JsonPropertyName("environment")] public string? Environment { get; set; }
+            [JsonPropertyName("trustServerCertificate")] public bool TrustServerCertificate { get; set; }
+            [JsonPropertyName("database")] public string? Database { get; set; }
+            [JsonPropertyName("multiSubnetFailover")] public bool MultiSubnetFailover { get; set; }
+            [JsonPropertyName("connectionTimeout")] public int ConnectionTimeout { get; set; }
         }
     }
 }

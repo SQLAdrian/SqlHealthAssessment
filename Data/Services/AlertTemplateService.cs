@@ -84,24 +84,24 @@ namespace SQLTriage.Data.Services
             var severityColor = n.Severity?.ToLower() switch
             {
                 "critical" => "#dc3545",
-                "warning"  => "#ffc107",
-                "high"     => "#e06c00",
-                _          => "#17a2b8"
+                "warning" => "#ffc107",
+                "high" => "#e06c00",
+                _ => "#17a2b8"
             };
 
             return template
-                .Replace("{{alert_name}}",    n.AlertName ?? "")
-                .Replace("{{severity}}",      n.Severity?.ToUpper() ?? "")
+                .Replace("{{alert_name}}", n.AlertName ?? "")
+                .Replace("{{severity}}", n.Severity?.ToUpper() ?? "")
                 .Replace("{{severity_color}}", severityColor)
-                .Replace("{{metric}}",        n.Metric ?? "")
+                .Replace("{{metric}}", n.Metric ?? "")
                 .Replace("{{current_value}}", n.CurrentValue.ToString("N2"))
-                .Replace("{{threshold}}",     n.ThresholdValue.ToString("N2"))
-                .Replace("{{server}}",        n.InstanceName ?? "")
-                .Replace("{{instance}}",      n.InstanceName ?? "")
-                .Replace("{{message}}",       n.Message ?? "")
-                .Replace("{{triggered_at}}",  n.TriggeredAt.ToString("yyyy-MM-dd HH:mm:ss"))
-                .Replace("{{machine}}",       Environment.MachineName)
-                .Replace("{{hit_count}}",     "1"); // NotificationChannelService can pass richer data if needed
+                .Replace("{{threshold}}", n.ThresholdValue.ToString("N2"))
+                .Replace("{{server}}", n.InstanceName ?? "")
+                .Replace("{{instance}}", n.InstanceName ?? "")
+                .Replace("{{message}}", n.Message ?? "")
+                .Replace("{{triggered_at}}", n.TriggeredAt.ToString("yyyy-MM-dd HH:mm:ss"))
+                .Replace("{{machine}}", Environment.MachineName)
+                .Replace("{{hit_count}}", "1"); // NotificationChannelService can pass richer data if needed
         }
 
         /// <summary>Returns the subject rendered with tokens.</summary>

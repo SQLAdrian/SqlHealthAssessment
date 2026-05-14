@@ -28,12 +28,12 @@ namespace SQLTriage.Data.Services.Assessment
 
             var startInfo = new ProcessStartInfo
             {
-                FileName               = "powershell.exe",
-                Arguments              = $"-NoProfile -ExecutionPolicy Bypass -Command \"{check.PowerShell}\"",
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{check.PowerShell}\"",
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute        = false,
-                CreateNoWindow         = true
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
 
             using var process = Process.Start(startInfo);
@@ -44,7 +44,7 @@ namespace SQLTriage.Data.Services.Assessment
             }
 
             var output = await process.StandardOutput.ReadToEndAsync();
-            var error  = await process.StandardError.ReadToEndAsync();
+            var error = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
 
             if (!string.IsNullOrEmpty(error))
@@ -55,17 +55,17 @@ namespace SQLTriage.Data.Services.Assessment
                 result.Passed = false;
                 result.Results.Add(new AssessmentResult
                 {
-                    CheckId            = check.CheckId,
-                    Message            = output.Trim(),
-                    Severity           = check.Severity,
-                    TargetName         = targetName,
-                    TargetType         = "LocalMachine",
-                    Category           = check.Category,
-                    Description        = check.Description,
-                    HelpLink           = check.HelpLink,
-                    SqlQuery           = check.Sql,
+                    CheckId = check.CheckId,
+                    Message = output.Trim(),
+                    Severity = check.Severity,
+                    TargetName = targetName,
+                    TargetType = "LocalMachine",
+                    Category = check.Category,
+                    Description = check.Description,
+                    HelpLink = check.HelpLink,
+                    SqlQuery = check.Sql,
                     ImplementationType = check.ImplementationType,
-                    Status             = "Failed"
+                    Status = "Failed"
                 });
             }
             else

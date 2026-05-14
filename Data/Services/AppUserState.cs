@@ -37,9 +37,9 @@ namespace SQLTriage.Data.Services
         /// </summary>
         public string Role => _cachedRole ?? AppRoles.Admin;
 
-        public bool IsAdmin    => Role == AppRoles.Admin;
+        public bool IsAdmin => Role == AppRoles.Admin;
         public bool IsOperator => Role is AppRoles.Admin or AppRoles.Operator;
-        public bool IsViewer   => true; // all roles can view
+        public bool IsViewer => true; // all roles can view
 
         /// <summary>
         /// Fetches the current user's role from /auth/me (server mode only).

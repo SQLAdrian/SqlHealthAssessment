@@ -95,13 +95,13 @@ public class WaitStatsHistoryService : IDisposable
             foreach (var d in snap.Deltas)
             {
                 cmd.Parameters.Clear();
-                cmd.Parameters.AddWithValue("@s",   serverName);
-                cmd.Parameters.AddWithValue("@t",   recordedAt);
-                cmd.Parameters.AddWithValue("@w",   d.WaitType);
-                cmd.Parameters.AddWithValue("@c",   d.Category.ToString());
-                cmd.Parameters.AddWithValue("@dw",  d.DeltaWaitMs);
-                cmd.Parameters.AddWithValue("@dt",  d.DeltaTasks);
-                cmd.Parameters.AddWithValue("@ds",  d.DeltaSignalMs);
+                cmd.Parameters.AddWithValue("@s", serverName);
+                cmd.Parameters.AddWithValue("@t", recordedAt);
+                cmd.Parameters.AddWithValue("@w", d.WaitType);
+                cmd.Parameters.AddWithValue("@c", d.Category.ToString());
+                cmd.Parameters.AddWithValue("@dw", d.DeltaWaitMs);
+                cmd.Parameters.AddWithValue("@dt", d.DeltaTasks);
+                cmd.Parameters.AddWithValue("@ds", d.DeltaSignalMs);
                 cmd.Parameters.AddWithValue("@sid", snap.SnapshotId);
                 await cmd.ExecuteNonQueryAsync(ct);
             }
@@ -137,8 +137,8 @@ public class WaitStatsHistoryService : IDisposable
                 rows.Add(new WaitTrendPoint
                 {
                     RecordedAtUtc = DateTime.Parse(reader.GetString(0), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                    DeltaWaitMs   = reader.GetInt64(1),
-                    DeltaTasks    = reader.GetInt64(2),
+                    DeltaWaitMs = reader.GetInt64(1),
+                    DeltaTasks = reader.GetInt64(2),
                     DeltaSignalMs = reader.GetInt64(3),
                 });
             }

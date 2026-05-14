@@ -151,24 +151,24 @@ public static class ExecutionPlanParser
                 xml = xml.TrimStart('\uFEFF');
             }
             var graphs = ParseAll(xml);
-            
-            Serilog.Log.Debug("Parsed execution plan successfully: {NodeCount} nodes, {EdgeCount} edges", 
+
+            Serilog.Log.Debug("Parsed execution plan successfully: {NodeCount} nodes, {EdgeCount} edges",
                 graphs.FirstOrDefault()?.Nodes.Count ?? 0,
                 graphs.FirstOrDefault()?.Edges.Count ?? 0);
-            
+
             return graphs.FirstOrDefault() ?? new PlanGraph();
         }
         catch (Exception ex)
         {
             Serilog.Log.Error(ex, "Execution plan parsing failed. XML length: {XmlLength} chars", xml?.Length ?? 0);
-            
+
             // Log first 1000 chars of XML for diagnostics
             if (!string.IsNullOrWhiteSpace(xml))
             {
                 var preview = xml.Length > 1000 ? xml.Substring(0, 1000) + "..." : xml;
                 Serilog.Log.Debug("Plan XML preview: {PlanPreview}", preview);
             }
-            
+
             return new PlanGraph();
         }
     }
@@ -309,7 +309,7 @@ public static class ExecutionPlanParser
             enhancedDdl += $"\n    ON {databasePrefix}{qualifiedTable} ({string.Join(", ", keyCols.Select(c => $"[{c}]"))})";
             if (include.Count > 0)
                 enhancedDdl += $"\n    INCLUDE ({string.Join(", ", include.Select(c => $"[{c}]"))})";
-            
+
             // Add production options
             enhancedDdl += $"\n    WITH (";
             enhancedDdl += $"\n        ONLINE = {{ONLINE}},";
@@ -512,7 +512,7 @@ public static class ExecutionPlanParser
                 var scalarOp = nsp.Descendants()
                     .FirstOrDefault(e => e.Name.LocalName == "ScalarOperator");
                 var colName = colRef?.Attribute("Column")?.Value;
-                var expr    = scalarOp?.Attribute("ScalarString")?.Value ?? nsp.Attribute("Reason")?.Value;
+                var expr = scalarOp?.Attribute("ScalarString")?.Value ?? nsp.Attribute("Reason")?.Value;
                 if (colName != null && expr != null)
                     warningParts.Add($"Non-SARGable: [{colName}] — {expr}");
                 else if (colName != null)
@@ -526,15 +526,15 @@ public static class ExecutionPlanParser
                 .Where(e => e.Name.LocalName == "PlanAffectingConvert"))
             {
                 // #4 Column-level implicit conversion detail
-                var expr       = conv.Attribute("Expression")?.Value;
+                var expr = conv.Attribute("Expression")?.Value;
                 var convertIssue = conv.Attribute("ConvertIssue")?.Value; // "Seek Plan" or "Cardinality Estimate"
-                var fromType   = conv.Attribute("FromType")?.Value;
-                var toType     = conv.Attribute("ToType")?.Value;
+                var fromType = conv.Attribute("FromType")?.Value;
+                var toType = conv.Attribute("ToType")?.Value;
 
                 var convMsg = "Implicit Convert";
-                if (expr != null)          convMsg += $": {expr}";
+                if (expr != null) convMsg += $": {expr}";
                 if (fromType != null && toType != null) convMsg += $" ({fromType} → {toType})";
-                if (convertIssue != null)  convMsg += $" — affects {convertIssue}";
+                if (convertIssue != null) convMsg += $" — affects {convertIssue}";
                 warningParts.Add(convMsg);
             }
             if (warningsEl.Descendants().Any(e => e.Name.LocalName == "SortSpillDetails"))
@@ -719,10 +719,10 @@ public static class ExecutionPlanParser
                 node.Badges.Add("MemGrantFeedback");
                 node.Properties["Memory Grant Feedback"] = mgfAdjusted switch
                 {
-                    "YesStable"    => "Feedback applied — grant is stable",
+                    "YesStable" => "Feedback applied — grant is stable",
                     "YesAdjusting" => "Feedback adjusting — grant still converging",
-                    "NoFeedback"   => "No feedback yet (first execution)",
-                    _              => mgfAdjusted
+                    "NoFeedback" => "No feedback yet (first execution)",
+                    _ => mgfAdjusted
                 };
             }
         }

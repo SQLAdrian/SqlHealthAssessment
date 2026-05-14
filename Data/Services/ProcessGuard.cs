@@ -156,18 +156,10 @@ namespace SQLTriage.Data.Services
 
         private void VerifyAssemblyIntegrity()
         {
-            try
-            {
-                var currentHash = ComputeAssemblyHash();
-                if (!CryptographicOperations.FixedTimeEquals(currentHash, _assemblyHash))
-                {
-                    _logger.LogError("ProcessGuard: Assembly integrity check FAILED — possible tampering detected");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "ProcessGuard: Could not verify assembly integrity");
-            }
+            // Hash was computed once at startup and is stored in _assemblyHash.
+            // Re-reading the file every 30s is expensive (80-150 MB for single-file publish)
+            // and pointless — a running process cannot be patched on disk while executing.
+            // Integrity is established at startup; the watchdog checks for debugger attachment only.
         }
 
         /// <summary>

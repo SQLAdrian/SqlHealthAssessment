@@ -207,13 +207,13 @@ ORDER BY total_cpu_ms DESC;";
 
     private static string MapObjectKind(string sysObjectsType) => sysObjectsType switch
     {
-        "P"  => "StoredProc",
+        "P" => "StoredProc",
         "FN" => "ScalarFn",
         "TF" => "TableFn",
         "IF" => "InlineFn",
         "TR" => "Trigger",
-        "V"  => "View",
-        _    => "Other"
+        "V" => "View",
+        _ => "Other"
     };
 
     // Single-line, ~60-char preview of the statement, used as the tile label.

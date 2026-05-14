@@ -307,7 +307,7 @@ namespace SQLTriage.Data.Scheduling
 
                     if (pending.Count == 0)
                     {
-                            await Task.Delay(10, _cts.Token);
+                        await Task.Delay(10, _cts.Token);
                         continue;
                     }
 
@@ -366,7 +366,7 @@ namespace SQLTriage.Data.Scheduling
                         }
                         else
                         {
-                        await Task.Delay(10, _cts.Token);
+                            await Task.Delay(10, _cts.Token);
                         }
                         continue;
                     }

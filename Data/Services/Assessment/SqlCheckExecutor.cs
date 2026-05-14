@@ -32,16 +32,16 @@ namespace SQLTriage.Data.Services.Assessment
                 result.Passed = false;
                 result.Results.Add(new AssessmentResult
                 {
-                    CheckId            = check.CheckId,
-                    Message            = reader.IsDBNull(0) ? check.DisplayName : reader.GetString(0),
-                    Severity           = check.Severity,
-                    TargetName         = reader.IsDBNull(1) ? serverName : reader.GetString(1),
-                    TargetType         = check.TargetType,
-                    Category           = check.Category,
-                    Description        = check.Description,
-                    HelpLink           = check.HelpLink,
-                    Status             = "Failed",
-                    SqlQuery           = check.Sql,
+                    CheckId = check.CheckId,
+                    Message = reader.IsDBNull(0) ? check.DisplayName : reader.GetString(0),
+                    Severity = check.Severity,
+                    TargetName = reader.IsDBNull(1) ? serverName : reader.GetString(1),
+                    TargetType = check.TargetType,
+                    Category = check.Category,
+                    Description = check.Description,
+                    HelpLink = check.HelpLink,
+                    Status = "Failed",
+                    SqlQuery = check.Sql,
                     ImplementationType = "Sql"
                 });
             }
@@ -56,15 +56,15 @@ namespace SQLTriage.Data.Services.Assessment
         internal static AssessmentResult MakePassedResult(AssessmentCheckDefinition check, string targetName) =>
             new()
             {
-                CheckId            = check.CheckId,
-                Message            = "Check passed - no issues found",
-                Severity           = "Pass",
-                TargetName         = targetName,
-                TargetType         = check.TargetType,
-                Category           = check.Category,
-                Description        = check.Description,
-                HelpLink           = check.HelpLink,
-                Status             = "Passed",
+                CheckId = check.CheckId,
+                Message = "Check passed - no issues found",
+                Severity = "Pass",
+                TargetName = targetName,
+                TargetType = check.TargetType,
+                Category = check.Category,
+                Description = check.Description,
+                HelpLink = check.HelpLink,
+                Status = "Passed",
                 ImplementationType = "Sql"
             };
     }

@@ -40,6 +40,12 @@ namespace SQLTriage
                 .CreateLogger();
 
             Log.Information("Application starting...");
+
+            // Keep the process from consuming all CPU if a background loop misbehaves.
+            // BelowNormal means the OS scheduler favours all other normal-priority processes.
+            System.Diagnostics.Process.GetCurrentProcess().PriorityClass =
+                System.Diagnostics.ProcessPriorityClass.BelowNormal;
+
             base.OnStartup(e);
             _ = OnStartupAsync(e);
         }
@@ -72,7 +78,7 @@ namespace SQLTriage
             var webView2Helper = new WebView2Helper();
             var webView2Status = await webView2Helper.CheckWebView2StatusAsync();
             sw.Stop();
-            Log.Information("[STARTUP] WebView2 check completed in {ElapsedMs}ms - Version: {Version}, IsCompatible: {Compatible}", 
+            Log.Information("[STARTUP] WebView2 check completed in {ElapsedMs}ms - Version: {Version}, IsCompatible: {Compatible}",
                 sw.ElapsedMilliseconds, webView2Status.Version, webView2Status.IsCompatible);
 
             WebView2Helper = webView2Helper;
@@ -122,7 +128,7 @@ namespace SQLTriage
 
             // Register ServerConnectionManager first - it will be used by SqlServerConnectionFactory
             services.AddSharedServices(configuration); /* BM: shared services registered via AddSharedServices â€” see Data/ServiceCollectionExtensions.cs */
-                        services.AddSingleton<PerformanceInspectorService>();
+            services.AddSingleton<PerformanceInspectorService>();
             services.AddSingleton<PanelMetricsService>();
 
             // DevBridge â€” only registered when --devbridge is on the command line.
@@ -214,7 +220,7 @@ namespace SQLTriage
             Log.Information("[STARTUP] liveQueriesMaintenanceService started");
 
             // Start alert baseline service (aggressive seeding for first 5 min, then hourly recompute)
-Log.Information("[STARTUP] AlertBaselineService starting async...");
+            Log.Information("[STARTUP] AlertBaselineService starting async...");
             _ = Task.Run(async () =>
             {
                 try

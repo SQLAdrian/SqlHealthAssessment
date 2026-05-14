@@ -391,12 +391,12 @@ public class XEventService
             {
                 sessions.Add(new XEventSessionInfo
                 {
-                    Name             = reader.GetString(0),
-                    StartupState     = reader.GetBoolean(1),
-                    CreateTime       = reader.IsDBNull(2) ? DateTime.MinValue : reader.GetDateTime(2),
-                    IsRunning        = reader.GetInt32(3) == 1,
+                    Name = reader.GetString(0),
+                    StartupState = reader.GetBoolean(1),
+                    CreateTime = reader.IsDBNull(2) ? DateTime.MinValue : reader.GetDateTime(2),
+                    IsRunning = reader.GetInt32(3) == 1,
                     TotalEventsEmitted = reader.GetInt64(4),
-                    BufferSizeBytes  = reader.GetInt64(5)
+                    BufferSizeBytes = reader.GetInt64(5)
                 });
             }
         }

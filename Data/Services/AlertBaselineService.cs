@@ -34,33 +34,33 @@ namespace SQLTriage.Data.Services
     {
         // ── Constants ────────────────────────────────────────────────────────
 
-        private const int    MinSeedSamples         = 10;
-        private const int    SeedIntervalSeconds    = 15;    // aggressive seed cadence
-        private const int    NormalIntervalSeconds  = 3600;  // recompute stats hourly
-        private const int    RetentionDays          = 30;
-        private const double WarnMultiplier         = 1.5;
-        private const double CritMultiplier         = 3.0;
+        private const int MinSeedSamples = 10;
+        private const int SeedIntervalSeconds = 15;    // aggressive seed cadence
+        private const int NormalIntervalSeconds = 3600;  // recompute stats hourly
+        private const int RetentionDays = 30;
+        private const double WarnMultiplier = 1.5;
+        private const double CritMultiplier = 3.0;
 
         // Trend detection: minimum samples needed for a meaningful slope, and the
         // window of recent samples to regress over (avoids ancient data skewing slope).
-        private const int    TrendMinSamples        = 20;
-        private const int    TrendWindowHours       = 72;   // look back 3 days for slope
+        private const int TrendMinSamples = 20;
+        private const int TrendWindowHours = 72;   // look back 3 days for slope
         // A slope is "trending" when it exceeds this fraction of the median per hour.
         // e.g. 0.005 = alert if rising > 0.5% of median per hour = ~12% per day.
-        private const double TrendWarnSlopeRatio    = 0.005;
-        private const double TrendCritSlopeRatio    = 0.015;
+        private const double TrendWarnSlopeRatio = 0.005;
+        private const double TrendCritSlopeRatio = 0.015;
 
         // ── Fields ───────────────────────────────────────────────────────────
 
-        private readonly ILogger<AlertBaselineService>  _logger;
-        private readonly AlertDefinitionService         _definitions;
-        private readonly ServerConnectionManager        _connections;
-        private readonly liveQueriesCacheStore          _cache;
-        private readonly IUserSettingsService           _settings;
+        private readonly ILogger<AlertBaselineService> _logger;
+        private readonly AlertDefinitionService _definitions;
+        private readonly ServerConnectionManager _connections;
+        private readonly liveQueriesCacheStore _cache;
+        private readonly IUserSettingsService _settings;
 
-        private readonly System.Timers.Timer            _seedTimer;
-        private readonly System.Timers.Timer            _computeTimer;
-        private readonly SemaphoreSlim                  _lock = new(1, 1);
+        private readonly System.Timers.Timer _seedTimer;
+        private readonly System.Timers.Timer _computeTimer;
+        private readonly SemaphoreSlim _lock = new(1, 1);
 
         // alert_id:server_name -> sample count (for progress)
         private readonly ConcurrentDictionary<string, int> _sampleCounts = new(StringComparer.OrdinalIgnoreCase);
@@ -85,14 +85,14 @@ namespace SQLTriage.Data.Services
             get
             {
                 if (_sampleCounts.IsEmpty) return 0;
-                var total   = _sampleCounts.Count * MinSeedSamples;
+                var total = _sampleCounts.Count * MinSeedSamples;
                 var current = _sampleCounts.Values.Sum(v => Math.Min(v, MinSeedSamples));
                 return total == 0 ? 0 : Math.Min(1.0, (double)current / total);
             }
         }
 
         /// <summary>Number of alert/server pairs that have reached the minimum sample threshold.</summary>
-        public int SeededCount   => _sampleCounts.Values.Count(v => v >= MinSeedSamples);
+        public int SeededCount => _sampleCounts.Values.Count(v => v >= MinSeedSamples);
         /// <summary>Total alert/server pairs being tracked.</summary>
         public int TotalPairCount => _sampleCounts.Count;
 
@@ -107,11 +107,11 @@ namespace SQLTriage.Data.Services
             liveQueriesCacheStore cache,
             IUserSettingsService settings)
         {
-            _logger      = logger;
+            _logger = logger;
             _definitions = definitions;
             _connections = connections;
-            _cache       = cache;
-            _settings    = settings;
+            _cache = cache;
+            _settings = settings;
 
             _seedTimer = new System.Timers.Timer(SeedIntervalSeconds * 1000) { AutoReset = true };
             _seedTimer.Elapsed += async (_, _) => await RunSeedCycleAsync();
@@ -308,8 +308,8 @@ namespace SQLTriage.Data.Services
                 if (result == null || result == DBNull.Value) return;
 
                 var value = Convert.ToDouble(result);
-                var now   = DateTime.UtcNow;
-                var key   = Key(alert.Id, serverName);
+                var now = DateTime.UtcNow;
+                var key = Key(alert.Id, serverName);
 
                 await PersistSampleAsync(alert.Id, serverName, value, now);
                 _sampleCounts.AddOrUpdate(key, 1, (_, old) => old + 1);
@@ -332,8 +332,8 @@ namespace SQLTriage.Data.Services
             if (!_settings.GetAlertBaselineEnabled()) return;
             try
             {
-                var cutoff    = DateTime.UtcNow.AddDays(-RetentionDays).ToString("o");
-                var rows      = await LoadAllSamplesAsync(cutoff);
+                var cutoff = DateTime.UtcNow.AddDays(-RetentionDays).ToString("o");
+                var rows = await LoadAllSamplesAsync(cutoff);
                 var trendCutoff = DateTime.UtcNow.AddHours(-TrendWindowHours);
 
                 // Per-server stats
@@ -343,7 +343,7 @@ namespace SQLTriage.Data.Services
 
                 foreach (var g in perServer)
                 {
-                    var sorted    = g.Select(r => r.Value).OrderBy(v => v).ToList();
+                    var sorted = g.Select(r => r.Value).OrderBy(v => v).ToList();
                     var trendRows = g.Where(r => r.SampledAt >= trendCutoff)
                                     .OrderBy(r => r.SampledAt).ToList();
                     var stats = ComputeStats(g.First().AlertId, g.First().ServerName, sorted, trendRows);
@@ -356,7 +356,7 @@ namespace SQLTriage.Data.Services
 
                 foreach (var g in byAlert)
                 {
-                    var sorted    = g.Select(r => r.Value).OrderBy(v => v).ToList();
+                    var sorted = g.Select(r => r.Value).OrderBy(v => v).ToList();
                     var trendRows = g.Where(r => r.SampledAt >= trendCutoff)
                                     .OrderBy(r => r.SampledAt).ToList();
                     var stats = ComputeStats(g.Key, "__global__", sorted, trendRows);
@@ -376,12 +376,12 @@ namespace SQLTriage.Data.Services
             List<double> sorted,
             List<(string AlertId, string ServerName, double Value, DateTime SampledAt)> trendRows)
         {
-            var n    = sorted.Count;
-            var p25  = Percentile(sorted, 0.25);
-            var p50  = Percentile(sorted, 0.50);
-            var p75  = Percentile(sorted, 0.75);
-            var p95  = Percentile(sorted, 0.95);
-            var iqr  = p75 - p25;
+            var n = sorted.Count;
+            var p25 = Percentile(sorted, 0.25);
+            var p50 = Percentile(sorted, 0.50);
+            var p75 = Percentile(sorted, 0.75);
+            var p95 = Percentile(sorted, 0.95);
+            var iqr = p75 - p25;
 
             // Warn = P75 + 1.5 * IQR, Crit = P75 + 3.0 * IQR
             // Floor at P95 so thresholds are never lower than the 95th percentile
@@ -390,31 +390,31 @@ namespace SQLTriage.Data.Services
 
             // OLS linear regression on recent trend window
             var (slope, rSquared) = ComputeTrend(trendRows);
-            var trendCount        = trendRows.Count;
+            var trendCount = trendRows.Count;
 
             // Slope ratio relative to median (0 guard)
             var slopeRatio = p50 > 0 ? Math.Abs(slope) / p50 : 0;
-            var trendWarn  = trendCount >= TrendMinSamples && slopeRatio >= TrendWarnSlopeRatio;
-            var trendCrit  = trendCount >= TrendMinSamples && slopeRatio >= TrendCritSlopeRatio;
+            var trendWarn = trendCount >= TrendMinSamples && slopeRatio >= TrendWarnSlopeRatio;
+            var trendCrit = trendCount >= TrendMinSamples && slopeRatio >= TrendCritSlopeRatio;
 
             return new BaselineStats
             {
-                AlertId          = alertId,
-                ServerName       = serverName,
-                SampleCount      = n,
-                P25              = p25,
-                P50              = p50,
-                P75              = p75,
-                P95              = p95,
-                Iqr              = iqr,
-                ThresholdWarn    = warn,
-                ThresholdCrit    = crit,
-                LastComputed     = DateTime.UtcNow,
+                AlertId = alertId,
+                ServerName = serverName,
+                SampleCount = n,
+                P25 = p25,
+                P50 = p50,
+                P75 = p75,
+                P95 = p95,
+                Iqr = iqr,
+                ThresholdWarn = warn,
+                ThresholdCrit = crit,
+                LastComputed = DateTime.UtcNow,
                 TrendSlopePerHour = slope,
-                TrendRSquared    = rSquared,
+                TrendRSquared = rSquared,
                 TrendSampleCount = trendCount,
-                IsTrendWarning   = trendWarn,
-                IsTrendCritical  = trendCrit,
+                IsTrendWarning = trendWarn,
+                IsTrendCritical = trendCrit,
             };
         }
 
@@ -435,8 +435,8 @@ namespace SQLTriage.Data.Services
             {
                 var x = (r.SampledAt - origin).TotalHours;
                 var y = r.Value;
-                sumX  += x;
-                sumY  += y;
+                sumX += x;
+                sumY += y;
                 sumXY += x * y;
                 sumX2 += x * x;
             }
@@ -444,18 +444,18 @@ namespace SQLTriage.Data.Services
             var denom = n * sumX2 - sumX * sumX;
             if (Math.Abs(denom) < 1e-12) return (0, 0);
 
-            var slope     = (n * sumXY - sumX * sumY) / denom;
+            var slope = (n * sumXY - sumX * sumY) / denom;
             var intercept = (sumY - slope * sumX) / n;
 
             // R² = 1 - SS_res / SS_tot
-            var yMean  = sumY / n;
+            var yMean = sumY / n;
             double ssTot = 0, ssRes = 0;
             foreach (var r in rows)
             {
-                var x    = (r.SampledAt - origin).TotalHours;
+                var x = (r.SampledAt - origin).TotalHours;
                 var yHat = slope * x + intercept;
-                ssTot += (r.Value - yMean)  * (r.Value - yMean);
-                ssRes += (r.Value - yHat)   * (r.Value - yHat);
+                ssTot += (r.Value - yMean) * (r.Value - yMean);
+                ssRes += (r.Value - yHat) * (r.Value - yHat);
             }
 
             var rSquared = ssTot < 1e-12 ? 0 : Math.Max(0, 1.0 - ssRes / ssTot);
@@ -466,9 +466,9 @@ namespace SQLTriage.Data.Services
         {
             if (sorted.Count == 0) return 0;
             if (sorted.Count == 1) return sorted[0];
-            var idx  = p * (sorted.Count - 1);
-            var lo   = (int)Math.Floor(idx);
-            var hi   = (int)Math.Ceiling(idx);
+            var idx = p * (sorted.Count - 1);
+            var lo = (int)Math.Floor(idx);
+            var hi = (int)Math.Ceiling(idx);
             var frac = idx - lo;
             return sorted[lo] + frac * (sorted[hi] - sorted[lo]);
         }
@@ -521,22 +521,22 @@ namespace SQLTriage.Data.Services
                          COALESCE((SELECT baseline_locked FROM alert_baseline_stats
                                    WHERE alert_id=@aid AND server_name=@srv), 0),
                          @tslope, @trsq, @tsc, @tiw, @tic)";
-                cmd.Parameters.AddWithValue("@aid",   s.AlertId);
-                cmd.Parameters.AddWithValue("@srv",   s.ServerName);
-                cmd.Parameters.AddWithValue("@sc",    s.SampleCount);
-                cmd.Parameters.AddWithValue("@p25",   s.P25);
-                cmd.Parameters.AddWithValue("@p50",   s.P50);
-                cmd.Parameters.AddWithValue("@p75",   s.P75);
-                cmd.Parameters.AddWithValue("@p95",   s.P95);
-                cmd.Parameters.AddWithValue("@iqr",   s.Iqr);
-                cmd.Parameters.AddWithValue("@tw",    s.ThresholdWarn);
-                cmd.Parameters.AddWithValue("@tc",    s.ThresholdCrit);
-                cmd.Parameters.AddWithValue("@lc",    s.LastComputed.ToString("o"));
-                cmd.Parameters.AddWithValue("@tslope",s.TrendSlopePerHour);
-                cmd.Parameters.AddWithValue("@trsq",  s.TrendRSquared);
-                cmd.Parameters.AddWithValue("@tsc",   s.TrendSampleCount);
-                cmd.Parameters.AddWithValue("@tiw",   s.IsTrendWarning  ? 1 : 0);
-                cmd.Parameters.AddWithValue("@tic",   s.IsTrendCritical ? 1 : 0);
+                cmd.Parameters.AddWithValue("@aid", s.AlertId);
+                cmd.Parameters.AddWithValue("@srv", s.ServerName);
+                cmd.Parameters.AddWithValue("@sc", s.SampleCount);
+                cmd.Parameters.AddWithValue("@p25", s.P25);
+                cmd.Parameters.AddWithValue("@p50", s.P50);
+                cmd.Parameters.AddWithValue("@p75", s.P75);
+                cmd.Parameters.AddWithValue("@p95", s.P95);
+                cmd.Parameters.AddWithValue("@iqr", s.Iqr);
+                cmd.Parameters.AddWithValue("@tw", s.ThresholdWarn);
+                cmd.Parameters.AddWithValue("@tc", s.ThresholdCrit);
+                cmd.Parameters.AddWithValue("@lc", s.LastComputed.ToString("o"));
+                cmd.Parameters.AddWithValue("@tslope", s.TrendSlopePerHour);
+                cmd.Parameters.AddWithValue("@trsq", s.TrendRSquared);
+                cmd.Parameters.AddWithValue("@tsc", s.TrendSampleCount);
+                cmd.Parameters.AddWithValue("@tiw", s.IsTrendWarning ? 1 : 0);
+                cmd.Parameters.AddWithValue("@tic", s.IsTrendCritical ? 1 : 0);
                 await cmd.ExecuteNonQueryAsync();
             }
             catch (Exception ex)
@@ -605,22 +605,22 @@ namespace SQLTriage.Data.Services
                 {
                     var s = new BaselineStats
                     {
-                        AlertId           = r2.GetString(0),
-                        ServerName        = r2.GetString(1),
-                        SampleCount       = r2.GetInt32(2),
-                        P25               = r2.GetDouble(3),
-                        P50               = r2.GetDouble(4),
-                        P75               = r2.GetDouble(5),
-                        P95               = r2.GetDouble(6),
-                        Iqr               = r2.GetDouble(7),
-                        ThresholdWarn     = r2.GetDouble(8),
-                        ThresholdCrit     = r2.GetDouble(9),
-                        LastComputed      = DateTime.Parse(r2.GetString(10)),
+                        AlertId = r2.GetString(0),
+                        ServerName = r2.GetString(1),
+                        SampleCount = r2.GetInt32(2),
+                        P25 = r2.GetDouble(3),
+                        P50 = r2.GetDouble(4),
+                        P75 = r2.GetDouble(5),
+                        P95 = r2.GetDouble(6),
+                        Iqr = r2.GetDouble(7),
+                        ThresholdWarn = r2.GetDouble(8),
+                        ThresholdCrit = r2.GetDouble(9),
+                        LastComputed = DateTime.Parse(r2.GetString(10)),
                         TrendSlopePerHour = r2.IsDBNull(11) ? 0 : r2.GetDouble(11),
-                        TrendRSquared     = r2.IsDBNull(12) ? 0 : r2.GetDouble(12),
-                        TrendSampleCount  = r2.IsDBNull(13) ? 0 : r2.GetInt32(13),
-                        IsTrendWarning    = !r2.IsDBNull(14) && r2.GetInt32(14) == 1,
-                        IsTrendCritical   = !r2.IsDBNull(15) && r2.GetInt32(15) == 1,
+                        TrendRSquared = r2.IsDBNull(12) ? 0 : r2.GetDouble(12),
+                        TrendSampleCount = r2.IsDBNull(13) ? 0 : r2.GetInt32(13),
+                        IsTrendWarning = !r2.IsDBNull(14) && r2.GetInt32(14) == 1,
+                        IsTrendCritical = !r2.IsDBNull(15) && r2.GetInt32(15) == 1,
                     };
                     _stats[Key(s.AlertId, s.ServerName)] = s;
                 }
@@ -700,23 +700,23 @@ namespace SQLTriage.Data.Services
     /// <summary>Computed IQR-based baseline statistics for one alert/server pair.</summary>
     public class BaselineStats
     {
-        public string   AlertId          { get; init; } = "";
-        public string   ServerName       { get; init; } = "";
-        public int      SampleCount      { get; init; }
-        public double   P25              { get; init; }
-        public double   P50              { get; init; }
-        public double   P75              { get; init; }
-        public double   P95              { get; init; }
-        public double   Iqr              { get; init; }
-        public double   ThresholdWarn    { get; init; }
-        public double   ThresholdCrit    { get; init; }
-        public DateTime LastComputed     { get; init; }
-        public bool     BaselineLocked   { get; init; }
+        public string AlertId { get; init; } = "";
+        public string ServerName { get; init; } = "";
+        public int SampleCount { get; init; }
+        public double P25 { get; init; }
+        public double P50 { get; init; }
+        public double P75 { get; init; }
+        public double P95 { get; init; }
+        public double Iqr { get; init; }
+        public double ThresholdWarn { get; init; }
+        public double ThresholdCrit { get; init; }
+        public DateTime LastComputed { get; init; }
+        public bool BaselineLocked { get; init; }
         // Trend detection (OLS linear regression over rolling TrendWindowHours)
-        public double   TrendSlopePerHour  { get; init; }   // units/hour
-        public double   TrendRSquared      { get; init; }   // 0–1 fit quality
-        public int      TrendSampleCount   { get; init; }   // samples used for slope
-        public bool     IsTrendWarning     { get; init; }
-        public bool     IsTrendCritical    { get; init; }
+        public double TrendSlopePerHour { get; init; }   // units/hour
+        public double TrendRSquared { get; init; }   // 0–1 fit quality
+        public int TrendSampleCount { get; init; }   // samples used for slope
+        public bool IsTrendWarning { get; init; }
+        public bool IsTrendCritical { get; init; }
     }
 }

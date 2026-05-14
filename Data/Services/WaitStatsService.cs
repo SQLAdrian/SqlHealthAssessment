@@ -141,18 +141,18 @@ public class WaitStatsService : IDisposable
         foreach (var (wt, cur) in current)
         {
             if (!previous.TryGetValue(wt, out var prev)) continue;
-            var dWait   = cur.WaitMs - prev.WaitMs;
-            var dTasks  = cur.Tasks - prev.Tasks;
+            var dWait = cur.WaitMs - prev.WaitMs;
+            var dTasks = cur.Tasks - prev.Tasks;
             var dSignal = cur.SignalMs - prev.SignalMs;
             if (dWait <= 0 && dTasks <= 0) continue;
             // Negative deltas can occur if DBCC SQLPERF cleared the stats — skip.
             if (dWait < 0 || dTasks < 0 || dSignal < 0) continue;
             snap.Deltas.Add(new WaitDelta
             {
-                WaitType      = wt,
-                Category      = WaitCategoryClassifier.Classify(wt),
-                DeltaWaitMs   = dWait,
-                DeltaTasks    = dTasks,
+                WaitType = wt,
+                Category = WaitCategoryClassifier.Classify(wt),
+                DeltaWaitMs = dWait,
+                DeltaTasks = dTasks,
                 DeltaSignalMs = dSignal,
             });
         }

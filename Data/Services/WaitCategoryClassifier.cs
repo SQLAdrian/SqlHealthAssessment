@@ -77,25 +77,25 @@ public static class WaitCategoryClassifier
 
         // Prefix matches first (most common), then exact matches.
         if (waitType.StartsWith("PAGEIOLATCH_", StringComparison.Ordinal)) return WaitCategory.Io;
-        if (waitType.StartsWith("PAGELATCH_", StringComparison.Ordinal))   return WaitCategory.Buffer;
-        if (waitType.StartsWith("LATCH_", StringComparison.Ordinal))       return WaitCategory.Latch;
-        if (waitType.StartsWith("LCK_", StringComparison.Ordinal))         return WaitCategory.Lock;
-        if (waitType.StartsWith("WRITELOG", StringComparison.Ordinal))     return WaitCategory.Io;
-        if (waitType.StartsWith("BACKUP", StringComparison.Ordinal))       return WaitCategory.Io;
-        if (waitType.StartsWith("HADR_", StringComparison.Ordinal))        return WaitCategory.Replication;
+        if (waitType.StartsWith("PAGELATCH_", StringComparison.Ordinal)) return WaitCategory.Buffer;
+        if (waitType.StartsWith("LATCH_", StringComparison.Ordinal)) return WaitCategory.Latch;
+        if (waitType.StartsWith("LCK_", StringComparison.Ordinal)) return WaitCategory.Lock;
+        if (waitType.StartsWith("WRITELOG", StringComparison.Ordinal)) return WaitCategory.Io;
+        if (waitType.StartsWith("BACKUP", StringComparison.Ordinal)) return WaitCategory.Io;
+        if (waitType.StartsWith("HADR_", StringComparison.Ordinal)) return WaitCategory.Replication;
         if (waitType.StartsWith("PREEMPTIVE_HADR_", StringComparison.Ordinal)) return WaitCategory.Replication;
-        if (waitType.StartsWith("DBMIRROR_", StringComparison.Ordinal))    return WaitCategory.Replication;
+        if (waitType.StartsWith("DBMIRROR_", StringComparison.Ordinal)) return WaitCategory.Replication;
 
         return waitType switch
         {
             "SOS_SCHEDULER_YIELD" or "CXPACKET" or "CXCONSUMER" or "THREADPOOL"
-                or "WORKER_BOUND" or "EXECSYNC"                            => WaitCategory.Cpu,
-            "ASYNC_IO_COMPLETION" or "IO_COMPLETION" or "IO_QUEUE_LIMIT"   => WaitCategory.Io,
+                or "WORKER_BOUND" or "EXECSYNC" => WaitCategory.Cpu,
+            "ASYNC_IO_COMPLETION" or "IO_COMPLETION" or "IO_QUEUE_LIMIT" => WaitCategory.Io,
             "RESOURCE_SEMAPHORE" or "RESOURCE_SEMAPHORE_QUERY_COMPILE"
                 or "CMEMPARTITIONED" or "EE_PMOLIST"
-                or "MEMORYBROKER_FOR_CACHE" or "CMEMTHREAD"                => WaitCategory.Memory,
+                or "MEMORYBROKER_FOR_CACHE" or "CMEMTHREAD" => WaitCategory.Memory,
             "ASYNC_NETWORK_IO" or "NET_WAITFOR_PACKET"
-                or "EXTERNAL_SCRIPT_NETWORK_IOF"                           => WaitCategory.Network,
+                or "EXTERNAL_SCRIPT_NETWORK_IOF" => WaitCategory.Network,
             _ => WaitCategory.Other,
         };
     }

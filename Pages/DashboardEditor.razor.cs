@@ -15,7 +15,7 @@ using SQLTriage.Data.Services;
 namespace SQLTriage.Pages;
 public partial class DashboardEditor
 {
-private DashboardConfigRoot EditedConfig = new();
+    private DashboardConfigRoot EditedConfig = new();
     private DashboardDefinition? SelectedDashboard;
     private PanelDefinition? SelectedPanel;
     private string StatusMessage = "";
@@ -26,19 +26,19 @@ private DashboardConfigRoot EditedConfig = new();
     private string QueryResultSource = "";
     private string? QueryDdlPreview;
     private bool IsQueryRunning;
-    
+
     // Add Dashboard Dialog
     private bool ShowAddDashboardDialog;
     private string NewDashboardTitle = "";
     private string NewDashboardRoute = "";
-    
+
     // Edit Dashboard Dialog
     private bool ShowEditDashboardDialog;
     private DashboardDefinition? EditingDashboard;
     private string EditDashboardTitle = "";
     private string EditDashboardRoute = "";
     private string EditDashboardDefaultDatabase = "";
-    
+
     private bool ShowPreview;
     private bool ShowImport;
     private string ImportJson = "";
@@ -63,7 +63,7 @@ private DashboardConfigRoot EditedConfig = new();
         try
         {
             LoadConfig();
-            
+
             // Auto-save timer: save 2 seconds after last edit
             _autoSaveTimer = new System.Timers.Timer(2000);
             _autoSaveTimer.AutoReset = false;
@@ -179,7 +179,7 @@ private DashboardConfigRoot EditedConfig = new();
             UndoStack = new Stack<DashboardConfigRoot>(temp.Reverse());
         }
         RedoStack.Clear();
-        
+
         // Mark as having unsaved changes and trigger auto-save timer
         _hasUnsavedChanges = true;
         _autoSaveTimer?.Stop();
@@ -264,20 +264,20 @@ private DashboardConfigRoot EditedConfig = new();
             IsSuccess = false;
             return;
         }
-        
+
         if (string.IsNullOrWhiteSpace(NewDashboardRoute))
         {
             StatusMessage = "Page name (route) is required";
             IsSuccess = false;
             return;
         }
-        
+
         // Ensure route starts with /
         if (!NewDashboardRoute.StartsWith("/"))
         {
             NewDashboardRoute = "/" + NewDashboardRoute;
         }
-        
+
         SaveState();
         var newDashboard = new DashboardDefinition
         {
@@ -324,32 +324,32 @@ private DashboardConfigRoot EditedConfig = new();
         try
         {
             if (EditingDashboard == null) return;
-            
+
             if (string.IsNullOrWhiteSpace(EditDashboardTitle))
             {
                 StatusMessage = "Dashboard name is required";
                 IsSuccess = false;
                 return;
             }
-            
+
             if (string.IsNullOrWhiteSpace(EditDashboardRoute))
             {
                 StatusMessage = "Page name (route) is required";
                 IsSuccess = false;
                 return;
             }
-            
+
             // Ensure route starts with /
             if (!EditDashboardRoute.StartsWith("/"))
             {
                 EditDashboardRoute = "/" + EditDashboardRoute;
             }
-            
+
             SaveState();
             EditingDashboard.Title = EditDashboardTitle.Trim();
             EditingDashboard.Route = EditDashboardRoute.Trim();
             EditingDashboard.DefaultDatabase = string.IsNullOrWhiteSpace(EditDashboardDefaultDatabase) ? null : EditDashboardDefaultDatabase.Trim();
-            
+
             ShowEditDashboardDialog = false;
             EditingDashboard = null;
             EditDashboardTitle = "";
@@ -446,23 +446,23 @@ private DashboardConfigRoot EditedConfig = new();
         }
     }
 
-    private PanelDefinition?     _draggedPanel;
+    private PanelDefinition? _draggedPanel;
     private DashboardDefinition? _draggedPanelDashboard;
     private DashboardDefinition? _draggedDashboard;
-    private PanelDefinition?     _dragOverPanel;
+    private PanelDefinition? _dragOverPanel;
     private DashboardDefinition? _dragOverDashboard;
 
     private void OnDragStart(PanelDefinition panel)
     {
-        _draggedPanel     = panel;
+        _draggedPanel = panel;
         _draggedPanelDashboard = SelectedDashboard;
         _draggedDashboard = null;
     }
 
     private void OnDashboardDragStart(DashboardDefinition dashboard)
     {
-        _draggedDashboard      = dashboard;
-        _draggedPanel          = null;
+        _draggedDashboard = dashboard;
+        _draggedPanel = null;
         _draggedPanelDashboard = null;
     }
 
@@ -499,16 +499,16 @@ private DashboardConfigRoot EditedConfig = new();
         {
             if (_draggedDashboard.Id == targetDashboard.Id)
             {
-                _draggedDashboard  = null;
+                _draggedDashboard = null;
                 _dragOverDashboard = null;
                 return;
             }
 
             SaveState();
 
-            var dashboards   = EditedConfig.Dashboards;
-            var fromIndex    = dashboards.IndexOf(_draggedDashboard);
-            var toIndex      = dashboards.IndexOf(targetDashboard);
+            var dashboards = EditedConfig.Dashboards;
+            var fromIndex = dashboards.IndexOf(_draggedDashboard);
+            var toIndex = dashboards.IndexOf(targetDashboard);
             if (fromIndex >= 0 && toIndex >= 0)
             {
                 dashboards.RemoveAt(fromIndex);
@@ -516,7 +516,7 @@ private DashboardConfigRoot EditedConfig = new();
                 UpdateDashboardOrders(dashboards);
             }
 
-            _draggedDashboard  = null;
+            _draggedDashboard = null;
             _dragOverDashboard = null;
             return;
         }
@@ -539,9 +539,9 @@ private DashboardConfigRoot EditedConfig = new();
         SelectDashboard(targetDashboard);
         SelectPanel(_draggedPanel);
 
-        _draggedPanel          = null;
+        _draggedPanel = null;
         _draggedPanelDashboard = null;
-        _dragOverDashboard     = null;
+        _dragOverDashboard = null;
     }
 
     private void OnDrop(PanelDefinition targetPanel)
@@ -647,8 +647,8 @@ private DashboardConfigRoot EditedConfig = new();
             {
                 TimeFrom = TestTimeFrom,
                 TimeTo = TestTimeTo,
-                Instances = string.IsNullOrWhiteSpace(TestSqlInstance) 
-                    ? Array.Empty<string>() 
+                Instances = string.IsNullOrWhiteSpace(TestSqlInstance)
+                    ? Array.Empty<string>()
                     : TestSqlInstance.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             };
 
@@ -814,18 +814,18 @@ private DashboardConfigRoot EditedConfig = new();
         }
         await Task.CompletedTask;
     }
-    
+
     private void TriggerAutoSave()
     {
         _hasUnsavedChanges = true;
         _autoSaveTimer?.Stop();
         _autoSaveTimer?.Start();
     }
-    
+
     private async Task AutoSave()
     {
         if (!_hasUnsavedChanges) return;
-        
+
         try
         {
             ConfigService.UpdateConfig(EditedConfig);
@@ -833,7 +833,7 @@ private DashboardConfigRoot EditedConfig = new();
             StatusMessage = "Auto-saved";
             IsSuccess = true;
             StateHasChanged();
-            
+
             // Clear status message after 2 seconds
             await Task.Delay(2000);
             StatusMessage = "";

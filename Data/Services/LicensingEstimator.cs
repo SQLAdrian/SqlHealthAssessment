@@ -104,13 +104,13 @@ namespace SQLTriage.Data.Services
                 using (var rdr = await cmd.ExecuteReaderAsync())
                 {
                     if (!await rdr.ReadAsync()) return null;
-                    edition         = rdr.IsDBNull(0) ? "Unknown" : rdr.GetString(0);
-                    productVersion  = rdr.IsDBNull(1) ? "" : rdr.GetString(1);
-                    isClustered     = !rdr.IsDBNull(2) && rdr.GetInt32(2) == 1;
-                    isHadrEnabled   = !rdr.IsDBNull(3) && rdr.GetInt32(3) == 1;
+                    edition = rdr.IsDBNull(0) ? "Unknown" : rdr.GetString(0);
+                    productVersion = rdr.IsDBNull(1) ? "" : rdr.GetString(1);
+                    isClustered = !rdr.IsDBNull(2) && rdr.GetInt32(2) == 1;
+                    isHadrEnabled = !rdr.IsDBNull(3) && rdr.GetInt32(3) == 1;
                     logicalCpuCount = rdr.IsDBNull(4) ? 0 : rdr.GetInt32(4);
-                    hyperthread     = rdr.IsDBNull(5) ? 1 : rdr.GetInt32(5);
-                    socketCount     = rdr.IsDBNull(6) ? 1 : rdr.GetInt32(6);
+                    hyperthread = rdr.IsDBNull(5) ? 1 : rdr.GetInt32(5);
+                    socketCount = rdr.IsDBNull(6) ? 1 : rdr.GetInt32(6);
                 }
 
                 // Physical cores = logical / hyperthread ratio. If ratio is 1, no HT.
@@ -119,15 +119,15 @@ namespace SQLTriage.Data.Services
 
                 var facts = new ServerLicensingFacts
                 {
-                    ServerName       = serverName,
-                    DetectedEdition  = edition,
+                    ServerName = serverName,
+                    DetectedEdition = edition,
                     NormalisedEdition = NormaliseEdition(edition),
-                    ProductVersion   = productVersion,
-                    IsClustered      = isClustered,
-                    IsHadrEnabled    = isHadrEnabled,
-                    LogicalCpuCount  = logicalCpuCount,
+                    ProductVersion = productVersion,
+                    IsClustered = isClustered,
+                    IsHadrEnabled = isHadrEnabled,
+                    LogicalCpuCount = logicalCpuCount,
                     PhysicalCpuCount = physicalCores,
-                    SocketCount      = socketCount,
+                    SocketCount = socketCount,
                     HyperthreadRatio = hyperthread,
                 };
 
@@ -177,10 +177,10 @@ namespace SQLTriage.Data.Services
                     replicas.Add(new AgReplica
                     {
                         ReplicaServerName = rdr.IsDBNull(0) ? "" : rdr.GetString(0),
-                        RoleDesc          = rdr.IsDBNull(1) ? "UNKNOWN" : rdr.GetString(1),
-                        AllowConnections  = rdr.IsDBNull(2) ? "NO" : rdr.GetString(2),
-                        IsLocal           = !rdr.IsDBNull(3) && rdr.GetInt32(3) == 1,
-                        AgName            = rdr.IsDBNull(4) ? "" : rdr.GetString(4),
+                        RoleDesc = rdr.IsDBNull(1) ? "UNKNOWN" : rdr.GetString(1),
+                        AllowConnections = rdr.IsDBNull(2) ? "NO" : rdr.GetString(2),
+                        IsLocal = !rdr.IsDBNull(3) && rdr.GetInt32(3) == 1,
+                        AgName = rdr.IsDBNull(4) ? "" : rdr.GetString(4),
                     });
                 }
             }
@@ -256,11 +256,11 @@ namespace SQLTriage.Data.Services
         {
             var line = new PerServerLicensing
             {
-                ServerName    = s.ServerName,
-                Edition       = s.NormalisedEdition,
+                ServerName = s.ServerName,
+                Edition = s.NormalisedEdition,
                 PhysicalCores = s.PhysicalCpuCount,
-                AgRole        = agRole?.RoleDesc,
-                AgName        = agRole?.AgName,
+                AgRole = agRole?.RoleDesc,
+                AgName = agRole?.AgName,
             };
 
             if (_pricing == null) return line;
@@ -271,19 +271,19 @@ namespace SQLTriage.Data.Services
                 && string.Equals(agRole.RoleDesc, "SECONDARY", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(agRole.AllowConnections, "NO", StringComparison.OrdinalIgnoreCase))
             {
-                line.LicensedCores      = 0;
+                line.LicensedCores = 0;
                 line.AnnualLicensingUSD = 0;
                 line.IsPassiveSecondary = true;
-                line.Notes              = $"Passive AG secondary in '{agRole.AgName}' — free under SA";
+                line.Notes = $"Passive AG secondary in '{agRole.AgName}' — free under SA";
                 return line;
             }
 
             // Free editions: zero cost, exit early
             if (s.NormalisedEdition is "Express" or "Developer")
             {
-                line.LicensedCores       = 0;
-                line.AnnualLicensingUSD  = 0;
-                line.Notes               = $"{s.NormalisedEdition} edition — no licensing cost";
+                line.LicensedCores = 0;
+                line.AnnualLicensingUSD = 0;
+                line.Notes = $"{s.NormalisedEdition} edition — no licensing cost";
                 return line;
             }
 

@@ -164,9 +164,9 @@ namespace SQLTriage.Data.Services
                         string? ed = null;
                         if (await rdr.ReadAsync(cts.Token))
                         {
-                            ee  = rdr.IsDBNull(0) ? 0    : rdr.GetInt32(0);
-                            pmv = rdr.IsDBNull(1) ? 0    : rdr.GetInt32(1);
-                            ed  = rdr.IsDBNull(2) ? null : rdr.GetString(2);
+                            ee = rdr.IsDBNull(0) ? 0 : rdr.GetInt32(0);
+                            pmv = rdr.IsDBNull(1) ? 0 : rdr.GetInt32(1);
+                            ed = rdr.IsDBNull(2) ? null : rdr.GetString(2);
                         }
                         _isAzure[serverName] = ee == 5 || ee == 8;
 
@@ -175,7 +175,7 @@ namespace SQLTriage.Data.Services
                         // Conservative gate: anything except Standard/Web/Express.
                         bool isEnterpriseClass = ee == 3 || ee == 5 || ee == 8 ||
                             (ed != null && (ed.Contains("Enterprise", StringComparison.OrdinalIgnoreCase)
-                                         || ed.Contains("Developer",  StringComparison.OrdinalIgnoreCase)
+                                         || ed.Contains("Developer", StringComparison.OrdinalIgnoreCase)
                                          || ed.Contains("Evaluation", StringComparison.OrdinalIgnoreCase)));
 
                         _caps[serverName] = new ServerCapabilities(pmv, ed, isEnterpriseClass);

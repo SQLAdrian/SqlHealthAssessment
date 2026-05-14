@@ -10,13 +10,13 @@ using SQLTriage.Data.Scheduling;
 
 namespace SQLTriage.Data.Services
 {
-     /// <summary>
-     /// Timer-based engine that periodically evaluates alert definitions against all configured servers.
-     /// Runs each alert's T-SQL query, compares the result to thresholds, manages the state machine
-     /// (Active → Acknowledged → Resolved), and dispatches notifications via AlertingService.
-     /// </summary>
-     // BM:AlertEvaluationService.Class — timer-based alert engine
-     public class AlertEvaluationService : IDisposable
+    /// <summary>
+    /// Timer-based engine that periodically evaluates alert definitions against all configured servers.
+    /// Runs each alert's T-SQL query, compares the result to thresholds, manages the state machine
+    /// (Active → Acknowledged → Resolved), and dispatches notifications via AlertingService.
+    /// </summary>
+    // BM:AlertEvaluationService.Class — timer-based alert engine
+    public class AlertEvaluationService : IDisposable
     {
         private readonly ILogger<AlertEvaluationService> _logger;
         private readonly AlertDefinitionService _definitions;
@@ -384,8 +384,8 @@ namespace SQLTriage.Data.Services
                 var sql = alert.Id switch
                 {
                     "error_log_severity" => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, NULL, NULL, @f, @t; SELECT COUNT(*) FROM @r WHERE [Text] NOT LIKE '%Backup%'",
-                    "error_log_fatal"    => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, NULL, NULL, @f, @t; SELECT COUNT(*) FROM @r WHERE [Text] LIKE '%Fatal%' OR [Text] LIKE '%severity 2[0-5]%'",
-                    "logon_failure"      => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, 'Login failed', NULL, @f, @t; SELECT COUNT(*) FROM @r",
+                    "error_log_fatal" => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, NULL, NULL, @f, @t; SELECT COUNT(*) FROM @r WHERE [Text] LIKE '%Fatal%' OR [Text] LIKE '%severity 2[0-5]%'",
+                    "logon_failure" => "DECLARE @f DATETIME = DATEADD(MINUTE,-5,GETDATE()), @t DATETIME = GETDATE(); DECLARE @r TABLE(LogDate DATETIME, ProcessInfo NVARCHAR(50), [Text] NVARCHAR(MAX)); INSERT INTO @r EXEC xp_readerrorlog 0, 1, 'Login failed', NULL, @f, @t; SELECT COUNT(*) FROM @r",
                     _ => null
                 };
 
@@ -506,7 +506,7 @@ namespace SQLTriage.Data.Services
                 {
                     var (bWarn, bCrit) = _baseline.GetThresholds(alert.Id, serverName);
                     if (bWarn.HasValue)
-                        isWarning  = IsThresholdBreached(value.Value, bWarn,  alert.Operator);
+                        isWarning = IsThresholdBreached(value.Value, bWarn, alert.Operator);
                     if (bCrit.HasValue)
                         isCritical = IsThresholdBreached(value.Value, bCrit, alert.Operator);
                 }

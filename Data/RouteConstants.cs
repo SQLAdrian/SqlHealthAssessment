@@ -7,97 +7,97 @@ namespace SQLTriage.Data;
 public static class RouteConstants
 {
     // ── Landing ──
-    public const string Guide          = "/guide";
-    public const string Health         = "/health";
-    public const string About          = "/about";
-    public const string Login          = "/login";
+    public const string Guide = "/guide";
+    public const string Health = "/health";
+    public const string About = "/about";
+    public const string Login = "/login";
 
     // ── Dashboards ──
-    public const string DashboardLive         = "/dashboard/live";
-    public const string DashboardInstance     = "/dashboard/instance";
-    public const string DashboardLiveWaits    = "/dashboard/livewaits";
-    public const string DashboardLongQueries  = "/dashboard/longqueries";
-    public const string DashboardQueryStore   = "/dashboard/querystore";
-    public const string DashboardLiveIndexes  = "/dashboard/liveindexes";
-    public const string DashboardSecurity     = "/dashboard/security";
-    public const string DashboardPmHealth     = "/dashboard/pmhealth";
-    public const string DashboardRepository   = "/dashboard/repository";
-    public const string DashboardSessions     = "/dashboard/sessions";
+    public const string DashboardLive = "/dashboard/live";
+    public const string DashboardInstance = "/dashboard/instance";
+    public const string DashboardLiveWaits = "/dashboard/livewaits";
+    public const string DashboardLongQueries = "/dashboard/longqueries";
+    public const string DashboardQueryStore = "/dashboard/querystore";
+    public const string DashboardLiveIndexes = "/dashboard/liveindexes";
+    public const string DashboardSecurity = "/dashboard/security";
+    public const string DashboardPmHealth = "/dashboard/pmhealth";
+    public const string DashboardRepository = "/dashboard/repository";
+    public const string DashboardSessions = "/dashboard/sessions";
     public static string Dashboard(string id) => $"/dashboard/{id}";
 
     // ── Diagnostics ──
-    public const string DiagnosticsRoadmap    = "/diagnostics-roadmap";
+    public const string DiagnosticsRoadmap = "/diagnostics-roadmap";
     public const string VulnerabilityAssessment = "/vulnerabilityassessment";
-    public const string Benchmark            = "/benchmark";
-    public const string QuickCheck           = "/quickcheck";
-    public const string Capacity             = "/capacity";
-    public const string CodeHotspots         = "/code-hotspots";
-    public const string PerfInspector        = "/perf-inspector";
-    public const string FullAudit            = "/fullaudit";
-    public const string BestPractice         = "/bestpractice";
-    public const string Environment          = "/environment";
-    public const string CheckValidator       = "/check-validator";
+    public const string Benchmark = "/benchmark";
+    public const string QuickCheck = "/quickcheck";
+    public const string Capacity = "/capacity";
+    public const string CodeHotspots = "/code-hotspots";
+    public const string PerfInspector = "/perf-inspector";
+    public const string FullAudit = "/fullaudit";
+    public const string BestPractice = "/bestpractice";
+    public const string Environment = "/environment";
+    public const string CheckValidator = "/check-validator";
 
     // ── Query & Analysis ──
-    public const string IndexAnalysis  = "/index-analysis";
-    public const string Compare        = "/compare";
-    public const string Blocking       = "/blocking";
-    public const string LongQueries   = "/longqueries";
-    public const string Memory        = "/memory";
-    public const string Pmemory       = "/pmemory";
+    public const string IndexAnalysis = "/index-analysis";
+    public const string Compare = "/compare";
+    public const string Blocking = "/blocking";
+    public const string LongQueries = "/longqueries";
+    public const string Memory = "/memory";
+    public const string Pmemory = "/pmemory";
     public const string PmemoryAnalysis = "/pmemory-analysis";
-    public const string WaitEvents    = "/waitevents";
-    public const string Sessions      = "/sessions";
-    public const string XEvents       = "/xevents";
-    public const string Query         = "/query";
+    public const string WaitEvents = "/waitevents";
+    public const string Sessions = "/sessions";
+    public const string XEvents = "/xevents";
+    public const string Query = "/query";
 
     // ── Configuration ──
-    public const string Pconfig       = "/pconfig";
-    public const string Pevents       = "/pevents";
-    public const string Presource     = "/presource";
-    public const string Pquery        = "/pquery";
-    public const string BpCheck       = "/bpcheck";
-    public const string Instance      = "/instance";
+    public const string Pconfig = "/pconfig";
+    public const string Pevents = "/pevents";
+    public const string Presource = "/presource";
+    public const string Pquery = "/pquery";
+    public const string BpCheck = "/bpcheck";
+    public const string Instance = "/instance";
 
     // ── Administration ──
-    public const string Settings           = "/settings";
-    public const string Servers            = "/servers";
-    public const string ServerDocs         = "/server-docs";
-    public const string MemoryProfile      = "/memory-profile";
-    public const string Alerts             = "/alerts";
-    public const string AlertsNoc          = "/alerts-noc";
-    public const string AlertingConfig     = "/alerting-config";
-    public const string ScheduledTasks     = "/scheduled-tasks";
-    public const string SchedulerHealth    = "/scheduler-health";
-    public const string ServiceManagement  = "/service-management";
-    public const string DbaTools           = "/dbatools";
-    public const string Onboarding         = "/onboarding";
+    public const string Settings = "/settings";
+    public const string Servers = "/servers";
+    public const string ServerDocs = "/server-docs";
+    public const string MemoryProfile = "/memory-profile";
+    public const string Alerts = "/alerts";
+    public const string AlertsNoc = "/alerts-noc";
+    public const string AlertingConfig = "/alerting-config";
+    public const string ScheduledTasks = "/scheduled-tasks";
+    public const string SchedulerHealth = "/scheduler-health";
+    public const string ServiceManagement = "/service-management";
+    public const string DbaTools = "/dbatools";
+    public const string Onboarding = "/onboarding";
 
     // ── Deployment ──
-    public const string DeploySqlWatch     = "/deploysqlwatch";
-    public const string DeployDarlingPm    = "/deploydarlingpm";
+    public const string DeploySqlWatch = "/deploysqlwatch";
+    public const string DeployDarlingPm = "/deploydarlingpm";
 
     // ── Tooling ──
-    public const string DashboardEditor    = "/dashboard-editor";
-    public const string BulkEditChecks     = "/bulkeditchecks";
-    public const string EditAuditScripts   = "/editauditscripts";
-    public const string UnifiedChecks      = "/unified-checks";
-    public const string Checks             = "/checks";
+    public const string DashboardEditor = "/dashboard-editor";
+    public const string BulkEditChecks = "/bulkeditchecks";
+    public const string EditAuditScripts = "/editauditscripts";
+    public const string UnifiedChecks = "/unified-checks";
+    public const string Checks = "/checks";
     public static string CheckTrend(string checkId) => $"/checks/trend/{checkId}";
 
     // ── Remediation ──
-    public const string Playbooks          = "/playbooks";
+    public const string Playbooks = "/playbooks";
 
     // ── Governance ──
-    public const string CioDashboard       = "/cio";
-    public const string Governance         = "/governance";
-    public const string GovernanceReport   = "/governance-report";
+    public const string CioDashboard = "/cio";
+    public const string Governance = "/governance";
+    public const string GovernanceReport = "/governance-report";
     public const string GovernanceReportIndicative = "/governance?IsIndicative=true";
-    public const string ComplianceMap      = "/compliance-map";
+    public const string ComplianceMap = "/compliance-map";
 
     // ── Audit ──
-    public const string AuditLogViewer     = "/audit-log";
+    public const string AuditLogViewer = "/audit-log";
 
     // ── Query Store ──
-    public const string QueryStore         = "/querystore";
+    public const string QueryStore = "/querystore";
 }

@@ -42,17 +42,17 @@ namespace SQLTriage.Data.Services.Assessment
                 result.Passed = false;
                 result.Results.Add(new AssessmentResult
                 {
-                    CheckId            = check.CheckId,
-                    Message            = output,
-                    Severity           = check.Severity,
-                    TargetName         = targetName,
-                    TargetType         = "LocalMachine",
-                    Category           = check.Category,
-                    Description        = check.Description,
-                    HelpLink           = check.HelpLink,
-                    SqlQuery           = check.Sql,
+                    CheckId = check.CheckId,
+                    Message = output,
+                    Severity = check.Severity,
+                    TargetName = targetName,
+                    TargetType = "LocalMachine",
+                    Category = check.Category,
+                    Description = check.Description,
+                    HelpLink = check.HelpLink,
+                    SqlQuery = check.Sql,
                     ImplementationType = check.ImplementationType,
-                    Status             = "Failed"
+                    Status = "Failed"
                 });
             }
             else

@@ -268,7 +268,7 @@ namespace SQLTriage.Data.Services
             // ── Step 2: build Graph sendMail payload ──────────────────────────
             var emailTemplate = _templates.Config.Email;
             var subject = AlertTemplateService.Render(emailTemplate.Subject, notification);
-            var body    = AlertTemplateService.Render(emailTemplate.Body, notification);
+            var body = AlertTemplateService.Render(emailTemplate.Body, notification);
 
             var toRecipients = smtp.ToAddresses
                 .Where(a => !string.IsNullOrWhiteSpace(a))

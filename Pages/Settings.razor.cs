@@ -18,7 +18,7 @@ using SQLTriage.Data.Scheduling;
 namespace SQLTriage.Pages;
 public partial class Settings
 {
-private string? TestResult;
+    private string? TestResult;
     private bool TestSuccess;
     private string SelectedDataSource = "SqlServer";
     private bool RestartRequired;
@@ -68,7 +68,7 @@ private string? TestResult;
 
     // ── Credential Export/Import ──
     private string _credsExportPassphrase = "";
-    private string _credsExportConfirm    = "";
+    private string _credsExportConfirm = "";
     private string _credsImportPassphrase = "";
     private string? _credsFileContent;
     private bool _credsExporting;
@@ -154,11 +154,11 @@ private string? TestResult;
         _debugLogging = UserSettings.GetDebugLogging();
         _anonymiseServerNames = UserSettings.GetAnonymiseServerNames();
         LogAnon.Enabled = _anonymiseServerNames;
-        _useV2PlanIcons          = UserSettings.GetUseV2PlanIcons();
-        _noPantsMode             = UserSettings.GetNoPantsMode();
-        _experimentalMode        = UserSettings.GetExperimentalMode();
-        _alertBaselineEnabled    = UserSettings.GetAlertBaselineEnabled();
-        _alertBaselinePerServer  = UserSettings.GetAlertBaselinePerServer();
+        _useV2PlanIcons = UserSettings.GetUseV2PlanIcons();
+        _noPantsMode = UserSettings.GetNoPantsMode();
+        _experimentalMode = UserSettings.GetExperimentalMode();
+        _alertBaselineEnabled = UserSettings.GetAlertBaselineEnabled();
+        _alertBaselinePerServer = UserSettings.GetAlertBaselinePerServer();
         DefaultDashboardId = UserSettings.GetDefaultDashboardId();
         _zoomLevel = UserSettings.GetZoomLevel();
         _selectedTheme = UserSettings.GetSelectedTheme();
@@ -282,7 +282,7 @@ private string? TestResult;
 
         // Load preview feature settings
         _showMaturityRoadmap = s.ShowMaturityRoadmap;
-        _noPantsModeActive   = s.NoPantsMode;
+        _noPantsModeActive = s.NoPantsMode;
         _experimentalModeActive = s.ExperimentalMode;
 
         // Load RBAC settings
@@ -353,57 +353,57 @@ private string? TestResult;
         StateHasChanged();
     }
 
-         private void ResetConcurrencyDefaults()
-     {
-         _maxHeavy = 5;
-         _maxLight = 10;
-         UserSettings.SetMaxHeavyConcurrent(5);
-         UserSettings.SetMaxLightConcurrent(10);
-         try
-         {
-             QueryOrchestrator?.UpdateLimits(globalConcurrency: 15, perServerConcurrency: 5);
-         }
-         catch { /* ignore */ }
-         _concurrencyMessage = "Concurrency reset to defaults (Heavy=5, Light=10).";
-         StateHasChanged();
-     }
+    private void ResetConcurrencyDefaults()
+    {
+        _maxHeavy = 5;
+        _maxLight = 10;
+        UserSettings.SetMaxHeavyConcurrent(5);
+        UserSettings.SetMaxLightConcurrent(10);
+        try
+        {
+            QueryOrchestrator?.UpdateLimits(globalConcurrency: 15, perServerConcurrency: 5);
+        }
+        catch { /* ignore */ }
+        _concurrencyMessage = "Concurrency reset to defaults (Heavy=5, Light=10).";
+        StateHasChanged();
+    }
 
-     private async Task RefreshCacheMetrics()
-     {
-         if (_cacheMetricsService == null) return;
+    private async Task RefreshCacheMetrics()
+    {
+        if (_cacheMetricsService == null) return;
 
-         _cacheMetricsLoading = true;
-         StateHasChanged();
+        _cacheMetricsLoading = true;
+        StateHasChanged();
 
-         try
-         {
-             // Current session
-             _sessionMetrics = _cacheMetricsService.GetCurrentSessionMetrics();
+        try
+        {
+            // Current session
+            _sessionMetrics = _cacheMetricsService.GetCurrentSessionMetrics();
 
-             // Last 24 hours (hourly)
-             var hourly = await _cacheMetricsService.GetHourlyMetricsAsync(24);
-             _hourlyTotalQueries = hourly.Sum(m => m.TotalQueries);
-             _hourlyCachePercentage = hourly.Count > 0 ? hourly.Average(m => m.GetCachePercentage()) : 0;
-             _hourlyDataPoints = hourly.Count;
+            // Last 24 hours (hourly)
+            var hourly = await _cacheMetricsService.GetHourlyMetricsAsync(24);
+            _hourlyTotalQueries = hourly.Sum(m => m.TotalQueries);
+            _hourlyCachePercentage = hourly.Count > 0 ? hourly.Average(m => m.GetCachePercentage()) : 0;
+            _hourlyDataPoints = hourly.Count;
 
-             // Last 7 days (daily)
-             var daily = await _cacheMetricsService.GetDailyMetricsAsync(7);
-             _dailyTotalQueries = daily.Sum(m => m.TotalQueries);
-             _dailyCachePercentage = daily.Count > 0 ? daily.Average(m => m.GetCachePercentage()) : 0;
-             _dailyDataPoints = daily.Count;
-         }
-         catch (Exception ex)
-         {
-             _concurrencyMessage = $"Failed to load metrics: {ex.Message}";
-         }
-         finally
-         {
-             _cacheMetricsLoading = false;
-             StateHasChanged();
-         }
-     }
+            // Last 7 days (daily)
+            var daily = await _cacheMetricsService.GetDailyMetricsAsync(7);
+            _dailyTotalQueries = daily.Sum(m => m.TotalQueries);
+            _dailyCachePercentage = daily.Count > 0 ? daily.Average(m => m.GetCachePercentage()) : 0;
+            _dailyDataPoints = daily.Count;
+        }
+        catch (Exception ex)
+        {
+            _concurrencyMessage = $"Failed to load metrics: {ex.Message}";
+        }
+        finally
+        {
+            _cacheMetricsLoading = false;
+            StateHasChanged();
+        }
+    }
 
-     private async Task OnCredsFileSelected(InputFileChangeEventArgs e)
+    private async Task OnCredsFileSelected(InputFileChangeEventArgs e)
     {
         try
         {
@@ -583,7 +583,7 @@ private string? TestResult;
     {
         if (string.IsNullOrEmpty(connStr))
             return "";
-        
+
         try
         {
             var builder = new SqlConnectionStringBuilder(connStr);
@@ -640,7 +640,7 @@ private string? TestResult;
     //        SaveSuccess = false;
     //        return;
     //    }
-//
+    //
     //    try
     //    {
     //        var appSettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
@@ -671,7 +671,7 @@ private string? TestResult;
     //        {
     //            // If parsing fails, use what the user provided
     //        }
-//
+    //
     //        var root = new Dictionary<string, object>();
     //        foreach (var prop in doc.RootElement.EnumerateObject())
     //        {
@@ -704,17 +704,17 @@ private string? TestResult;
     //                root[prop.Name] = prop.Value.GetInt32();
     //            }
     //        }
-//
+    //
     //        // Ensure TrustServerCertificate is in the config
     //        if (!root.ContainsKey("TrustServerCertificate"))
     //        {
     //            root["TrustServerCertificate"] = TrustServerCertificate;
     //        }
-//
+    //
     //        var options = new JsonSerializerOptions { WriteIndented = true };
     //        var updatedJson = JsonSerializer.Serialize(root, options);
     //        await File.WriteAllTextAsync(appSettingsPath, updatedJson);
-//
+    //
     //        SaveResult = "Connection string saved and applied. No restart required.";
     //        SaveSuccess = true;
     //        RestartRequired = false;
@@ -846,15 +846,15 @@ private string? TestResult;
     private void LoadRbacSettings()
     {
         var cfg = RbacService.Config;
-        _rbacEnabled         = cfg.Enabled;
+        _rbacEnabled = cfg.Enabled;
         _rbacRequireExplicit = cfg.RequireExplicitAccess;
-        _rbacDefaultRole     = cfg.DefaultRole;
-        _rbacGoogleEnabled   = cfg.Google.Enabled;
-        _rbacGoogleClientId  = cfg.Google.ClientId;
-        _rbacGoogleDomain    = cfg.Google.AllowedDomain;
-        _rbacMsEnabled       = cfg.Microsoft.Enabled;
-        _rbacMsClientId      = cfg.Microsoft.ClientId;
-        _rbacMsDomain        = cfg.Microsoft.AllowedDomain;
+        _rbacDefaultRole = cfg.DefaultRole;
+        _rbacGoogleEnabled = cfg.Google.Enabled;
+        _rbacGoogleClientId = cfg.Google.ClientId;
+        _rbacGoogleDomain = cfg.Google.AllowedDomain;
+        _rbacMsEnabled = cfg.Microsoft.Enabled;
+        _rbacMsClientId = cfg.Microsoft.ClientId;
+        _rbacMsDomain = cfg.Microsoft.AllowedDomain;
         // Secrets: never pre-populate — leave blank (placeholder shows "(unchanged)")
         _rbacUsers = RbacService.GetUsers();
     }
@@ -864,24 +864,24 @@ private string? TestResult;
         var existing = RbacService.Config;
         RbacService.UpdateConfig(new RbacConfig
         {
-            Enabled               = _rbacEnabled,
+            Enabled = _rbacEnabled,
             RequireExplicitAccess = _rbacRequireExplicit,
-            DefaultRole           = _rbacDefaultRole,
+            DefaultRole = _rbacDefaultRole,
             Google = new OAuthProviderConfig
             {
-                Enabled       = _rbacGoogleEnabled,
-                ClientId      = _rbacGoogleClientId,
+                Enabled = _rbacGoogleEnabled,
+                ClientId = _rbacGoogleClientId,
                 // Keep existing secret if field left blank
-                ClientSecret  = string.IsNullOrWhiteSpace(_rbacGoogleClientSecret)
+                ClientSecret = string.IsNullOrWhiteSpace(_rbacGoogleClientSecret)
                                     ? existing.Google.ClientSecret
                                     : _rbacGoogleClientSecret,
                 AllowedDomain = _rbacGoogleDomain,
             },
             Microsoft = new OAuthProviderConfig
             {
-                Enabled       = _rbacMsEnabled,
-                ClientId      = _rbacMsClientId,
-                ClientSecret  = string.IsNullOrWhiteSpace(_rbacMsClientSecret)
+                Enabled = _rbacMsEnabled,
+                ClientId = _rbacMsClientId,
+                ClientSecret = string.IsNullOrWhiteSpace(_rbacMsClientSecret)
                                     ? existing.Microsoft.ClientSecret
                                     : _rbacMsClientSecret,
                 AllowedDomain = _rbacMsDomain,
@@ -929,12 +929,12 @@ private string? TestResult;
         RbacService.AddUser(new RbacUser
         {
             Email = _newUserEmail.Trim(),
-            Role  = _newUserRole,
+            Role = _newUserRole,
         });
         _newUserEmail = string.Empty;
-        _rbacUsers    = RbacService.GetUsers();
-        _rbacMessage  = "User added.";
-        _rbacSuccess  = true;
+        _rbacUsers = RbacService.GetUsers();
+        _rbacMessage = "User added.";
+        _rbacSuccess = true;
     }
 
     private void ValidateConfig()
@@ -1014,7 +1014,7 @@ private string? TestResult;
             StateHasChanged();
         }
     }
-    
+
     private void UpdateCacheFileSize()
     {
         try
@@ -1036,7 +1036,7 @@ private string? TestResult;
             CacheFileSize = "N/A";
         }
     }
-    
+
     private async Task RunMaintenance()
     {
         IsRunningMaintenance = true;
@@ -1059,20 +1059,20 @@ private string? TestResult;
             using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
             {
                 await conn.OpenAsync();
-                
+
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "PRAGMA optimize;";
                     await cmd.ExecuteNonQueryAsync();
                 }
-                
+
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "ANALYZE;";
                     await cmd.ExecuteNonQueryAsync();
                 }
             }
-            
+
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
             {
@@ -1086,7 +1086,7 @@ private string? TestResult;
 
             var sizeAfter = new System.IO.FileInfo(dbPath).Length;
             var savedMB = (sizeBefore - sizeAfter) / 1024.0 / 1024.0;
-            
+
             UpdateCacheFileSize();
             MaintenanceResult = $"Maintenance completed. Reclaimed {savedMB:N1} MB.";
             MaintenanceSuccess = true;

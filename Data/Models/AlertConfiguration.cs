@@ -270,17 +270,17 @@ namespace SQLTriage.Data.Models
     [Flags]
     public enum WindowDays
     {
-        None      = 0,
-        Monday    = 1,
-        Tuesday   = 2,
+        None = 0,
+        Monday = 1,
+        Tuesday = 2,
         Wednesday = 4,
-        Thursday  = 8,
-        Friday    = 16,
-        Saturday  = 32,
-        Sunday    = 64,
-        Weekdays  = Monday | Tuesday | Wednesday | Thursday | Friday,
-        Weekend   = Saturday | Sunday,
-        All       = Weekdays | Weekend
+        Thursday = 8,
+        Friday = 16,
+        Saturday = 32,
+        Sunday = 64,
+        Weekdays = Monday | Tuesday | Wednesday | Thursday | Friday,
+        Weekend = Saturday | Sunday,
+        All = Weekdays | Weekend
     }
 
     /// <summary>
@@ -311,14 +311,14 @@ namespace SQLTriage.Data.Models
             var now = DateTime.Now;
             var dayFlag = now.DayOfWeek switch
             {
-                DayOfWeek.Monday    => WindowDays.Monday,
-                DayOfWeek.Tuesday   => WindowDays.Tuesday,
+                DayOfWeek.Monday => WindowDays.Monday,
+                DayOfWeek.Tuesday => WindowDays.Tuesday,
                 DayOfWeek.Wednesday => WindowDays.Wednesday,
-                DayOfWeek.Thursday  => WindowDays.Thursday,
-                DayOfWeek.Friday    => WindowDays.Friday,
-                DayOfWeek.Saturday  => WindowDays.Saturday,
-                DayOfWeek.Sunday    => WindowDays.Sunday,
-                _                   => WindowDays.None
+                DayOfWeek.Thursday => WindowDays.Thursday,
+                DayOfWeek.Friday => WindowDays.Friday,
+                DayOfWeek.Saturday => WindowDays.Saturday,
+                DayOfWeek.Sunday => WindowDays.Sunday,
+                _ => WindowDays.None
             };
             if ((Days & dayFlag) == WindowDays.None) return false;
 

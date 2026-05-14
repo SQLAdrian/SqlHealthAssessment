@@ -469,7 +469,7 @@ namespace SQLTriage.Data
         {
             if (string.IsNullOrWhiteSpace(latest)) return false;
 
-            var latestParts  = latest.Split('.');
+            var latestParts = latest.Split('.');
             var currentParts = current.Split('.');
 
             for (int i = 0; i < Math.Min(latestParts.Length, currentParts.Length); i++)

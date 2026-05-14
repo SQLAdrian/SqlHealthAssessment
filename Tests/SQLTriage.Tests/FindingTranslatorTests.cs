@@ -148,13 +148,21 @@ namespace SQLTriage.Tests
             var translator = CreateTranslator();
             var low = new CheckResult
             {
-                CheckId = "CHK-001", CheckName = "X", Severity = "LOW", Passed = false,
-                Message = "M", InstanceName = "S"
+                CheckId = "CHK-001",
+                CheckName = "X",
+                Severity = "LOW",
+                Passed = false,
+                Message = "M",
+                InstanceName = "S"
             };
             var critical = new CheckResult
             {
-                CheckId = "CHK-002", CheckName = "Y", Severity = "CRITICAL", Passed = false,
-                Message = "M", InstanceName = "S"
+                CheckId = "CHK-002",
+                CheckName = "Y",
+                Severity = "CRITICAL",
+                Passed = false,
+                Message = "M",
+                InstanceName = "S"
             };
 
             var tLow = await translator.TranslateAsync(low);

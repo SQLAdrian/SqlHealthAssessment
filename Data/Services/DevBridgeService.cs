@@ -171,15 +171,15 @@ namespace SQLTriage.Data.Services
                 var path = ctx.Request.Url?.AbsolutePath?.TrimEnd('/').ToLowerInvariant() ?? "";
                 switch (path)
                 {
-                    case "/ping":       await HandlePingAsync(ctx); break;
-                    case "/nav":        await HandleNavAsync(ctx); break;
+                    case "/ping": await HandlePingAsync(ctx); break;
+                    case "/nav": await HandleNavAsync(ctx); break;
                     case "/screenshot": await HandleScreenshotAsync(ctx); break;
-                    case "/eval":       await HandleEvalAsync(ctx); break;
-                    case "/print-pdf":  await HandlePrintPdfAsync(ctx); break;
+                    case "/eval": await HandleEvalAsync(ctx); break;
+                    case "/print-pdf": await HandlePrintPdfAsync(ctx); break;
                     case "/render-pdf": await HandleRenderPdfAsync(ctx); break;
-                    case "/state":      await HandleStateAsync(ctx); break;
-                    case "/shutdown":   await HandleShutdownAsync(ctx); break;
-                    default:            await WriteJsonAsync(ctx, 404, new { error = "unknown endpoint", path }); break;
+                    case "/state": await HandleStateAsync(ctx); break;
+                    case "/shutdown": await HandleShutdownAsync(ctx); break;
+                    default: await WriteJsonAsync(ctx, 404, new { error = "unknown endpoint", path }); break;
                 }
             }
             catch (Exception ex)
@@ -344,8 +344,8 @@ namespace SQLTriage.Data.Services
             }
 
             var body = await ReadJsonAsync(ctx);
-            var outPath  = body.TryGetProperty("out",      out var op) ? op.GetString() : null;
-            var format   = body.TryGetProperty("format",   out var fp) ? fp.GetString() : "png";
+            var outPath = body.TryGetProperty("out", out var op) ? op.GetString() : null;
+            var format = body.TryGetProperty("format", out var fp) ? fp.GetString() : "png";
             var selector = body.TryGetProperty("selector", out var sp) ? sp.GetString() : null;
 
             var imageFormat = string.Equals(format, "jpeg", StringComparison.OrdinalIgnoreCase)
@@ -541,7 +541,7 @@ namespace SQLTriage.Data.Services
         private async Task HandleRenderPdfAsync(HttpListenerContext ctx)
         {
             var body = await ReadJsonAsync(ctx);
-            var inPath  = body.TryGetProperty("in",  out var ip) ? ip.GetString() : null;
+            var inPath = body.TryGetProperty("in", out var ip) ? ip.GetString() : null;
             var outBase = body.TryGetProperty("out", out var op) ? op.GetString() : null;
             if (string.IsNullOrWhiteSpace(inPath) || string.IsNullOrWhiteSpace(outBase))
             {

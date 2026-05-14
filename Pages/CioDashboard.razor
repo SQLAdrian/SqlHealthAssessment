@@ -493,7 +493,9 @@
             _          => ("Review",            "DBA",                "BU Manager",       "6 months"),
         };
 
-    private IEnumerable<CheckResult> _failed => _lastCheckResults.Where(r => !r.Passed);
+    // IsBad gates costing — only checks flagged bad:1 in YAML incur remediation cost.
+    // Scoring uses all non-SKIP results; costing uses IsBad failures only.
+    private IEnumerable<CheckResult> _failed => _lastCheckResults.Where(r => !r.Passed && r.IsBad);
 
     private int _serversInLastRun => _lastCheckResults
         .Select(r => r.InstanceName)
@@ -519,7 +521,7 @@
     private double _rawLabourHours => _remediationLabourHours;
     private double _rawLabourCost  => _remediationLabourCost;
 
-    private int _pricedCheckCount => _failed.Count();
+    private int _pricedCheckCount => _failed.Count(r => r.IsBad);
     private DateTime _lastUpdated = DateTime.Now;
     private List<CheckResult> _lastCheckResults = new();
     private LicensingEstimate? _licensingEstimate;
