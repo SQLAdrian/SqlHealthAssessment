@@ -1,6 +1,6 @@
 {
     "version":  "0.85.3",
-    "buildNumber":  1668,
+    "buildNumber":  1669,
     "buildDate":  "2026-05-14",
     "releaseType":  "Production",
     "updateCheckUrl":  "https://api.github.com/repos/SQLAdrian/SQLTriage/releases/latest",
