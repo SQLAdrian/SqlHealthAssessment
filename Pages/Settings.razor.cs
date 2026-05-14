@@ -292,6 +292,59 @@ public partial class Settings
         _ = Task.Run(RefreshCacheMetrics);
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Scroll spy: highlight the rail link whose section is currently in view.
+        // Uses IntersectionObserver so it's free of scroll-event throttling.
+        try
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                (() => {
+                    const links = document.querySelectorAll('.settings-rail a[href^=""#""]');
+                    if (!links.length) return;
+                    const byId = new Map();
+                    links.forEach(a => byId.set(a.getAttribute('href').slice(1), a));
+                    const setActive = (id) => {
+                        links.forEach(a => a.classList.remove('active'));
+                        const a = byId.get(id);
+                        if (a) a.classList.add('active');
+                    };
+                    const groups = Array.from(document.querySelectorAll('.settings-group[id]'));
+                    if (!groups.length) return;
+                    const scrollRoot = document.querySelector('.app-content');
+                    const io = new IntersectionObserver((entries) => {
+                        // Pick the entry closest to the top that is intersecting.
+                        const visible = entries
+                            .filter(e => e.isIntersecting)
+                            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                        if (visible.length) setActive(visible[0].target.id);
+                    }, { root: scrollRoot, rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+                    groups.forEach(g => io.observe(g));
+                    // Initial highlight: first group
+                    setActive(groups[0].id);
+                    // Anchor links default to window scroll, but the actual scroll
+                    // container in this app is .app-content — intercept and scroll
+                    // that container instead so smooth-scroll + active highlight work.
+                    links.forEach(a => {
+                        a.addEventListener('click', (e) => {
+                            const id = a.getAttribute('href').slice(1);
+                            const target = document.getElementById(id);
+                            if (!target || !scrollRoot) return;
+                            e.preventDefault();
+                            const rootRect = scrollRoot.getBoundingClientRect();
+                            const targetRect = target.getBoundingClientRect();
+                            const top = scrollRoot.scrollTop + (targetRect.top - rootRect.top) - 16;
+                            scrollRoot.scrollTo({ top, behavior: 'smooth' });
+                            setActive(id);
+                        });
+                    });
+                })();
+            ");
+        }
+        catch { /* JS may not be ready in pre-render */ }
+    }
+
     private void SaveUpdateProxy()
     {
         UserSettings.SetUpdateProxyUrl(_updateProxyUrl);

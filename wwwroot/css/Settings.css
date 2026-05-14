@@ -6,6 +6,12 @@
     padding: 24px 24px 64px;
 }
 
+/* The actual scroll container in this app is .app-content (not <html>),
+   so anchor-link smooth scrolling has to be set there. */
+body:has(.settings-page) .app-content {
+    scroll-behavior: smooth;
+}
+
 .settings-page > h2 {
     margin: 0 0 20px;
     font-size: 22px;
