@@ -4,11 +4,11 @@
 @using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
 @using static SQLTriage.Data.Services.GovernanceService
+@using Microsoft.Extensions.Logging
 @inject IGovernanceService GovernanceService
 @inject GovernanceHistoryService HistoryService
 @inject ExecutiveHealthService HealthService
 @inject CheckExecutionService CheckExecutor
-@inject IReportService ReportService
 @inject ServerConnectionManager ConnectionManager
 @inject ConnectionHealthService ConnectionHealth
 @inject NavigationManager Navigation
@@ -16,6 +16,9 @@
 @inject UserSettingsService UserSettings
 @inject LicensingEstimator LicensingEstimator
 @inject RemediationWeightStore WeightStore
+@inject IPrintService PrintSvc
+@inject IJSRuntime JS
+@inject ILogger<CioDashboard> Logger
 
 <PageTitle>CIO Dashboard - SQLTriage</PageTitle>
 
@@ -811,6 +814,9 @@
         return recordedAt.Length > 5 ? recordedAt[^5..] : recordedAt;
     }
 
+    // Renders the live CIO Dashboard view to PDF via WebView2 (CoreWebView2.PrintToPdfAsync),
+    // not QuestPDF, so no Community-licensing constraint applies. Mirrors the pattern used
+    // by DiagnosticsRoadmap.razor — hide chrome, expand sections, capture, restore.
     private async Task ExportPdf(MouseEventArgs e)
     {
         if (_isExporting) return;
@@ -818,35 +824,43 @@
         {
             _isExporting = true;
             StateHasChanged();
-            
-            var firstServer = _serverScores.Keys.FirstOrDefault();
-            if (firstServer == null)
+
+            var firstServer = _serverScores.Keys.FirstOrDefault() ?? "CIO";
+            var fileName = $"CIO_Dashboard_{firstServer.Replace("\\", "_").Replace("/", "_")}_{DateTime.UtcNow:yyyyMMdd_HHmmssZ}.pdf";
+
+            await JS.InvokeVoidAsync("eval",
+                "document.querySelectorAll('.nav-menu,.dashboard-toolbar,.cio-action-bar,[class*=\"server-mode\"]').forEach(e => { e.dataset.printHidden='1'; e.style.display='none'; });" +
+                "document.body.classList.add('printing-active');");
+            await Task.Delay(200);
+
+            var (success, path, error) = await PrintSvc.PrintToPdfAsync(fileName,
+                printBackgrounds: true,
+                orientation: Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait,
+                headerTitle: null,
+                footerUri: null);
+
+            await JS.InvokeVoidAsync("eval",
+                "document.querySelectorAll('[data-print-hidden=\"1\"]').forEach(e => { e.style.display=''; delete e.dataset.printHidden; });" +
+                "document.body.classList.remove('printing-active');");
+
+            if (success && !string.IsNullOrEmpty(path))
             {
-                Toast.ShowWarning("No server data available to export.");
-                return;
+                Logger.LogInformation("CIO Dashboard PDF exported: {File}", path);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+                Toast.ShowSuccess("PDF exported", $"Saved to {System.IO.Path.GetDirectoryName(path)}");
             }
-            var results = _lastCheckResults.Count > 0
-                ? _lastCheckResults
-                : CheckExecutor.GetResults(firstServer, 500);
-            
-            var pdfBytes = await ReportService.GenerateGovernanceReportAsync(firstServer, results);
-            
-            var outputDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SQLTriage Reports");
-            Directory.CreateDirectory(outputDir);
-            var filePath = Path.Combine(outputDir, $"Governance_Report_{firstServer}_{DateTime.Now:yyyy-MM-dd_HHmm}.pdf");
-            await File.WriteAllBytesAsync(filePath, pdfBytes);
-            
-            // Open with system PDF viewer
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            else
             {
-                FileName = filePath,
-                UseShellExecute = true
-            });
-            
-            Toast.ShowSuccess("PDF exported", $"Saved to Documents\\SQLTriage Reports");
+                Toast.ShowError("PDF export failed", error ?? "Unknown error");
+            }
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "CIO Dashboard PDF export failed");
             Toast.ShowError("PDF export failed", ex.Message);
         }
         finally

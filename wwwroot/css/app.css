@@ -705,11 +705,7 @@ body {
 
 .chart-grid-full { grid-column: 1 / -1; }
 
-/* === Settings Page === */
-.settings-page {
-    padding: 24px;
-    max-width: 600px;
-}
+/* === Settings Page === (canonical rules in Settings.css) */
 
 /* === Health Page === */
 .health-page {
