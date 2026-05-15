@@ -64,8 +64,15 @@ namespace SQLTriage.Data
         };
 
         public AuditLogService()
+            : this(Path.Combine(AppContext.BaseDirectory, "audit-logs"))
         {
-            _logDirectory = Path.Combine(AppContext.BaseDirectory, "audit-logs");
+        }
+
+        // Test seam: explicit log directory + opt-out for the background flush timer.
+        // Production callers should use the parameterless constructor.
+        public AuditLogService(string logDirectory, bool startFlushTimer = true)
+        {
+            _logDirectory = logDirectory;
             if (!Directory.Exists(_logDirectory))
                 Directory.CreateDirectory(_logDirectory);
 
@@ -75,8 +82,10 @@ namespace SQLTriage.Data
             _eventLogAvailable = TryEnsureEventLogSource();
             VerifyChainOnStartup();
 
-            // Periodic flush timer
-            _flushTimer = new Timer(_ => Flush(), null, FlushIntervalMs, FlushIntervalMs);
+            // Periodic flush timer (skipped in tests so they don't race the foreground Flush())
+            _flushTimer = startFlushTimer
+                ? new Timer(_ => Flush(), null, FlushIntervalMs, FlushIntervalMs)
+                : new Timer(_ => { }, null, Timeout.Infinite, Timeout.Infinite);
         }
 
         private static byte[] LoadOrCreateHmacKey(string keyPath)
