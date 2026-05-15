@@ -29,6 +29,28 @@ namespace SQLTriage.Data.Services
             Load();
         }
 
+        // Test seam: construct from an in-memory JSON payload without touching disk.
+        // Mirrors Load()'s behaviour — malformed JSON is logged and IsAvailable stays false.
+        public static BuildCatalogueService FromJson(string catalogueJson, ILogger<BuildCatalogueService> logger)
+        {
+            var svc = new BuildCatalogueService(logger, deferLoad: true);
+            try
+            {
+                svc.LoadFromJson(catalogueJson);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to parse build catalogue from in-memory JSON");
+            }
+            return svc;
+        }
+
+        private BuildCatalogueService(ILogger<BuildCatalogueService> logger, bool deferLoad)
+        {
+            _logger = logger;
+            if (!deferLoad) Load();
+        }
+
         public bool IsAvailable => _catalogue != null;
         public string? LastUpdated => _catalogue?.LastUpdated;
 
@@ -43,15 +65,20 @@ namespace SQLTriage.Data.Services
             try
             {
                 var json = File.ReadAllText(path);
-                _catalogue = JsonSerializer.Deserialize<BuildCatalogueData>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                _logger.LogInformation("Build catalogue loaded — last updated {Updated}, {VersionCount} versions",
-                    _catalogue?.LastUpdated, _catalogue?.Versions?.Count ?? 0);
+                LoadFromJson(json);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to parse build catalogue");
             }
+        }
+
+        private void LoadFromJson(string json)
+        {
+            _catalogue = JsonSerializer.Deserialize<BuildCatalogueData>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _logger.LogInformation("Build catalogue loaded — last updated {Updated}, {VersionCount} versions",
+                _catalogue?.LastUpdated, _catalogue?.Versions?.Count ?? 0);
         }
 
         /// <summary>
