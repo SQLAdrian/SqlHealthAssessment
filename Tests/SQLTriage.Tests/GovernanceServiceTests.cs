@@ -55,66 +55,169 @@ namespace SQLTriage.Tests
             Assert.Equal(0, score.FailedFindings);
         }
 
-        [Fact(Skip = "Stale: tests the pre-2026-05-14 accumulation-with-caps model. Scoring " +
-                     "was rewritten to weighted ratio (check_value = score_weight × max(effort,1) " +
-                     "as ratio of pass/info to non-SKIP). Rewrite for new model — see " +
-                     "memory/project_score_weight_model.md.")]
-        public async Task ThreeCriticalFindings_Spread_DoesNotExceedSixty()
+        // Weighted-ratio model (rewritten 2026-05-15, replaces stale per-finding-cap tests):
+        //   check_value = max(score_weight, 1) × max(effort_hours, 1.0)
+        //   category ratio = Σ(pass-or-info check_value) / Σ(non-SKIP check_value) × 100
+
+        [Fact]
+        public async Task HighWeightFailure_DragsCategoryRatioDownMoreThanLowWeightFailure()
         {
-            var weights = new GovernanceWeights
+            var svc = CreateService();
+
+            // Both servers: one passing + one failing in Security. Differ only in the
+            // failing check's score_weight: heavy (20) vs light (1). Same effort.
+            var heavyFail = new[]
             {
-                Categories = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["Security"] = 0.25,
-                    ["Performance"] = 0.20,
-                    ["Reliability"] = 0.20,
-                    ["Cost"] = 0.15,
-                    ["Compliance"] = 0.20
-                },
-                Caps = new GovernanceCaps { PerFinding = 40, PerCategory = 100, Overall = 100 }
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = 1,  EffortHours = 1 },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = 20, EffortHours = 1 }
+            };
+            var lightFail = new[]
+            {
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = 1,  EffortHours = 1 },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = 1,  EffortHours = 1 }
             };
 
-            var svc = CreateService(weights);
-            var results = new[]
-            {
-                new CheckResult { CheckId = "C1", Category = "Security", Severity = "CRITICAL", Passed = true },
-                new CheckResult { CheckId = "C2", Category = "Performance", Severity = "CRITICAL", Passed = true },
-                new CheckResult { CheckId = "C3", Category = "Reliability", Severity = "CRITICAL", Passed = true }
-            };
+            var heavy = await svc.ComputeFullAsync(heavyFail);
+            var light = await svc.ComputeFullAsync(lightFail);
 
-            var score = await svc.ComputeIndicativeAsync(results);
-
-            // 3 critical findings (base 20 each) spread across 3 categories:
-            // Security cap = 100*0.25 = 25 -> min(20,25) = 20
-            // Performance cap = 100*0.20 = 20 -> min(20,20) = 20
-            // Reliability cap = 100*0.20 = 20 -> min(20,20) = 20
-            // Overall = 60
-            Assert.True(score.Overall <= 60, $"Expected ≤60 but got {score.Overall}");
-            Assert.Equal(60, score.Overall);
+            // Heavy: 1/(1+20) ≈ 4.76%   Light: 1/(1+1) = 50%
+            Assert.Equal(100.0 * 1 / 21, heavy.Categories["Security"].RawScore, 3);
+            Assert.Equal(50.0, light.Categories["Security"].RawScore, 3);
+            Assert.True(heavy.Overall < light.Overall,
+                $"Heavy-weighted failure should drop overall lower (heavy={heavy.Overall}, light={light.Overall})");
         }
 
-        [Fact(Skip = "Stale: PerFinding cap no longer exists post-2026-05-14 weighted-ratio rewrite. " +
-                     "GovernanceCaps still on the model but unused by Compute(). Rewrite to test " +
-                     "score_weight + effort_hours influence on category ratios instead.")]
-        public async Task PerFindingCap_IsRespected()
+        [Fact]
+        public async Task HighEffortFailure_DragsCategoryRatioDownMoreThanLowEffortFailure()
         {
-            var weights = new GovernanceWeights
+            var svc = CreateService();
+            var sameWeights = new { ScoreWeight = 5 };
+
+            var heavyEffort = new[]
             {
-                Caps = new GovernanceCaps { PerFinding = 10, PerCategory = 100, Overall = 100 }
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = sameWeights.ScoreWeight, EffortHours = 1 },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = sameWeights.ScoreWeight, EffortHours = 40 }
+            };
+            var lightEffort = new[]
+            {
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = sameWeights.ScoreWeight, EffortHours = 1 },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = sameWeights.ScoreWeight, EffortHours = 1 }
             };
 
-            var svc = CreateService(weights);
+            var heavy = await svc.ComputeFullAsync(heavyEffort);
+            var light = await svc.ComputeFullAsync(lightEffort);
+
+            // Heavy effort: pass=5×1=5, fail=5×40=200  → 5/205 ≈ 2.44%
+            // Light effort: pass=5×1=5, fail=5×1 =5    → 5/10 = 50%
+            Assert.Equal(100.0 * 5 / 205, heavy.Categories["Security"].RawScore, 3);
+            Assert.Equal(50.0, light.Categories["Security"].RawScore, 3);
+            Assert.True(heavy.Overall < light.Overall);
+        }
+
+        [Fact]
+        public async Task EffortHoursZero_IsTreatedAsOne_SoZeroEffortChecksStillCount()
+        {
+            var svc = CreateService();
+
+            // EffortHours=0 should be clamped to 1.0 — meaning these two equivalent-weight
+            // checks contribute equally, and a single failing one halves the ratio.
             var results = new[]
             {
-                new CheckResult { CheckId = "C1", Category = "Security", Severity = "CRITICAL", Passed = true }
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = 1, EffortHours = 0 },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = 1, EffortHours = 0 }
             };
 
             var score = await svc.ComputeFullAsync(results);
 
-            // Base score for CRITICAL is 20, but per-finding cap is 10
-            var sec = score.Categories["Security"];
-            Assert.Equal(10, sec.RawScore);
-            Assert.Equal(10, sec.CappedScore); // min(10, 25 ceiling) — capped score is already weighted
+            // Both check_value = 1×max(0,1) = 1 → ratio = 1/(1+1) = 50%
+            Assert.Equal(50.0, score.Categories["Security"].RawScore, 3);
+        }
+
+        [Fact]
+        public async Task ScoreWeightZero_IsTreatedAsOne()
+        {
+            var svc = CreateService();
+
+            // ScoreWeight is documented as 1-25 (default 1) but the service guards against
+            // < 1 by clamping. Two checks with ScoreWeight=0 still each contribute weight 1.
+            var results = new[]
+            {
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = 0, EffortHours = 1 },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = 0, EffortHours = 1 }
+            };
+
+            var score = await svc.ComputeFullAsync(results);
+            Assert.Equal(50.0, score.Categories["Security"].RawScore, 3);
+        }
+
+        [Fact]
+        public async Task InfoSeverity_CountsAsPass_EvenWhenPassedFalse()
+        {
+            var svc = CreateService();
+
+            // INFO results are informational — never a finding. Per doc block: "INFO result → counts as PASS".
+            var results = new[]
+            {
+                new CheckResult { CheckId = "I", Category = "Security", Severity = "INFO", Passed = false, ScoreWeight = 5, EffortHours = 1 },
+                new CheckResult { CheckId = "F", Category = "Security", Severity = "HIGH", Passed = false, ScoreWeight = 5, EffortHours = 1 }
+            };
+
+            var score = await svc.ComputeFullAsync(results);
+
+            // INFO + HIGH-fail: numerator = INFO(5), denominator = INFO(5)+HIGH(5) = 10 → 50%
+            Assert.Equal(50.0, score.Categories["Security"].RawScore, 3);
+        }
+
+        [Fact]
+        public async Task SkipResults_AreExcludedFromBothSides()
+        {
+            var svc = CreateService();
+
+            var results = new[]
+            {
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = 1, EffortHours = 1 },
+                // SKIP via Message — should be excluded entirely
+                new CheckResult { CheckId = "S1", Category = "Security", Passed = false, ScoreWeight = 25, EffortHours = 40, Message = "SKIP: not applicable to this edition" },
+                // SKIP via ErrorMessage — should be excluded entirely
+                new CheckResult { CheckId = "S2", Category = "Security", Passed = false, ScoreWeight = 25, EffortHours = 40, ErrorMessage = "Query failed: permission denied" }
+            };
+
+            var score = await svc.ComputeFullAsync(results);
+
+            // Only the passing check remains in the denominator → 100%
+            Assert.Equal(100.0, score.Categories["Security"].RawScore, 3);
+            Assert.Equal(1, score.Categories["Security"].FindingCount);
+            // PassedFindings/FailedFindings on the score also exclude SKIPs
+            Assert.Equal(1, score.PassedFindings);
+            Assert.Equal(0, score.FailedFindings);
+            // But TotalFindings is the raw count of inputs (incl. SKIPs)
+            Assert.Equal(3, score.TotalFindings);
+        }
+
+        [Fact]
+        public async Task IsBad_HasNoEffectOnScore()
+        {
+            var svc = CreateService();
+
+            // IsBad is costing-only per memory/project_score_weight_model.md.
+            // Two identical result sets, one with IsBad=true on the failing check, should
+            // produce the same score.
+            var withIsBad = new[]
+            {
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = 1, EffortHours = 1, IsBad = false },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = 1, EffortHours = 1, IsBad = true }
+            };
+            var withoutIsBad = new[]
+            {
+                new CheckResult { CheckId = "P", Category = "Security", Passed = true,  ScoreWeight = 1, EffortHours = 1, IsBad = false },
+                new CheckResult { CheckId = "F", Category = "Security", Passed = false, ScoreWeight = 1, EffortHours = 1, IsBad = false }
+            };
+
+            var a = await svc.ComputeFullAsync(withIsBad);
+            var b = await svc.ComputeFullAsync(withoutIsBad);
+
+            Assert.Equal(a.Overall, b.Overall);
+            Assert.Equal(a.Categories["Security"].RawScore, b.Categories["Security"].RawScore, 3);
         }
 
         [Fact]
