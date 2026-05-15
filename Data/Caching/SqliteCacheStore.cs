@@ -378,7 +378,19 @@ namespace SQLTriage.Data.Caching
         {
             var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var op = new BatchOperation { Action = action, Completion = tcs };
-            await _batchChannel.Writer.WriteAsync(op);
+            // R-L4: avoid blocking the caller (potentially UI) if SQLite is slow.
+            // Drop the write and log rather than blocking indefinitely.
+            using var writeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            try
+            {
+                await _batchChannel.Writer.WriteAsync(op, writeTimeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                Serilog.Log.Warning("[CACHE] Write timeout on channel — slow SQLite suspected");
+                tcs.TrySetCanceled();
+                return;
+            }
             await tcs.Task;
         }
 

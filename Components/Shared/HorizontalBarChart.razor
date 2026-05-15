@@ -2,7 +2,9 @@
 @using ApexCharts
 @using SQLTriage.Data.Models
 
-<div class="chart-panel">
+<div class="chart-panel"
+     role="img"
+     aria-label="@(!string.IsNullOrEmpty(Title) ? $"Bar chart showing {Title}" : "Horizontal bar chart")">
     @if (!string.IsNullOrEmpty(Title))
     {
         <div class="chart-title">@Title</div>

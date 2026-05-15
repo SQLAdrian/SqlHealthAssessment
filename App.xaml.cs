@@ -282,7 +282,11 @@ namespace SQLTriage
             auditLog?.LogApplicationStart();
 
             // L4: CM-3 — config baseline drift check (informational; never blocks startup)
-            _ = Task.Run(() => Services.GetService<Data.Services.ConfigBaselineService>()?.RunStartupCheck());
+            _ = Task.Run(() =>
+            {
+                try { Services.GetService<Data.Services.ConfigBaselineService>()?.RunStartupCheck(); }
+                catch (Exception ex) { Log.Error(ex, "[STARTUP] fire-and-forget task failed: {Context}", "ConfigBaselineService.RunStartupCheck"); }
+            });
 
             // L2: A1.2 — resolve UptimeTrackerService singleton so it writes session_start immediately
             _ = Services.GetService<Data.Services.UptimeTrackerService>();
@@ -300,8 +304,15 @@ namespace SQLTriage
                 {
                     _ = Task.Run(async () =>
                     {
-                        await Task.Delay(2000); // brief delay â€” let connection pool warm up first
-                        await sessionSvc.PrefetchAsync();
+                        try
+                        {
+                            await Task.Delay(2000); // brief delay â€” let connection pool warm up first
+                            await sessionSvc.PrefetchAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, “[STARTUP] fire-and-forget task failed: {Context}”, “SessionDataService.PrefetchAsync”);
+                        }
                     });
                 }
 
@@ -435,6 +446,9 @@ namespace SQLTriage
                 Services?.GetService<LogCleanupService>()?.Dispose();
                 Services?.GetService<AutoRefreshService>()?.Dispose();
                 Services?.GetService<Data.Services.DevBridgeService>()?.Stop();
+                // R-L2: explicitly stop connection health + wait stats (cancel their CTS)
+                Services?.GetService<Data.Services.ConnectionHealthService>()?.Dispose();
+                Services?.GetService<Data.Services.WaitStatsService>()?.Dispose();
 
                 Log.Information("Background services stopped");
             }

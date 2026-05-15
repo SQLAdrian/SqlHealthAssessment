@@ -140,6 +140,19 @@
     outline: none;
 }
 
+/* A-L3: visually-hidden — accessible label for screen readers, invisible to sighted users */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -886,9 +899,9 @@ body {
     font-size: 13px;
 }
 
-.settings-row input[type="number"]:focus,
-.settings-row input[type="text"]:focus,
-.settings-row select:focus {
+.settings-row input[type="number"]:focus-visible,
+.settings-row input[type="text"]:focus-visible,
+.settings-row select:focus-visible {
     outline: none;
     border-color: var(--accent);
 }
@@ -1357,11 +1370,12 @@ body {
     cursor: pointer;
     padding: 2px 6px;
     font-size: 12px;
-    opacity: 0.6;
+    opacity: 0.85; /* A-L2: was 0.6 — fails WCAG 1.4.11 (3:1 UI component contrast) */
     transition: opacity 0.15s;
 }
 
-.btn-icon:hover {
+.btn-icon:hover,
+.btn-icon:focus-visible {
     opacity: 1;
 }
 
@@ -1430,9 +1444,9 @@ body {
     font-size: 13px;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
+.form-group input:focus-visible,
+.form-group select:focus-visible,
+.form-group textarea:focus-visible {
     outline: none;
     border-color: var(--accent);
 }
@@ -2007,19 +2021,19 @@ body {
     box-shadow: inset 3px 0 8px -4px rgba(239, 68, 68, 0.4);
 }
 .qp-stmt-tab.cost-high .stmt-tab-cost {
-    color: #f87171;
+    color: var(--red); /* A-L7: was #f87171 */
     font-weight: 700;
 }
 .qp-stmt-tab.cost-high .stmt-tab-num {
     background: rgba(239, 68, 68, 0.25);
-    color: #fca5a5;
+    color: var(--red); /* A-L7: was #fca5a5 */
 }
 .qp-stmt-tab.cost-medium {
     border-left: 3px solid var(--warning, #f59e0b);
     background: rgba(245, 158, 11, 0.07);
 }
 .qp-stmt-tab.cost-medium .stmt-tab-cost {
-    color: #fbbf24;
+    color: var(--yellow); /* A-L7: was #fbbf24 */
     font-weight: 600;
 }
 .qp-stmt-tab.cost-low {
@@ -2028,11 +2042,11 @@ body {
 
 /* Active state for cost coloured tabs */
 .qp-stmt-tab.active.cost-high {
-    border-left-color: #f87171;
+    border-left-color: var(--red); /* A-L7: was #f87171 */
     background: rgba(239, 68, 68, 0.16);
     box-shadow: inset 3px 0 12px -4px rgba(239, 68, 68, 0.5);
 }
-.qp-stmt-tab.active.cost-medium { border-left-color: #fbbf24; }
+.qp-stmt-tab.active.cost-medium { border-left-color: var(--yellow); /* A-L7: was #fbbf24 */ }
 .qp-stmt-tab.active.cost-low   { border-left-color: var(--success-fg); }
 
 .stmt-tab-badge {
@@ -2131,10 +2145,10 @@ body {
     white-space: nowrap !important;
 }
 .qp-node.qp-hot-red[data-heat-pct]::after {
-    color: #dc2626 !important;
+    color: var(--red) !important; /* A-L7: was #dc2626 */
 }
 .qp-node.qp-hot-orange[data-heat-pct]::after {
-    color: #ea580c !important;
+    color: var(--orange) !important; /* A-L7: was #ea580c */
 }
 
 /* Query plan graph scrollable container */
@@ -2146,16 +2160,16 @@ body {
 /* ── LiveWait Stats dashboard ────────────────────────────────────── */
 
 /* Stat card accent colours per wait category */
-.stat-card[data-panel-id="livestats.cpu_pct"]    { border-left: 3px solid #f44336; }
+.stat-card[data-panel-id="livestats.cpu_pct"]    { border-left: 3px solid var(--red); }   /* A-L7: was #f44336 */
 .stat-card[data-panel-id="livestats.io_pct"]     { border-left: 3px solid #2196f3; }
 .stat-card[data-panel-id="livestats.memory_pct"] { border-left: 3px solid #9c27b0; }
 .stat-card[data-panel-id="livestats.other_pct"]  { border-left: 3px solid #607d8b; }
-.stat-card[data-panel-id="livestats.signal_pct"] { border-left: 3px solid #ff9800; }
+.stat-card[data-panel-id="livestats.signal_pct"] { border-left: 3px solid var(--orange); } /* A-L7: was #ff9800 */
 
 /* CPU pressure highlight when stat card is red */
 .stat-card .stat-card-value[style*="#f44336"] ~ .stat-card-label::after {
     content: " ⚠ CPU Pressure";
-    color: #f44336;
+    color: var(--red); /* A-L7: was #f44336 */
     font-size: 10px;
     font-weight: bold;
 }
@@ -2194,7 +2208,7 @@ body {
     opacity: 1;
 }
 
-.datagrid-toprows-input:focus {
+.datagrid-toprows-input:focus-visible {
     outline: none;
     border-color: var(--accent);
 }
@@ -2681,7 +2695,7 @@ tr.clickable:hover .datagrid-plan-badge {
     min-height: 80px;
 }
 
-.form-group input:focus, textarea:focus {
+.form-group input:focus-visible, textarea:focus-visible {
     outline: none;
     border-color: var(--accent);
 }
@@ -3551,7 +3565,7 @@ tr.clickable:hover .datagrid-plan-badge {
     font-size: 14px;
 }
 
-.server-select:focus {
+.server-select:focus-visible {
     outline: none;
     border-color: var(--accent);
 }
@@ -4142,7 +4156,7 @@ tr.clickable:hover .datagrid-plan-badge {
     color: var(--text-primary);
 }
 
-.server-select:focus {
+.server-select:focus-visible {
     border-color: var(--accent);
     outline: none;
 }
@@ -4162,7 +4176,7 @@ tr.clickable:hover .datagrid-plan-badge {
     color: var(--text-primary);
 }
 
-.filter-select:focus {
+.filter-select:focus-visible {
     border-color: var(--accent);
     outline: none;
 }
@@ -4350,7 +4364,7 @@ tr.clickable:hover .datagrid-plan-badge {
     width: 180px;
 }
 
-.param-input:focus {
+.param-input:focus-visible {
     outline: none;
     border-color: var(--accent);
 }
@@ -5238,17 +5252,17 @@ tr.clickable:hover .datagrid-plan-badge {
 .panel-item.panel-type-timeseries { border-left: 3px solid #2196f3; }
 .panel-item.panel-type-statcard { border-left: 3px solid #4caf50; }
 .panel-item.panel-type-deltastatcard { border-left: 3px solid #00bcd4; }
-.panel-item.panel-type-bargauge { border-left: 3px solid #ff9800; }
+.panel-item.panel-type-bargauge { border-left: 3px solid var(--orange); }    /* A-L7: was #ff9800 */
 .panel-item.panel-type-datagrid { border-left: 3px solid #9c27b0; }
-.panel-item.panel-type-checkstatus { border-left: 3px solid #f44336; }
+.panel-item.panel-type-checkstatus { border-left: 3px solid var(--red); }     /* A-L7: was #f44336 */
 .panel-item.panel-type-textcard { border-left: 3px solid #607d8b; }
 
 .preview-panel-type.timeseries { background: #2196f3; color: white; }
 .preview-panel-type.statcard { background: #4caf50; color: white; }
 .preview-panel-type.deltastatcard { background: #00bcd4; color: white; }
-.preview-panel-type.bargauge { background: #ff9800; color: white; }
+.preview-panel-type.bargauge { background: var(--orange); color: white; }     /* A-L7: was #ff9800 */
 .preview-panel-type.datagrid { background: #9c27b0; color: white; }
-.preview-panel-type.checkstatus { background: #f44336; color: white; }
+.preview-panel-type.checkstatus { background: var(--red); color: white; }     /* A-L7: was #f44336 */
 .preview-panel-type.textcard { background: #607d8b; color: white; }
 
 /* === Sessions Page === */
@@ -5366,7 +5380,7 @@ tr.clickable:hover .datagrid-plan-badge {
 }
 
 .blocking-line {
-    stroke: #f44336;
+    stroke: var(--red); /* A-L7: was #f44336 */
     stroke-width: 2.5;
     stroke-dasharray: 8,4;
     stroke-opacity: 0.85;
@@ -6589,12 +6603,14 @@ tr.clickable:hover .datagrid-plan-badge {
     padding: 7px 10px;
     font-size: 13px;
     color: var(--text-primary);
-    outline: none;
+    outline: none; /* A-L1: browser-default outline suppressed; focus-visible below provides keyboard indicator */
     transition: border-color 0.15s;
 }
 
-.pdf-input:focus {
+.pdf-input:focus-visible {
     border-color: var(--accent, #63b3ed);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .pdf-ext {
@@ -7261,11 +7277,13 @@ tr.clickable:hover .datagrid-plan-badge {
     border-radius: 6px;
     color: var(--text-primary, #c9d1e0);
     font-size: 14px;
-    outline: none;
+    outline: none; /* A-L1: focus-visible below provides keyboard indicator */
 }
 
-.admin-guard-input:focus {
+.admin-guard-input:focus-visible {
     border-color: var(--accent, #5a9fd4);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .admin-guard-btn {
@@ -7400,11 +7418,13 @@ tr.clickable:hover .datagrid-plan-badge {
     border-radius: 4px;
     color: var(--text-primary, #c9d1e0);
     font-size: 12px;
-    outline: none;
+    outline: none; /* A-L1: focus-visible below provides keyboard indicator */
 }
 
-.config-field .form-input:focus {
+.config-field .form-input:focus-visible {
     border-color: var(--accent, #5a9fd4);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .config-toggle {
@@ -7566,11 +7586,13 @@ tr.clickable:hover .datagrid-plan-badge {
     border-radius: 4px;
     color: var(--text-primary, #c9d1e0);
     font-size: 12px;
-    outline: none;
+    outline: none; /* A-L1: focus-visible below provides keyboard indicator */
 }
 
-.file-filter-input:focus {
+.file-filter-input:focus-visible {
     border-color: var(--accent, #5a9fd4);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .file-count {
@@ -8016,11 +8038,13 @@ tr.clickable:hover .datagrid-plan-badge {
     color: var(--text-primary, #cccccc);
     font-size: 12px;
     cursor: pointer;
-    outline: none;
+    outline: none; /* A-L1: focus-visible below provides keyboard indicator */
     appearance: auto;
 }
-.nav-theme-select:focus {
+.nav-theme-select:focus-visible {
     border-color: var(--accent, #007acc);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 
@@ -8414,7 +8438,7 @@ tr.clickable:hover .datagrid-plan-badge {
     font-size: 12px; color: var(--text-primary); resize: vertical; min-height: 80px;
     line-height: 1.5;
 }
-.dba-cmd-editor:focus { outline: none; border-color: var(--accent); }
+.dba-cmd-editor:focus-visible { outline: none; border-color: var(--accent); }
 
 .dba-output-pre {
     margin: 0; padding: 12px; border-radius: 6px;

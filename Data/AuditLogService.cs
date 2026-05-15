@@ -96,6 +96,8 @@ namespace SQLTriage.Data
 
             _eventLogAvailable = TryEnsureEventLogSource();
             VerifyChainOnStartup();
+            // R-L6: emit one-time migration note on first run after switching to UTC filenames.
+            EmitSegmentFilenameUtcMarkerIfNeeded();
             // L6: check key age after chain verification (only in production mode with timer)
             if (startFlushTimer) CheckHmacKeyAge(configuration);
 
@@ -788,6 +790,37 @@ namespace SQLTriage.Data
             }
         }
 
+        // Marker file that tracks whether the UTC segment-filename migration note has been emitted.
+        private static readonly string UtcFilenameMarkerFileName = "audit-utc-filename.marker";
+        private string UtcFilenameMarkerPath => Path.Combine(_logDirectory, UtcFilenameMarkerFileName);
+
+        /// <summary>
+        /// Emits a single audit entry noting the switch from local-time to UTC segment filenames,
+        /// then writes a marker file so it only fires once per installation.
+        /// </summary>
+        private void EmitSegmentFilenameUtcMarkerIfNeeded()
+        {
+            try
+            {
+                if (File.Exists(UtcFilenameMarkerPath)) return;
+                Enqueue(new AuditLogEntry
+                {
+                    EventType = AuditEventType.ApplicationLifecycle,
+                    Severity  = AuditSeverity.Info,
+                    Message   = "[AUDIT] Segment filename basis changed from local to UTC",
+                    Details   = new Dictionary<string, string>
+                    {
+                        ["Note"] = "R-L6 migration: audit-YYYY-MM-DD.jsonl filenames now use UTC date, matching entry timestamp_utc"
+                    }
+                });
+                File.WriteAllText(UtcFilenameMarkerPath, DateTime.UtcNow.ToString("o"));
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[AUDIT] Failed to emit UTC filename migration marker");
+            }
+        }
+
         /// <summary>
         /// Returns the path to the current active segment. Segment naming:
         /// audit-YYYYMMDD.jsonl for the first segment of a day, then
@@ -795,7 +828,9 @@ namespace SQLTriage.Data
         /// </summary>
         private string GetCurrentLogFile()
         {
-            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            // R-L6: use UTC so segment filenames match entry timestamp_utc — no midnight
+            // mismatch for observers in non-UTC zones.
+            var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
             var baseFile = Path.Combine(_logDirectory, $"audit-{today}.jsonl");
 
             // Pick the highest-numbered rotated segment if any exist.
@@ -814,7 +849,8 @@ namespace SQLTriage.Data
                 var fi = new FileInfo(logFile);
                 if (!fi.Exists || fi.Length < RotationSizeBytes) return;
 
-                var today = DateTime.Now.ToString("yyyy-MM-dd");
+                // R-L6: UTC for consistency with GetCurrentLogFile
+                var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
                 int next = 1;
                 while (File.Exists(Path.Combine(_logDirectory, $"audit-{today}_{next:D4}.jsonl")))
                     next++;

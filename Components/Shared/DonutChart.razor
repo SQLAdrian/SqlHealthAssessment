@@ -2,7 +2,9 @@
 @using ApexCharts
 @using SQLTriage.Data.Models
 
-<div class="bg-app-bg-panel rounded-lg p-3 my-2">
+<div class="bg-app-bg-panel rounded-lg p-3 my-2"
+     role="img"
+     aria-label="@(!string.IsNullOrEmpty(Title) ? $"Donut chart showing {Title}" : "Donut chart")">
     @if (!string.IsNullOrEmpty(Title))
     {
         <div class="text-sm font-semibold text-app-text-primary mb-2 pl-1">@Title</div>
