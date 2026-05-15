@@ -220,6 +220,8 @@ namespace SQLTriage.Data.Services
         /// </summary>
         public static bool HasPermission(string role, string permission)
         {
+            // Normalise once so role comparison stays case-insensitive — matches HasRole().
+            role = role?.ToLowerInvariant() ?? string.Empty;
             return permission switch
             {
                 // Admin-only operations
