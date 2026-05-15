@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         });
 
         // ── Core infrastructure ──
+        services.AddSingleton<SqlConnectionPoolService>();
         services.AddSingleton<ResilienceService>();
         services.AddSingleton<DashboardConfigService>();
         services.AddSingleton<QueryRegistry>();
@@ -84,7 +85,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<WaitStatsHistoryService>();
         services.AddSingleton<WaitStatsService>();
         services.AddSingleton<IErrorCatalog, ErrorCatalog>();
-        services.AddSingleton<IReportService, ReportService>();
         services.AddSingleton<IQuickCheckRunner, QuickCheckRunner>();
 
         // ── Scheduled tasks ──

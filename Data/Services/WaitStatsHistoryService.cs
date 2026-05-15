@@ -14,6 +14,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using SQLTriage.Data;
 
 namespace SQLTriage.Data.Services;
 
@@ -42,8 +43,7 @@ public class WaitStatsHistoryService : IDisposable
     {
         try
         {
-            using var conn = new SqliteConnection(_connectionString);
-            conn.Open();
+            using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 PRAGMA journal_mode=WAL;
@@ -79,8 +79,7 @@ public class WaitStatsHistoryService : IDisposable
         if (snap?.Deltas == null || snap.Deltas.Count == 0) return;
         try
         {
-            using var conn = new SqliteConnection(_connectionString);
-            await conn.OpenAsync(ct);
+            using var conn = await SqliteCipherHelper.OpenEncryptedAsync(_connectionString);
             using var tx = conn.BeginTransaction();
             using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
@@ -118,8 +117,7 @@ public class WaitStatsHistoryService : IDisposable
         var rows = new List<WaitTrendPoint>();
         try
         {
-            using var conn = new SqliteConnection(_connectionString);
-            conn.Open();
+            using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 SELECT recorded_at, delta_wait_ms, delta_tasks, delta_signal_ms
@@ -154,8 +152,7 @@ public class WaitStatsHistoryService : IDisposable
     {
         try
         {
-            using var conn = new SqliteConnection(_connectionString);
-            conn.Open();
+            using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "DELETE FROM wait_stats_history WHERE recorded_at < @cutoff;";
             cmd.Parameters.AddWithValue("@cutoff", DateTime.UtcNow.AddDays(-_retentionDays).ToString("o"));

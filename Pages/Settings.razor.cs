@@ -129,8 +129,8 @@ public partial class Settings
     private bool _enablePerfInspector;
 
     // Tuning knobs
-    private int _globalConcurrency = 5;
-    private int _perServerConcurrency = 3;
+    private int _globalConcurrency = 45;
+    private int _perServerConcurrency = 13;
     private int _channelCapacity = 1000;
     private int _defaultTimeoutSeconds = 60;
     private int _maxPanelsInFlight = 10;
@@ -1109,10 +1109,8 @@ public partial class Settings
             var sizeBefore = new System.IO.FileInfo(dbPath).Length;
             var connStr = $"Data Source={dbPath}";
 
-            using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
+            using (var conn = await SQLTriage.Data.SqliteCipherHelper.OpenEncryptedAsync(connStr))
             {
-                await conn.OpenAsync();
-
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "PRAGMA optimize;";
@@ -1127,9 +1125,8 @@ public partial class Settings
             }
 
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(connStr))
+            using (var conn = await SQLTriage.Data.SqliteCipherHelper.OpenEncryptedAsync(connStr))
             {
-                await conn.OpenAsync();
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "VACUUM;";

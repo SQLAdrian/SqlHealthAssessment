@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using SQLTriage.Data;
 using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
@@ -58,8 +59,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
@@ -155,8 +155,7 @@ namespace SQLTriage.Data.Services
 
             lock (_writeLock)
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var transaction = conn.BeginTransaction();
 
                 // Insert governance snapshot
@@ -252,8 +251,7 @@ namespace SQLTriage.Data.Services
 
             lock (_writeLock)
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     INSERT INTO compliance_history
@@ -280,8 +278,7 @@ namespace SQLTriage.Data.Services
             var results = new List<GovernanceTrendPoint>();
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     SELECT recorded_at, overall_score, band, security_score, performance_score,
@@ -329,8 +326,7 @@ namespace SQLTriage.Data.Services
             var results = new List<GovernanceWeeklyAverage>();
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     SELECT strftime('%Y-W%W', recorded_at) AS week,
@@ -386,8 +382,7 @@ namespace SQLTriage.Data.Services
             {
                 lock (_writeLock)
                 {
-                    using var conn = new SqliteConnection(_connectionString);
-                    conn.Open();
+                    using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = @"
                         INSERT INTO check_results
@@ -420,8 +415,7 @@ namespace SQLTriage.Data.Services
             var results = new List<CheckResult>();
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     WITH latest AS (
@@ -472,8 +466,7 @@ namespace SQLTriage.Data.Services
             if (string.IsNullOrWhiteSpace(checkId)) return points;
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     SELECT server_name, recorded_at, passed, actual_value, severity, check_name, category
@@ -515,8 +508,7 @@ namespace SQLTriage.Data.Services
             var violations = new List<IntegrityViolation>();
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     SELECT id, report_type, report_id, payload_hash, previous_hash, chain_hash, server_name, recorded_at
@@ -591,8 +583,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     DELETE FROM governance_history WHERE recorded_at < datetime('now', @days);

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data.Models;
 
@@ -23,7 +24,7 @@ namespace SQLTriage.Data.Services
 
         public record HealthEntry(ServerStatus Status, DateTime LastChecked, string? Error);
 
-        private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+        private readonly TimeSpan PollInterval;
 
         private readonly ServerConnectionManager _connections;
         private readonly ILogger<ConnectionHealthService> _logger;
@@ -59,10 +60,13 @@ namespace SQLTriage.Data.Services
         public bool IsAzureSql(string serverName)
             => _isAzure.TryGetValue(serverName, out var v) && v;
 
-        public ConnectionHealthService(ServerConnectionManager connections, ILogger<ConnectionHealthService> logger)
+        public ConnectionHealthService(ServerConnectionManager connections, ILogger<ConnectionHealthService> logger,
+            IConfiguration? configuration = null)
         {
             _connections = connections;
             _logger = logger;
+            var intervalSeconds = configuration?.GetValue<int>("ConnectionHealth:PollIntervalSeconds", 30) ?? 30;
+            PollInterval = TimeSpan.FromSeconds(intervalSeconds > 0 ? intervalSeconds : 30);
         }
 
         /// <summary>Start polling. Called once from App startup after DI is ready.</summary>

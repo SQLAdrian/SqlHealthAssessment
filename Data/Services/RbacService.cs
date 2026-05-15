@@ -220,22 +220,26 @@ namespace SQLTriage.Data.Services
         /// </summary>
         public static bool HasPermission(string role, string permission)
         {
-            return permission switch
+            // Normalise both inputs so callers with mixed casing are handled consistently.
+            var normRole = role?.Trim().ToLowerInvariant() ?? "";
+            var normPerm = permission?.Trim().ToLowerInvariant() ?? "";
+
+            return normPerm switch
             {
                 // Admin-only operations
                 "settings" or "manage_servers" or "manage_users" or "manage_alerts"
-                    => role == AppRoles.Admin,
+                    => normRole == AppRoles.Admin,
 
                 // Admin + Operator
                 "execute_checks" or "run_scripts" or "export_data" or "acknowledge_alerts"
-                    => role is AppRoles.Admin or AppRoles.Operator,
+                    => normRole is AppRoles.Admin or AppRoles.Operator,
 
                 // Everyone (including viewer)
                 "view_dashboard" or "view_results" or "view_audit_log"
                     => true,
 
                 // Unknown permissions default to admin-only
-                _ => role == AppRoles.Admin
+                _ => normRole == AppRoles.Admin
             };
         }
 

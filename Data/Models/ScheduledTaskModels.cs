@@ -60,8 +60,7 @@ namespace SQLTriage.Data.Models
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum TaskType
     {
-        SqlQuery,
-        GovernanceReport
+        SqlQuery
     }
 
     public class ScheduledTaskDefinition

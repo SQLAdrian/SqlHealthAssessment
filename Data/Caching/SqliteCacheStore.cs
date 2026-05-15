@@ -133,13 +133,13 @@ namespace SQLTriage.Data.Caching
         /// without going through the cache abstraction layer.
         /// Caller is responsible for opening and disposing the connection.
         /// </summary>
+        /// Returns an already-open, SQLCipher-keyed connection for callers outside this class.
         public SqliteConnection CreateExternalConnection()
-            => new SqliteConnection(_connectionString);
+            => SqliteCipherHelper.OpenEncrypted(_connectionString);
 
         private void InitializeSchema()
         {
-            using var conn = CreateConnection();
-            conn.Open();
+            using var conn = CreateConnection(); // already open + keyed
 
             // Enable WAL mode for concurrent reads during writes
             using (var pragma = conn.CreateCommand())
@@ -341,8 +341,7 @@ namespace SQLTriage.Data.Caching
                 // Execute batch in single SQLite transaction
                 try
                 {
-                    using var conn = CreateConnection();
-                    await conn.OpenAsync();
+                    using var conn = await CreateConnectionAsync();
                     using var tx = conn.BeginTransaction();
 
                     foreach (var op in batch)
@@ -669,8 +668,7 @@ namespace SQLTriage.Data.Caching
         public async Task<List<TimeSeriesPoint>> GetTimeSeriesAsync(
             string queryId, string instanceKey, DateTime from, DateTime to)
         {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+            using var conn = await CreateConnectionAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -707,8 +705,7 @@ namespace SQLTriage.Data.Caching
         /// </summary>
         public async Task<StatValue?> GetStatValueAsync(string queryId, string instanceKey)
         {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+            using var conn = await CreateConnectionAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -737,8 +734,7 @@ namespace SQLTriage.Data.Caching
         /// </summary>
         public async Task<List<StatValue>> GetBarGaugeAsync(string queryId, string instanceKey)
         {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+            using var conn = await CreateConnectionAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -769,8 +765,7 @@ namespace SQLTriage.Data.Caching
         /// </summary>
         public async Task<DataTable?> GetDataTableAsync(string queryId, string instanceKey)
         {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+            using var conn = await CreateConnectionAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -791,8 +786,7 @@ namespace SQLTriage.Data.Caching
         /// </summary>
         public async Task<List<CheckStatus>> GetCheckStatusAsync(string queryId, string instanceKey)
         {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+            using var conn = await CreateConnectionAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -820,8 +814,7 @@ namespace SQLTriage.Data.Caching
         /// </summary>
         public async Task<DateTime?> GetLastFetchTimeAsync(string queryId, string instanceKey)
         {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+            using var conn = await CreateConnectionAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -841,8 +834,7 @@ namespace SQLTriage.Data.Caching
         /// </summary>
         public async Task<long> GetCacheSizeBytes()
         {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+            using var conn = await CreateConnectionAsync();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()";
             var result = await cmd.ExecuteScalarAsync();
@@ -880,8 +872,7 @@ namespace SQLTriage.Data.Caching
             await _globalWriteLock.WaitAsync();
             try
             {
-                using var conn = CreateConnection();
-                await conn.OpenAsync();
+                using var conn = await CreateConnectionAsync();
 
                 try
                 {
@@ -947,8 +938,7 @@ namespace SQLTriage.Data.Caching
             await _globalWriteLock.WaitAsync();
             try
             {
-                using var conn = CreateConnection();
-                await conn.OpenAsync();
+                using var conn = await CreateConnectionAsync();
 
                 try
                 {
@@ -997,8 +987,7 @@ namespace SQLTriage.Data.Caching
             await lk.WaitAsync();
             try
             {
-                using var conn = CreateConnection();
-                await conn.OpenAsync();
+                using var conn = await CreateConnectionAsync();
 
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
@@ -1026,8 +1015,7 @@ namespace SQLTriage.Data.Caching
             await _globalWriteLock.WaitAsync();
             try
             {
-                using var conn = CreateConnection();
-                await conn.OpenAsync();
+                using var conn = await CreateConnectionAsync();
 
                 try
                 {
@@ -1157,8 +1145,7 @@ namespace SQLTriage.Data.Caching
             await _globalWriteLock.WaitAsync();
             try
             {
-                using var conn = CreateConnection();
-                await conn.OpenAsync();
+                using var conn = await CreateConnectionAsync();
 
                 // PRAGMA optimize — lets liveQueries update internal statistics
                 using (var cmd = conn.CreateCommand())
@@ -1200,7 +1187,12 @@ namespace SQLTriage.Data.Caching
 
         // ──────────────────────── Helpers ───────────────────────────────
 
-        private SqliteConnection CreateConnection() => new(_connectionString);
+        // Returns an already-open, SQLCipher-keyed connection.
+        private SqliteConnection CreateConnection() => SqliteCipherHelper.OpenEncrypted(_connectionString);
+
+        // Returns an already-open async SQLCipher-keyed connection.
+        private async Task<SqliteConnection> CreateConnectionAsync()
+            => await SqliteCipherHelper.OpenEncryptedAsync(_connectionString);
 
         public void Dispose()
         {

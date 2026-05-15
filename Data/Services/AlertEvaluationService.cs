@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data;
 using SQLTriage.Data.Caching;
@@ -29,6 +30,7 @@ namespace SQLTriage.Data.Services
         private readonly AlertBaselineService? _baseline;
         private readonly ConnectionHealthService? _health;
         private readonly IQueryOrchestrator _orchestrator;
+        private readonly SqlConnectionPoolService? _pool;
         private readonly System.Timers.Timer _timer;
 
         // In-memory state: key = "alertId:serverName"
@@ -85,7 +87,9 @@ namespace SQLTriage.Data.Services
             liveQueriesCacheStore cache,
             IQueryOrchestrator orchestrator,
             AlertBaselineService? baseline = null,
-            ConnectionHealthService? health = null)
+            ConnectionHealthService? health = null,
+            SqlConnectionPoolService? pool = null,
+            IConfiguration? configuration = null)
         {
             _logger = logger;
             _definitions = definitions;
@@ -98,9 +102,12 @@ namespace SQLTriage.Data.Services
             _orchestrator = orchestrator;
             _baseline = baseline;
             _health = health;
+            _pool = pool;
 
-            // Base timer ticks every 30 seconds; individual alert frequencies are checked inside
-            _timer = new System.Timers.Timer(30_000);
+            var baseTickSeconds = configuration?.GetValue<int>("AlertEvaluation:BaseTickSeconds", 30) ?? 30;
+            if (baseTickSeconds <= 0) baseTickSeconds = 30;
+            // Base timer ticks per config (default 30 seconds); individual alert frequencies are checked inside
+            _timer = new System.Timers.Timer(baseTickSeconds * 1_000);
             _timer.Elapsed += (_, _) =>
             {
                 _ = Task.Run(async () =>
@@ -117,7 +124,7 @@ namespace SQLTriage.Data.Services
             if (_isRunning) return;
             _isRunning = true;
             _timer.Start();
-            _logger.LogInformation("Alert evaluation engine started (30s tick)");
+            _logger.LogInformation("Alert evaluation engine started ({Interval}ms tick)", _timer.Interval);
         }
 
         public void Stop()
@@ -170,10 +177,23 @@ namespace SQLTriage.Data.Services
                 // Evaluate each alert that is due
                 foreach (var alert in alerts)
                 {
+                    // Enforce minimum 300s for log-scan alert types (xp_readerrorlog is expensive)
+                    const int LogScanMinFrequencySeconds = 300;
+                    var effectiveFrequency = alert.Id is "error_log_severity" or "error_log_fatal" or "logon_failure"
+                        ? Math.Max(alert.FrequencySeconds, LogScanMinFrequencySeconds)
+                        : alert.FrequencySeconds;
+                    if (effectiveFrequency != alert.FrequencySeconds
+                        && !_lastEvaluation.ContainsKey($"__logwarn__{alert.Id}"))
+                    {
+                        _lastEvaluation[$"__logwarn__{alert.Id}"] = now; // sentinel — log once per run
+                        _logger.LogWarning("Alert '{AlertId}' FrequencySeconds ({Stored}s) is below log-scan minimum; effective frequency clamped to {Min}s",
+                            alert.Id, alert.FrequencySeconds, LogScanMinFrequencySeconds);
+                    }
+
                     // Skip if not due yet based on frequency
                     var evalKey = alert.Id;
                     if (_lastEvaluation.TryGetValue(evalKey, out var lastEval)
-                        && (now - lastEval).TotalSeconds < alert.FrequencySeconds)
+                        && (now - lastEval).TotalSeconds < effectiveFrequency)
                     {
                         continue;
                     }
@@ -353,16 +373,38 @@ namespace SQLTriage.Data.Services
             }
         }
 
+        // Helper: get a connection — from pool if available, else direct.
+        // Caller must call ReturnOrDispose when done.
+        private async Task<(System.Data.IDbConnection Conn, bool Pooled)> RentConnectionAsync(string connStr, CancellationToken ct = default)
+        {
+            if (_pool != null)
+                return (await _pool.GetConnectionAsync(connStr, ct), true);
+            var c = new SqlConnection(connStr);
+            await c.OpenAsync(ct);
+            return (c, false);
+        }
+
+        private void ReturnOrDispose(System.Data.IDbConnection conn, string connStr, bool pooled)
+        {
+            if (pooled && _pool != null)
+                _pool.ReturnConnection(conn, connStr);
+            else
+                try { conn.Dispose(); } catch { /* best effort */ }
+        }
+
         private async Task<double?> CheckConnectivityAsync(ServerConnection connection, string serverName)
         {
             try
             {
                 var connStr = connection.GetConnectionString(serverName, "master");
-                using var sqlConn = new SqlConnection(connStr);
-                await sqlConn.OpenAsync();
-                using var cmd = new SqlCommand("SELECT 1", sqlConn) { CommandTimeout = 5 };
-                await cmd.ExecuteScalarAsync();
-                return 0; // 0 = reachable (below threshold of 1 = unreachable)
+                var (sqlConn, pooled) = await RentConnectionAsync(connStr);
+                try
+                {
+                    using var cmd = new SqlCommand("SELECT 1", (SqlConnection)sqlConn) { CommandTimeout = 5 };
+                    await cmd.ExecuteScalarAsync();
+                    return 0; // 0 = reachable (below threshold of 1 = unreachable)
+                }
+                finally { ReturnOrDispose(sqlConn, connStr, pooled); }
             }
             catch (Exception ex)
             {
@@ -376,8 +418,6 @@ namespace SQLTriage.Data.Services
             try
             {
                 var connStr = connection.GetConnectionString(serverName, "master");
-                using var sqlConn = new SqlConnection(connStr);
-                await sqlConn.OpenAsync();
 
                 // Count matching errors in xp_readerrorlog output from the last 5 minutes.
                 // xp_readerrorlog params 5 & 6 must be datetime variables, not inline expressions.
@@ -391,9 +431,14 @@ namespace SQLTriage.Data.Services
 
                 if (sql == null) return null;
 
-                using var cmd = new SqlCommand(sql, sqlConn) { CommandTimeout = 15 };
-                var result = await cmd.ExecuteScalarAsync();
-                return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
+                var (sqlConn, pooled) = await RentConnectionAsync(connStr);
+                try
+                {
+                    using var cmd = new SqlCommand(sql, (SqlConnection)sqlConn) { CommandTimeout = 15 };
+                    var result = await cmd.ExecuteScalarAsync();
+                    return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
+                }
+                finally { ReturnOrDispose(sqlConn, connStr, pooled); }
             }
             catch (Exception ex)
             {
@@ -407,14 +452,17 @@ namespace SQLTriage.Data.Services
             try
             {
                 var connStr = connection.GetConnectionString(serverName, "master");
-                using var sqlConn = new SqlConnection(connStr);
-                await sqlConn.OpenAsync();
-                using var cmd = new SqlCommand(
-                    "SELECT COUNT(*) FROM sys.dm_io_virtual_file_stats(NULL, NULL) WHERE io_stall_read_ms > 5000 OR io_stall_write_ms > 5000",
-                    sqlConn)
-                { CommandTimeout = 10 };
-                var result = await cmd.ExecuteScalarAsync();
-                return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
+                var (sqlConn, pooled) = await RentConnectionAsync(connStr);
+                try
+                {
+                    using var cmd = new SqlCommand(
+                        "SELECT COUNT(*) FROM sys.dm_io_virtual_file_stats(NULL, NULL) WHERE io_stall_read_ms > 5000 OR io_stall_write_ms > 5000",
+                        (SqlConnection)sqlConn)
+                    { CommandTimeout = 10 };
+                    var result = await cmd.ExecuteScalarAsync();
+                    return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
+                }
+                finally { ReturnOrDispose(sqlConn, connStr, pooled); }
             }
             catch (Exception ex)
             {
@@ -428,8 +476,7 @@ namespace SQLTriage.Data.Services
             try
             {
                 var connStr = connection.GetConnectionString(serverName, "master");
-                using var sqlConn = new SqlConnection(connStr);
-                await sqlConn.OpenAsync();
+                var (sqlConn, pooled) = await RentConnectionAsync(connStr);
 
                 // Count xml_deadlock_report events in the last 5 minutes from system_health ring buffer.
                 // Pre-check: if target_data contains no 'xml_deadlock_report' string at all,
@@ -462,9 +509,13 @@ namespace SQLTriage.Data.Services
                     WHERE TRY_CAST(ts AS datetimeoffset)
                           >= DATEADD(MINUTE, -5, SYSUTCDATETIME())";
 
-                using var cmd = new SqlCommand(sql, sqlConn) { CommandTimeout = 30 };
-                var result = await cmd.ExecuteScalarAsync();
-                return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
+                try
+                {
+                    using var cmd = new SqlCommand(sql, (SqlConnection)sqlConn) { CommandTimeout = 30 };
+                    var result = await cmd.ExecuteScalarAsync();
+                    return result == null || result == DBNull.Value ? 0 : Convert.ToDouble(result);
+                }
+                finally { ReturnOrDispose(sqlConn, connStr, pooled); }
             }
             catch (Exception ex)
             {
@@ -701,18 +752,18 @@ namespace SQLTriage.Data.Services
             string serverName)
         {
             var connString = connection.GetConnectionString(serverName, "master");
-
-            using var sqlConn = new SqlConnection(connString);
-            await sqlConn.OpenAsync();
-
-            using var cmd = new SqlCommand(alert.Query, sqlConn)
+            var (sqlConn, pooled) = await RentConnectionAsync(connString);
+            try
             {
-                CommandTimeout = 15
-            };
-
-            var result = await cmd.ExecuteScalarAsync();
-            if (result == null || result == DBNull.Value) return null;
-            return Convert.ToDouble(result);
+                using var cmd = new SqlCommand(alert.Query, (SqlConnection)sqlConn)
+                {
+                    CommandTimeout = 15
+                };
+                var result = await cmd.ExecuteScalarAsync();
+                if (result == null || result == DBNull.Value) return null;
+                return Convert.ToDouble(result);
+            }
+            finally { ReturnOrDispose(sqlConn, connString, pooled); }
         }
 
         private static bool IsThresholdBreached(double value, double? threshold, string op)

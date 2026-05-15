@@ -1112,9 +1112,16 @@
 
     private async void OnEngineChanged()
     {
-        _activeAlerts = Engine.ActiveAlerts.ToList();
-        _activeAlertCount = Engine.ActiveCount;
-        await InvokeAsync(StateHasChanged);
+        try
+        {
+            _activeAlerts = Engine.ActiveAlerts.ToList();
+            _activeAlertCount = Engine.ActiveCount;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "OnEngineChanged failed in Alerts");
+        }
     }
 
     private void ToggleDryRun(ChangeEventArgs e)

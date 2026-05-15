@@ -10,6 +10,7 @@ namespace SQLTriage.Data.Services
 {
     public static class LocalInstanceDetector
     {
+        // loopback probe — TLS validation not applicable; all targets here are 127.0.0.1 / localhost equivalents
         private static readonly string[] DefaultConnectionStrings =
         {
             "Data Source=.;Integrated Security=True;TrustServerCertificate=True;Connect Timeout=2",

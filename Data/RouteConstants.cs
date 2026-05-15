@@ -91,7 +91,7 @@ public static class RouteConstants
     // ── Governance ──
     public const string CioDashboard = "/cio";
     public const string Governance = "/governance";
-    public const string GovernanceReportIndicative = "/governance?IsIndicative=true";
+    public const string GovernanceIndicative = "/governance?IsIndicative=true";
     public const string ComplianceMap = "/compliance-map";
 
     // ── Audit ──

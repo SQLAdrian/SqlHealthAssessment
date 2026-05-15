@@ -20,14 +20,10 @@ namespace SQLTriage.Data
             _connectionString = connectionString;
         }
 
-        public IDbConnection CreateConnection() => new SqliteConnection(_connectionString);
+        public IDbConnection CreateConnection() => SqliteCipherHelper.OpenEncrypted(_connectionString);
         public string DataSourceType => "liveQueries";
 
         public async Task<IDbConnection> CreateConnectionAsync()
-        {
-            var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync();
-            return connection;
-        }
+            => await SqliteCipherHelper.OpenEncryptedAsync(_connectionString);
     }
 }

@@ -14,13 +14,14 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services;
 
 public class WaitStatsService : IDisposable
 {
-    private const int SnapshotIntervalSeconds = 30;
+    private readonly int SnapshotIntervalSeconds;
 
     // Default DMV query. User can override by replacing this with a config-driven
     // query later (per CLAUDE.md "User owns SQL"). Read-only system catalog access.
@@ -33,6 +34,7 @@ public class WaitStatsService : IDisposable
     private readonly ILogger<WaitStatsService> _logger;
     private readonly ServerConnectionManager _connections;
     private readonly WaitStatsHistoryService _history;
+    private readonly SqlConnectionPoolService? _pool;
     private readonly CancellationTokenSource _cts = new();
     private readonly Dictionary<string, Dictionary<string, (long WaitMs, long Tasks, long SignalMs)>> _lastCumulative
         = new(StringComparer.OrdinalIgnoreCase);
@@ -42,11 +44,15 @@ public class WaitStatsService : IDisposable
     public WaitStatsService(
         ILogger<WaitStatsService> logger,
         ServerConnectionManager connections,
-        WaitStatsHistoryService history)
+        WaitStatsHistoryService history,
+        IConfiguration? configuration = null,
+        SqlConnectionPoolService? pool = null)
     {
         _logger = logger;
         _connections = connections;
         _history = history;
+        _pool = pool;
+        SnapshotIntervalSeconds = configuration?.GetValue<int>("WaitStats:SnapshotIntervalSeconds", 30) ?? 30;
     }
 
     /// <summary>
@@ -65,8 +71,10 @@ public class WaitStatsService : IDisposable
 
     private async Task LoopAsync(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(SnapshotIntervalSeconds));
+        while (await timer.WaitForNextTickAsync(ct))
         {
+            var tickStart = DateTime.UtcNow;
             try
             {
                 var conns = _connections.GetEnabledConnections();
@@ -91,8 +99,9 @@ public class WaitStatsService : IDisposable
             {
                 _logger.LogWarning(ex, "WaitStats loop iteration failed");
             }
-            try { await Task.Delay(TimeSpan.FromSeconds(SnapshotIntervalSeconds), ct); }
-            catch (TaskCanceledException) { break; }
+            var elapsed = DateTime.UtcNow - tickStart;
+            if (elapsed.TotalSeconds > SnapshotIntervalSeconds)
+                _logger.LogWarning("WaitStats tick overran interval ({ElapsedMs}ms > {IntervalS}s); next tick dropped", (int)elapsed.TotalMilliseconds, SnapshotIntervalSeconds);
         }
     }
 
@@ -110,9 +119,22 @@ public class WaitStatsService : IDisposable
         var current = new Dictionary<string, (long WaitMs, long Tasks, long SignalMs)>(StringComparer.OrdinalIgnoreCase);
 
         var connStr = conn.GetConnectionString(serverName, "master");
-        using (var sqlConn = new SqlConnection(connStr))
+        System.Data.IDbConnection? rentedConn = null;
+        bool pooled = false;
+        if (_pool != null)
         {
-            await sqlConn.OpenAsync(ct);
+            rentedConn = await _pool.GetConnectionAsync(connStr, ct);
+            pooled = true;
+        }
+        else
+        {
+            var direct = new SqlConnection(connStr);
+            await direct.OpenAsync(ct);
+            rentedConn = direct;
+        }
+        try
+        {
+            var sqlConn = (SqlConnection)rentedConn;
             using var cmd = sqlConn.CreateCommand();
             cmd.CommandText = DefaultWaitStatsQuery;
             cmd.CommandTimeout = 10;
@@ -127,6 +149,13 @@ public class WaitStatsService : IDisposable
                     r.IsDBNull(3) ? 0 : Convert.ToInt64(r.GetValue(3))
                 );
             }
+        }
+        finally
+        {
+            if (pooled && _pool != null)
+                _pool.ReturnConnection(rentedConn!, connStr);
+            else
+                try { rentedConn?.Dispose(); } catch { /* best effort */ }
         }
 
         Dictionary<string, (long WaitMs, long Tasks, long SignalMs)>? previous;

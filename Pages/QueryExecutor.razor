@@ -3,6 +3,14 @@
 @using Microsoft.Data.SqlClient
 @inject IDbConnectionFactory ConnectionFactory
 @inject ServerConnectionManager ConnectionManager
+@inject AppUserState UserState
+@inject AuditLogService AuditLog
+
+@if (!RbacService.HasPermission(UserState.Role, "run_scripts"))
+{
+    <div class="alert alert-danger" style="margin: 32px;">Access denied. Query Executor requires the 'run_scripts' permission. Contact your administrator.</div>
+    return;
+}
 
 <h3>SQL Query Executor</h3>
 
@@ -72,42 +80,55 @@
     private async Task ExecuteQuery()
     {
         if (string.IsNullOrWhiteSpace(SqlQuery)) return;
-        
+
         IsExecuting = true;
         Messages.Clear();
         Results = null;
         StateHasChanged();
 
+        var serverName = ConnectionManager.CurrentServer?.ServerNames ?? "unknown";
+        var querySnippet = SqlQuery.Length > 500 ? SqlQuery[..500] : SqlQuery;
+        var startTime = DateTime.UtcNow;
+        bool success = false;
+        string? errorMessage = null;
+
         try
         {
             var factory = ConnectionFactory as SqlServerConnectionFactory;
             using var conn = (SqlConnection)factory!.CreateConnection(Database);
-            
+
             conn.InfoMessage += (s, e) => Messages.Add((e.Message, false));
-            
+
             await conn.OpenAsync();
+            serverName = conn.DataSource;
             Messages.Add(($"Connected to {conn.DataSource} - {conn.Database}", false));
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = SqlQuery;
             cmd.CommandTimeout = 300;
 
-            var startTime = DateTime.Now;
-            
             using var reader = await cmd.ExecuteReaderAsync();
-            
+
             Results = new DataTable();
             Results.Load(reader);
-            
-            var elapsed = DateTime.Now - startTime;
+
+            var elapsed = DateTime.UtcNow - startTime;
+            success = true;
             Messages.Add(($"Query completed in {elapsed.TotalSeconds:F2}s", false));
         }
         catch (Exception ex)
         {
+            errorMessage = ex.Message;
             Messages.Add(($"Error: {ex.Message}", true));
         }
         finally
         {
+            AuditLog.LogScriptExecution(
+                $"QueryExecutor[{UserState.Role}]: {querySnippet}",
+                serverName,
+                success,
+                DateTime.UtcNow - startTime,
+                errorMessage);
             IsExecuting = false;
             StateHasChanged();
         }

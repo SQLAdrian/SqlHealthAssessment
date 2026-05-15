@@ -3,6 +3,7 @@
 using System.IO;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using SQLTriage.Data;
 using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
@@ -32,8 +33,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
@@ -71,8 +71,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     INSERT INTO task_executions
@@ -98,8 +97,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     UPDATE task_executions SET
@@ -131,14 +129,16 @@ namespace SQLTriage.Data.Services
 
         public List<ScheduledTaskExecution> GetRecentExecutions(int maxRecords = 100)
         {
-            return QueryRecords($"ORDER BY started_at DESC LIMIT {maxRecords}");
+            return QueryRecords("ORDER BY started_at DESC LIMIT @maxRecords",
+                ("@maxRecords", maxRecords.ToString()));
         }
 
         public List<ScheduledTaskExecution> GetExecutionsByTask(string taskId, int maxRecords = 50)
         {
             return QueryRecords(
-                $"WHERE task_id = @taskId ORDER BY started_at DESC LIMIT {maxRecords}",
-                ("@taskId", taskId));
+                "WHERE task_id = @taskId ORDER BY started_at DESC LIMIT @maxRecords",
+                ("@taskId", taskId),
+                ("@maxRecords", maxRecords.ToString()));
         }
 
         public ScheduledTaskExecution? GetLastExecution(string taskId)
@@ -154,8 +154,7 @@ namespace SQLTriage.Data.Services
             var records = new List<ScheduledTaskExecution>();
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"SELECT * FROM task_executions {whereClause}";
                 foreach (var (name, value) in parameters)
@@ -194,8 +193,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = "DELETE FROM task_executions WHERE started_at < @cutoff";
                 cmd.Parameters.AddWithValue("@cutoff", DateTime.UtcNow.AddDays(-_retentionDays).ToString("o"));

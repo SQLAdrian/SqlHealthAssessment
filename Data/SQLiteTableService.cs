@@ -116,8 +116,7 @@ namespace SQLTriage.Data
 
             try
             {
-                using var conn = new SqliteConnection(_SqliteConnectionString);
-                await conn.OpenAsync();
+                using var conn = await SqliteCipherHelper.OpenEncryptedAsync(_SqliteConnectionString);
 
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = query;
@@ -183,8 +182,7 @@ namespace SQLTriage.Data
                 var sb = new StringBuilder();
 
                 // Check if table already exists
-                using var liveQueriesConn = new SqliteConnection(_SqliteConnectionString);
-                await liveQueriesConn.OpenAsync();
+                using var liveQueriesConn = await SqliteCipherHelper.OpenEncryptedAsync(_SqliteConnectionString);
 
                 using var checkCmd = liveQueriesConn.CreateCommand();
                 checkCmd.CommandText = $"SELECT name FROM liveQueries_master WHERE type='table' AND name='{tableName}'";
@@ -456,8 +454,7 @@ namespace SQLTriage.Data
         /// </summary>
         private async Task CreateOrUpdateTableAsync(string tableName, List<ColumnInfo> columns)
         {
-            using var SqliteConnection = new SqliteConnection(_SqliteConnectionString);
-            await SqliteConnection.OpenAsync();
+            using var SqliteConnection = await SqliteCipherHelper.OpenEncryptedAsync(_SqliteConnectionString);
 
             // Check if table exists
             var checkTableSql = $"SELECT name FROM liveQueries_master WHERE type='table' AND name='{tableName}'";
@@ -556,41 +553,35 @@ namespace SQLTriage.Data
             columnNames.Add("collection_time"); // Add collection_time last
 
             // Insert data into liveQueries
-            using var SqliteConnection = new SqliteConnection(_SqliteConnectionString);
-            await SqliteConnection.OpenAsync();
+            using var SqliteConnection = await SqliteCipherHelper.OpenEncryptedAsync(_SqliteConnectionString);
+
+            // Build parameterised INSERT once (column names are allowlisted via SanitizeTableName
+            // and schema-derived names; values go through parameters, never string concatenation).
+            var paramNames = columnNames.Select((_, idx) => $"@p{idx}").ToList();
+            var insertSql = $"INSERT INTO {tableName} ({string.Join(",", columnNames)}) VALUES ({string.Join(",", paramNames)})";
 
             while (await reader.ReadAsync())
             {
-                var values = new List<string>();
-                values.Add($"'{SanitizeSqlValue(serverName)}'"); // server_name
+                using var insertCmd = SqliteConnection.CreateCommand();
+                insertCmd.CommandText = insertSql;
+
+                // @p0 = server_name
+                insertCmd.Parameters.AddWithValue("@p0", serverName);
 
                 for (int i = 0; i < reader.FieldCount; i++)
                 {
                     var value = reader.GetValue(i);
                     if (value == DBNull.Value || value == null)
-                    {
-                        values.Add("NULL");
-                    }
-                    else if (value is string strValue)
-                    {
-                        values.Add($"'{SanitizeSqlValue(strValue)}'");
-                    }
+                        insertCmd.Parameters.AddWithValue($"@p{i + 1}", DBNull.Value);
                     else if (value is DateTime dtValue)
-                    {
-                        values.Add($"'{dtValue:yyyy-MM-dd HH:mm:ss}'");
-                    }
+                        insertCmd.Parameters.AddWithValue($"@p{i + 1}", dtValue.ToString("yyyy-MM-dd HH:mm:ss"));
                     else
-                    {
-                        values.Add(value.ToString() ?? "NULL");
-                    }
+                        insertCmd.Parameters.AddWithValue($"@p{i + 1}", value);
                 }
 
-                values.Add($"'{DateTime.Now:yyyy-MM-dd HH:mm:ss}'"); // collection_time
+                // last param = collection_time
+                insertCmd.Parameters.AddWithValue($"@p{reader.FieldCount + 1}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 
-                var insertSql = $"INSERT INTO {tableName} ({string.Join(",", columnNames)}) VALUES ({string.Join(",", values)})";
-
-                using var insertCmd = SqliteConnection.CreateCommand();
-                insertCmd.CommandText = insertSql;
                 await insertCmd.ExecuteNonQueryAsync();
             }
         }

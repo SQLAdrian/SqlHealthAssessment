@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sql;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data.Models;
 
@@ -32,16 +33,24 @@ namespace SQLTriage.Data.Services
 
         public static readonly TimeSpan GlobalBudget = TimeSpan.FromSeconds(55);
         public static readonly TimeSpan PerCheckTimeout = TimeSpan.FromSeconds(8);
+
+        // Default: min(ProcessorCount, 4). Override via appsettings: QuickCheck:MaxDegreeOfParallelism
         public static readonly int MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 4);
+
+        // Instance-level DOP — respects IConfiguration; falls back to static default.
+        private readonly int _maxDop;
 
         public QuickCheckRunner(
             ILogger<QuickCheckRunner> logger,
             CheckExecutionService checkExecutor,
-            ISqlQueryRepository queryRepo)
+            ISqlQueryRepository queryRepo,
+            IConfiguration? configuration = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _checkExecutor = checkExecutor ?? throw new ArgumentNullException(nameof(checkExecutor));
             _queryRepo = queryRepo ?? throw new ArgumentNullException(nameof(queryRepo));
+            var configDop = configuration?.GetValue<int>("QuickCheck:MaxDegreeOfParallelism", 0) ?? 0;
+            _maxDop = configDop > 0 ? configDop : MaxDegreeOfParallelism;
         }
 
         public async Task<QuickCheckResult> RunAsync(
@@ -58,7 +67,7 @@ namespace SQLTriage.Data.Services
             var quickIds = new HashSet<string>(quickDefs.Select(d => d.Id), StringComparer.OrdinalIgnoreCase);
 
             _logger.LogInformation("QuickCheck starting on {Server} with {Count} quick checks, budget {Budget}s, DOP={DOP}",
-                serverName, quickIds.Count, GlobalBudget.TotalSeconds, MaxDegreeOfParallelism);
+                serverName, quickIds.Count, GlobalBudget.TotalSeconds, _maxDop);
 
             var summary = await _checkExecutor.ExecuteChecksAsync(
                 connection, serverName,

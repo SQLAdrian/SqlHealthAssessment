@@ -44,7 +44,6 @@ All service files in `Data/Services/` with one-line purpose. Full catalogue at `
 | QuickCheckRunner | Runs the QuickCheck audit suite and returns a pass/fail summary |
 | RbacService | Role-based access control with permission enumeration and guard helpers |
 | ReportPageConfigService | Loads and caches per-report-page layout configuration |
-| ReportService | Orchestrates governance report data collection and PDF assembly |
 | ScheduledTaskDefinitionService | CRUD for scheduled task definitions with cron expressions |
 | ScheduledTaskEngine | Cron-based task scheduler that invokes registered job handlers |
 | ScheduledTaskHistoryService | Persists and queries scheduled task execution history |

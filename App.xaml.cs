@@ -45,6 +45,7 @@ namespace SQLTriage
             // BelowNormal means the OS scheduler favours all other normal-priority processes.
             System.Diagnostics.Process.GetCurrentProcess().PriorityClass =
                 System.Diagnostics.ProcessPriorityClass.BelowNormal;
+            Log.Information("[STARTUP] Process priority set to BelowNormal (CPU runaway guard)");
 
             base.OnStartup(e);
             _ = OnStartupAsync(e);

@@ -3,6 +3,7 @@
 using System.IO;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using SQLTriage.Data;
 using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
@@ -37,8 +38,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
 
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
@@ -88,8 +88,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
 
                 // Atomic upsert: try UPDATE first, fall back to INSERT if no rows affected.
                 // Runs inside a transaction to prevent race conditions.
@@ -168,8 +167,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     UPDATE alert_history SET status = 'Resolved', resolved_at = @now
@@ -190,8 +188,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     UPDATE alert_history SET status = 'Acknowledged', acknowledged_at = @now
@@ -212,8 +209,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     UPDATE alert_history SET status = 'Acknowledged', acknowledged_at = @now
@@ -234,8 +230,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     UPDATE alert_history SET status = 'Acknowledged', acknowledged_at = @now
@@ -259,7 +254,8 @@ namespace SQLTriage.Data.Services
 
         public List<AlertHistoryRecord> GetRecentHistory(int maxRecords = 100)
         {
-            return QueryRecords($"ORDER BY last_triggered DESC LIMIT {maxRecords}");
+            return QueryRecords("ORDER BY last_triggered DESC LIMIT @maxRecords",
+                ("@maxRecords", maxRecords.ToString()));
         }
 
         public List<AlertHistoryRecord> GetHistoryByDateRange(DateTime from, DateTime to)
@@ -273,16 +269,16 @@ namespace SQLTriage.Data.Services
         public List<AlertHistoryRecord> GetHistoryByAlert(string alertId, int maxRecords = 50)
         {
             return QueryRecords(
-                $"WHERE alert_id = @alertId ORDER BY last_triggered DESC LIMIT {maxRecords}",
-                ("@alertId", alertId));
+                "WHERE alert_id = @alertId ORDER BY last_triggered DESC LIMIT @maxRecords",
+                ("@alertId", alertId),
+                ("@maxRecords", maxRecords.ToString()));
         }
 
         public int GetActiveCount()
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = "SELECT COUNT(*) FROM alert_history WHERE status = 'Active'";
                 return Convert.ToInt32(cmd.ExecuteScalar());
@@ -299,8 +295,7 @@ namespace SQLTriage.Data.Services
             var records = new List<AlertHistoryRecord>();
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"SELECT * FROM alert_history {whereClause}";
                 foreach (var (name, value) in parameters)
@@ -353,8 +348,7 @@ namespace SQLTriage.Data.Services
         {
             try
             {
-                using var conn = new SqliteConnection(_connectionString);
-                conn.Open();
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     DELETE FROM alert_history

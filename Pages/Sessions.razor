@@ -617,12 +617,19 @@
 
     private async void OnGlobalInstanceChanged(string instanceName)
     {
-        SelectedInstance = instanceName;
-        await InvokeAsync(async () =>
+        try
         {
-            await LoadSessions(true);
-            StateHasChanged();
-        });
+            SelectedInstance = instanceName;
+            await InvokeAsync(async () =>
+            {
+                await LoadSessions(true);
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "OnGlobalInstanceChanged failed in Sessions");
+        }
     }
 
     private async Task OnInstanceChanged(ChangeEventArgs e)

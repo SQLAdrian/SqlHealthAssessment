@@ -33,9 +33,11 @@ namespace SQLTriage.Data.Services
         /// Returns the current user's role. In WPF mode always "admin".
         /// In server mode, returns the role from the session cookie or "viewer" if unauthenticated.
         /// Call InitAsync() once in OnInitializedAsync of the root layout or page if needed.
-        /// Synchronous access returns the cached value (defaults to "admin" until fetched).
+        /// Synchronous access returns the cached value (defaults to "viewer" until InitAsync()
+        /// completes — most-restrictive default prevents privilege-escalation race in server mode).
+        /// In WPF mode InitAsync() immediately sets Admin so the effective role is unchanged.
         /// </summary>
-        public string Role => _cachedRole ?? AppRoles.Admin;
+        public string Role => _cachedRole ?? AppRoles.Viewer;
 
         public bool IsAdmin => Role == AppRoles.Admin;
         public bool IsOperator => Role is AppRoles.Admin or AppRoles.Operator;

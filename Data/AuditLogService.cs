@@ -88,14 +88,43 @@ namespace SQLTriage.Data
                 : new Timer(_ => { }, null, Timeout.Infinite, Timeout.Infinite);
         }
 
+        // DPAPI entropy tag — distinguishes SQLTriage HMAC key blobs from other ProtectedData blobs.
+        private static readonly byte[] HmacKeyEntropy =
+            System.Text.Encoding.UTF8.GetBytes("SQLTriage.AuditLog.HmacKey.v1");
+
         private static byte[] LoadOrCreateHmacKey(string keyPath)
         {
             if (File.Exists(keyPath))
             {
                 try
                 {
-                    var existing = File.ReadAllBytes(keyPath);
-                    if (existing.Length >= 32) return existing;
+                    var blob = File.ReadAllBytes(keyPath);
+
+                    // ── Happy path: DPAPI-wrapped blob ──
+                    if (OperatingSystem.IsWindows())
+                    {
+                        try
+                        {
+                            return UnwrapHmacKey(blob);
+                        }
+                        catch (CryptographicException)
+                        {
+                            // Legacy raw key (pre-DPAPI): 32 exact bytes written by older builds.
+                            // Migrate: re-wrap under DPAPI, log once, continue with the same key.
+                            if (blob.Length == 32)
+                            {
+                                Serilog.Log.Information("[AUDIT] Migrated HMAC key to DPAPI-wrapped format");
+                                WriteWrappedHmacKey(keyPath, blob);
+                                return blob;
+                            }
+                            // Blob is neither a valid DPAPI blob nor a raw 32-byte key — regenerate.
+                        }
+                    }
+                    else
+                    {
+                        // Non-Windows: key is stored raw (DPAPI unavailable); accept any ≥32-byte file.
+                        if (blob.Length >= 32) return blob;
+                    }
                 }
                 catch { /* fall through to recreate */ }
             }
@@ -103,9 +132,7 @@ namespace SQLTriage.Data
             var fresh = RandomNumberGenerator.GetBytes(32);
             try
             {
-                File.WriteAllBytes(keyPath, fresh);
-                // Best-effort ACL: owner-only. On non-NTFS paths this is a no-op.
-                try { File.SetAttributes(keyPath, FileAttributes.Hidden); } catch { }
+                WriteWrappedHmacKey(keyPath, fresh);
             }
             catch (Exception ex)
             {
@@ -113,6 +140,33 @@ namespace SQLTriage.Data
             }
             return fresh;
         }
+
+        /// <summary>
+        /// Writes <paramref name="rawKey"/> to <paramref name="keyPath"/> wrapped with
+        /// DPAPI CurrentUser scope on Windows, or as raw bytes on non-Windows.
+        /// </summary>
+        private static void WriteWrappedHmacKey(string keyPath, byte[] rawKey)
+        {
+            byte[] toWrite = OperatingSystem.IsWindows()
+                ? WrapHmacKey(rawKey)
+                : rawKey;
+
+            File.WriteAllBytes(keyPath, toWrite);
+            // Hidden as defense-in-depth; primary protection is DPAPI wrapping on Windows.
+            try { File.SetAttributes(keyPath, FileAttributes.Hidden); } catch { }
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static byte[] WrapHmacKey(byte[] rawKey) =>
+            System.Security.Cryptography.ProtectedData.Protect(
+                rawKey, HmacKeyEntropy,
+                System.Security.Cryptography.DataProtectionScope.CurrentUser);
+
+        [SupportedOSPlatform("windows")]
+        private static byte[] UnwrapHmacKey(byte[] blob) =>
+            System.Security.Cryptography.ProtectedData.Unprotect(
+                blob, HmacKeyEntropy,
+                System.Security.Cryptography.DataProtectionScope.CurrentUser);
 
         [SupportedOSPlatform("windows")]
         private static bool TryCreateEventLogSource()

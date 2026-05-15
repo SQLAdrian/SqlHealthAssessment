@@ -361,8 +361,15 @@
 
     private async void OnEngineChanged()
     {
-        Refresh();
-        await InvokeAsync(StateHasChanged);
+        try
+        {
+            Refresh();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "OnEngineChanged failed in AlertsNoc");
+        }
     }
 
     private void AckOne(AlertState alert)

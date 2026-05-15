@@ -26,14 +26,19 @@ namespace SQLTriage.Data.Services
         public BuildCatalogueService(ILogger<BuildCatalogueService> logger)
         {
             _logger = logger;
+            _referenceDate = DateTime.UtcNow.Date;
             Load();
         }
 
         // Test seam: construct from an in-memory JSON payload without touching disk.
         // Mirrors Load()'s behaviour — malformed JSON is logged and IsAvailable stays false.
         public static BuildCatalogueService FromJson(string catalogueJson, ILogger<BuildCatalogueService> logger)
+            => FromJson(catalogueJson, logger, DateTime.UtcNow.Date);
+
+        // Deterministic overload — pass a fixed referenceDate so lifecycle tests do not depend on the wall clock.
+        public static BuildCatalogueService FromJson(string catalogueJson, ILogger<BuildCatalogueService> logger, DateTime referenceDate)
         {
-            var svc = new BuildCatalogueService(logger, deferLoad: true);
+            var svc = new BuildCatalogueService(logger, deferLoad: true, referenceDate: referenceDate);
             try
             {
                 svc.LoadFromJson(catalogueJson);
@@ -45,9 +50,12 @@ namespace SQLTriage.Data.Services
             return svc;
         }
 
-        private BuildCatalogueService(ILogger<BuildCatalogueService> logger, bool deferLoad)
+        private readonly DateTime _referenceDate;
+
+        private BuildCatalogueService(ILogger<BuildCatalogueService> logger, bool deferLoad, DateTime referenceDate = default)
         {
             _logger = logger;
+            _referenceDate = referenceDate == default ? DateTime.UtcNow.Date : referenceDate;
             if (!deferLoad) Load();
         }
 
@@ -116,7 +124,7 @@ namespace SQLTriage.Data.Services
             if (versionData.LatestReleaseDate.HasValue && installed.ReleaseDate.HasValue)
                 daysBehind = (versionData.LatestReleaseDate.Value - installed.ReleaseDate.Value).Days;
 
-            var lifecycleStatus = ComputeLifecycleStatus(versionData);
+            var lifecycleStatus = ComputeLifecycleStatus(versionData, _referenceDate);
 
             return new BuildStatus
             {
@@ -179,12 +187,11 @@ namespace SQLTriage.Data.Services
             return 0;
         }
 
-        private static LifecycleStatusKind ComputeLifecycleStatus(BuildCatalogueVersionData v)
+        private static LifecycleStatusKind ComputeLifecycleStatus(BuildCatalogueVersionData v, DateTime referenceDate)
         {
-            var now = DateTime.UtcNow.Date;
-            if (v.ExtendedSupportEnds is { } ext && ext < now) return LifecycleStatusKind.OutOfSupport;
-            if (v.MainstreamSupportEnds is { } main && main < now) return LifecycleStatusKind.ExtendedSupportOnly;
-            if (v.MainstreamSupportEnds is { } main2 && (main2 - now).TotalDays < 365) return LifecycleStatusKind.MainstreamEndingSoon;
+            if (v.ExtendedSupportEnds is { } ext && ext < referenceDate) return LifecycleStatusKind.OutOfSupport;
+            if (v.MainstreamSupportEnds is { } main && main < referenceDate) return LifecycleStatusKind.ExtendedSupportOnly;
+            if (v.MainstreamSupportEnds is { } main2 && (main2 - referenceDate).TotalDays < 365) return LifecycleStatusKind.MainstreamEndingSoon;
             return LifecycleStatusKind.Mainstream;
         }
     }

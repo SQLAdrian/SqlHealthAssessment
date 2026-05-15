@@ -83,8 +83,8 @@ namespace SQLTriage.Data.Scheduling
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
-            _globalConcurrency = configuration.GetValue<int>("Orchestrator:GlobalConcurrency", 50);
-            _perServerConcurrency = configuration.GetValue<int>("Orchestrator:PerServerConcurrency", 50);
+            _globalConcurrency = configuration.GetValue<int>("Orchestrator:GlobalConcurrency", 45);
+            _perServerConcurrency = configuration.GetValue<int>("Orchestrator:PerServerConcurrency", 13);
             _channelCapacity = configuration.GetValue<int>("Orchestrator:ChannelCapacity", 1000);
             _defaultTimeout = TimeSpan.FromSeconds(configuration.GetValue<int>("Orchestrator:DefaultTimeoutSeconds", 60));
 
@@ -161,10 +161,12 @@ namespace SQLTriage.Data.Scheduling
             var now = DateTime.UtcNow;
             TrimLatencyWindow(now);
 
-            var completedLastMinute = _latencyWindow.Count(s => s.Timestamp > now.AddMinutes(-1));
-            var failedLastMinute = _latencyWindow.Count(s => !s.Success && s.Timestamp > now.AddMinutes(-1));
-            var avgLatency = _latencyWindow.Any()
-                ? TimeSpan.FromMilliseconds(_latencyWindow.Average(s => s.Latency.TotalMilliseconds))
+            // Snapshot the queue once to avoid enumeration races against concurrent enqueue/dequeue.
+            var snapshot = _latencyWindow.ToArray();
+            var completedLastMinute = snapshot.Count(s => s.Timestamp > now.AddMinutes(-1));
+            var failedLastMinute = snapshot.Count(s => !s.Success && s.Timestamp > now.AddMinutes(-1));
+            var avgLatency = snapshot.Length > 0
+                ? TimeSpan.FromMilliseconds(snapshot.Average(s => s.Latency.TotalMilliseconds))
                 : TimeSpan.Zero;
 
             var queueDepth = _channels.Sum(c => c.Reader.Count);
@@ -187,11 +189,13 @@ namespace SQLTriage.Data.Scheduling
             var now = DateTime.UtcNow;
             TrimLatencyWindow(now);
 
+            // Snapshot the queue once to avoid enumeration races against concurrent enqueue/dequeue.
+            var snapshot = _latencyWindow.ToArray();
             var countByPriority = new Dictionary<QueryPriority, int>();
             foreach (QueryPriority p in Enum.GetValues<QueryPriority>())
-                countByPriority[p] = _latencyWindow.Count(s => s.QueryId.StartsWith(p.ToString()));
+                countByPriority[p] = snapshot.Count(s => s.QueryId.StartsWith(p.ToString()));
 
-            var avgByServer = _latencyWindow
+            var avgByServer = snapshot
                 .GroupBy(s => s.ServerName)
                 .ToDictionary(
                     g => g.Key,

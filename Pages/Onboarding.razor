@@ -271,7 +271,7 @@
             {
                 var result = await QuickCheckRunner.RunAsync(conn, _selectedInstance, progress, _cts.Token);
                 Toast.ShowSuccess("Quick Check complete", $"{result.Summary.Passed}/{result.Summary.TotalChecks} passed");
-                Navigation.NavigateTo(RouteConstants.GovernanceReportIndicative);
+                Navigation.NavigateTo(RouteConstants.GovernanceIndicative);
             }
             catch (OperationCanceledException)
             {

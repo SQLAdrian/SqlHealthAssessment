@@ -108,7 +108,8 @@ namespace SQLTriage.Data
 
             try
             {
-                using var conn = new SqlConnection($"Server={serverName};Database=master;Integrated Security=true;TrustServerCertificate=true;");
+                var trustCert = IsLoopback(serverName) ? "true" : "false";
+                using var conn = new SqlConnection($"Server={serverName};Database=master;Integrated Security=true;TrustServerCertificate={trustCert};");
                 await conn.OpenAsync(cancellationToken);
 
                 using var cmd = new SqlCommand(
@@ -144,6 +145,23 @@ namespace SQLTriage.Data
                 _cache.Clear();
                 _serverCache.Clear();
             }
+        }
+
+        /// <summary>
+        /// Returns true when the target server is a loopback address or the local machine.
+        /// Used to gate TrustServerCertificate: loopback probes skip TLS validation (no cert);
+        /// remote targets must validate the certificate.
+        /// </summary>
+        private static bool IsLoopback(string serverName)
+        {
+            if (string.IsNullOrWhiteSpace(serverName)) return true;
+            var host = serverName.Split('\\')[0].Trim(); // strip named-instance suffix
+            return host.Equals(".", StringComparison.Ordinal)
+                || host.Equals("(local)", StringComparison.OrdinalIgnoreCase)
+                || host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || host.Equals("127.0.0.1", StringComparison.Ordinal)
+                || host.Equals("::1", StringComparison.Ordinal)
+                || host.Equals(Environment.MachineName, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

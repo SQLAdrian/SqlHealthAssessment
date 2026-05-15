@@ -11,13 +11,12 @@ namespace SQLTriage.Tests
 {
     public class BuildCatalogueServiceTests
     {
-        // Fixed reference dates used to assert lifecycle status. The service computes
-        // lifecycle against DateTime.UtcNow.Date, so fixtures are built relative to "today".
-        private static readonly DateTime Today = DateTime.UtcNow.Date;
+        // Fixed reference date — pinned so lifecycle assertions are deterministic regardless of wall clock.
+        private static readonly DateTime Today = new DateTime(2026, 5, 15);
         private static string D(DateTime d) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         private static BuildCatalogueService Build(string json) =>
-            BuildCatalogueService.FromJson(json, NullLogger<BuildCatalogueService>.Instance);
+            BuildCatalogueService.FromJson(json, NullLogger<BuildCatalogueService>.Instance, Today);
 
         // ── Availability ────────────────────────────────────────────────
 

@@ -145,6 +145,9 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*">
       <ExcludeAssets>runtimes</ExcludeAssets>
     </PackageReference>
+    <!-- SQLCipher native provider — replaces the default SQLite3 bundle with an encrypted one.
+         Microsoft.Data.Sqlite API surface is unchanged; only the native library swaps. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.10" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.*" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.*" />
     <PackageReference Include="Polly" Version="8.4.2" />
