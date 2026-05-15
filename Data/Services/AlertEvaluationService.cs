@@ -31,6 +31,7 @@ namespace SQLTriage.Data.Services
         private readonly ConnectionHealthService? _health;
         private readonly IQueryOrchestrator _orchestrator;
         private readonly SqlConnectionPoolService? _pool;
+        private readonly ServerCircuitBreakerService? _breaker;
         private readonly System.Timers.Timer _timer;
 
         // In-memory state: key = "alertId:serverName"
@@ -89,7 +90,8 @@ namespace SQLTriage.Data.Services
             AlertBaselineService? baseline = null,
             ConnectionHealthService? health = null,
             SqlConnectionPoolService? pool = null,
-            IConfiguration? configuration = null)
+            IConfiguration? configuration = null,
+            ServerCircuitBreakerService? breaker = null)
         {
             _logger = logger;
             _definitions = definitions;
@@ -101,6 +103,7 @@ namespace SQLTriage.Data.Services
             _cache = cache;
             _orchestrator = orchestrator;
             _baseline = baseline;
+            _breaker = breaker;
             _health = health;
             _pool = pool;
 
@@ -215,6 +218,8 @@ namespace SQLTriage.Data.Services
                         {
                             foreach (var serverName in conn.GetServerList())
                             {
+                                if (_breaker != null && !_breaker.ShouldAttempt(serverName))
+                                    continue;
                                 specialTasks.Add(ThrottledSpecialEvaluateAsync(alert, conn, serverName, globalDefaults, cancellationToken));
                             }
                         }
@@ -230,6 +235,8 @@ namespace SQLTriage.Data.Services
                     {
                         foreach (var serverName in conn.GetServerList())
                         {
+                            if (_breaker != null && !_breaker.ShouldAttempt(serverName))
+                                continue;
                             tasks.Add(ThrottledEvaluateAsync(alert, conn, serverName, globalDefaults, cancellationToken));
                         }
                     }
@@ -267,7 +274,14 @@ namespace SQLTriage.Data.Services
             }, QueryPriority.P1_Alert, cancellationToken);
 
             if (!result.Success)
+            {
+                _breaker?.RecordFailure(serverName);
                 _logger.LogError(result.Exception, "Alert evaluation failed for {AlertId} on {Server}", alert.Id, serverName);
+            }
+            else
+            {
+                _breaker?.RecordSuccess(serverName);
+            }
         }
 
         private async Task ThrottledSpecialEvaluateAsync(
@@ -285,7 +299,14 @@ namespace SQLTriage.Data.Services
             }, QueryPriority.P1_Alert, cancellationToken);
 
             if (!result.Success)
+            {
+                _breaker?.RecordFailure(serverName);
                 _logger.LogError(result.Exception, "Special alert evaluation failed for {AlertId} on {Server}", alert.Id, serverName);
+            }
+            else
+            {
+                _breaker?.RecordSuccess(serverName);
+            }
         }
 
         private async Task EvaluateSpecialAlertAsync(

@@ -27,6 +27,13 @@ namespace SQLTriage.Data
         private readonly ILogger<SqlConnectionPoolService> _logger;
         private volatile bool _disposed;
 
+        // Global lock used to make the count-check → increment sequence atomic,
+        // preventing TOCTOU races when multiple callers acquire simultaneously.
+        private readonly object _countLock = new();
+
+        // Signals waiting callers when a connection is returned to the pool.
+        private readonly SemaphoreSlim _returnSignal = new(0);
+
         public SqlConnectionPoolService(IConfiguration configuration, ILogger<SqlConnectionPoolService> logger)
         {
             _logger = logger;
@@ -41,7 +48,11 @@ namespace SQLTriage.Data
         }
 
         /// <summary>
-        /// Gets a connection from the pool or creates a new one
+        /// Gets a connection from the pool or creates a new one.
+        /// When the pool is saturated, blocks up to <see cref="_connectionTimeout"/> waiting
+        /// for a connection to be returned. Throws <see cref="TimeoutException"/> if the
+        /// wait expires — the caller gets a clean, retryable failure instead of a leaked
+        /// untracked connection.
         /// </summary>
         public async Task<IDbConnection> GetConnectionAsync(string connectionString, CancellationToken cancellationToken = default)
         {
@@ -49,70 +60,97 @@ namespace SQLTriage.Data
 
             var connectionKey = GetConnectionKey(connectionString);
 
-            // Try to get from pool first
-            while (_availableConnections.TryDequeue(out var pooled))
+            while (true)
             {
-                if (pooled.ConnectionString == connectionString &&
-                    pooled.Connection.State == ConnectionState.Open &&
-                    DateTime.UtcNow - pooled.LastUsed < _idleTimeout)
+                // 1. Try to get from pool first
+                while (_availableConnections.TryDequeue(out var pooled))
                 {
-                    pooled.LastUsed = DateTime.UtcNow;
-                    return pooled.Connection;
+                    if (pooled.ConnectionString == connectionString &&
+                        pooled.Connection.State == ConnectionState.Open &&
+                        DateTime.UtcNow - pooled.LastUsed < _idleTimeout)
+                    {
+                        pooled.LastUsed = DateTime.UtcNow;
+                        return pooled.Connection;
+                    }
+                    else
+                    {
+                        // Connection is stale or closed, dispose it
+                        try { pooled.Connection.Dispose(); } catch (Exception ex) { _logger.LogDebug(ex, "[ConnPool] Dispose stale connection failed"); }
+                        lock (_countLock) { _connectionCounts.AddOrUpdate(connectionKey, 0, (k, v) => Math.Max(0, v - 1)); }
+                    }
                 }
-                else
+
+                // 2. Atomically check-and-increment the count to avoid TOCTOU race.
+                bool slotAcquired = false;
+                lock (_countLock)
                 {
-                    // Connection is stale or closed, dispose it
-                    try { pooled.Connection.Dispose(); } catch (Exception ex) { _logger.LogDebug(ex, "[ConnPool] Dispose stale connection failed"); }
-                    _connectionCounts.AddOrUpdate(connectionKey, 0, (k, v) => Math.Max(0, v - 1));
+                    var currentCount = _connectionCounts.GetOrAdd(connectionKey, 0);
+                    if (currentCount < _maxPoolSize)
+                    {
+                        _connectionCounts.AddOrUpdate(connectionKey, 1, (k, v) => v + 1);
+                        slotAcquired = true;
+                    }
                 }
+
+                if (slotAcquired)
+                {
+                    try
+                    {
+                        var connection = new SqlConnection(connectionString);
+                        await connection.OpenAsync(cancellationToken);
+                        return connection;
+                    }
+                    catch
+                    {
+                        // Failed to open — release the count slot we reserved.
+                        lock (_countLock) { _connectionCounts.AddOrUpdate(connectionKey, 0, (k, v) => Math.Max(0, v - 1)); }
+                        throw;
+                    }
+                }
+
+                // 3. Pool saturated — block until a connection is returned.
+                _logger.LogWarning("[POOL] Saturated at {Max}, waiting for connection return (key={Key})", _maxPoolSize, connectionKey);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var acquired = await _returnSignal.WaitAsync(_connectionTimeout, cancellationToken);
+                if (!acquired)
+                    throw new TimeoutException(
+                        $"[POOL] No connection available for key '{connectionKey}' after {_connectionTimeout.TotalSeconds:F0}s. " +
+                        $"Pool is saturated at {_maxPoolSize} connections.");
+
+                _logger.LogInformation("[POOL] Connection available after {Ms}ms wait (key={Key})", sw.ElapsedMilliseconds, connectionKey);
+                // Loop back and try to dequeue or create now that signal was received.
             }
-
-            // Create new connection if under limit
-            var currentCount = _connectionCounts.GetOrAdd(connectionKey, 0);
-            if (currentCount < _maxPoolSize)
-            {
-                var connection = new SqlConnection(connectionString);
-                await connection.OpenAsync(cancellationToken);
-
-                _connectionCounts.AddOrUpdate(connectionKey, 1, (k, v) => v + 1);
-                return connection;
-            }
-
-            // Pool is full, create temporary connection
-            var tempConnection = new SqlConnection(connectionString);
-            await tempConnection.OpenAsync(cancellationToken);
-            return tempConnection;
         }
 
         /// <summary>
-        /// Returns a connection to the pool for reuse
+        /// Returns a connection to the pool for reuse and signals any waiting callers.
         /// </summary>
         public void ReturnConnection(IDbConnection connection, string connectionString)
         {
             if (_disposed || connection == null || connection.State != ConnectionState.Open)
             {
                 try { connection?.Dispose(); } catch (Exception ex) { _logger.LogDebug(ex, "[ConnPool] Dispose returned connection failed"); }
+                if (connection != null)
+                {
+                    var k = GetConnectionKey(connectionString);
+                    lock (_countLock) { _connectionCounts.AddOrUpdate(k, 0, (_, v) => Math.Max(0, v - 1)); }
+                }
+                // Signal even on failed return so waiters can attempt a new create.
+                if (!_disposed) _returnSignal.Release();
                 return;
             }
 
             var connectionKey = GetConnectionKey(connectionString);
-            var currentCount = _connectionCounts.GetOrAdd(connectionKey, 0);
 
-            // Only pool if under max size
-            if (currentCount <= _maxPoolSize)
+            _availableConnections.Enqueue(new PooledConnection
             {
-                _availableConnections.Enqueue(new PooledConnection
-                {
-                    Connection = connection,
-                    ConnectionString = connectionString,
-                    LastUsed = DateTime.UtcNow
-                });
-            }
-            else
-            {
-                try { connection.Dispose(); } catch (Exception ex) { _logger.LogDebug(ex, "[ConnPool] Dispose excess connection failed"); }
-                _connectionCounts.AddOrUpdate(connectionKey, 0, (k, v) => Math.Max(0, v - 1));
-            }
+                Connection = connection,
+                ConnectionString = connectionString,
+                LastUsed = DateTime.UtcNow
+            });
+
+            // Signal exactly one waiting caller that a connection is available.
+            if (!_disposed) _returnSignal.Release();
         }
 
         /// <summary>
@@ -152,7 +190,7 @@ namespace SQLTriage.Data
                 {
                     connection.Connection.Dispose();
                     var key = GetConnectionKey(connection.ConnectionString);
-                    _connectionCounts.AddOrUpdate(key, 0, (k, v) => Math.Max(0, v - 1));
+                    lock (_countLock) { _connectionCounts.AddOrUpdate(key, 0, (k, v) => Math.Max(0, v - 1)); }
                 }
                 catch (Exception ex) { _logger.LogDebug(ex, "[ConnPool] Dispose during cleanup failed"); }
             }
@@ -182,6 +220,7 @@ namespace SQLTriage.Data
             _disposed = true;
 
             _cleanupTimer?.Dispose();
+            _returnSignal.Dispose();
 
             // Dispose all pooled connections
             while (_availableConnections.TryDequeue(out var pooled))

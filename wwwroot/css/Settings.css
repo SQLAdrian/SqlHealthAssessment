@@ -12,6 +12,12 @@ body:has(.settings-page) .app-content {
     scroll-behavior: smooth;
 }
 
+@media (prefers-reduced-motion: reduce) {
+    body:has(.settings-page) .app-content {
+        scroll-behavior: auto !important;
+    }
+}
+
 .settings-page > h2 {
     margin: 0 0 20px;
     font-size: 22px;

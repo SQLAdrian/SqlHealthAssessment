@@ -1,6 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/dashboard-editor"
-
+<PageTitle>SQLTriage - Dashboard Editor</PageTitle>
 @using System.Data
 @using System.IO
 @using System.Text.Json
@@ -66,11 +66,11 @@
                             <span class="dashboard-route">@dashboard.Route</span>
                         </div>
                         <div class="dashboard-actions">
-                            <button class="btn-icon" @onclick="() => EditDashboard(dashboard)" @onclick:stopPropagation title="Edit"><i class="fa-solid fa-pencil"></i>️</button>
+                            <button class="btn-icon" @onclick="() => EditDashboard(dashboard)" @onclick:stopPropagation title="Edit" aria-label="Edit dashboard @dashboard.Title"><i class="fa-solid fa-pencil"></i>️</button>
                             <label class="toggle">
                                 <input type="checkbox" @bind="dashboard.Enabled" />
                             </label>
-                            <button class="btn-icon" @onclick="() => DeleteDashboard(dashboard)" @onclick:stopPropagation title="Delete"><i class="fa-solid fa-trash"></i></button>
+                            <button class="btn-icon" @onclick="() => DeleteDashboard(dashboard)" @onclick:stopPropagation title="Delete" aria-label="Delete dashboard @dashboard.Title"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
                 }
@@ -115,8 +115,8 @@
                                     <label class="toggle">
                                         <input type="checkbox" @bind="panel.Enabled" />
                                     </label>
-                                    <button class="btn-icon" @onclick="() => DuplicatePanel(panel)" @onclick:stopPropagation title="Duplicate"><i class="fa-solid fa-copy"></i></button>
-                                    <button class="btn-icon" @onclick="() => DeletePanel(panel)" @onclick:stopPropagation title="Delete"><i class="fa-solid fa-trash"></i></button>
+                                    <button class="btn-icon" @onclick="() => DuplicatePanel(panel)" @onclick:stopPropagation title="Duplicate" aria-label="Duplicate panel @panel.Title"><i class="fa-solid fa-copy"></i></button>
+                                    <button class="btn-icon" @onclick="() => DeletePanel(panel)" @onclick:stopPropagation title="Delete" aria-label="Delete panel @panel.Title"><i class="fa-solid fa-trash"></i></button>
                                 </div>
                             </div>
                         }
@@ -405,7 +405,7 @@
                                 </select>
                                 <input type="number" @bind="rule.Value" @bind:event="oninput" step="0.1" />
                                 <input type="text" @bind="rule.Color" @bind:event="oninput" placeholder="#color" style="width: 80px;" />
-                                <button class="btn-icon" @onclick="() => RemoveColorThreshold(rule)"><i class="fa-solid fa-trash"></i></button>
+                                <button class="btn-icon" @onclick="() => RemoveColorThreshold(rule)" title="Remove threshold" aria-label="Remove color threshold"><i class="fa-solid fa-trash"></i></button>
                             </div>
                         }
                     </div>

@@ -1,6 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/editauditscripts"
-
+<PageTitle>SQLTriage - Edit Audit Scripts</PageTitle>
 @using System
 @using System.Collections.Generic
 @using System.IO
@@ -16,7 +16,7 @@
     <!-- Status Message -->
     @if (!string.IsNullOrEmpty(StatusMessage))
     {
-        <div class="status-message @(StatusSuccess ? "success" : "error")">
+        <div class="status-message @(StatusSuccess ? "success" : "error")" role="status">
             @StatusMessage
         </div>
     }

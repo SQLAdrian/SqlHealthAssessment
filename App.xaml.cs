@@ -103,11 +103,29 @@ namespace SQLTriage
 
             // ===== STARTUP PHASE 2: Configuration Loading =====
             sw.Restart();
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-                .AddJsonFile("config/appsettings.json", optional: false, reloadOnChange: true)
-                .AddJsonFile("config/governance-weights.json", optional: false, reloadOnChange: true)
-                .Build();
+            IConfiguration configuration;
+            try
+            {
+                configuration = new ConfigurationBuilder()
+                    .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                    .AddJsonFile("config/appsettings.json", optional: false, reloadOnChange: true)
+                    .AddJsonFile("config/governance-weights.json", optional: false, reloadOnChange: true)
+                    .Build();
+            }
+            catch (Exception cfgEx) when (cfgEx is FileNotFoundException
+                                       || cfgEx is System.Text.Json.JsonException
+                                       || cfgEx is InvalidOperationException)
+            {
+                var cfgPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "appsettings.json");
+                Log.Fatal(cfgEx, "[STARTUP] Configuration file missing or corrupt: {Path}", cfgPath);
+                System.Windows.MessageBox.Show(
+                    $"SQLTriage configuration file is missing or corrupt.\n\nPath: {cfgPath}\n\nPlease reinstall or restore the file.\n\nDetail: {cfgEx.Message}",
+                    "SQLTriage - Configuration Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+                Environment.Exit(1);
+                return; // unreachable — satisfies compiler flow analysis
+            }
             sw.Stop();
             Log.Information("[STARTUP] Configuration loaded in {ElapsedMs}ms", sw.ElapsedMilliseconds);
 

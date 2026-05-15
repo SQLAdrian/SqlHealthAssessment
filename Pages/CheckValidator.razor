@@ -1,5 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/check-validator"
+<PageTitle>SQLTriage - Check Validator</PageTitle>
 @using SQLTriage.Data
 @using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
@@ -155,7 +156,7 @@
                         </div>
                     }
                 </div>
-                <button class="btn-icon" @onclick="CloseModal"><i class="fa-solid fa-xmark"></i></button>
+                <button class="btn-icon" @onclick="CloseModal" title="Close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
             <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">

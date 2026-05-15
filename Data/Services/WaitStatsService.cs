@@ -35,6 +35,7 @@ public class WaitStatsService : IDisposable
     private readonly ServerConnectionManager _connections;
     private readonly WaitStatsHistoryService _history;
     private readonly SqlConnectionPoolService? _pool;
+    private readonly ServerCircuitBreakerService? _breaker;
     private readonly CancellationTokenSource _cts = new();
     private readonly Dictionary<string, Dictionary<string, (long WaitMs, long Tasks, long SignalMs)>> _lastCumulative
         = new(StringComparer.OrdinalIgnoreCase);
@@ -46,12 +47,14 @@ public class WaitStatsService : IDisposable
         ServerConnectionManager connections,
         WaitStatsHistoryService history,
         IConfiguration? configuration = null,
-        SqlConnectionPoolService? pool = null)
+        SqlConnectionPoolService? pool = null,
+        ServerCircuitBreakerService? breaker = null)
     {
         _logger = logger;
         _connections = connections;
         _history = history;
         _pool = pool;
+        _breaker = breaker;
         SnapshotIntervalSeconds = configuration?.GetValue<int>("WaitStats:SnapshotIntervalSeconds", 30) ?? 30;
     }
 
@@ -82,14 +85,19 @@ public class WaitStatsService : IDisposable
                 {
                     foreach (var srv in c.GetServerList())
                     {
+                        if (_breaker != null && !_breaker.ShouldAttempt(srv))
+                            continue;
+
                         try
                         {
                             var snap = await GetSnapshotAsync(c, srv, ct);
                             if (snap.Deltas.Count > 0)
                                 await _history.RecordSnapshotAsync(srv, snap, ct);
+                            _breaker?.RecordSuccess(srv);
                         }
                         catch (Exception ex)
                         {
+                            _breaker?.RecordFailure(srv);
                             _logger.LogDebug(ex, "WaitStats snapshot failed for {Server}", srv);
                         }
                     }

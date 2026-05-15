@@ -1,5 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/diagnostics-roadmap"
+<PageTitle>SQLTriage - Diagnostics Maturity Roadmap</PageTitle>
 @implements IDisposable
 
 @using SQLTriage.Data
@@ -270,7 +271,7 @@
                     <div><div style="font-size:28px; font-weight:700; color:#222;">@(_overallScore.ToString("N0"))%</div><div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em;">Overall Score</div></div>
                     <div><div style="font-size:28px; font-weight:700; color:#222;">@_availableServers.Count(s => s.IsSelected)</div><div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em;">Servers</div></div>
                     <div><div style="font-size:28px; font-weight:700; color:#222;">@_passedFindings / @_totalFindings</div><div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em;">Checks Passed</div></div>
-                    <div><div style="font-size:28px; font-weight:700; color:@(_totalItemsImpacted > 0 ? "#e2583e" : "#22c55e");">@_totalItemsImpacted</div><div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em;">Items Impacted</div></div>
+                    <div><div style="font-size:28px; font-weight:700; color:@(_totalItemsImpacted > 0 ? "var(--red)" : "var(--green)");">@_totalItemsImpacted</div><div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em;">Items Impacted</div></div>
                 </div>
 
                 @* Maturity gauge ring — visual gap between current score and 100% target *@
@@ -2199,9 +2200,9 @@
     {
         1 => "var(--red)",
         2 => "var(--orange)",
-        3 => "#e6b800",
+        3 => "var(--yellow)",
         4 => "var(--green)",
-        5 => "#6366f1",
+        5 => "var(--purple)",
         _ => "var(--text-muted)"
     };
 

@@ -28,7 +28,7 @@ namespace SQLTriage.Data
     {
         private readonly string _logDirectory;
         private readonly string _keyPath;
-        private readonly byte[] _hmacKey;
+        private byte[] _hmacKey;
         private readonly ConcurrentQueue<AuditLogEntry> _pendingEntries = new();
         private readonly Timer _flushTimer;
         private readonly Timer? _retentionTimer;
@@ -38,6 +38,8 @@ namespace SQLTriage.Data
         private bool _disposed;
         private bool _eventLogAvailable;
         private readonly int _configuredRetentionDays;
+        private int _consecutiveFlushFailures;
+        private const int FlushFailoverThreshold = 3;
 
         /// <summary>Event Log source name. Creating the source requires admin rights.</summary>
         private const string EventLogSource = "SQLTriage-Audit";
@@ -231,9 +233,8 @@ namespace SQLTriage.Data
                 };
                 WriteHmacMeta(newMeta);
 
-                // Swap the in-memory key.
-                // Note: _hmacKey is readonly; we use a local field copy via reflection-free workaround:
-                // write the chain-anchor entry BEFORE swapping so it signs correctly with old key.
+                // Write the chain-anchor entry with the old key BEFORE swapping,
+                // so the rotation entry itself is signed correctly under the old key.
                 var rotationEntry = new AuditLogEntry
                 {
                     EventType = AuditEventType.HmacKeyRotated,
@@ -255,8 +256,10 @@ namespace SQLTriage.Data
                 File.AppendAllText(logFile,
                     JsonSerializer.Serialize(rotationEntry, SerializerOptions) + Environment.NewLine);
 
-                // Replace the in-memory key array contents so subsequent ComputeSignature uses new key.
-                newRaw.CopyTo(_hmacKey, 0);
+                // Atomically replace the reference so concurrent ComputeSignature calls see
+                // either fully-old or fully-new key (never a partially-copied array).
+                // .NET reference assignment is atomic on all supported architectures.
+                _hmacKey = newRaw;
 
                 Serilog.Log.Information("[AUDIT] HMAC key rotated by {Actor}. Prior age: {Age} days", actor, priorAgeDays);
             }
@@ -674,6 +677,7 @@ namespace SQLTriage.Data
         {
             if (_pendingEntries.IsEmpty) return;
 
+            // Capture the batch BEFORE attempting any write so we can requeue on failure.
             var entries = new List<AuditLogEntry>();
             while (_pendingEntries.TryDequeue(out var entry))
             {
@@ -705,12 +709,82 @@ namespace SQLTriage.Data
                         }
                     }
                     File.AppendAllText(logFile, sb.ToString());
+                    _consecutiveFlushFailures = 0;
                 }
                 catch (Exception ex)
                 {
+                    _consecutiveFlushFailures++;
                     // Last resort: use Serilog static logger since the audit log itself is failing
-                    Serilog.Log.Warning(ex, "Failed to write audit log to file");
+                    Serilog.Log.Error(ex,
+                        "[AUDIT] Flush failed (attempt {N}); {Count} entries requeued. Path: {Dir}",
+                        _consecutiveFlushFailures, entries.Count, _logDirectory);
+
+                    // Requeue the batch in original order so entries are not lost.
+                    // Prepend via a temp queue to maintain order.
+                    var tempQueue = new Queue<AuditLogEntry>(entries);
+                    while (tempQueue.Count > 0)
+                        _pendingEntries.Enqueue(tempQueue.Dequeue());
+
+                    // After FlushFailoverThreshold consecutive failures, write to the failover directory.
+                    if (_consecutiveFlushFailures >= FlushFailoverThreshold)
+                    {
+                        TryWriteFailover(entries);
+                    }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Writes the batch to audit-logs/.failover/ when the primary directory is unavailable.
+        /// Emits AuditFlushFailover once per transition (guarded by _consecutiveFlushFailures == threshold).
+        /// </summary>
+        private void TryWriteFailover(List<AuditLogEntry> entries)
+        {
+            try
+            {
+                var failoverDir = Path.Combine(_logDirectory, ".failover");
+                Directory.CreateDirectory(failoverDir);
+                var path = Path.Combine(failoverDir,
+                    $"audit-failover-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.jsonl");
+                var sb = new StringBuilder();
+                foreach (var e in entries)
+                    sb.AppendLine(JsonSerializer.Serialize(e, SerializerOptions));
+                File.WriteAllText(path, sb.ToString());
+
+                Serilog.Log.Critical(
+                    "[AUDIT] PRIMARY FLUSH UNAVAILABLE after {N} consecutive failures. " +
+                    "Failover batch written to {Path}. Investigate disk/permissions immediately.",
+                    _consecutiveFlushFailures, path);
+
+                // Emit one AuditFlushFailover event only on the exact transition tick.
+                if (_consecutiveFlushFailures == FlushFailoverThreshold)
+                {
+                    var fe = new AuditLogEntry
+                    {
+                        EventType = AuditEventType.AuditFlushFailover,
+                        Severity  = AuditSeverity.Critical,
+                        Message   = $"Audit flush entered failover mode after {_consecutiveFlushFailures} consecutive failures. " +
+                                    $"Failover path: {failoverDir}",
+                        Details   = new Dictionary<string, string>
+                        {
+                            ["FailoverDirectory"]         = failoverDir,
+                            ["ConsecutiveFailures"]        = _consecutiveFlushFailures.ToString(),
+                            ["EntriesInFailoverBatch"]     = entries.Count.ToString()
+                        }
+                    };
+                    fe.PreviousHash = _lastSignature;
+                    fe.Signature    = ComputeSignature(fe, _lastSignature);
+                    _lastSignature  = fe.Signature;
+                    var fePath = Path.Combine(failoverDir,
+                        $"audit-failover-transition-{DateTime.UtcNow:yyyyMMdd-HHmmss}.jsonl");
+                    File.AppendAllText(fePath, JsonSerializer.Serialize(fe, SerializerOptions) + Environment.NewLine);
+                }
+            }
+            catch (Exception fex)
+            {
+                Serilog.Log.Fatal(fex,
+                    "[AUDIT] Failover write also failed — audit entries are being dropped. " +
+                    "Check disk space and directory permissions for {Dir}", _logDirectory);
             }
         }
 
@@ -773,8 +847,10 @@ namespace SQLTriage.Data
             };
             var payload = JsonSerializer.Serialize(canonical, SerializerOptions);
             var input = Encoding.UTF8.GetBytes(previousSig + "|" + payload);
-            using var hmac = new HMACSHA256(_hmacKey);
-            return Convert.ToBase64String(hmac.ComputeHash(input));
+            // Snapshot the reference so one signature always uses one consistent key,
+            // even if RotateHmacKey atomically swaps _hmacKey on another thread.
+            var keySnapshot = _hmacKey;
+            return Convert.ToBase64String(HMACSHA256.HashData(keySnapshot, input));
         }
 
         [SupportedOSPlatform("windows")]
@@ -1401,7 +1477,14 @@ namespace SQLTriage.Data
         /// <summary>AU-9: HMAC key age exceeded the configured maximum; rotation recommended.</summary>
         HmacKeyAgeExceeded,
         /// <summary>AU-9: HMAC key rotated; chain-anchor entry.</summary>
-        HmacKeyRotated
+        HmacKeyRotated,
+        // ── Reliability ───────────────────────────────────────────────────
+        /// <summary>Audit flush entered failover mode (primary write directory unavailable).</summary>
+        AuditFlushFailover,
+        /// <summary>Server circuit breaker opened; polling suppressed until back-off expires.</summary>
+        ServerCircuitOpened,
+        /// <summary>Server circuit breaker closed; polling resumed after successful connection.</summary>
+        ServerCircuitClosed
     }
 
     public enum AuditSeverity
