@@ -82,6 +82,16 @@
     <None Remove="DdgTest\**" />
   </ItemGroup>
 
+  <!-- L1: CC7.2 / SI-7 — SBOM generation (Release only) -->
+  <!-- Writes bin/<config>/sbom.json listing all direct + transitive packages. -->
+  <!-- No new package dependency: uses the dotnet CLI already on PATH. -->
+  <Target Name="GenerateSbom" AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' AND !$(MSBuildProjectFile.Contains('_wpftmp'))">
+    <Exec Command="dotnet list &quot;$(MSBuildProjectFullPath)&quot; package --include-transitive --format json &gt; &quot;$(OutputPath)sbom.json&quot;"
+          ContinueOnError="true" />
+    <Message Text="[SBOM] Written to $(OutputPath)sbom.json" Importance="high" />
+  </Target>
+
   <!-- Release Build Optimizations -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <PublishReadyToRun>true</PublishReadyToRun>

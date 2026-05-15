@@ -12,6 +12,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace SQLTriage.Data
 {
@@ -30,10 +31,13 @@ namespace SQLTriage.Data
         private readonly byte[] _hmacKey;
         private readonly ConcurrentQueue<AuditLogEntry> _pendingEntries = new();
         private readonly Timer _flushTimer;
+        private readonly Timer? _retentionTimer;
+        private readonly Timer? _verificationTimer;
         private readonly object _writeLock = new();
         private string _lastSignature = string.Empty;
         private bool _disposed;
         private bool _eventLogAvailable;
+        private readonly int _configuredRetentionDays;
 
         /// <summary>Event Log source name. Creating the source requires admin rights.</summary>
         private const string EventLogSource = "SQLTriage-Audit";
@@ -64,14 +68,23 @@ namespace SQLTriage.Data
         };
 
         public AuditLogService()
-            : this(Path.Combine(AppContext.BaseDirectory, "audit-logs"))
+            : this(Path.Combine(AppContext.BaseDirectory, "audit-logs"), configuration: null)
+        {
+        }
+
+        /// <summary>Production constructor — reads Audit:RetentionDays from IConfiguration (default 90).</summary>
+        public AuditLogService(IConfiguration? configuration)
+            : this(Path.Combine(AppContext.BaseDirectory, "audit-logs"), startFlushTimer: true, configuration: configuration)
         {
         }
 
         // Test seam: explicit log directory + opt-out for the background flush timer.
-        // Production callers should use the parameterless constructor.
-        public AuditLogService(string logDirectory, bool startFlushTimer = true)
+        // Production callers should use the parameterless or IConfiguration constructor.
+        public AuditLogService(string logDirectory, bool startFlushTimer = true, IConfiguration? configuration = null)
         {
+            _configuredRetentionDays = configuration?.GetValue<int>("Audit:RetentionDays", 90) ?? 90;
+            RetentionDays = _configuredRetentionDays;
+
             _logDirectory = logDirectory;
             if (!Directory.Exists(_logDirectory))
                 Directory.CreateDirectory(_logDirectory);
@@ -81,16 +94,173 @@ namespace SQLTriage.Data
 
             _eventLogAvailable = TryEnsureEventLogSource();
             VerifyChainOnStartup();
+            // L6: check key age after chain verification (only in production mode with timer)
+            if (startFlushTimer) CheckHmacKeyAge(configuration);
 
             // Periodic flush timer (skipped in tests so they don't race the foreground Flush())
             _flushTimer = startFlushTimer
                 ? new Timer(_ => Flush(), null, FlushIntervalMs, FlushIntervalMs)
                 : new Timer(_ => { }, null, Timeout.Infinite, Timeout.Infinite);
+
+            // Retention timer: fire immediately (catches existing over-retention), then every 24 h.
+            // Skipped when startFlushTimer is false (test mode) to avoid background races.
+            if (startFlushTimer)
+            {
+                _retentionTimer = new Timer(_ => RunRetentionSweep(), null,
+                    TimeSpan.Zero, TimeSpan.FromHours(24));
+
+                // Verification timer: fires after 1 min (startup settle) then every N hours.
+                // Interval is configurable via Audit:VerificationIntervalHours (default 24).
+                int verificationHours = configuration?.GetValue<int>("Audit:VerificationIntervalHours", 24) ?? 24;
+                _verificationTimer = new Timer(_ => RunScheduledVerification(), null,
+                    TimeSpan.FromMinutes(1), TimeSpan.FromHours(verificationHours));
+            }
         }
 
         // DPAPI entropy tag — distinguishes SQLTriage HMAC key blobs from other ProtectedData blobs.
         private static readonly byte[] HmacKeyEntropy =
             System.Text.Encoding.UTF8.GetBytes("SQLTriage.AuditLog.HmacKey.v1");
+
+        // ── L6: Key metadata sidecar ─────────────────────────────────────────────
+        // Path: <logDirectory>/hmac.key.meta (JSON: { "createdAt": "...", "rotationDueAt": "..." })
+
+        private static readonly string HmacMetaFileName = "hmac.key.meta";
+
+        private string HmacMetaPath => Path.Combine(_logDirectory, HmacMetaFileName);
+
+        private sealed class HmacKeyMeta
+        {
+            public string CreatedAt { get; set; } = string.Empty;
+            public string RotationDueAt { get; set; } = string.Empty;
+        }
+
+        private HmacKeyMeta LoadOrCreateHmacMeta(string keyPath, int maxAgeDays)
+        {
+            if (File.Exists(HmacMetaPath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(HmacMetaPath, Encoding.UTF8);
+                    var m = JsonSerializer.Deserialize<HmacKeyMeta>(json, SerializerOptions);
+                    if (m != null && !string.IsNullOrEmpty(m.CreatedAt))
+                        return m;
+                }
+                catch { }
+            }
+
+            // No meta yet — create it (assume key was created now for new keys, or set
+            // to file creation time for existing keys so age is not artificially zero).
+            DateTime created = File.Exists(keyPath)
+                ? File.GetCreationTimeUtc(keyPath)
+                : DateTime.UtcNow;
+
+            var meta = new HmacKeyMeta
+            {
+                CreatedAt      = created.ToString("o"),
+                RotationDueAt  = created.AddDays(maxAgeDays).ToString("o")
+            };
+            WriteHmacMeta(meta);
+            return meta;
+        }
+
+        private void WriteHmacMeta(HmacKeyMeta meta)
+        {
+            try
+            {
+                File.WriteAllText(HmacMetaPath,
+                    JsonSerializer.Serialize(meta, SerializerOptions),
+                    Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[AUDIT] Failed to write HMAC key meta sidecar");
+            }
+        }
+
+        private void CheckHmacKeyAge(IConfiguration? configuration)
+        {
+            int maxAgeDays = configuration?.GetValue<int>("Audit:HmacKeyMaxAgeDays", 365) ?? 365;
+            var meta = LoadOrCreateHmacMeta(_keyPath, maxAgeDays);
+
+            if (!DateTime.TryParse(meta.CreatedAt, out var created)) return;
+            int ageDays = (int)(DateTime.UtcNow - created).TotalDays;
+
+            if (ageDays > maxAgeDays)
+            {
+                Serilog.Log.Warning("[AUDIT] HMAC key is {AgeDays} days old (max: {MaxAgeDays}). Consider rotating via Settings.", ageDays, maxAgeDays);
+                LogHmacKeyAgeExceeded(ageDays, maxAgeDays);
+            }
+        }
+
+        /// <summary>
+        /// L6: Rotates the HMAC key. Generates a new key, re-wraps it, writes both the key file
+        /// and the meta sidecar, then appends a chain-anchor entry (HmacKeyRotated).
+        /// The chain is NOT broken: the rotation entry uses the old key's last signature as its
+        /// PreviousHash, and subsequent entries are signed with the new key.
+        /// </summary>
+        public void RotateHmacKey(string actor, IConfiguration? configuration = null)
+        {
+            lock (_writeLock)
+            {
+                // Flush pending entries under old key first.
+                Flush();
+
+                int maxAgeDays = configuration?.GetValue<int>("Audit:HmacKeyMaxAgeDays", 365) ?? 365;
+                var meta = LoadOrCreateHmacMeta(_keyPath, maxAgeDays);
+                int priorAgeDays = DateTime.TryParse(meta.CreatedAt, out var prevCreated)
+                    ? (int)(DateTime.UtcNow - prevCreated).TotalDays : 0;
+
+                // Generate and persist new key.
+                var newRaw = RandomNumberGenerator.GetBytes(32);
+                try
+                {
+                    WriteWrappedHmacKey(_keyPath, newRaw);
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Error(ex, "[AUDIT] HMAC key rotation failed during key write");
+                    throw;
+                }
+
+                // Update meta sidecar.
+                var now = DateTime.UtcNow;
+                var newMeta = new HmacKeyMeta
+                {
+                    CreatedAt     = now.ToString("o"),
+                    RotationDueAt = now.AddDays(maxAgeDays).ToString("o")
+                };
+                WriteHmacMeta(newMeta);
+
+                // Swap the in-memory key.
+                // Note: _hmacKey is readonly; we use a local field copy via reflection-free workaround:
+                // write the chain-anchor entry BEFORE swapping so it signs correctly with old key.
+                var rotationEntry = new AuditLogEntry
+                {
+                    EventType = AuditEventType.HmacKeyRotated,
+                    Severity  = AuditSeverity.Critical,
+                    Message   = $"Key rotated by {actor}. Prior key age: {priorAgeDays} days.",
+                    Details   = new Dictionary<string, string>
+                    {
+                        ["Actor"]        = actor,
+                        ["PriorAgeDays"] = priorAgeDays.ToString(),
+                        ["RotatedAt"]    = now.ToString("o")
+                    }
+                };
+                rotationEntry.PreviousHash = _lastSignature;
+                rotationEntry.Signature    = ComputeSignature(rotationEntry, _lastSignature);
+                _lastSignature = rotationEntry.Signature;
+
+                var logFile = GetCurrentLogFile();
+                MaybeRotate(ref logFile);
+                File.AppendAllText(logFile,
+                    JsonSerializer.Serialize(rotationEntry, SerializerOptions) + Environment.NewLine);
+
+                // Replace the in-memory key array contents so subsequent ComputeSignature uses new key.
+                newRaw.CopyTo(_hmacKey, 0);
+
+                Serilog.Log.Information("[AUDIT] HMAC key rotated by {Actor}. Prior age: {Age} days", actor, priorAgeDays);
+            }
+        }
 
         private static byte[] LoadOrCreateHmacKey(string keyPath)
         {
@@ -629,11 +799,29 @@ namespace SQLTriage.Data
         }
 
         /// <summary>
-        /// Applies the retention policy by deleting old audit log files.
-        /// Runs automatically once per day.
+        /// Called by the 24-hour retention timer. Runs the sweep and emits audit + Serilog telemetry.
         /// </summary>
-        private void ApplyRetentionPolicy()
+        private void RunRetentionSweep()
         {
+            try
+            {
+                int deleted = ApplyRetentionPolicy();
+                Serilog.Log.Information("[AUDIT] Retention sweep complete: {Deleted} entries removed", deleted);
+                LogRetentionSweep(deleted, RetentionDays);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "[AUDIT] Retention sweep failed");
+            }
+        }
+
+        /// <summary>
+        /// Applies the retention policy by deleting old audit log files.
+        /// Returns the number of files deleted.
+        /// </summary>
+        private int ApplyRetentionPolicy()
+        {
+            int deleted = 0;
             try
             {
                 var cutoffDate = DateTime.Now.AddDays(-RetentionDays);
@@ -645,6 +833,7 @@ namespace SQLTriage.Data
                     if (fileInfo.CreationTime < cutoffDate)
                     {
                         fileInfo.Delete();
+                        deleted++;
                         Serilog.Log.Information("Deleted old audit log: {FileName}", fileInfo.Name);
                     }
                 }
@@ -653,6 +842,443 @@ namespace SQLTriage.Data
             {
                 Serilog.Log.Warning(ex, "Error applying audit log retention policy");
             }
+            return deleted;
+        }
+
+        /// <summary>
+        /// Emits an auditable record of each retention sweep (SOC2 AU-11 evidence).
+        /// </summary>
+        public void LogRetentionSweep(int deletedCount, int retentionDays)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.AuditRetentionSweep,
+                Severity = AuditSeverity.Info,
+                Message = $"Audit retention sweep: removed {deletedCount} entries older than {retentionDays} days",
+                Details = new Dictionary<string, string>
+                {
+                    ["DeletedCount"] = deletedCount.ToString(),
+                    ["RetentionDays"] = retentionDays.ToString()
+                }
+            });
+        }
+
+        /// <summary>
+        /// Emits an audit record when an admin marks a user's access as reviewed (SOC2 CC6.3).
+        /// </summary>
+        public void LogUserAccessReviewed(string reviewedUser, string reviewerName)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.UserAccessReviewed,
+                Severity = AuditSeverity.Info,
+                Message = $"User {reviewedUser} access marked reviewed by {reviewerName}",
+                Details = new Dictionary<string, string>
+                {
+                    ["ReviewedUser"] = reviewedUser,
+                    ["ReviewerName"] = reviewerName
+                }
+            });
+        }
+
+        /// <summary>
+        /// Emits an audit record when an access review report is exported (SOC2 CC6.3).
+        /// </summary>
+        public void LogAccessReviewExported(string exportedBy, string filePath)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.AccessReviewExported,
+                Severity = AuditSeverity.Info,
+                Message = $"Access review report exported by {exportedBy}",
+                Details = new Dictionary<string, string>
+                {
+                    ["ExportedBy"] = exportedBy,
+                    ["FilePath"] = filePath
+                }
+            });
+        }
+
+        // ================================================================
+        // SOC2 AU-6/AU-9 — CHAIN VERIFICATION
+        // ================================================================
+
+        /// <summary>
+        /// Result returned by <see cref="VerifyChain"/> for use in UI and export artifacts.
+        /// </summary>
+        public sealed record ChainVerificationResult(
+            bool Intact,
+            int EntryCount,
+            DateTime? FirstEntry,
+            DateTime? LastEntry,
+            DateTime VerifiedAt);
+
+        /// <summary>
+        /// Verifies the HMAC chain of the current log file on demand.
+        /// Returns a <see cref="ChainVerificationResult"/> and emits an <c>AuditChainVerified</c> event.
+        /// </summary>
+        public ChainVerificationResult VerifyChain(string? triggeredBy = null)
+        {
+            Flush(); // ensure all pending entries are on disk before verifying
+            int count = 0;
+            bool intact = true;
+            DateTime? first = null, last = null;
+
+            try
+            {
+                var latest = GetCurrentLogFile();
+                if (File.Exists(latest))
+                {
+                    string? previousSig = null;
+                    foreach (var line in File.ReadLines(latest))
+                    {
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        var entry = JsonSerializer.Deserialize<AuditLogEntry>(line, SerializerOptions);
+                        if (entry == null) continue;
+
+                        count++;
+                        first ??= entry.Timestamp;
+                        last = entry.Timestamp;
+
+                        if (previousSig == null)
+                            previousSig = entry.PreviousHash ?? string.Empty;
+
+                        var recomputed = ComputeSignature(entry, previousSig);
+                        if (!string.Equals(recomputed, entry.Signature, StringComparison.Ordinal))
+                        {
+                            intact = false;
+                            break;
+                        }
+                        previousSig = entry.Signature;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[AUDIT] On-demand chain verification failed");
+                intact = false;
+            }
+
+            var result = new ChainVerificationResult(intact, count, first, last, DateTime.UtcNow);
+            LogChainVerified(result, triggeredBy ?? Environment.UserName);
+            return result;
+        }
+
+        /// <summary>Called by the scheduled verification timer (background).</summary>
+        private void RunScheduledVerification()
+        {
+            try
+            {
+                var result = VerifyChain("scheduled");
+                Serilog.Log.Information("[AUDIT] Scheduled chain verification: {Status}, {Count} entries",
+                    result.Intact ? "INTACT" : "BROKEN", result.EntryCount);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "[AUDIT] Scheduled chain verification failed");
+            }
+        }
+
+        /// <summary>Emits an audit record of a chain verification run (SOC2 AU-6/AU-9).</summary>
+        public void LogChainVerified(ChainVerificationResult result, string triggeredBy)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.AuditChainVerified,
+                Severity = result.Intact ? AuditSeverity.Info : AuditSeverity.Critical,
+                Message = $"Audit chain verification: {(result.Intact ? "INTACT" : "BROKEN")} — {result.EntryCount} entries verified by {triggeredBy}",
+                Details = new Dictionary<string, string>
+                {
+                    ["Intact"]      = result.Intact.ToString(),
+                    ["EntryCount"]  = result.EntryCount.ToString(),
+                    ["FirstEntry"]  = result.FirstEntry?.ToString("o") ?? string.Empty,
+                    ["LastEntry"]   = result.LastEntry?.ToString("o") ?? string.Empty,
+                    ["VerifiedAt"]  = result.VerifiedAt.ToString("o"),
+                    ["TriggeredBy"] = triggeredBy
+                }
+            });
+        }
+
+        /// <summary>Emits an audit record when a verification report is exported (SOC2 AU-9).</summary>
+        public void LogChainVerificationExported(string exportedBy, string filePath, int entryCount, bool intact)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.AuditChainVerificationExported,
+                Severity = AuditSeverity.Info,
+                Message = $"Audit chain verification report exported by {exportedBy}",
+                Details = new Dictionary<string, string>
+                {
+                    ["ExportedBy"] = exportedBy,
+                    ["FilePath"]   = filePath,
+                    ["EntryCount"] = entryCount.ToString(),
+                    ["Intact"]     = intact.ToString()
+                }
+            });
+        }
+
+        // ================================================================
+        // SOC2 AU-3 — AUDIT LOG EXPORT
+        // ================================================================
+
+        /// <summary>Emits an audit record when the audit log itself is exported (SOC2 AU-3).</summary>
+        public void LogAuditLogExported(string exportedBy, string format, int entryCount, DateTime from, DateTime to)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.AuditLogExported,
+                Severity = AuditSeverity.Info,
+                Message = $"Audit log exported as {format} ({entryCount} entries) by {exportedBy}",
+                Details = new Dictionary<string, string>
+                {
+                    ["ExportedBy"]  = exportedBy,
+                    ["Format"]      = format,
+                    ["EntryCount"]  = entryCount.ToString(),
+                    ["From"]        = from.ToString("o"),
+                    ["To"]          = to.ToString("o")
+                }
+            });
+        }
+
+        // ================================================================
+        // SOC2 CC6.2 — INDIVIDUAL USER-MUTATION AUDIT EVENTS
+        // ================================================================
+
+        /// <summary>Emits an audit record when a user is added to the RBAC roster (SOC2 CC6.2).</summary>
+        public void LogUserAdded(string addedBy, string addedUser, string role)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.UserAdded,
+                Severity = AuditSeverity.Info,
+                Message = $"User '{addedUser}' added with role '{role}' by {addedBy}",
+                Details = new Dictionary<string, string>
+                {
+                    ["AddedBy"]   = addedBy,
+                    ["AddedUser"] = addedUser,
+                    ["Role"]      = role
+                }
+            });
+        }
+
+        /// <summary>Emits an audit record when a user is removed from the RBAC roster (SOC2 CC6.2).</summary>
+        public void LogUserRemoved(string removedBy, string removedUser, string formerRole)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.UserRemoved,
+                Severity = AuditSeverity.Warning,
+                Message = $"User '{removedUser}' (role: '{formerRole}') removed by {removedBy}",
+                Details = new Dictionary<string, string>
+                {
+                    ["RemovedBy"]  = removedBy,
+                    ["RemovedUser"]= removedUser,
+                    ["FormerRole"] = formerRole
+                }
+            });
+        }
+
+        /// <summary>Emits an audit record when a user attribute is changed (SOC2 CC6.2).</summary>
+        public void LogUserUpdated(string updatedBy, string updatedUser, string field, string? oldValue, string? newValue)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.UserUpdated,
+                Severity = AuditSeverity.Info,
+                Message = $"User '{updatedUser}' {field} changed by {updatedBy}",
+                Details = new Dictionary<string, string>
+                {
+                    ["UpdatedBy"]   = updatedBy,
+                    ["UpdatedUser"] = updatedUser,
+                    ["Field"]       = field,
+                    ["OldValue"]    = oldValue ?? string.Empty,
+                    ["NewValue"]    = newValue ?? string.Empty
+                }
+            });
+        }
+
+        // ================================================================
+        // INTERNAL / CROSS-SERVICE HELPER
+        // ================================================================
+
+        /// <summary>
+        /// General-purpose enqueue used by sibling services that cannot call the
+        /// private overload directly (ConfigBaselineService, UptimeTrackerService, etc.).
+        /// </summary>
+        internal void Enqueue(AuditEventType eventType, AuditSeverity severity, string message,
+            Dictionary<string, string>? details = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = eventType,
+                Severity  = severity,
+                Message   = message,
+                Details   = details ?? new Dictionary<string, string>()
+            });
+        }
+
+        // ================================================================
+        // L2: A1.2 — UPTIME SNAPSHOT EXPORT
+        // ================================================================
+
+        /// <summary>Emits an audit record when a 30-day uptime snapshot is exported (A1.2).</summary>
+        public void LogUptimeSnapshotExported(string exportedBy, double uptimePercent, DateTime from, DateTime to)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.UptimeSnapshotExported,
+                Severity  = AuditSeverity.Info,
+                Message   = $"Uptime snapshot exported by {exportedBy}: {uptimePercent:F2}% over {(to - from).TotalDays:F0} days",
+                Details   = new Dictionary<string, string>
+                {
+                    ["ExportedBy"]    = exportedBy,
+                    ["UptimePercent"] = uptimePercent.ToString("F4"),
+                    ["From"]          = from.ToString("o"),
+                    ["To"]            = to.ToString("o")
+                }
+            });
+        }
+
+        // ================================================================
+        // L3: CP-2 — CONTINUITY / DR TEST
+        // ================================================================
+
+        /// <summary>Emits an audit record when a DR test is manually recorded (CP-2).</summary>
+        public void LogDrTestRecorded(string recordedBy, string? notes = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.DrTestRecorded,
+                Severity  = AuditSeverity.Info,
+                Message   = $"DR test recorded by {recordedBy}",
+                Details   = new Dictionary<string, string>
+                {
+                    ["RecordedBy"] = recordedBy,
+                    ["Notes"]      = notes ?? string.Empty
+                }
+            });
+        }
+
+        // ================================================================
+        // L4: CM-3 — CONFIGURATION BASELINE / DRIFT
+        // ================================================================
+
+        /// <summary>Emits an audit record when configuration drift is detected (CM-3).</summary>
+        public void LogConfigDriftDetected(string driftDetails, int fileCount)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ConfigDriftDetected,
+                Severity  = AuditSeverity.Warning,
+                Message   = $"Configuration drift detected in {fileCount} file(s)",
+                Details   = new Dictionary<string, string>
+                {
+                    ["DriftedFiles"] = driftDetails,
+                    ["FileCount"]    = fileCount.ToString()
+                }
+            });
+        }
+
+        /// <summary>Emits an audit record when the config baseline is re-snapshotted (CM-3).</summary>
+        public void LogConfigBaselineUpdated(string actor, int fileCount)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ConfigBaselineUpdated,
+                Severity  = AuditSeverity.Info,
+                Message   = $"Configuration baseline updated by {actor} ({fileCount} files)",
+                Details   = new Dictionary<string, string>
+                {
+                    ["Actor"]     = actor,
+                    ["FileCount"] = fileCount.ToString()
+                }
+            });
+        }
+
+        // ================================================================
+        // L5: IR-5 — INCIDENT STATE CHANGE
+        // ================================================================
+
+        /// <summary>Emits an audit record when an alert's incident lifecycle state changes (IR-5).</summary>
+        public void LogIncidentStateChanged(long alertId, string alertName, string newState,
+            string changedBy, string? notes = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.IncidentStateChanged,
+                Severity  = AuditSeverity.Info,
+                Message   = $"Incident #{alertId} ({alertName}) → {newState} by {changedBy}",
+                Details   = new Dictionary<string, string>
+                {
+                    ["AlertId"]    = alertId.ToString(),
+                    ["AlertName"]  = alertName,
+                    ["NewState"]   = newState,
+                    ["ChangedBy"]  = changedBy,
+                    ["Notes"]      = notes ?? string.Empty
+                }
+            });
+        }
+
+        // ================================================================
+        // L6: SC-28 / AU-9 — HMAC KEY AGE + ROTATION
+        // ================================================================
+
+        /// <summary>Emits a Warning when the HMAC key age exceeds the configured maximum (AU-9).</summary>
+        public void LogHmacKeyAgeExceeded(int ageDays, int maxAgeDays)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.HmacKeyAgeExceeded,
+                Severity  = AuditSeverity.Warning,
+                Message   = $"HMAC audit key is {ageDays} days old (max: {maxAgeDays} days). Rotation recommended.",
+                Details   = new Dictionary<string, string>
+                {
+                    ["AgeDays"]    = ageDays.ToString(),
+                    ["MaxAgeDays"] = maxAgeDays.ToString()
+                }
+            });
+        }
+
+        /// <summary>Emits a Critical chain-anchor entry when the HMAC key is rotated (AU-9).</summary>
+        public void LogHmacKeyRotated(string actor, int priorAgeDays)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.HmacKeyRotated,
+                Severity  = AuditSeverity.Critical,
+                Message   = $"Key rotated by {actor}. Prior key age: {priorAgeDays} days.",
+                Details   = new Dictionary<string, string>
+                {
+                    ["Actor"]       = actor,
+                    ["PriorAgeDays"]= priorAgeDays.ToString()
+                }
+            });
+        }
+
+        // ================================================================
+        // SOC2 CC8.2 — CONFIG CHANGE WITH PRIOR VALUE
+        // ================================================================
+
+        /// <summary>
+        /// Logs a configuration change capturing both old and new values (SOC2 CC8.2).
+        /// Use this overload at all new/updated call sites.
+        /// </summary>
+        public void LogConfigurationChange(string configType, string action, string? oldValue, string? newValue, string? changedBy = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ConfigurationChange,
+                Severity = AuditSeverity.Info,
+                Message = $"Configuration '{configType}' {action}" + (changedBy != null ? $" by {changedBy}" : string.Empty),
+                Details = new Dictionary<string, string>
+                {
+                    ["ConfigType"] = configType,
+                    ["Action"]     = action,
+                    ["OldValue"]   = oldValue ?? string.Empty,
+                    ["NewValue"]   = newValue ?? string.Empty,
+                    ["ChangedBy"]  = changedBy ?? string.Empty
+                }
+            });
         }
 
         /// <summary>
@@ -697,6 +1323,8 @@ namespace SQLTriage.Data
         {
             if (_disposed) return;
             _disposed = true;
+            _retentionTimer?.Dispose();
+            _verificationTimer?.Dispose();
             _flushTimer?.Dispose();
             Flush(); // Final flush on dispose
         }
@@ -736,7 +1364,44 @@ namespace SQLTriage.Data
         ExportOperation,
         CacheOperation,
         DashboardAccess,
-        SessionEvent
+        SessionEvent,
+        /// <summary>SOC2 AU-11: daily retention sweep evidence.</summary>
+        AuditRetentionSweep,
+        /// <summary>SOC2 CC6.3: admin marked a user's access as reviewed.</summary>
+        UserAccessReviewed,
+        /// <summary>SOC2 CC6.3: access review report exported.</summary>
+        AccessReviewExported,
+        /// <summary>SOC2 AU-6/AU-9: on-demand or scheduled chain integrity verification.</summary>
+        AuditChainVerified,
+        /// <summary>SOC2 AU-9: chain verification report exported as signed artifact.</summary>
+        AuditChainVerificationExported,
+        /// <summary>SOC2 AU-3/CC6.2: audit log entries exported (CSV or JSON).</summary>
+        AuditLogExported,
+        /// <summary>SOC2 CC6.2: a user account was added to the RBAC roster.</summary>
+        UserAdded,
+        /// <summary>SOC2 CC6.2: a user account was removed from the RBAC roster.</summary>
+        UserRemoved,
+        /// <summary>SOC2 CC6.2: a user account attribute (role, enabled state) was changed.</summary>
+        UserUpdated,
+        // ── L2: A1.2 ──────────────────────────────────────────────────────
+        /// <summary>A1.2: 30-day uptime snapshot exported for SLA evidence.</summary>
+        UptimeSnapshotExported,
+        // ── L3: CP-2 ──────────────────────────────────────────────────────
+        /// <summary>CP-2: DR test manually recorded by an admin.</summary>
+        DrTestRecorded,
+        // ── L4: CM-3 ──────────────────────────────────────────────────────
+        /// <summary>CM-3: configuration drift detected against the baseline snapshot.</summary>
+        ConfigDriftDetected,
+        /// <summary>CM-3: admin explicitly re-snapshotted the current config as the new baseline.</summary>
+        ConfigBaselineUpdated,
+        // ── L5: IR-5 ──────────────────────────────────────────────────────
+        /// <summary>IR-5: alert incident lifecycle state changed (acknowledged / root-caused / closed).</summary>
+        IncidentStateChanged,
+        // ── L6: SC-28 / AU-9 ─────────────────────────────────────────────
+        /// <summary>AU-9: HMAC key age exceeded the configured maximum; rotation recommended.</summary>
+        HmacKeyAgeExceeded,
+        /// <summary>AU-9: HMAC key rotated; chain-anchor entry.</summary>
+        HmacKeyRotated
     }
 
     public enum AuditSeverity

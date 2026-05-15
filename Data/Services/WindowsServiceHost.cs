@@ -261,6 +261,10 @@ namespace SQLTriage.Data.Services
             services.GetService<CacheEvictionService>()?.Start();
             services.GetService<liveQueriesMaintenanceService>()?.Start();
             services.GetService<AuditLogService>()?.LogApplicationStart();
+            // L4: CM-3 — config baseline drift check
+            _ = Task.Run(() => services.GetService<ConfigBaselineService>()?.RunStartupCheck());
+            // L2: A1.2 — start uptime tracking
+            _ = services.GetService<UptimeTrackerService>();
         }
 
         private static string ResolveWebRoot()

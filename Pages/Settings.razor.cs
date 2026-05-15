@@ -18,6 +18,129 @@ using SQLTriage.Data.Scheduling;
 namespace SQLTriage.Pages;
 public partial class Settings
 {
+    // ── L2: A1.2 — Uptime ────────────────────────────────────────────────
+    private double? _uptimePercent30d;
+    private string? _uptimeMessage;
+    private bool _uptimeSuccess;
+
+    private void ComputeUptime30d()
+    {
+        try
+        {
+            var to = DateTime.UtcNow;
+            var from = to.AddDays(-30);
+            _uptimePercent30d = UptimeTracker.GetUptimePercent(from, to);
+            _uptimeMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _uptimeMessage = $"Failed: {ex.Message}";
+            _uptimeSuccess = false;
+        }
+    }
+
+    private void ExportUptimeSnapshot()
+    {
+        if (!_uptimePercent30d.HasValue) return;
+        try
+        {
+            var to = DateTime.UtcNow;
+            var from = to.AddDays(-30);
+            var downloadsDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var exportDir = Path.Combine(downloadsDir, "Downloads");
+            if (!Directory.Exists(exportDir)) exportDir = AppDomain.CurrentDomain.BaseDirectory;
+            var fileName = $"UptimeSnapshot_{to:yyyyMMdd_HHmmss}.csv";
+            var filePath = Path.Combine(exportDir, fileName);
+            var csv = $"from_utc,to_utc,uptime_percent\r\n{from:o},{to:o},{_uptimePercent30d.Value:F4}\r\n";
+            File.WriteAllText(filePath, csv, System.Text.Encoding.UTF8);
+            AuditLog.LogUptimeSnapshotExported(ReviewerName, _uptimePercent30d.Value, from, to);
+            _uptimeMessage = $"Saved: {filePath}";
+            _uptimeSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            _uptimeMessage = $"Export failed: {ex.Message}";
+            _uptimeSuccess = false;
+        }
+    }
+
+    // ── L3: CP-2 — Continuity ────────────────────────────────────────────
+    private string? _drTestMessage;
+
+    private void RecordDrTest()
+    {
+        try
+        {
+            // Write today's date into appsettings.json under Continuity:LastDrTestDate.
+            var appsettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+            var json = File.ReadAllText(appsettingsPath);
+            var config = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new();
+
+            string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            if (!config.ContainsKey("Continuity"))
+                config["Continuity"] = new Dictionary<string, object>();
+
+            // The value may deserialise as JsonElement; replace with plain dict.
+            config["Continuity"] = new Dictionary<string, object>
+            {
+                ["RecoveryPointObjectiveMinutes"] = Configuration.GetValue<int>("Continuity:RecoveryPointObjectiveMinutes", 0),
+                ["RecoveryTimeObjectiveMinutes"]  = Configuration.GetValue<int>("Continuity:RecoveryTimeObjectiveMinutes", 0),
+                ["LastDrTestDate"]                = today
+            };
+
+            File.WriteAllText(appsettingsPath,
+                JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
+
+            AuditLog.LogDrTestRecorded(ReviewerName, $"DR test recorded via Settings on {today}");
+            _drTestMessage = $"DR test recorded: {today}";
+        }
+        catch (Exception ex)
+        {
+            _drTestMessage = $"Failed: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    // ── L4: CM-3 — Config Baseline ───────────────────────────────────────
+    private bool _showRebaselineConfirm;
+    private string? _rebaselineMessage;
+
+    private void ConfirmRebaseline()
+    {
+        _showRebaselineConfirm = false;
+        try
+        {
+            ConfigBaselineSvc.ReBaseline(ReviewerName);
+            _rebaselineMessage = "Baseline updated — current config accepted as new reference.";
+        }
+        catch (Exception ex)
+        {
+            _rebaselineMessage = $"Re-baseline failed: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    // ── L6: AU-9 — HMAC Key Rotation ─────────────────────────────────────
+    private bool _showRotateConfirm;
+    private string? _rotateMessage;
+    private bool _rotateSuccess;
+
+    private void ConfirmRotateHmacKey()
+    {
+        _showRotateConfirm = false;
+        try
+        {
+            AuditLog.RotateHmacKey(ReviewerName, Configuration);
+            _rotateMessage = "HMAC key rotated. Chain-anchor entry appended. New key is active.";
+            _rotateSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            _rotateMessage = $"Rotation failed: {ex.Message}";
+            _rotateSuccess = false;
+        }
+        StateHasChanged();
+    }
     private string? TestResult;
     private bool TestSuccess;
     private string SelectedDataSource = "SqlServer";
@@ -347,9 +470,10 @@ public partial class Settings
 
     private void SaveUpdateProxy()
     {
+        var oldProxy = UserSettings.GetUpdateProxyUrl();
         UserSettings.SetUpdateProxyUrl(_updateProxyUrl);
         UpdateService.SetManualProxyUrl(_updateProxyUrl);
-        AuditLog.LogConfigurationChange("Settings", "updated", "Update proxy URL");
+        AuditLog.LogConfigurationChange("Settings", "updated", oldProxy, _updateProxyUrl, ReviewerName);
         Toast.ShowSuccess(string.IsNullOrWhiteSpace(_updateProxyUrl)
             ? "Proxy cleared — using system proxy settings."
             : $"Proxy saved: {_updateProxyUrl}");
@@ -384,6 +508,8 @@ public partial class Settings
     {
         try
         {
+            var oldHeavy = UserSettings.GetMaxHeavyConcurrent();
+            var oldLight = UserSettings.GetMaxLightConcurrent();
             UserSettings.SetMaxHeavyConcurrent(_maxHeavy);
             UserSettings.SetMaxLightConcurrent(_maxLight);
 
@@ -397,7 +523,10 @@ public partial class Settings
             {
                 _concurrencyMessage = $"Settings saved. Restart may be required to apply new limits. Error: {ex.Message}";
             }
-            AuditLog.LogConfigurationChange("Settings", "updated", $"Concurrency: Heavy={_maxHeavy}, Light={_maxLight}");
+            AuditLog.LogConfigurationChange("Settings", "updated",
+                $"Concurrency: Heavy={oldHeavy}, Light={oldLight}",
+                $"Concurrency: Heavy={_maxHeavy}, Light={_maxLight}",
+                ReviewerName);
         }
         catch (Exception ex)
         {
@@ -624,8 +753,9 @@ public partial class Settings
 
     private void SaveDefaultDashboard()
     {
+        var oldDashboard = UserSettings.GetDefaultDashboardId();
         UserSettings.SetDefaultDashboardId(DefaultDashboardId);
-        AuditLog.LogConfigurationChange("Settings", "updated", $"DefaultDashboard={DefaultDashboardId}");
+        AuditLog.LogConfigurationChange("Settings", "updated", $"DefaultDashboard={oldDashboard}", $"DefaultDashboard={DefaultDashboardId}", ReviewerName);
         DashboardSaveResult = "Default dashboard saved successfully";
         StateHasChanged();
     }
@@ -895,6 +1025,8 @@ public partial class Settings
     private string _newUserRole = AppRoles.Viewer;
     private string? _rbacMessage;
     private bool _rbacSuccess;
+    private int _rbacUsersNeedingReview;
+    private int _accessReviewDays = 90;
 
     private void LoadRbacSettings()
     {
@@ -910,12 +1042,24 @@ public partial class Settings
         _rbacMsDomain = cfg.Microsoft.AllowedDomain;
         // Secrets: never pre-populate — leave blank (placeholder shows "(unchanged)")
         _rbacUsers = RbacService.GetUsers();
+
+        // SOC2 CC6.3: compute stale-review count
+        _accessReviewDays = Configuration.GetValue<int>("Rbac:AccessReviewDays", 90);
+        var reviewCutoff = DateTime.UtcNow.AddDays(-_accessReviewDays);
+        _rbacUsersNeedingReview = _rbacUsers.Count(u =>
+            !u.LastReviewedAt.HasValue || u.LastReviewedAt.Value < reviewCutoff);
     }
 
     private void SaveRbacConfig()
     {
         var existing = RbacService.Config;
-        RbacService.UpdateConfig(new RbacConfig
+        // Capture old values before mutating (CC8.2 prior-value capture).
+        // Secrets are intentionally omitted from the audit record.
+        var oldSummary = $"Enabled={existing.Enabled},RequireExplicit={existing.RequireExplicitAccess},DefaultRole={existing.DefaultRole}," +
+                         $"GoogleEnabled={existing.Google.Enabled},GoogleClientId={existing.Google.ClientId},GoogleDomain={existing.Google.AllowedDomain}," +
+                         $"MsEnabled={existing.Microsoft.Enabled},MsClientId={existing.Microsoft.ClientId},MsDomain={existing.Microsoft.AllowedDomain}";
+
+        var newConfig = new RbacConfig
         {
             Enabled = _rbacEnabled,
             RequireExplicitAccess = _rbacRequireExplicit,
@@ -939,8 +1083,13 @@ public partial class Settings
                                     : _rbacMsClientSecret,
                 AllowedDomain = _rbacMsDomain,
             },
-        });
-        AuditLog.LogConfigurationChange("Settings", "updated", "RBAC/Access Control config");
+        };
+        RbacService.UpdateConfig(newConfig);
+
+        var newSummary = $"Enabled={_rbacEnabled},RequireExplicit={_rbacRequireExplicit},DefaultRole={_rbacDefaultRole}," +
+                         $"GoogleEnabled={_rbacGoogleEnabled},GoogleClientId={_rbacGoogleClientId},GoogleDomain={_rbacGoogleDomain}," +
+                         $"MsEnabled={_rbacMsEnabled},MsClientId={_rbacMsClientId},MsDomain={_rbacMsDomain}";
+        AuditLog.LogConfigurationChange("Settings", "updated", oldSummary, newSummary, ReviewerName);
     }
 
     private void SaveOAuthConfig()
@@ -950,23 +1099,35 @@ public partial class Settings
         _rbacSuccess = true;
     }
 
+    private string ReviewerName => UserState.Role == AppRoles.Admin
+        ? Environment.UserName
+        : UserState.Role;
+
     private void ChangeUserRole(RbacUser user, string role)
     {
+        var oldRole = user.Role;
         user.Role = role;
         RbacService.UpdateUser(user);
+        AuditLog.LogUserUpdated(ReviewerName, user.Email, "Role", oldRole, role);
         _rbacUsers = RbacService.GetUsers();
     }
 
     private void ToggleUserEnabled(RbacUser user, bool enabled)
     {
+        var oldEnabled = user.Enabled.ToString();
         user.Enabled = enabled;
         RbacService.UpdateUser(user);
+        AuditLog.LogUserUpdated(ReviewerName, user.Email, "Enabled", oldEnabled, enabled.ToString());
         _rbacUsers = RbacService.GetUsers();
     }
 
     private void RemoveRbacUser(string id)
     {
+        var existing = _rbacUsers.FirstOrDefault(u => u.Id == id);
+        var formerRole = existing?.Role ?? string.Empty;
+        var userName = existing?.Email ?? id;
         RbacService.RemoveUser(id);
+        AuditLog.LogUserRemoved(ReviewerName, userName, formerRole);
         _rbacUsers = RbacService.GetUsers();
     }
 
@@ -979,15 +1140,79 @@ public partial class Settings
             _rbacSuccess = false;
             return;
         }
+        var emailToAdd = _newUserEmail.Trim();
+        var roleToAdd = _newUserRole;
         RbacService.AddUser(new RbacUser
         {
-            Email = _newUserEmail.Trim(),
-            Role = _newUserRole,
+            Email = emailToAdd,
+            Role = roleToAdd,
         });
+        AuditLog.LogUserAdded(ReviewerName, emailToAdd, roleToAdd);
         _newUserEmail = string.Empty;
         _rbacUsers = RbacService.GetUsers();
         _rbacMessage = "User added.";
         _rbacSuccess = true;
+    }
+
+    // SOC2 CC6.3 ─────────────────────────────────────────────────────────
+
+    private void MarkUserAccessReviewed(RbacUser user)
+    {
+        user.LastReviewedAt  = DateTime.UtcNow;
+        user.LastReviewedBy  = ReviewerName;
+        RbacService.UpdateUser(user);
+        AuditLog.LogUserAccessReviewed(user.Email, ReviewerName);
+
+        _rbacUsers = RbacService.GetUsers();
+
+        // Recompute banner count
+        var reviewCutoff = DateTime.UtcNow.AddDays(-_accessReviewDays);
+        _rbacUsersNeedingReview = _rbacUsers.Count(u =>
+            !u.LastReviewedAt.HasValue || u.LastReviewedAt.Value < reviewCutoff);
+    }
+
+    private void ExportAccessReviewReport()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("user_name,role,last_reviewed_at,last_reviewed_by,days_since_review,status");
+
+        var now = DateTime.UtcNow;
+        foreach (var u in _rbacUsers)
+        {
+            string lastReviewedAt = u.LastReviewedAt.HasValue
+                ? u.LastReviewedAt.Value.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                : string.Empty;
+            string lastReviewedBy = u.LastReviewedBy ?? string.Empty;
+            string daysSince = u.LastReviewedAt.HasValue
+                ? ((int)(now - u.LastReviewedAt.Value).TotalDays).ToString()
+                : string.Empty;
+            string status = (!u.LastReviewedAt.HasValue)
+                ? "NEVER_REVIEWED"
+                : (now - u.LastReviewedAt.Value).TotalDays > _accessReviewDays ? "OVERDUE" : "OK";
+
+            sb.AppendLine($"{CsvField(u.Email)},{CsvField(u.Role)},{lastReviewedAt},{CsvField(lastReviewedBy)},{daysSince},{status}");
+        }
+
+        var downloadsDir = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+        var exportDir    = System.IO.Path.Combine(downloadsDir, "Downloads");
+        if (!System.IO.Directory.Exists(exportDir))
+            exportDir = AppDomain.CurrentDomain.BaseDirectory;
+
+        var fileName = $"AccessReviewReport_{now:yyyyMMdd_HHmmssZ}.csv";
+        var filePath = System.IO.Path.Combine(exportDir, fileName);
+        System.IO.File.WriteAllText(filePath, sb.ToString(), System.Text.Encoding.UTF8);
+
+        AuditLog.LogAccessReviewExported(ReviewerName, filePath);
+
+        _rbacMessage = $"Report saved: {filePath}";
+        _rbacSuccess = true;
+    }
+
+    private static string CsvField(string value)
+    {
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        return value;
     }
 
     private void ValidateConfig()
@@ -1158,6 +1383,9 @@ public partial class Settings
         _azureResult = null;
         try
         {
+            // Capture old Azure config before any mutations (CC8.2 prior-value capture; credentials omitted).
+            var oldAzureSummary = $"AuthMode={BlobExport.AuthMode},Container={BlobExport.ContainerName},Method={BlobExport.UploadMethod},Compress={BlobExport.CompressUploads},AutoUpload={BlobExport.AutoUploadCsvs}";
+
             // null = keep existing credential, empty string = clear it
             string? connStr = _azureAuthMode == "connectionstring"
                 ? (string.IsNullOrWhiteSpace(_azureConnStr) && _hasExistingAzureConnStr ? null : _azureConnStr)
@@ -1179,7 +1407,8 @@ public partial class Settings
 
             _azureSuccess = true;
             _azureResult = "Azure Blob configuration saved (credentials encrypted).";
-            AuditLog.LogConfigurationChange("Settings", "updated", "Azure Blob Export config");
+            var newAzureSummary = $"AuthMode={_azureAuthMode},Container={_azureContainer},Method={_azureUploadMethod},Compress={_azureCompress},AutoUpload={_azureAutoUpload}";
+            AuditLog.LogConfigurationChange("Settings", "updated", oldAzureSummary, newAzureSummary, ReviewerName);
         }
         catch (Exception ex)
         {

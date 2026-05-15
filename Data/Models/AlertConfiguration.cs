@@ -433,5 +433,11 @@ namespace SQLTriage.Data.Models
         public DateTime? AcknowledgedAt { get; set; }
         public DateTime? ResolvedAt { get; set; }
         public string Message { get; set; } = string.Empty;
+        // IR-5: incident lifecycle
+        /// <summary>open | acknowledged | root_caused | closed</summary>
+        public string IncidentState { get; set; } = "open";
+        public DateTime? IncidentStateUpdatedAt { get; set; }
+        public string? IncidentStateUpdatedBy { get; set; }
+        public string? IncidentNotes { get; set; }
     }
 }

@@ -63,6 +63,14 @@ namespace SQLTriage.Data.Models
         /// <summary>Argon2id hash for local password authentication.</summary>
         [JsonPropertyName("passwordHash")]
         public string? PasswordHash { get; set; }
+
+        /// <summary>SOC2 CC6.3: when an admin last reviewed this user's access. Null = never reviewed.</summary>
+        [JsonPropertyName("lastReviewedAt")]
+        public DateTime? LastReviewedAt { get; set; }
+
+        /// <summary>SOC2 CC6.3: display name of the reviewer who last reviewed this user's access.</summary>
+        [JsonPropertyName("lastReviewedBy")]
+        public string? LastReviewedBy { get; set; }
     }
 
     /// <summary>

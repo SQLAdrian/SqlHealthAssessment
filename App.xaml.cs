@@ -262,6 +262,13 @@ namespace SQLTriage
             // Log application start for audit trail
             var auditLog = Services.GetService<AuditLogService>();
             auditLog?.LogApplicationStart();
+
+            // L4: CM-3 — config baseline drift check (informational; never blocks startup)
+            _ = Task.Run(() => Services.GetService<Data.Services.ConfigBaselineService>()?.RunStartupCheck());
+
+            // L2: A1.2 — resolve UptimeTrackerService singleton so it writes session_start immediately
+            _ = Services.GetService<Data.Services.UptimeTrackerService>();
+
             Log.Information("Application started successfully");
             Log.Information("[STARTUP] All services started - entering UI phase");
 

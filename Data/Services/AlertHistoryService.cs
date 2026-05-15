@@ -1,6 +1,8 @@
 /* In the name of God, the Merciful, the Compassionate */
 
+using System;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data;
@@ -12,6 +14,7 @@ namespace SQLTriage.Data.Services
     /// <summary>
     /// Persists alert history to a local SQLite database (alert-history.db).
     /// Supports insert, update, query by date range, and automatic purge of records older than retention period.
+    /// IR-5: includes incident lifecycle columns (state, state_updated_utc, state_updated_by, incident_notes).
     /// </summary>
     public class AlertHistoryService : IDisposable
     {
@@ -19,14 +22,18 @@ namespace SQLTriage.Data.Services
         private readonly string _connectionString;
         private readonly System.Timers.Timer _purgeTimer;
         private readonly int _retentionDays;
+        private readonly AuditLogService? _audit;
 
-        public AlertHistoryService(ILogger<AlertHistoryService> logger, int retentionDays = 365)
+        public AlertHistoryService(ILogger<AlertHistoryService> logger, int retentionDays = 365,
+            AuditLogService? audit = null)
         {
             _logger = logger;
             _retentionDays = retentionDays;
+            _audit = audit;
             var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "alert-history.db");
             _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
             InitializeSchema();
+            MigrateIncidentColumns();
 
             // Purge old records once a day
             _purgeTimer = new System.Timers.Timer(TimeSpan.FromHours(24).TotalMilliseconds);
@@ -78,6 +85,103 @@ namespace SQLTriage.Data.Services
                 _logger.LogError(ex, "Failed to initialize alert history database");
             }
         }
+
+        // ── IR-5 migration ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Idempotent migration: adds incident lifecycle columns if they do not yet exist.
+        /// SQLite silently ignores ADD COLUMN for an existing column in older versions, but
+        /// some builds throw — we catch "duplicate column" to stay idempotent.
+        /// </summary>
+        private void MigrateIncidentColumns()
+        {
+            var columns = new[]
+            {
+                ("state",             "TEXT NOT NULL DEFAULT 'open'"),
+                ("state_updated_utc", "TEXT"),
+                ("state_updated_by",  "TEXT"),
+                ("incident_notes",    "TEXT"),
+            };
+
+            try
+            {
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
+                foreach (var (col, def) in columns)
+                {
+                    try
+                    {
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $"ALTER TABLE alert_history ADD COLUMN {col} {def}";
+                        cmd.ExecuteNonQuery();
+                    }
+                    catch (SqliteException ex) when (
+                        ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase) ||
+                        ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Column already present — idempotent, continue.
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[IR-5] Incident column migration failed; lifecycle features disabled");
+            }
+        }
+
+        // ── IR-5: Incident lifecycle ──────────────────────────────────────────────
+
+        /// <summary>Marks an alert as acknowledged (IR-5).</summary>
+        public async Task AcknowledgeAsync(long alertId, string user)
+            => await SetIncidentStateAsync(alertId, "acknowledged", user, notes: null);
+
+        /// <summary>Marks an alert as root-caused with optional notes (IR-5).</summary>
+        public async Task MarkRootCausedAsync(long alertId, string user, string? notes = null)
+            => await SetIncidentStateAsync(alertId, "root_caused", user, notes);
+
+        /// <summary>Closes an incident with optional notes (IR-5).</summary>
+        public async Task CloseAsync(long alertId, string user, string? notes = null)
+            => await SetIncidentStateAsync(alertId, "closed", user, notes);
+
+        private async Task SetIncidentStateAsync(long alertId, string newState, string user, string? notes)
+        {
+            try
+            {
+                // Fetch alert name for the audit record before updating.
+                string alertName;
+                using (var conn = SqliteCipherHelper.OpenEncrypted(_connectionString))
+                {
+                    using var nameCmd = conn.CreateCommand();
+                    nameCmd.CommandText = "SELECT alert_name FROM alert_history WHERE id = @id";
+                    nameCmd.Parameters.AddWithValue("@id", alertId);
+                    alertName = nameCmd.ExecuteScalar()?.ToString() ?? alertId.ToString();
+                }
+
+                using var writeConn = SqliteCipherHelper.OpenEncrypted(_connectionString);
+                using var cmd = writeConn.CreateCommand();
+                cmd.CommandText = @"
+                    UPDATE alert_history
+                    SET state             = @state,
+                        state_updated_utc = @now,
+                        state_updated_by  = @user,
+                        incident_notes    = COALESCE(@notes, incident_notes)
+                    WHERE id = @id";
+                cmd.Parameters.AddWithValue("@id",    alertId);
+                cmd.Parameters.AddWithValue("@state", newState);
+                cmd.Parameters.AddWithValue("@now",   DateTime.UtcNow.ToString("o"));
+                cmd.Parameters.AddWithValue("@user",  user);
+                cmd.Parameters.AddWithValue("@notes", (object?)notes ?? DBNull.Value);
+                await cmd.ExecuteNonQueryAsync();
+
+                _audit?.LogIncidentStateChanged(alertId, alertName, newState, user, notes);
+                _logger.LogInformation("[IR-5] Alert {Id} ({Name}) → {State} by {User}", alertId, alertName, newState, user);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[IR-5] Failed to set incident state for alert {Id}", alertId);
+            }
+        }
+
+        // ── End IR-5 ──────────────────────────────────────────────────────────────
 
         /// <summary>
         /// Inserts or updates an alert history record. If an Active/Acknowledged record exists
@@ -304,7 +408,7 @@ namespace SQLTriage.Data.Services
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
-                    records.Add(new AlertHistoryRecord
+                    var rec = new AlertHistoryRecord
                     {
                         Id = reader.GetInt64(reader.GetOrdinal("id")),
                         AlertId = reader.GetString(reader.GetOrdinal("alert_id")),
@@ -322,7 +426,22 @@ namespace SQLTriage.Data.Services
                         ResolvedAt = reader.IsDBNull(reader.GetOrdinal("resolved_at"))
                             ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("resolved_at"))),
                         Message = reader.GetString(reader.GetOrdinal("message"))
-                    });
+                    };
+                    // IR-5: read lifecycle columns if present (added by migration).
+                    try
+                    {
+                        var stateOrd = reader.GetOrdinal("state");
+                        rec.IncidentState = reader.IsDBNull(stateOrd) ? "open" : reader.GetString(stateOrd);
+                        var suOrd = reader.GetOrdinal("state_updated_utc");
+                        rec.IncidentStateUpdatedAt = reader.IsDBNull(suOrd)
+                            ? null : DateTime.Parse(reader.GetString(suOrd));
+                        var subOrd = reader.GetOrdinal("state_updated_by");
+                        rec.IncidentStateUpdatedBy = reader.IsDBNull(subOrd) ? null : reader.GetString(subOrd);
+                        var notesOrd = reader.GetOrdinal("incident_notes");
+                        rec.IncidentNotes = reader.IsDBNull(notesOrd) ? null : reader.GetString(notesOrd);
+                    }
+                    catch { /* columns not yet migrated — leave defaults */ }
+                    records.Add(rec);
                 }
             }
             catch (Exception ex)

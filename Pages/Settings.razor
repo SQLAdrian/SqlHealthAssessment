@@ -27,6 +27,8 @@
 @inject SQLTriage.Data.Services.CacheMetricsService CacheMetrics
 @inject SQLTriage.Data.Scheduling.IQueryOrchestrator QueryOrchestrator
 @inject AuditLogService AuditLog
+@inject SQLTriage.Data.Services.UptimeTrackerService UptimeTracker
+@inject SQLTriage.Data.Services.ConfigBaselineService ConfigBaselineSvc
 
 @if (!RbacService.HasPermission(UserState.Role, "settings"))
 {
@@ -76,6 +78,13 @@
                 <a href="#set-azure-blob">Azure Blob Export</a>
                 <a href="#set-auto-export">Auto-Export Reports</a>
                 <a href="#set-preview">Preview Features</a>
+            </div>
+            <div class="settings-rail-group">
+                <div class="settings-rail-heading">Compliance</div>
+                <a href="#set-uptime">Uptime / Availability</a>
+                <a href="#set-continuity">Continuity Posture</a>
+                <a href="#set-config-baseline">Config Baseline</a>
+                <a href="#set-hmac-rotation">Audit Key Rotation</a>
             </div>
         </nav>
 
@@ -913,6 +922,31 @@
 
             <!-- User list -->
             <h4 style="margin:0 0 8px;font-size:13px;color:var(--text-primary);">Users</h4>
+
+            @* SOC2 CC6.3 — access review banner *@
+            @if (_rbacUsersNeedingReview > 0)
+            {
+                <div style="display:flex;align-items:center;gap:10px;background:var(--bg-warning,rgba(255,180,0,0.12));border:1px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:10px;">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:var(--orange);"></i>
+                    <span style="font-size:12px;color:var(--text-primary);flex:1;">
+                        <strong>@_rbacUsersNeedingReview user(s)</strong> have not been reviewed in @_accessReviewDays days.
+                    </span>
+                    <button class="btn-secondary" style="font-size:12px;white-space:nowrap;" @onclick="ExportAccessReviewReport">
+                        <i class="fa-solid fa-file-csv" style="margin-right:4px;"></i>Export access-review report
+                    </button>
+                </div>
+            }
+            else if (_rbacUsers.Count > 0)
+            {
+                <div style="display:flex;align-items:center;gap:10px;background:var(--bg-success,rgba(0,180,80,0.08));border:1px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:10px;">
+                    <i class="fa-solid fa-circle-check" style="color:var(--green);"></i>
+                    <span style="font-size:12px;color:var(--text-primary);flex:1;">All users reviewed within @_accessReviewDays days.</span>
+                    <button class="btn-secondary" style="font-size:12px;white-space:nowrap;" @onclick="ExportAccessReviewReport">
+                        <i class="fa-solid fa-file-csv" style="margin-right:4px;"></i>Export access-review report
+                    </button>
+                </div>
+            }
+
             @if (_rbacUsers.Count == 0)
             {
                 <p style="color:var(--text-muted);font-size:12px;">No users yet. Users are added automatically on first login.</p>
@@ -927,7 +961,8 @@
                             <th style="text-align:left;padding:4px 8px 6px;">Provider</th>
                             <th style="text-align:left;padding:4px 8px 6px;">Role</th>
                             <th style="text-align:left;padding:4px 8px 6px;">Enabled</th>
-                            <th style="text-align:left;padding:4px 0 6px 8px;">Last Login</th>
+                            <th style="text-align:left;padding:4px 8px 6px;">Last Login</th>
+                            <th style="text-align:left;padding:4px 8px 6px;">Last Reviewed</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -966,7 +1001,15 @@
                                 <td style="padding:5px 0 5px 8px;color:var(--text-muted);">
                                     @(u.LastLogin.HasValue ? u.LastLogin.Value.ToString("yyyy-MM-dd HH:mm") : "—")
                                 </td>
-                                <td style="padding:5px 0 5px 6px;">
+                                <td style="padding:5px 8px;color:var(--text-muted);"
+                                    title="@(u.LastReviewedBy != null ? $"Reviewed by {u.LastReviewedBy}" : "")">
+                                    @(u.LastReviewedAt.HasValue ? u.LastReviewedAt.Value.ToString("yyyy-MM-dd") : "Never")
+                                </td>
+                                <td style="padding:5px 0 5px 6px;white-space:nowrap;">
+                                    <button class="btn-icon" title="Mark access reviewed"
+                                            @onclick="() => MarkUserAccessReviewed(u)">
+                                        <i class="fa-solid fa-clipboard-check"></i>
+                                    </button>
                                     <button class="btn-icon" title="Remove user" style="color:var(--error,#e05252);"
                                             @onclick="() => RemoveRbacUser(u.Id)">
                                         <i class="fa-solid fa-trash"></i>
@@ -1062,6 +1105,122 @@
         </div>
     }
 
+    @* ── L2: A1.2 — Uptime / Availability ── *@
+    <div class="settings-group" id="set-uptime">
+        <h3>Uptime / Availability <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(A1.2)</span></h3>
+        <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">
+            Session heartbeats are persisted every 5 minutes to <code>Data/Caching/uptime.db</code>.
+            Use this panel to compute and export a 30-day availability percentage for SLA evidence.
+        </p>
+        <div class="settings-row">
+            <label class="settings-label">30-day uptime</label>
+            <span style="font-size:13px;color:var(--text-primary);">
+                @(_uptimePercent30d.HasValue ? $"{_uptimePercent30d.Value:F2}%" : "Click Compute")
+            </span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <button class="settings-btn" @onclick="ComputeUptime30d">Compute 30-day uptime</button>
+            <button class="settings-btn" @onclick="ExportUptimeSnapshot"
+                    disabled="@(!_uptimePercent30d.HasValue)">
+                Export snapshot (CSV)
+            </button>
+        </div>
+        @if (_uptimeMessage != null)
+        {
+            <p style="margin-top:8px;font-size:12px;color:@(_uptimeSuccess ? "var(--green)" : "var(--red)");">@_uptimeMessage</p>
+        }
+    </div>
+
+    @* ── L3: CP-2 — Continuity Posture ── *@
+    <div class="settings-group" id="set-continuity">
+        <h3>Continuity Posture <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(CP-2)</span></h3>
+        <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">
+            Evidence framework for RPO/RTO targets and DR testing. Values are read from
+            <code>appsettings.json → Continuity</code>. Set them per buyer contract.
+        </p>
+        <div class="settings-row">
+            <label class="settings-label">RPO (minutes)</label>
+            @{
+                var rpo = Configuration.GetValue<int>("Continuity:RecoveryPointObjectiveMinutes", 0);
+                var rto = Configuration.GetValue<int>("Continuity:RecoveryTimeObjectiveMinutes", 0);
+                var lastDr = Configuration["Continuity:LastDrTestDate"];
+            }
+            <span style="font-size:13px;color:@(rpo == 0 ? "var(--orange)" : "var(--text-primary)");">
+                @(rpo == 0 ? "Not set — TODO: Adrian" : rpo.ToString())
+            </span>
+        </div>
+        <div class="settings-row">
+            <label class="settings-label">RTO (minutes)</label>
+            <span style="font-size:13px;color:@(rto == 0 ? "var(--orange)" : "var(--text-primary)");">
+                @(rto == 0 ? "Not set — TODO: Adrian" : rto.ToString())
+            </span>
+        </div>
+        <div class="settings-row">
+            <label class="settings-label">Last DR test</label>
+            <span style="font-size:13px;color:var(--text-primary);">
+                @(string.IsNullOrWhiteSpace(lastDr) ? "Never recorded" : lastDr)
+            </span>
+        </div>
+        <button class="settings-btn" style="margin-top:8px;" @onclick="RecordDrTest">
+            Mark DR test complete (today)
+        </button>
+        @if (_drTestMessage != null)
+        {
+            <p style="margin-top:8px;font-size:12px;color:var(--green);">@_drTestMessage</p>
+        }
+    </div>
+
+    @* ── L4: CM-3 — Configuration Baseline ── *@
+    <div class="settings-group" id="set-config-baseline">
+        <h3>Configuration Baseline <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(CM-3)</span></h3>
+        <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">
+            SHA-256 hashes of <code>appsettings.json</code> + <code>Config/*.json</code> are snapshotted at install
+            and compared on every startup. Drift is logged as a Warning audit event.
+        </p>
+        @if (ConfigBaselineSvc != null && ConfigBaselineSvc.DriftDetected)
+        {
+            <div style="background:rgba(255,140,0,0.1);border:1px solid var(--orange);border-radius:6px;padding:10px 12px;margin-bottom:12px;">
+                <strong style="color:var(--orange);">Configuration drift detected</strong>
+                <ul style="margin:6px 0 0 16px;font-size:12px;color:var(--text-secondary);">
+                    @foreach (var f in ConfigBaselineSvc.DriftedFiles)
+                    {
+                        <li>@f</li>
+                    }
+                </ul>
+            </div>
+        }
+        else if (ConfigBaselineSvc != null)
+        {
+            <p style="font-size:12px;color:var(--green);margin-bottom:12px;">No drift — configuration matches baseline.</p>
+        }
+        <button class="settings-btn" @onclick="() => _showRebaselineConfirm = true">
+            Re-baseline (accept current state)
+        </button>
+        @if (_rebaselineMessage != null)
+        {
+            <p style="margin-top:8px;font-size:12px;color:var(--green);">@_rebaselineMessage</p>
+        }
+    </div>
+
+    @* ── L6: AU-9 — Audit HMAC Key Rotation ── *@
+    <div class="settings-group" id="set-hmac-rotation">
+        <h3>Audit Key Rotation <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(AU-9 / SC-28)</span></h3>
+        <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">
+            The HMAC-SHA256 key securing the audit chain is DPAPI-wrapped at rest.
+            Key age is checked on startup; rotation is recommended every
+            <strong>@(Configuration.GetValue<int>("Audit:HmacKeyMaxAgeDays", 365)) days</strong>.
+            Rotation appends a chain-anchor entry — the chain is not broken.
+        </p>
+        <button class="settings-btn" style="background:var(--red);color:#fff;"
+                @onclick="() => _showRotateConfirm = true">
+            Rotate HMAC key (audit chain)
+        </button>
+        @if (_rotateMessage != null)
+        {
+            <p style="margin-top:8px;font-size:12px;color:@(_rotateSuccess ? "var(--green)" : "var(--red)");">@_rotateMessage</p>
+        }
+    </div>
+
     </div> @* /.settings-content *@
 </div> @* /.settings-layout *@
 
@@ -1145,6 +1304,47 @@
                 <i class="fa-solid fa-shield-halved" style="margin-right: 4px;"></i>
                 Account keys and full signatures are never shown. SAS signatures are truncated.
             </p>
+        </div>
+    </div>
+}
+
+@* ── L4: CM-3 Re-baseline Confirmation ── *@
+@if (_showRebaselineConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal" style="max-width: 480px;">
+            <h3><i class="fa-solid fa-shield-check" style="margin-right:6px;"></i> Re-baseline Configuration</h3>
+            <p style="color:var(--text-secondary);margin-bottom:16px;">
+                This will snapshot the current <code>appsettings.json</code> and <code>Config/*.json</code>
+                as the new baseline. Future drift will be measured against today's state.
+            </p>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="settings-btn" style="background:var(--bg-hover);" @onclick="() => _showRebaselineConfirm = false">Cancel</button>
+                <button class="settings-btn" style="background:var(--accent);" @onclick="ConfirmRebaseline">Accept &amp; Re-baseline</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── L6: AU-9 HMAC Rotation Confirmation ── *@
+@if (_showRotateConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal" style="max-width: 480px;">
+            <h3><i class="fa-solid fa-key" style="margin-right:6px;color:var(--red);"></i> Rotate HMAC Key</h3>
+            <p style="color:var(--text-secondary);margin-bottom:12px;">
+                A new HMAC key will be generated and DPAPI-wrapped. A chain-anchor entry
+                (<code>HmacKeyRotated</code>) is appended to the audit log — the chain is
+                <strong>not</strong> broken. All future entries are signed with the new key.
+            </p>
+            <p style="color:var(--orange);font-size:12px;margin-bottom:16px;">
+                <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>
+                This action cannot be undone. The old key is permanently replaced.
+            </p>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="settings-btn" style="background:var(--bg-hover);" @onclick="() => _showRotateConfirm = false">Cancel</button>
+                <button class="settings-btn" style="background:var(--red);color:#fff;" @onclick="ConfirmRotateHmacKey">Rotate Key</button>
+            </div>
         </div>
     </div>
 }

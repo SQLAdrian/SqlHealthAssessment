@@ -64,7 +64,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AlertingService>();
         services.AddSingleton<AlertDefinitionService>();
         services.AddSingleton<AlertTemplateService>();
-        services.AddSingleton<AlertHistoryService>();
+        services.AddSingleton<AlertHistoryService>(sp =>
+            new AlertHistoryService(
+                sp.GetRequiredService<ILogger<AlertHistoryService>>(),
+                retentionDays: 365,
+                audit: sp.GetService<AuditLogService>()));
         services.AddSingleton<AlertBaselineService>();
         services.AddSingleton<AlertEvaluationService>();
 
@@ -121,6 +125,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AdminAuthService>();
         services.AddSingleton<QuickCheckStateService>();
         services.AddSingleton<VulnerabilityAssessmentStateService>();
+
+        // ── Compliance / SOC2 services ──
+        services.AddSingleton<UptimeTrackerService>(sp =>
+            new UptimeTrackerService(
+                sp.GetRequiredService<ILogger<UptimeTrackerService>>(),
+                startTimer: true));
+        services.AddSingleton<ConfigBaselineService>(sp =>
+            new ConfigBaselineService(
+                sp.GetRequiredService<ILogger<ConfigBaselineService>>(),
+                sp.GetService<AuditLogService>()));
 
         // ── Audit / observability ──
         // CorrelationIdAccessor stores its value in an AsyncLocal (see class doc),
