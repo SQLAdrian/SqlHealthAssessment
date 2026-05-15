@@ -226,11 +226,22 @@
                                     @alert.Status
                                 </span>
                             </td>
-                            <td>
+                            <td style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
                                 @if (alert.Status == AlertStatus.Active)
                                 {
                                     <button class="settings-btn" style="font-size: 10px; padding: 2px 7px;"
                                             @onclick="() => AckOne(alert)">Ack</button>
+                                }
+                                @{
+                                    var _hr = _historyAlerts.FirstOrDefault(h =>
+                                        h.AlertId == alert.AlertId &&
+                                        h.ServerName.Equals(alert.ServerName, StringComparison.OrdinalIgnoreCase));
+                                }
+                                @if (_hr != null &&
+                                     (_hr.IncidentState == null || _hr.IncidentState == "open" || _hr.IncidentState == ""))
+                                {
+                                    <button class="settings-btn" style="font-size: 10px; padding: 2px 7px;"
+                                            @onclick="() => _ = AcknowledgeIR5(_hr)">Acknowledge</button>
                                 }
                             </td>
                         </tr>
@@ -299,6 +310,7 @@
     private List<ServerCard> _serverCards = new();
     private List<AlertState> _activeAlerts = new();
     private List<AlertHistoryRecord> _recentHistory = new();
+    private List<AlertHistoryRecord> _historyAlerts = new();
     private int _criticalCount;
     private int _warningCount;
 
@@ -350,6 +362,9 @@
         _criticalCount = _activeAlerts.Count(a => a.Severity is "Critical" or "High");
         _warningCount  = _activeAlerts.Count(a => a.Severity is "Warning" or "Medium");
 
+        // IR-5: active history records keyed by AlertId+ServerName for incident state lookup
+        _historyAlerts = History.GetActiveAlerts();
+
         // Recent history — resolved/acknowledged in last 24h
         _recentHistory = History.GetRecentHistory(100)
             .Where(r => r.Status != "Active"
@@ -377,6 +392,15 @@
         if (!RbacService.HasPermission(UserState.Role, "acknowledge_alerts"))
         { Toast.ShowWarning("Insufficient permissions. Operator role required."); return; }
         Engine.AcknowledgeAlert(alert.AlertId, alert.ServerName);
+        Refresh();
+    }
+
+    // IR-5: incident lifecycle acknowledge
+    private async Task AcknowledgeIR5(AlertHistoryRecord rec)
+    {
+        if (!RbacService.HasPermission(UserState.Role, "acknowledge_alerts"))
+        { Toast.ShowWarning("Insufficient permissions. Operator role required."); return; }
+        await History.AcknowledgeAsync(rec.Id, UserState.Role);
         Refresh();
     }
 
