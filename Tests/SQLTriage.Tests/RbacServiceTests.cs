@@ -130,12 +130,25 @@ namespace SQLTriage.Tests
         }
 
         [Fact]
-        public void HasPermission_RoleComparison_IsCaseSensitive()
+        public void HasPermission_RoleComparison_IsCaseInsensitive()
         {
-            // Role constants are lowercase. Document that mixing case breaks the match.
+            // Role match is normalised to lowercase — matches HasRole() and tolerates
+            // whatever casing the OAuth provider/cookie hands in.
             Assert.True(RbacService.HasPermission(AppRoles.Admin, "settings"));
-            Assert.False(RbacService.HasPermission("ADMIN", "settings"));
-            Assert.False(RbacService.HasPermission("Admin", "settings"));
+            Assert.True(RbacService.HasPermission("ADMIN", "settings"));
+            Assert.True(RbacService.HasPermission("Admin", "settings"));
+            Assert.False(RbacService.HasPermission("admin-typo", "settings"));
+        }
+
+        [Fact]
+        public void HasPermission_NullRole_DeniesEverythingExceptViewPermissions()
+        {
+            // null role is treated as empty string — matches no role constant,
+            // so only the universal view perms (which return true unconditionally)
+            // are allowed.
+            Assert.True(RbacService.HasPermission(null!, "view_dashboard"));
+            Assert.False(RbacService.HasPermission(null!, "settings"));
+            Assert.False(RbacService.HasPermission(null!, "execute_checks"));
         }
 
         // ── Argon2id password hashing ───────────────────────────────────
