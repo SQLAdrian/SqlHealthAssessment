@@ -36,10 +36,18 @@ namespace SQLTriage.Data.Services
         public event Action? OnConfigChanged;
 
         public RbacService(ILogger<RbacService> logger)
+            : this(logger,
+                   Path.Combine(AppContext.BaseDirectory, "Config", "rbac-config.json"),
+                   Path.Combine(AppContext.BaseDirectory, "Config", "rbac-users.json"))
+        {
+        }
+
+        // Test seam: lets callers point at arbitrary files (used by RbacServiceTests).
+        public RbacService(ILogger<RbacService> logger, string configPath, string usersPath)
         {
             _logger = logger;
-            _configPath = Path.Combine(AppContext.BaseDirectory, "Config", "rbac-config.json");
-            _usersPath = Path.Combine(AppContext.BaseDirectory, "Config", "rbac-users.json");
+            _configPath = configPath;
+            _usersPath = usersPath;
             LoadConfig();
             LoadUsers();
         }
