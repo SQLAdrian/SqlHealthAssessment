@@ -934,6 +934,58 @@
     "EffortHours": 0.0
   },
   {
+    "Id": "193",
+    "Name": "Detect tables with zero indexes — pure heaps that severely degrade performance",
+    "Description": "Checks for user tables with no indexes at all - pure heaps. Every query against a heap requires a full table scan regardless of what columns are in the WHERE clause. On large tables, this means SQL Server reads every page every time. It looks like these tables have never been reviewed for indexing. Creating a clustered index on the most-queried column will typically show immediate query plan improvement.",
+    "Category": "Performance",
+    "Severity": "High",
+    "SqlQuery": "DECLARE @ver INT, @heap_count INT, @result VARCHAR(10), @msg NVARCHAR(1000);\nSET @ver = CONVERT(INT, SERVERPROPERTY('ProductMajorVersion'));\nIF @ver < 10 BEGIN SELECT 'SKIP' AS result, CONCAT('Requires SQL Server 2008 (10.0) or later. Current: ',@ver) AS message; RETURN; END;\nSELECT @heap_count = COUNT(*) FROM sys.indexes WHERE object_id > 100 AND index_id = 0 AND type_desc = 'HEAP';\nIF @heap_count = 0 BEGIN SET @result = 'PASS'; SET @msg = 'All user tables have at least one index.'; END\nELSE BEGIN SET @result = 'FAIL'; SET @msg = CONCAT(@heap_count,' table(s) have no indexes (heaps). Create a clustered index for optimal performance.'); END\nSELECT @result AS result, @msg AS message;",
+    "ExpectedValue": 0,
+    "Enabled": true,
+    "RecommendedAction": "One or more tables have no indexes. Review each heap table for query patterns, then create a clustered index on the natural primary key or most-queried column. Use `SELECT OBJECT_NAME(object_id), object_id FROM sys.indexes WHERE index_id = 0 AND object_id > 100` to list them. Verify execution plans show seeks instead of scans after adding indexes.",
+    "Source": "YAML corpus",
+    "ExecutionType": "Binary",
+    "RowCountCondition": "Equals0",
+    "ResultInterpretation": "PassFailSkip",
+    "Priority": 1,
+    "SeverityScore": 3,
+    "ExpectedResult": "Returns PASS when all user tables have at least one index. Returns FAIL when any user table has no indexes.",
+    "FrameworkMappings": [
+      {
+        "framework": "NIST SP 800-53 Rev 5",
+        "control_id": "CM-6",
+        "control_name": "Configuration Settings",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "CIS Controls v8",
+        "control_id": "4.1",
+        "control_name": "Secure Configuration Process",
+        "mapping_type": "related"
+      }
+    ],
+    "ValidationSources": [
+      {
+        "source": "Microsoft Learn",
+        "url": "https://learn.microsoft.com/en-us/sql/relational-databases/indexes/heaps-tables-without-clustered-indexes",
+        "relevance_score": "High"
+      },
+      {
+        "source": "Coeo",
+        "url": "https://www.coeo.com/2026/02/sql-server-indexing-101-why-everything-feels-so-slow/",
+        "relevance_score": "Medium"
+      },
+      {
+        "source": "SQLYARD",
+        "url": "https://sqlyard.com/2025/11/05/understanding-heaps-in-sql-server-troubleshooting-tuning-and-when-to-rebuild-or-index/",
+        "relevance_score": "Medium"
+      }
+    ],
+    "BusinessTranslation": "",
+    "EffortEstimate": "",
+    "EffortHours": 0.0
+  },
+  {
     "Id": "196",
     "Name": "Detect duplicate indexes (same key columns) — waste storage, memory, and write performance",
     "Description": "Checks for indexes with identical key column sets on the same table. Duplicate indexes give the query optimizer a choice with no benefit - every INSERT, UPDATE, and DELETE must maintain all copies, doubling or tripling write overhead for zero read gain. They also waste buffer pool memory keeping redundant B-trees warm. It looks like these accumulated over time from developers adding indexes without checking what already existed.",
@@ -1297,6 +1349,112 @@
         "source": "SQL Skills",
         "url": "https://www.sqlskills.com/blogs/",
         "relevance_score": "0.65"
+      }
+    ],
+    "BusinessTranslation": "",
+    "EffortEstimate": "",
+    "EffortHours": 0.0
+  },
+  {
+    "Id": "207",
+    "Name": "Enforce Strong Password Policies and Modern Authentication for SQL Logins",
+    "Description": "Verifies that SQL logins have CHECK_POLICY and CHECK_EXPIRATION enforced, and flags any login with a blank or trivially guessable password. SQL logins that bypass Windows password policy are the lowest-friction credential attack vector on mixed-mode servers.",
+    "Category": "Security",
+    "Severity": "High",
+    "SqlQuery": "DECLARE @no_pol INT, @result VARCHAR(10), @msg NVARCHAR(1000);\nSELECT @no_pol = COUNT(*) FROM sys.sql_logins WHERE is_policy_checked = 0;;\n\nIF @no_pol  = 0 BEGIN \nSET @result = 'PASS'; SET @msg = 'All SQL logins have password policy set'; END\nELSE BEGIN SET @result = 'FAIL'; SET @msg = CONCAT(@no_pol ,' SQL user(s) do not have password policy set'); END\nSELECT @result AS result, @msg AS message;",
+    "ExpectedValue": 0,
+    "Enabled": true,
+    "RecommendedAction": "Run ALTER LOGIN [name] WITH CHECK_POLICY = ON, CHECK_EXPIRATION = ON for every SQL login where either flag is off. Test for blank passwords using PWDCOMPARE. Logins that have no documented business need should be disabled or dropped.",
+    "Source": "YAML corpus",
+    "ExecutionType": "Binary",
+    "RowCountCondition": "Equals0",
+    "ResultInterpretation": "PassFail",
+    "Priority": 1,
+    "SeverityScore": 3,
+    "ExpectedResult": "PASS when all SQL logins have CHECK_POLICY and CHECK_EXPIRATION enabled and no blank passwords are detected. FAIL or WARN when policy gaps or blank passwords are found. Note - this check is currently a SKIP placeholder pending OPUS_REVIEW implementation.",
+    "FrameworkMappings": [
+      {
+        "framework": "NIST SP 800-53 Rev 5",
+        "control_id": "IA-2",
+        "control_name": "Identification and Authentication",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "NIST SP 800-53 Rev 5",
+        "control_id": "IA-5",
+        "control_name": "Authenticator Management",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "NIST SP 800-53 Rev 5",
+        "control_id": "AC-2",
+        "control_name": "Account Management",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "CIS Controls v8",
+        "control_id": "5.2",
+        "control_name": "Use Unique Passwords",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "CIS Controls v8",
+        "control_id": "5.3",
+        "control_name": "Disable Dormant Accounts",
+        "mapping_type": "related"
+      },
+      {
+        "framework": "CIS SQL Server Benchmark",
+        "control_id": "2.3",
+        "control_name": "Ensure CHECK_POLICY is enabled for all SQL logins",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "SOC 2 (2017 TSC)",
+        "control_id": "CC6.1",
+        "control_name": "Logical Access Security",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "PCI-DSS v4.0",
+        "control_id": "8.2",
+        "control_name": "User Authentication",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "PCI-DSS v4.0",
+        "control_id": "8.3",
+        "control_name": "User Authentication - Password Requirements",
+        "mapping_type": "direct_match"
+      },
+      {
+        "framework": "HIPAA",
+        "control_id": "164.312(d)",
+        "control_name": "Person or Entity Authentication",
+        "mapping_type": "related"
+      },
+      {
+        "framework": "ISO 27001:2022",
+        "control_id": "A.9.4",
+        "control_name": "System and Application Access Control",
+        "mapping_type": "direct_match"
+      }
+    ],
+    "ValidationSources": [
+      {
+        "source": "Microsoft Learn",
+        "url": "https://learn.microsoft.com/en-us/sql/relational-databases/security/securing-sql-server",
+        "relevance_score": "0.85"
+      },
+      {
+        "source": "NIST SP 800-63B",
+        "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+        "relevance_score": "0.88"
+      },
+      {
+        "source": "CIS Microsoft SQL Server Benchmark",
+        "url": "https://www.cisecurity.org/benchmark/microsoft_sql_server",
+        "relevance_score": "0.9"
       }
     ],
     "BusinessTranslation": "",
@@ -11857,77 +12015,6 @@
     "EffortHours": 0.0
   },
   {
-    "Id": "BLITZ_034",
-    "Name": "Database Corruption Detected",
-    "Description": "Database corruption has been detected via DBCC CHECKDB results stored in msdb or the default trace. Corruption can lead to data loss and application failures. Immediate investigation and restoration from a clean backup may be required.",
-    "Category": "Configuration",
-    "Severity": "Critical",
-    "SqlQuery": "SELECT CASE \nWHEN EXISTS (\n\nSELECT DISTINCT\n    34 AS CheckID ,\n    db.name ,\n    1 AS Priority ,\n    'Corruption' AS FindingsGroup ,\n    'Database Corruption Detected' AS Finding ,\n    'https://www.brentozar.com/go/repair' AS URL ,\n    ( 'Database mirroring has automatically repaired at least one corrupt page in the last 30 days. For more information, query the DMV sys.dm_db_mirroring_auto_page_repair.' ) AS Details\n    FROM (SELECT rp2.database_id, rp2.modification_time\n   FROM sys.dm_db_mirroring_auto_page_repair rp2\n   WHERE rp2.[database_id] not in (\n   SELECT db2.[database_id]\n   FROM sys.databases as db2\n   WHERE db2.[state] = 1\n   ) ) as rp\n    INNER JOIN master.sys.databases db ON rp.database_id = db.database_id\n    WHERE   rp.modification_time >= DATEADD(dd, -30, GETDATE())\n) THEN 1\n ELSE 0\nEND",
-    "ExpectedValue": 0,
-    "Enabled": true,
-    "RecommendedAction": "Investigate the finding 'Database Corruption Detected' and address the root cause. Consult the recommendations in technical_details for specific remediation steps.",
-    "Source": "BLITZ_034",
-    "ExecutionType": "Scalar",
-    "RowCountCondition": "Auto",
-    "ResultInterpretation": "",
-    "Priority": 1,
-    "SeverityScore": 5,
-    "ExpectedResult": "Returns PASS when no instances of 'Database Corruption Detected' are detected. Returns FAIL or WARN when the condition exists and requires attention.",
-    "FrameworkMappings": [
-      {
-        "framework": "NIST SP 800-53 Rev 5",
-        "control_id": "CP-9",
-        "control_name": "System Backup",
-        "mapping_type": "direct_match"
-      },
-      {
-        "framework": "NIST SP 800-53 Rev 5",
-        "control_id": "CP-10",
-        "control_name": "System Recovery",
-        "mapping_type": "related"
-      },
-      {
-        "framework": "NIST SP 800-53 Rev 5",
-        "control_id": "CP-2",
-        "control_name": "Contingency Plan",
-        "mapping_type": "related"
-      },
-      {
-        "framework": "CIS Controls v8",
-        "control_id": "11.1",
-        "control_name": "Data Recovery",
-        "mapping_type": "direct_match"
-      },
-      {
-        "framework": "CIS SQL Server Benchmark",
-        "control_id": "7.1",
-        "control_name": "Automated backups enabled",
-        "mapping_type": "direct_match"
-      },
-      {
-        "framework": "SOC 2 (2017 TSC)",
-        "control_id": "A1.2",
-        "control_name": "System Operations",
-        "mapping_type": "related"
-      }
-    ],
-    "ValidationSources": [
-      {
-        "source": "Brent Ozar Unlimited",
-        "url": "https://www.brentozar.com/blitz/",
-        "relevance_score": "0.85"
-      },
-      {
-        "source": "SQLDBA.ORG",
-        "url": "https://github.com/SQLDBA-ORG/sqldba/",
-        "relevance_score": "0.8"
-      }
-    ],
-    "BusinessTranslation": "",
-    "EffortEstimate": "",
-    "EffortHours": 0.0
-  },
-  {
     "Id": "BLITZ_035",
     "Name": "Single-Use Plans in Procedure Cache",
     "Description": "Checks whether \"optimize for ad hoc workloads\" is disabled while a large number of single-use ad-hoc plans are sitting in the procedure cache. Each plan compiles once, is cached, and never runs again - wasting memory that SQL Server could use for data pages. It seems like this has never been looked at on most servers. The fix is a single sp_configure change and a cache flush.",
@@ -14561,7 +14648,7 @@
   {
     "Id": "BLITZ_090",
     "Name": "Database Corruption Detected",
-    "Description": "Additional database corruption evidence has been detected, typically from DBCC output stored in the default trace or error log. This check complements BLITZ_034 and may indicate corruption in different databases or objects.",
+    "Description": "Additional database corruption evidence has been detected, typically from DBCC output stored in the default trace or error log. This may indicate corruption in different databases or objects.",
     "Category": "Configuration",
     "Severity": "Critical",
     "SqlQuery": "SELECT CASE \nWHEN EXISTS (\n\nSELECT DISTINCT\n    90 AS CheckID ,\n    db.name ,\n    1 AS Priority ,\n    'Corruption' AS FindingsGroup ,\n    'Database Corruption Detected' AS Finding ,\n    'https://www.brentozar.com/go/repair' AS URL ,\n    ( 'SQL Server has detected at least one corrupt page in the last 30 days. For more information, query the system table msdb.dbo.suspect_pages.' ) AS Details\n    FROM    msdb.dbo.suspect_pages sp\n    INNER JOIN master.sys.databases db ON sp.database_id = db.database_id\n    WHERE   sp.last_update_date >= DATEADD(dd, -30, GETDATE())\n) THEN 1\n ELSE 0\nEND",
@@ -19117,53 +19204,6 @@
         "source": "Brent Ozar Unlimited",
         "url": "https://www.brentozar.com/archive/2017/03/breaking-news-suggested-maxdop-changed-sql-server-2016/",
         "relevance_score": "0.85"
-      }
-    ],
-    "BusinessTranslation": "",
-    "EffortEstimate": "",
-    "EffortHours": 0.0
-  },
-  {
-    "Id": "BLITZ_189",
-    "Name": "Missing Features",
-    "Description": "SQL Server is missing recommended features or configurations for its version. This may indicate that version-specific features that improve performance, security, or reliability have not been enabled or configured after installation.",
-    "Category": "Configuration",
-    "Severity": "Warning",
-    "SqlQuery": "SELECT CASE WHEN EXISTS(SELECT 1 FROM sys.dm_os_windows_info WHERE windows_release <> '10' AND windows_sku < 7) THEN 1 ELSE 0 END",
-    "ExpectedValue": 0,
-    "Enabled": true,
-    "RecommendedAction": "Investigate the finding 'Missing Features' and address the root cause. Consult the recommendations in technical_details for specific remediation steps.",
-    "Source": "BLITZ_189",
-    "ExecutionType": "Scalar",
-    "RowCountCondition": "Auto",
-    "ResultInterpretation": "",
-    "Priority": 1,
-    "SeverityScore": 1,
-    "ExpectedResult": "Returns PASS when no instances of 'Missing Features' are detected. Returns FAIL or WARN when the condition exists and requires attention.",
-    "FrameworkMappings": [
-      {
-        "framework": "NIST SP 800-53 Rev 5",
-        "control_id": "CM-6",
-        "control_name": "Configuration Settings",
-        "mapping_type": "direct_match"
-      },
-      {
-        "framework": "NIST SP 800-53 Rev 5",
-        "control_id": "CP-2",
-        "control_name": "Contingency Plan",
-        "mapping_type": "related"
-      }
-    ],
-    "ValidationSources": [
-      {
-        "source": "Brent Ozar Unlimited",
-        "url": "https://www.brentozar.com/blitz/",
-        "relevance_score": "0.85"
-      },
-      {
-        "source": "SQLDBA.ORG",
-        "url": "https://github.com/SQLDBA-ORG/sqldba/",
-        "relevance_score": "0.8"
       }
     ],
     "BusinessTranslation": "",
@@ -45593,6 +45633,42 @@
         "relevance_score": "0.8"
       }
     ],
+    "BusinessTranslation": "",
+    "EffortEstimate": "",
+    "EffortHours": 0.0
+  },
+  {
+    "Id": "WAIT_001",
+    "Name": "Top Wait Stats Categories — Performance Health Snapshot",
+    "Description": "Categorizes current wait statistics into actionable performance groups. Shows which resource (Disk I/O, Locking, CPU, Memory) is the dominant bottleneck affecting query throughput. A single sentence verdict tells the IT Manager what needs attention.",
+    "Category": "Performance",
+    "Severity": "High",
+    "SqlQuery": "SELECT TOP 1 0 AS result,\n  CASE\n    WHEN wait_type LIKE 'PAGEIOLATCH%' THEN 'Disk I/O'\n    WHEN wait_type LIKE 'LCK%' THEN 'Locking'\n    WHEN wait_type LIKE 'CXPACKET%' OR wait_type LIKE 'CXCONSUMER%' THEN 'Parallelism'\n    WHEN wait_type = 'WRITELOG' THEN 'Transaction Log'\n    WHEN wait_type LIKE 'SOS_SCHEDULER_YIELD' THEN 'CPU Pressure'\n    WHEN wait_type LIKE 'RESOURCE_SEMAPHORE%' OR wait_type LIKE 'MEMORY_ALLOCATION%' THEN 'Memory Pressure'\n    WHEN wait_type LIKE 'ASYNC_NETWORK_IO' THEN 'Network I/O'\n    WHEN wait_type LIKE 'LATCH%' THEN 'Latch Contention'\n    WHEN wait_type LIKE 'THREADPOOL' THEN 'Worker Thread Starvation'\n    WHEN wait_type LIKE 'PREEMPTIVE_OS%' THEN 'OS Preemptive Wait'\n    WHEN wait_type LIKE 'HADR%' THEN 'Replication/AG'\n    ELSE 'Other'\n  END + '|' + CAST(CAST(SUM(wait_time_ms) * 100.0 / SUM(SUM(wait_time_ms)) OVER () AS DECIMAL(5,1)) AS VARCHAR(20)) AS message\nFROM sys.dm_os_wait_stats\nWHERE wait_type NOT IN ('LAZYWRITER_SLEEP','LOGMGR_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','SQLTRACE_BUFFER_FLUSH','XE_TIMER_EVENT','SLEEP_TASK','SLEEP_SYSTEMTASK','SLEEP_BPOOL_FLUSH','CHECKPOINT_QUEUE','SERVER_IDLE_CHECK')\nAND wait_time_ms > 0\nGROUP BY\n  CASE\n    WHEN wait_type LIKE 'PAGEIOLATCH%' THEN 'Disk I/O'\n    WHEN wait_type LIKE 'LCK%' THEN 'Locking'\n    WHEN wait_type LIKE 'CXPACKET%' OR wait_type LIKE 'CXCONSUMER%' THEN 'Parallelism'\n    WHEN wait_type = 'WRITELOG' THEN 'Transaction Log'\n    WHEN wait_type LIKE 'SOS_SCHEDULER_YIELD' THEN 'CPU Pressure'\n    WHEN wait_type LIKE 'RESOURCE_SEMAPHORE%' OR wait_type LIKE 'MEMORY_ALLOCATION%' THEN 'Memory Pressure'\n    WHEN wait_type LIKE 'ASYNC_NETWORK_IO' THEN 'Network I/O'\n    WHEN wait_type LIKE 'LATCH%' THEN 'Latch Contention'\n    WHEN wait_type LIKE 'THREADPOOL' THEN 'Worker Thread Starvation'\n    WHEN wait_type LIKE 'PREEMPTIVE_OS%' THEN 'OS Preemptive Wait'\n    WHEN wait_type LIKE 'HADR%' THEN 'Replication/AG'\n    ELSE 'Other'\n  END\nORDER BY SUM(wait_time_ms) DESC",
+    "ExpectedValue": 0,
+    "Enabled": true,
+    "RecommendedAction": "Investigate the top wait category. Disk I/O > 30% suggests storage upgrade. Locking > 20% suggests query/index tuning. CPU > 40% suggests query optimization or hardware upgrade.",
+    "Source": "YAML corpus",
+    "ExecutionType": "Scalar",
+    "RowCountCondition": "Auto",
+    "ResultInterpretation": "",
+    "Priority": 1,
+    "SeverityScore": 3,
+    "ExpectedResult": "Returns the dominant wait category with percentage",
+    "FrameworkMappings": [
+      {
+        "framework": "NIST SP 800-53 Rev 5",
+        "control_id": "CP-2",
+        "control_name": "Contingency Plan",
+        "mapping_type": "related"
+      },
+      {
+        "framework": "SOC 2 (2017 TSC)",
+        "control_id": "A1.1",
+        "control_name": "Performance Monitoring",
+        "mapping_type": "direct_match"
+      }
+    ],
+    "ValidationSources": [],
     "BusinessTranslation": "",
     "EffortEstimate": "",
     "EffortHours": 0.0

@@ -1,5 +1,5 @@
 {
-  "_comment": "sp_Blitz CheckID to maturity category/level mapping. Exported from DiagnosticsRoadmap CategoryLevelMap + sql-checks.json. Edit this file to reclassify findings \u2014 do NOT commit if it contains confidential server/org info.",
+  "_comment": "sp_Blitz CheckID to maturity category/level mapping. Exported from DiagnosticsRoadmap CategoryLevelMap + sql-checks.json. Edit this file to reclassify findings — do NOT commit if it contains confidential server/org info.",
   "categoryLevelMap": {
     "Backup": 1,
     "Reliability": 1,
@@ -44,7 +44,7 @@
       "Roadmap": "Data Protection & Backup",
       "level": 1,
       "IsBad": 1,
-      "business_translation": "Detects databases in FULL or BULK_LOGGED recovery that have no transaction log backup in msdb.dbo.backupset. Without log backups the log chain is broken: point-in-time restore is impossible, and the log file grows unboundedly until disk space is exhausted. Schedule log backups every 15\u00e2\u20ac\u201c60 minutes depending on RPO requirement.",
+      "business_translation": "Detects databases in FULL or BULK_LOGGED recovery that have no transaction log backup in msdb.dbo.backupset. Without log backups the log chain is broken: point-in-time restore is impossible, and the log file grows unboundedly until disk space is exhausted. Schedule log backups every 15â€“60 minutes depending on RPO requirement.",
       "effort_estimate": "30 min",
       "related_finding_ids": [
         1,
@@ -444,7 +444,7 @@
       "Roadmap": "Monitoring",
       "level": 2,
       "IsBad": 1,
-      "business_translation": "msdb.dbo.sysalerts , not all recommended sp_Blitz alerts are configured. sp_Blitz recommends a baseline set of SQL Agent alerts covering: severity 17\u00e2\u20ac\u201c25, error 823 (I/O error), 824 (consistency error), 825 (read retry), 832 (corrupt page). Run sp_Blitz's alert setup script or Brent Ozar's 'sp_Blitz_Alerts' to configure the complete recommended alert set.",
+      "business_translation": "msdb.dbo.sysalerts , not all recommended sp_Blitz alerts are configured. sp_Blitz recommends a baseline set of SQL Agent alerts covering: severity 17â€“25, error 823 (I/O error), 824 (consistency error), 825 (read retry), 832 (corrupt page). Run sp_Blitz's alert setup script or Brent Ozar's 'sp_Blitz_Alerts' to configure the complete recommended alert set.",
       "effort_estimate": "30 min",
       "related_finding_ids": [
         59,
@@ -498,22 +498,6 @@
         3,
         4,
         5
-      ]
-    },
-    {
-      "checkId": 34,
-      "blitzId": "BLITZ_34",
-      "findingName": "Database Corruption Detected",
-      "category": "Reliability",
-      "Roadmap": "Configuration",
-      "level": 1,
-      "IsBad": 1,
-      "business_translation": "Reads msdb.dbo.suspect_pages (page_error_type > 0) or sys.databases where state_desc = 'SUSPECT'. A database in SUSPECT state is inaccessible. Causes: I/O subsystem failure, hardware fault, abrupt shutdown. Recovery path: restore from backup (preferred), or DBCC CHECKDB WITH REPAIR_ALLOW_DATA_LOSS (last resort , data loss accepted).",
-      "effort_estimate": "2 hr",
-      "related_finding_ids": [
-        14,
-        68,
-        89
       ]
     },
     {
@@ -883,7 +867,7 @@
       "Roadmap": "Monitoring",
       "level": 1,
       "IsBad": 1,
-      "business_translation": "msdb.dbo.sysalerts , no alert configured for severity 19\u00e2\u20ac\u201c25 errors. Severity 19 and above indicates serious server-level problems (resource exhaustion, access violations, fatal errors). Without alerts, DBAs discover these events in the error log after the fact. Configure alerts for all severity levels 19\u00e2\u20ac\u201c25.",
+      "business_translation": "msdb.dbo.sysalerts , no alert configured for severity 19â€“25 errors. Severity 19 and above indicates serious server-level problems (resource exhaustion, access violations, fatal errors). Without alerts, DBAs discover these events in the error log after the fact. Configure alerts for all severity levels 19â€“25.",
       "effort_estimate": "5 min",
       "related_finding_ids": [
         30,
@@ -992,7 +976,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         89
       ]
     },
@@ -1287,7 +1271,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -1303,7 +1287,6 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
         68
       ]
     },
@@ -1395,11 +1378,11 @@
       "Roadmap": "Monitoring",
       "level": 1,
       "IsBad": 1,
-      "business_translation": "msdb.dbo.sysalerts , checks whether alert 832 (Corrupt page) or 833 (I/O taking > 15 seconds) is configured. No corruption alerts means data integrity failures go undetected until they surface as application errors. Configure alerts for severity 19\u00e2\u20ac\u201c25 and error numbers 823, 824, 825 (I/O errors) and 832 (page corruption). Use Database Mail + operator to email the DBA team.",
+      "business_translation": "msdb.dbo.sysalerts , checks whether alert 832 (Corrupt page) or 833 (I/O taking > 15 seconds) is configured. No corruption alerts means data integrity failures go undetected until they surface as application errors. Configure alerts for severity 19â€“25 and error numbers 823, 824, 825 (I/O errors) and 832 (page corruption). Use Database Mail + operator to email the DBA team.",
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -1569,7 +1552,7 @@
       "Roadmap": "Performance",
       "level": 4,
       "IsBad": 1,
-      "business_translation": "sys.dm_os_wait_stats CXPACKET waits combined with cost threshold for parallelism = 5 (default). CXPACKET waits indicate parallel query execution with thread imbalance. The root fix is raising the cost threshold for parallelism (CTP) from 5 to 25\u00e2\u20ac\u201c50. Also check MAXDOP: set to number of physical cores per NUMA node (not total logical processors). Monitor via sys.dm_os_waiting_tasks WHERE wait_type = 'CXPACKET'.",
+      "business_translation": "sys.dm_os_wait_stats CXPACKET waits combined with cost threshold for parallelism = 5 (default). CXPACKET waits indicate parallel query execution with thread imbalance. The root fix is raising the cost threshold for parallelism (CTP) from 5 to 25â€“50. Also check MAXDOP: set to number of physical cores per NUMA node (not total logical processors). Monitor via sys.dm_os_waiting_tasks WHERE wait_type = 'CXPACKET'.",
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         121,
@@ -1674,7 +1657,7 @@
       "Roadmap": "Configuration",
       "level": 2,
       "IsBad": 1,
-      "business_translation": "sp_configure 'backup compression default' = 0. Backup compression is available on SQL 2008 Standard and above. Without compression, backups are larger (60\u00e2\u20ac\u201c80% larger typically), backup windows are longer, and storage costs are higher. Enable: sp_configure 'backup compression default', 1; RECONFIGURE.",
+      "business_translation": "sp_configure 'backup compression default' = 0. Backup compression is available on SQL 2008 Standard and above. Without compression, backups are larger (60â€“80% larger typically), backup windows are longer, and storage costs are higher. Enable: sp_configure 'backup compression default', 1; RECONFIGURE.",
       "effort_estimate": "30 min",
       "related_finding_ids": [
         1,
@@ -1690,7 +1673,7 @@
       "Roadmap": "Performance",
       "level": 3,
       "IsBad": 1,
-      "business_translation": "sys.dm_os_wait_stats RESOURCE_SEMAPHORE and RESOURCE_SEMAPHORE_QUERY_COMPILE waits. These waits appear when queries cannot obtain their requested memory grant , they wait in a queue. Causes: max server memory too low, single query consuming excessive memory grant, or too many concurrent parallel queries. Tune max server memory to leave 10\u00e2\u20ac\u201c15% for OS. Monitor sys.dm_exec_query_memory_grants for queued grants.",
+      "business_translation": "sys.dm_os_wait_stats RESOURCE_SEMAPHORE and RESOURCE_SEMAPHORE_QUERY_COMPILE waits. These waits appear when queries cannot obtain their requested memory grant , they wait in a queue. Causes: max server memory too low, single query consuming excessive memory grant, or too many concurrent parallel queries. Tune max server memory to leave 10â€“15% for OS. Monitor sys.dm_exec_query_memory_grants for queued grants.",
       "effort_estimate": "half day",
       "related_finding_ids": [
         50,
@@ -1738,7 +1721,7 @@
       "Roadmap": "Configuration impacting Performance",
       "level": 2,
       "IsBad": 1,
-      "business_translation": "Checks whether the SQL Server service account has the SE_MANAGE_VOLUME_NAME Windows privilege (Perform Volume Maintenance Tasks). Without IFI, every database file growth event must zero-fill the new space, causing long I/O stalls during autogrow. With IFI enabled, data file growth is instant. Enable via Windows Local Security Policy \u00e2\u2020\u2019 User Rights Assignment \u00e2\u2020\u2019 Perform volume maintenance tasks \u00e2\u2020\u2019 add the SQL Server service account. Does NOT apply to log files (always zero-filled for write-ahead logging safety).",
+      "business_translation": "Checks whether the SQL Server service account has the SE_MANAGE_VOLUME_NAME Windows privilege (Perform Volume Maintenance Tasks). Without IFI, every database file growth event must zero-fill the new space, causing long I/O stalls during autogrow. With IFI enabled, data file growth is instant. Enable via Windows Local Security Policy â†’ User Rights Assignment â†’ Perform volume maintenance tasks â†’ add the SQL Server service account. Does NOT apply to log files (always zero-filled for write-ahead logging safety).",
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         107,
@@ -1827,22 +1810,6 @@
       ]
     },
     {
-      "checkId": 127,
-      "blitzId": "BLITZ_127",
-      "findingName": "Cumulative Update Available",
-      "category": "Reliability",
-      "Roadmap": "Server Configuration",
-      "level": 2,
-      "IsBad": 0,
-      "business_translation": "Compares @@VERSION against the latest known CU for the installed release. A newer CU is available. CUs contain cumulative bug fixes and may include security patches. Test in a lower environment first. Establish a regular patching cadence.",
-      "effort_estimate": "30 min",
-      "related_finding_ids": [
-        6,
-        10,
-        12
-      ]
-    },
-    {
       "checkId": 128,
       "blitzId": "BLITZ_128",
       "findingName": "SQL Server Version Out of Support",
@@ -1870,7 +1837,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -2193,7 +2160,7 @@
       "Roadmap": "Configuration",
       "level": 4,
       "IsBad": 1,
-      "business_translation": "Reads sys.dm_os_ring_buffers WHERE ring_buffer_type = 'RING_BUFFER_EXCEPTION' and the SQL Server error log via xp_readerrorlog for severity >= 17 errors. Recent high-severity errors (errors 17\u00e2\u20ac\u201c25) indicate resource exhaustion or internal failures. Investigate via SELECT * FROM sys.dm_os_ring_buffers WHERE ring_buffer_type = 'RING_BUFFER_EXCEPTION'.",
+      "business_translation": "Reads sys.dm_os_ring_buffers WHERE ring_buffer_type = 'RING_BUFFER_EXCEPTION' and the SQL Server error log via xp_readerrorlog for severity >= 17 errors. Recent high-severity errors (errors 17â€“25) indicate resource exhaustion or internal failures. Investigate via SELECT * FROM sys.dm_os_ring_buffers WHERE ring_buffer_type = 'RING_BUFFER_EXCEPTION'.",
       "effort_estimate": "30 min",
       "related_finding_ids": [
         8,
@@ -2570,7 +2537,7 @@
       "Roadmap": "Configuration",
       "level": 2,
       "IsBad": 1,
-      "business_translation": "sp_configure 'buffer pool extension enabled' = 1 (SQL 2014\u00e2\u20ac\u201c2019 only). Buffer Pool Extension (BPE) uses an SSD as an extension of the buffer pool for caching read-only pages. Deprecated and removed in SQL 2022. Performance benefit is marginal , adding more RAM is almost always better. Monitor via sys.dm_os_buffer_pool_extension_configuration.",
+      "business_translation": "sp_configure 'buffer pool extension enabled' = 1 (SQL 2014â€“2019 only). Buffer Pool Extension (BPE) uses an SSD as an extension of the buffer pool for caching read-only pages. Deprecated and removed in SQL 2022. Performance benefit is marginal , adding more RAM is almost always better. Monitor via sys.dm_os_buffer_pool_extension_configuration.",
       "effort_estimate": "half day",
       "related_finding_ids": [
         50,
@@ -2586,7 +2553,7 @@
       "Roadmap": "Configuration",
       "level": 2,
       "IsBad": 1,
-      "business_translation": "sys.master_files WHERE database_id = 2 (tempdb) and file_type = 0 (data files) , count exceeds 16. Having more than 8\u00e2\u20ac\u201c16 tempdb data files provides no additional benefit and complicates management. SQL's proportional fill algorithm becomes less effective with very large file counts. The recommended maximum is 8 files (or equal to logical CPU count if fewer than 8). Extra files beyond the recommended count do not reduce contention and may increase management overhead.",
+      "business_translation": "sys.master_files WHERE database_id = 2 (tempdb) and file_type = 0 (data files) , count exceeds 16. Having more than 8â€“16 tempdb data files provides no additional benefit and complicates management. SQL's proportional fill algorithm becomes less effective with very large file counts. The recommended maximum is 8 files (or equal to logical CPU count if fewer than 8). Extra files beyond the recommended count do not reduce contention and may increase management overhead.",
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         25,
@@ -2792,28 +2759,12 @@
       "Roadmap": "Configuration impacting Performance",
       "level": 3,
       "IsBad": 1,
-      "business_translation": "sp_configure 'cost threshold for parallelism' = 5 (default low value). A CTP of 5 means virtually any non-trivial query is eligible for parallelism. On OLTP servers, this causes excessive CXPACKET waits and serial bottlenecks at the thread synchronisation point. Recommended: raise CTP to 25\u00e2\u20ac\u201c50 for mixed OLTP/OLAP; higher (50\u00e2\u20ac\u201c100) for pure OLTP. Test changes during off-peak with Query Store plan regression monitoring.",
+      "business_translation": "sp_configure 'cost threshold for parallelism' = 5 (default low value). A CTP of 5 means virtually any non-trivial query is eligible for parallelism. On OLTP servers, this causes excessive CXPACKET waits and serial bottlenecks at the thread synchronisation point. Recommended: raise CTP to 25â€“50 for mixed OLTP/OLAP; higher (50â€“100) for pure OLTP. Test changes during off-peak with Query Store plan regression monitoring.",
       "effort_estimate": "half day",
       "related_finding_ids": [
         115,
         194,
         1012
-      ]
-    },
-    {
-      "checkId": 189,
-      "blitzId": "BLITZ_189",
-      "findingName": "Missing Features",
-      "category": "Configuration",
-      "Roadmap": "Configuration",
-      "level": 4,
-      "IsBad": 0,
-      "business_translation": "sys.dm_exec_requests where sql_handle references a paused resumable index operation. A resumable index rebuild/create operation was started and paused. It is holding space in tempdb and consuming maintenance window resources. Resume with ALTER INDEX [name] ON [table] RESUME or abort with ALTER INDEX [name] ON [table] ABORT.",
-      "effort_estimate": "5 min",
-      "related_finding_ids": [
-        6,
-        10,
-        12
       ]
     },
     {
@@ -3004,7 +2955,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -3052,7 +3003,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -3068,7 +3019,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -3084,7 +3035,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -3100,7 +3051,7 @@
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         14,
-        34,
+        90,
         68
       ]
     },
@@ -3687,7 +3638,7 @@
       "Roadmap": "Performance & Capacity",
       "level": 4,
       "IsBad": 0,
-      "business_translation": "sys.database_scoped_configurations BATCH_MODE_ON_ROWSTORE = OFF. SQL 2019+ IQP feature. Allows batch mode execution on heap and B-tree (rowstore) indexes without a columnstore index. Disabling forces row-mode processing. For analytical queries on rowstore tables, batch mode can improve performance 2\u00e2\u20ac\u201c10x by processing 64\u00e2\u20ac\u201c900 rows per CPU instruction rather than one.",
+      "business_translation": "sys.database_scoped_configurations BATCH_MODE_ON_ROWSTORE = OFF. SQL 2019+ IQP feature. Allows batch mode execution on heap and B-tree (rowstore) indexes without a columnstore index. Disabling forces row-mode processing. For analytical queries on rowstore tables, batch mode can improve performance 2â€“10x by processing 64â€“900 rows per CPU instruction rather than one.",
       "effort_estimate": "half day",
       "related_finding_ids": [
         67,
@@ -4023,7 +3974,7 @@
       "Roadmap": "Performance",
       "level": 4,
       "IsBad": 0,
-      "business_translation": "sys.databases is_optimized_locking_on = 0. Optimized Locking (2023+) reduces lock memory consumption by using transaction ID (TID) locking instead of row/key locking for qualifying transactions. Not fully set up means the feature is partially enabled \u2014 check both database-level and instance-level settings to ensure consistent behavior across workloads.",
+      "business_translation": "sys.databases is_optimized_locking_on = 0. Optimized Locking (2023+) reduces lock memory consumption by using transaction ID (TID) locking instead of row/key locking for qualifying transactions. Not fully set up means the feature is partially enabled — check both database-level and instance-level settings to ensure consistent behavior across workloads.",
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         107,
@@ -4167,7 +4118,7 @@
       "Roadmap": "Monitoring & Observability",
       "level": 4,
       "IsBad": 0,
-      "business_translation": "sp_configure 'blocked process threshold (s)' > 0. Enables the Blocked Process Report event when a query is blocked beyond the threshold (seconds). Required for blocking analysis via Extended Events (system_health session captures this automatically if threshold > 0). Recommended value: 5\u00e2\u20ac\u201c15 seconds. Setting this is a positive operational practice.",
+      "business_translation": "sp_configure 'blocked process threshold (s)' > 0. Enables the Blocked Process Report event when a query is blocked beyond the threshold (seconds). Required for blocking analysis via Extended Events (system_health session captures this automatically if threshold > 0). Recommended value: 5â€“15 seconds. Setting this is a positive operational practice.",
       "effort_estimate": "2 hr",
       "related_finding_ids": [
         107,
@@ -4215,7 +4166,7 @@
       "Roadmap": "Performance & Capacity",
       "level": 3,
       "IsBad": 0,
-      "business_translation": "sp_configure 'cost threshold for parallelism'. Default 5 (extremely low , nearly all non-trivial queries go parallel). Non-default value (typically 25\u00e2\u20ac\u201c50) indicates this has been intentionally tuned, which is a positive sign. Confirm the current value aligns with the server's workload profile , OLTP benefits from higher thresholds; OLAP from lower.",
+      "business_translation": "sp_configure 'cost threshold for parallelism'. Default 5 (extremely low , nearly all non-trivial queries go parallel). Non-default value (typically 25â€“50) indicates this has been intentionally tuned, which is a positive sign. Confirm the current value aligns with the server's workload profile , OLTP benefits from higher thresholds; OLAP from lower.",
       "effort_estimate": "half day",
       "related_finding_ids": [
         115,
@@ -4977,7 +4928,7 @@
       "Roadmap": "Configuration",
       "level": 3,
       "IsBad": 0,
-      "business_translation": "sp_configure 'two digit year cutoff'. Default 2049. Controls how 2-digit year values in date strings are interpreted (e.g. '50' \u00e2\u2020\u2019 1950 or 2050). Non-default value (e.g. 2030) means the cutoff year was deliberately changed. Applications that parse date strings with 2-digit years are affected. Confirm application date handling is consistent with the configured cutoff.",
+      "business_translation": "sp_configure 'two digit year cutoff'. Default 2049. Controls how 2-digit year values in date strings are interpreted (e.g. '50' â†’ 1950 or 2050). Non-default value (e.g. 2030) means the cutoff year was deliberately changed. Applications that parse date strings with 2-digit years are affected. Confirm application date handling is consistent with the configured cutoff.",
       "effort_estimate": "5 min",
       "related_finding_ids": [
         131,
@@ -5105,7 +5056,7 @@
       "Roadmap": "Server Configuration",
       "level": 5,
       "IsBad": 0,
-      "business_translation": "sp_configure 'remote login timeout (s)'. Default 10s. Controls timeout for establishing linked server connections. Non-default value (often increased to 30\u00e2\u20ac\u201c60s) typically indicates linked server stability issues. Review if linked servers are still in active use.",
+      "business_translation": "sp_configure 'remote login timeout (s)'. Default 10s. Controls timeout for establishing linked server connections. Non-default value (often increased to 30â€“60s) typically indicates linked server stability issues. Review if linked servers are still in active use.",
       "effort_estimate": "30 min",
       "related_finding_ids": [
         4,
@@ -5169,7 +5120,7 @@
       "Roadmap": "Data Protection & Backup",
       "level": 2,
       "IsBad": 1,
-      "business_translation": "sp_configure 'backup compression default' = 0. Native backup compression typically achieves 60\u00e2\u20ac\u201c80% size reduction. Disabling it means larger backups, longer backup windows, greater storage cost, and slower restore times. Enable at instance level; override per-backup if specific databases require uncompressed backups for compatibility.",
+      "business_translation": "sp_configure 'backup compression default' = 0. Native backup compression typically achieves 60â€“80% size reduction. Disabling it means larger backups, longer backup windows, greater storage cost, and slower restore times. Enable at instance level; override per-backup if specific databases require uncompressed backups for compatibility.",
       "effort_estimate": "30 min",
       "related_finding_ids": [
         1,
