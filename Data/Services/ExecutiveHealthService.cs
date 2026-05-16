@@ -1,204 +1,540 @@
 /* In the name of God, the Merciful, the Compassionate */
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using SQLTriage.Data.Models;
 
 namespace SQLTriage.Data.Services
 {
     /// <summary>
-    /// Service for computing executive health scores (0-100) from server health status.
-    /// Provides trend analysis and weighted scoring based on critical indicators.
+    /// Computes a weighted 0-100 Health Score and Risk Rating from five dimensions:
+    ///   1. Performance   — wait-stats trend from HistoricalPerformanceService (weight: governance-weights.json Performance)
+    ///   2. Compliance    — governance pass-rate across Compliance dimension (weight: Compliance)
+    ///   3. Security      — VA security findings pass-rate (weight: Security)
+    ///   4. Resource      — CPU / memory saturation from live HealthCheckService (weight: Reliability)
+    ///   5. Blocking      — blocking event frequency from BlockingHistoryService (weight: Performance share)
+    ///
+    /// Weights are read from Config/governance-weights.json via the same IOptionsMonitor used by
+    /// GovernanceService.  Breakdown snapshots are written once per UTC day to governance-history.db
+    /// (health_score_history table) for trend rendering.
     /// </summary>
     public class ExecutiveHealthService
     {
         private readonly HealthCheckService _healthCheckService;
+        private readonly GovernanceHistoryService _historyService;
+        private readonly BlockingHistoryService _blockingHistory;
+        private readonly HistoricalPerformanceService _perfHistory;
+        private readonly VulnerabilityAssessmentStateService _vaState;
+        private readonly ILogger<ExecutiveHealthService> _logger;
 
-        /// <summary>
-        /// Historical health scores per server for trend analysis.
-        /// Key: ServerName, Value: List of (DateTime, Score) tuples
-        /// </summary>
-        private readonly ConcurrentDictionary<string, List<(DateTime Timestamp, int Score)>> _historicalScores = new();
+        // Governance weights — loaded once from governance-weights.json at startup.
+        // Reload is not needed at runtime for v1; the file changes rarely.
+        private readonly GovernanceWeightsConfig _weights;
 
-        public ExecutiveHealthService(HealthCheckService healthCheckService)
+        // One snapshot per server per UTC day — guards against duplicate writes.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime>
+            _lastSnapshotDate = new(StringComparer.OrdinalIgnoreCase);
+
+        public ExecutiveHealthService(
+            HealthCheckService healthCheckService,
+            GovernanceHistoryService historyService,
+            BlockingHistoryService blockingHistory,
+            HistoricalPerformanceService perfHistory,
+            VulnerabilityAssessmentStateService vaState,
+            ILogger<ExecutiveHealthService> logger)
         {
             _healthCheckService = healthCheckService ?? throw new ArgumentNullException(nameof(healthCheckService));
+            _historyService     = historyService     ?? throw new ArgumentNullException(nameof(historyService));
+            _blockingHistory    = blockingHistory    ?? throw new ArgumentNullException(nameof(blockingHistory));
+            _perfHistory        = perfHistory        ?? throw new ArgumentNullException(nameof(perfHistory));
+            _vaState            = vaState            ?? throw new ArgumentNullException(nameof(vaState));
+            _logger             = logger             ?? throw new ArgumentNullException(nameof(logger));
+
+            _weights = LoadWeights();
         }
 
+        // ── Public API ────────────────────────────────────────────────────────
+
         /// <summary>
-        /// Computes a weighted 0-100 health score for the specified server.
-        /// Higher scores indicate better health.
+        /// Computes a weighted 0-100 health score for the specified server,
+        /// including a full per-dimension breakdown with tooltips.
+        /// Writes a daily snapshot to governance-history.db for trend data.
         /// </summary>
         public async Task<ExecutiveHealthScore> GetHealthScoreAsync(string serverName)
         {
-            var healthStatus = _healthCheckService.GetCachedHealth(serverName);
-            if (healthStatus == null)
-                return new ExecutiveHealthScore { Score = 0, Severity = HealthSeverity.Unknown, Message = "No health data available" };
-
-            var score = ComputeWeightedScore(healthStatus);
-            var severity = MapScoreToSeverity(score);
-
-            // Store historical score
-            StoreHistoricalScore(serverName, score);
-
-            // Calculate trend
-            var trend = CalculateTrend(serverName);
-
-            return new ExecutiveHealthScore
+            try
             {
-                Score = score,
-                Severity = severity,
-                Trend = trend,
-                Message = GetHealthMessage(severity),
-                LastUpdated = healthStatus.LastUpdated ?? DateTime.Now
-            };
+                var breakdown = await BuildBreakdownAsync(serverName);
+                var score     = ComputeComposite(breakdown);
+                var severity  = ScoreToSeverity(score);
+                var trend     = await GetTrendAsync(serverName, score);
+
+                // Persist snapshot once per UTC day
+                MaybeWriteSnapshot(serverName, score, breakdown);
+
+                return new ExecutiveHealthScore
+                {
+                    Score       = score,
+                    Severity    = severity,
+                    Trend       = trend,
+                    Message     = HealthMessage(severity),
+                    LastUpdated = DateTime.Now,
+                    Breakdown   = breakdown,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "GetHealthScoreAsync failed for {Server}", serverName);
+                return new ExecutiveHealthScore
+                {
+                    Score    = 0,
+                    Severity = HealthSeverity.Unknown,
+                    Message  = "Health data unavailable",
+                    Breakdown = new HealthScoreBreakdown(),
+                };
+            }
         }
 
         /// <summary>
-        /// Gets health scores for all servers.
+        /// Gets health scores for all servers registered with the connection manager.
         /// </summary>
         public async Task<Dictionary<string, ExecutiveHealthScore>> GetAllHealthScoresAsync()
         {
             var allHealth = _healthCheckService.GetAllHealth();
-            var results = new Dictionary<string, ExecutiveHealthScore>();
-
+            var results   = new Dictionary<string, ExecutiveHealthScore>(StringComparer.OrdinalIgnoreCase);
             foreach (var kvp in allHealth)
-            {
                 results[kvp.Key] = await GetHealthScoreAsync(kvp.Key).ConfigureAwait(false);
-            }
-
             return results;
         }
 
-        private int ComputeWeightedScore(ServerHealthStatus status)
+        // ── Dimension builders ────────────────────────────────────────────────
+
+        private async Task<HealthScoreBreakdown> BuildBreakdownAsync(string serverName)
         {
-            if (status.IsOnline != true)
-                return 0; // Completely offline = 0 health
+            var breakdown = new HealthScoreBreakdown();
 
-            int score = 100; // Start with perfect health
+            // ── 1. Performance: wait-stats trend (HistoricalPerformanceService) ──────
+            breakdown.Performance = await ScorePerformanceAsync(serverName);
 
-            // Connection status (20% weight)
-            if (status.ConnectionSeverity == HealthSeverity.Critical)
-                score -= 20;
-            else if (status.ConnectionSeverity == HealthSeverity.Warning)
-                score -= 10;
+            // ── 2. Compliance: governance compliance pass-rate ───────────────────────
+            breakdown.Compliance = ScoreCompliance();
 
-            // CPU utilization (25% weight)
-            if (status.TotalCpuPercent.HasValue)
-            {
-                if (status.TotalCpuPercent >= 95) score -= 25; // Critical
-                else if (status.TotalCpuPercent >= 80) score -= 15; // Warning
-                else if (status.TotalCpuPercent >= 60) score -= 5; // Elevated
-            }
+            // ── 3. Security: VA security findings ───────────────────────────────────
+            breakdown.Security = ScoreSecurity();
 
-            // Memory pressure (20% weight)
-            if (status.RequestsWaitingForMemory > 0)
-                score -= 20; // Any memory waits = critical
-            else if (status.MemorySeverity == HealthSeverity.Warning)
-                score -= 10;
+            // ── 4. Resource: CPU / memory saturation (live HealthCheckService) ───────
+            breakdown.Resource = ScoreResource(serverName);
 
-            // Blocking (15% weight)
-            if (status.BlockingSeverity == HealthSeverity.Critical)
-                score -= 15;
-            else if (status.BlockingSeverity == HealthSeverity.Warning)
-                score -= 8;
+            // ── 5. Blocking: event frequency last 24 h ───────────────────────────────
+            breakdown.Blocking = await ScoreBlockingAsync(serverName);
 
-            // Thread starvation (10% weight)
-            if (status.ThreadsSeverity == HealthSeverity.Critical)
-                score -= 10;
-            else if (status.ThreadsSeverity == HealthSeverity.Warning)
-                score -= 5;
-
-            // Deadlocks (5% weight)
-            if (status.DeadlockSeverity == HealthSeverity.Critical)
-                score -= 5;
-
-            // Wait times (5% weight)
-            if (status.WaitSeverity == HealthSeverity.Critical)
-                score -= 5;
-            else if (status.WaitSeverity == HealthSeverity.Warning)
-                score -= 3;
-
-            return Math.Max(0, Math.Min(100, score));
+            return breakdown;
         }
 
-        private HealthSeverity MapScoreToSeverity(int score)
+        // Performance (0-100): deduct points when avg wait_ms is elevated vs prior day.
+        // Uses PAGEIOLATCH + CXPACKET + SOS_SCHEDULER_YIELD as saturation signals.
+        private async Task<DimensionScore> ScorePerformanceAsync(string serverName)
+        {
+            const string dim = "Performance";
+            double weight = GetWeight(dim);
+
+            try
+            {
+                var now      = DateTime.UtcNow;
+                var todayRows = _perfHistory.GetHourlyWaitStats(serverName, now.AddHours(-24), now);
+
+                if (todayRows.Count == 0)
+                    return new DimensionScore(dim, weight, 100, "No wait-stat history yet — full points awarded by default.",
+                        "Collects once HistoricalPerformanceService has 24 h of data.");
+
+                double avgWaitMs = todayRows.Average(r => r.AvgWaitMs);
+
+                // Compare to prior day for trend signal
+                var priorRows = _perfHistory.GetHourlyWaitStats(serverName, now.AddHours(-48), now.AddHours(-24));
+                double priorAvg = priorRows.Count > 0 ? priorRows.Average(r => r.AvgWaitMs) : avgWaitMs;
+
+                // Score: 100 at ≤50ms avg wait, linear decay to 0 at ≥1500ms
+                double rawScore = Math.Max(0, 100 - (avgWaitMs - 50) / 14.5);
+                int score       = (int)Math.Round(Math.Clamp(rawScore, 0, 100));
+
+                double delta = priorRows.Count > 0 ? avgWaitMs - priorAvg : 0;
+                string direction = delta > 10 ? "degrading" : delta < -10 ? "improving" : "stable";
+
+                return new DimensionScore(dim, weight, score,
+                    $"Avg wait {avgWaitMs:F0} ms over last 24 h ({direction} vs prior day). " +
+                    $"Score = {score}/100.",
+                    $"This dimension contributes {weight * score:F0} of {weight * 100:F0} possible points " +
+                    $"(weight {weight * 100:F0}%). " +
+                    $"Source: {todayRows.Count} hourly wait-stat rows from HistoricalPerformanceService.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Performance score failed for {Server}", serverName);
+                return new DimensionScore(dim, weight, 100, "No performance data — full points by default.", "");
+            }
+        }
+
+        // Compliance (0-100): governance compliance pass-rate from VA results (Compliance/Auditing/Patching categories).
+        private DimensionScore ScoreCompliance()
+        {
+            const string dim = "Compliance";
+            double weight = GetWeight(dim);
+
+            try
+            {
+                var results = _vaState.Results;
+                if (results.Count == 0)
+                    return new DimensionScore(dim, weight, 100, "No VA results — full points by default.",
+                        "Run Vulnerability Assessment to populate compliance score.");
+
+                // Compliance-mapped categories from governance-weights.json categoryMapping
+                var complianceCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    { "Auditing", "Compliance", "Data_Protection", "Patching", "Maintenance", "Monitoring" };
+
+                var complianceResults = results.Where(r =>
+                    complianceCategories.Contains(r.Category ?? "")).ToList();
+
+                if (complianceResults.Count == 0)
+                    return new DimensionScore(dim, weight, 100, "No compliance-category findings in VA results.",
+                        "Categories: Auditing, Compliance, Data_Protection, Patching, Maintenance, Monitoring.");
+
+                int passing = complianceResults.Count(r =>
+                    string.Equals(r.Status, "Passed", StringComparison.OrdinalIgnoreCase));
+                int total   = complianceResults.Count;
+                int score   = (int)Math.Round(passing * 100.0 / total);
+
+                return new DimensionScore(dim, weight, score,
+                    $"{passing}/{total} compliance checks passing ({score}%).",
+                    $"This dimension contributes {weight * score:F0} of {weight * 100:F0} possible points " +
+                    $"(weight {weight * 100:F0}%). " +
+                    $"Categories: Auditing, Compliance, Data_Protection, Patching, Maintenance.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Compliance score failed");
+                return new DimensionScore(dim, weight, 100, "No compliance data.", "");
+            }
+        }
+
+        // Security (0-100): VA security findings pass-rate.
+        private DimensionScore ScoreSecurity()
+        {
+            const string dim = "Security";
+            double weight = GetWeight(dim);
+
+            try
+            {
+                var results = _vaState.Results;
+                if (results.Count == 0)
+                    return new DimensionScore(dim, weight, 100, "No VA results — full points by default.",
+                        "Run Vulnerability Assessment to populate security score.");
+
+                var securityCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    { "Security", "Authentication", "Authorization", "Encryption", "Surface_Area" };
+
+                var secResults = results.Where(r =>
+                    securityCategories.Contains(r.Category ?? "")).ToList();
+
+                if (secResults.Count == 0)
+                    return new DimensionScore(dim, weight, 100, "No security-category findings in VA results.",
+                        "Categories: Security, Authentication, Authorization, Encryption, Surface_Area.");
+
+                int passing  = secResults.Count(r =>
+                    string.Equals(r.Status, "Passed", StringComparison.OrdinalIgnoreCase));
+                int total    = secResults.Count;
+                int critical = secResults.Count(r =>
+                    !string.Equals(r.Status, "Passed", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(r.Severity, "Critical", StringComparison.OrdinalIgnoreCase));
+
+                // Critical failures penalise harder: raw pass-rate minus 3 pts per critical
+                double rawPct = passing * 100.0 / total;
+                int score     = (int)Math.Round(Math.Clamp(rawPct - critical * 3, 0, 100));
+
+                return new DimensionScore(dim, weight, score,
+                    $"{passing}/{total} security checks passing ({score}%); {critical} critical failures.",
+                    $"This dimension contributes {weight * score:F0} of {weight * 100:F0} possible points " +
+                    $"(weight {weight * 100:F0}%). " +
+                    $"Critical failures carry extra penalty (−3 pts each). " +
+                    $"Source: VA results from VulnerabilityAssessmentStateService.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Security score failed");
+                return new DimensionScore(dim, weight, 100, "No security data.", "");
+            }
+        }
+
+        // Resource (0-100): CPU / memory / blocking saturation from live ServerHealthStatus.
+        // Uses Reliability weight since resource saturation is a reliability concern.
+        private DimensionScore ScoreResource(string serverName)
+        {
+            const string dim = "Resource";
+            double weight = GetWeight("Reliability");
+
+            try
+            {
+                var status = _healthCheckService.GetCachedHealth(serverName);
+                if (status == null)
+                    return new DimensionScore(dim, weight, 0,
+                        "No live health data for this server.",
+                        "Connect to the server and wait for the first health poll.");
+
+                if (status.IsOnline != true)
+                    return new DimensionScore(dim, weight, 0,
+                        "Server is offline — resource score is 0.",
+                        "Server must be online to compute resource saturation.");
+
+                int score = 100;
+
+                // CPU: up to −30
+                if (status.TotalCpuPercent.HasValue)
+                {
+                    if (status.TotalCpuPercent >= 95)       score -= 30;
+                    else if (status.TotalCpuPercent >= 80)  score -= 18;
+                    else if (status.TotalCpuPercent >= 60)  score -= 8;
+                }
+
+                // Memory waits: up to −25
+                if (status.RequestsWaitingForMemory > 0)    score -= 25;
+                else if (status.MemorySeverity == HealthSeverity.Warning) score -= 12;
+
+                // Thread starvation: up to −15
+                if (status.ThreadsSeverity == HealthSeverity.Critical)    score -= 15;
+                else if (status.ThreadsSeverity == HealthSeverity.Warning) score -= 8;
+
+                // Waits: up to −10
+                if (status.WaitSeverity == HealthSeverity.Critical)       score -= 10;
+                else if (status.WaitSeverity == HealthSeverity.Warning)   score -= 5;
+
+                score = Math.Clamp(score, 0, 100);
+
+                string cpuText = status.TotalCpuPercent.HasValue
+                    ? $"CPU {status.TotalCpuPercent:F0}%"
+                    : "CPU unknown";
+
+                string memText = status.RequestsWaitingForMemory > 0
+                    ? $"{status.RequestsWaitingForMemory} requests waiting for memory"
+                    : $"memory {status.MemorySeverity}";
+
+                return new DimensionScore(dim, weight, score,
+                    $"{cpuText}, {memText}, threads {status.ThreadsSeverity}. Score = {score}/100.",
+                    $"This dimension contributes {weight * score:F0} of {weight * 100:F0} possible points " +
+                    $"(weight {weight * 100:F0}%, uses Reliability weight). " +
+                    $"Source: live HealthCheckService poll.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Resource score failed for {Server}", serverName);
+                return new DimensionScore(dim, weight, 100, "No resource data.", "");
+            }
+        }
+
+        // Blocking (0-100): event count over last 24 h from BlockingHistoryService.
+        // Uses a share of Performance weight (blocking is a performance-adjacent concern).
+        private async Task<DimensionScore> ScoreBlockingAsync(string serverName)
+        {
+            const string dim = "Blocking";
+            // Blocking takes half the Performance weight for its share
+            double weight = GetWeight("Performance") * 0.5;
+
+            try
+            {
+                var offenders = await _blockingHistory.GetTopOffendersAsync(
+                    serverName, DateTime.UtcNow.AddHours(-24), topN: 20);
+
+                int totalEvents   = offenders.Sum(o => o.EventCount);
+                int totalDuration = offenders.Sum(o => o.TotalDurationSeconds);
+
+                // Score: 100 at 0 events, decays to 0 at ≥50 events
+                int score = totalEvents == 0
+                    ? 100
+                    : (int)Math.Round(Math.Clamp(100 - totalEvents * 2.0, 0, 100));
+
+                string detail = totalEvents == 0
+                    ? "No blocking events in last 24 h."
+                    : $"{totalEvents} blocking event(s) in last 24 h (total {totalDuration}s blocked).";
+
+                return new DimensionScore(dim, weight, score,
+                    $"{detail} Score = {score}/100.",
+                    $"This dimension contributes {weight * score:F0} of {weight * 100:F0} possible points " +
+                    $"(weight {weight * 100:F0}%). " +
+                    $"Source: BlockingHistoryService last 24 h.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Blocking score failed for {Server}", serverName);
+                return new DimensionScore(dim, weight, 100, "No blocking history.", "");
+            }
+        }
+
+        // ── Composite calculation ─────────────────────────────────────────────
+
+        private static int ComputeComposite(HealthScoreBreakdown b)
+        {
+            double total = 0;
+            double wsum  = 0;
+            foreach (var d in b.Dimensions)
+            {
+                total += d.Weight * d.Score;
+                wsum  += d.Weight;
+            }
+            if (wsum <= 0) return 0;
+            return (int)Math.Round(Math.Clamp(total / wsum, 0, 100));
+        }
+
+        // ── Trend (yesterday's snapshot vs today) ────────────────────────────
+
+        private async Task<HealthTrend> GetTrendAsync(string serverName, int currentScore)
+        {
+            try
+            {
+                var yesterday = await _historyService.GetLatestHealthScoreAsync(
+                    serverName, DateTime.UtcNow.Date.AddDays(-1));
+                if (yesterday == null) return HealthTrend.Stable;
+
+                int diff = currentScore - yesterday.Value;
+                if (diff > 5)  return HealthTrend.Improving;
+                if (diff < -5) return HealthTrend.Degrading;
+                return HealthTrend.Stable;
+            }
+            catch
+            {
+                return HealthTrend.Stable;
+            }
+        }
+
+        // ── Snapshot persistence ──────────────────────────────────────────────
+
+        private void MaybeWriteSnapshot(string serverName, int score, HealthScoreBreakdown breakdown)
+        {
+            var today = DateTime.UtcNow.Date;
+            if (_lastSnapshotDate.TryGetValue(serverName, out var last) && last >= today)
+                return;
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    _historyService.RecordHealthScore(serverName, score, breakdown);
+                    _lastSnapshotDate[serverName] = today;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to persist health score snapshot for {Server}", serverName);
+                }
+            });
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+
+        private double GetWeight(string dimension) =>
+            _weights.Categories.TryGetValue(dimension, out var w) ? w : 0.20;
+
+        private static HealthSeverity ScoreToSeverity(int score)
         {
             if (score >= 80) return HealthSeverity.Healthy;
             if (score >= 60) return HealthSeverity.Warning;
             return HealthSeverity.Critical;
         }
 
-        private string GetHealthMessage(HealthSeverity severity)
+        private static string HealthMessage(HealthSeverity sev) => sev switch
         {
-            return severity switch
-            {
-                HealthSeverity.Healthy => "Server is healthy",
-                HealthSeverity.Warning => "Server needs attention",
-                HealthSeverity.Critical => "Server requires immediate action",
-                _ => "Health status unknown"
-            };
-        }
+            HealthSeverity.Healthy  => "Server is healthy",
+            HealthSeverity.Warning  => "Server needs attention",
+            HealthSeverity.Critical => "Server requires immediate action",
+            _                       => "Health status unknown"
+        };
 
-        private void StoreHistoricalScore(string serverName, int score)
+        private static GovernanceWeightsConfig LoadWeights()
         {
-            var history = _historicalScores.GetOrAdd(serverName, _ => new List<(DateTime, int)>());
-
-            // Keep only last 30 days of data
-            var cutoff = DateTime.Now.AddDays(-30);
-            history.RemoveAll(x => x.Timestamp < cutoff);
-
-            history.Add((DateTime.Now, score));
-
-            // Keep only last 100 entries per server
-            if (history.Count > 100)
+            try
             {
-                history.RemoveRange(0, history.Count - 100);
+                var path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    "Config", "governance-weights.json");
+                if (!System.IO.File.Exists(path)) return GovernanceWeightsConfig.Defaults;
+                var json = System.IO.File.ReadAllText(path);
+                var cfg  = JsonSerializer.Deserialize<GovernanceWeightsConfig>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                return cfg ?? GovernanceWeightsConfig.Defaults;
+            }
+            catch
+            {
+                return GovernanceWeightsConfig.Defaults;
             }
         }
+    }
 
-        private HealthTrend CalculateTrend(string serverName)
+    // ── Data models ──────────────────────────────────────────────────────────
+
+    /// <summary>Per-dimension score: 0-100 normalised, with weight and tooltip text.</summary>
+    public sealed class DimensionScore
+    {
+        public string Name        { get; }
+        public double Weight      { get; }
+        public int    Score       { get; }
+        /// <summary>Short label shown in the bar chart (e.g. "CPU 72%, memory OK — 84/100").</summary>
+        public string Summary     { get; }
+        /// <summary>Full tooltip explaining "X of Y points because Z".</summary>
+        public string Tooltip     { get; }
+        /// <summary>Weighted contribution to composite score (0-100 scale).</summary>
+        public double Contribution => Weight * Score;
+
+        public DimensionScore(string name, double weight, int score, string summary, string tooltip)
         {
-            var history = _historicalScores.GetValueOrDefault(serverName);
-            if (history == null || history.Count < 2)
-                return HealthTrend.Stable;
-
-            // Compare last 2 scores
-            var recent = history.TakeLast(2).ToList();
-            var previousScore = recent[0].Score;
-            var currentScore = recent[1].Score;
-
-            var difference = currentScore - previousScore;
-
-            if (difference > 5) return HealthTrend.Improving;
-            if (difference < -5) return HealthTrend.Degrading;
-
-            return HealthTrend.Stable;
+            Name    = name;
+            Weight  = weight;
+            Score   = score;
+            Summary = summary;
+            Tooltip = tooltip;
         }
     }
 
-    /// <summary>
-    /// Executive health score result
-    /// </summary>
-    public class ExecutiveHealthScore
+    /// <summary>Full breakdown of the 5-dimension health index.</summary>
+    public sealed class HealthScoreBreakdown
     {
-        public int Score { get; set; }
-        public HealthSeverity Severity { get; set; }
-        public HealthTrend Trend { get; set; }
-        public string Message { get; set; } = "";
-        public DateTime LastUpdated { get; set; }
+        public DimensionScore Performance { get; set; } = new("Performance", 0.20, 100, "", "");
+        public DimensionScore Compliance  { get; set; } = new("Compliance",  0.20, 100, "", "");
+        public DimensionScore Security    { get; set; } = new("Security",    0.25, 100, "", "");
+        public DimensionScore Resource    { get; set; } = new("Resource",    0.20, 100, "", "");
+        public DimensionScore Blocking    { get; set; } = new("Blocking",    0.10, 100, "", "");
+
+        public IEnumerable<DimensionScore> Dimensions =>
+            new[] { Security, Compliance, Performance, Resource, Blocking };
     }
 
-    /// <summary>
-    /// Health trend direction
-    /// </summary>
-    public enum HealthTrend
+    /// <summary>Executive health score result including full breakdown.</summary>
+    public class ExecutiveHealthScore
     {
-        Improving,
-        Stable,
-        Degrading
+        public int                  Score       { get; set; }
+        public HealthSeverity       Severity    { get; set; }
+        public HealthTrend          Trend       { get; set; }
+        public string               Message     { get; set; } = "";
+        public DateTime             LastUpdated { get; set; }
+        public HealthScoreBreakdown Breakdown   { get; set; } = new();
+    }
+
+    /// <summary>Health trend direction.</summary>
+    public enum HealthTrend { Improving, Stable, Degrading }
+
+    /// <summary>Typed read of governance-weights.json categories block.</summary>
+    internal sealed class GovernanceWeightsConfig
+    {
+        public Dictionary<string, double> Categories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public static readonly GovernanceWeightsConfig Defaults = new()
+        {
+            Categories = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Security"]    = 0.25,
+                ["Performance"] = 0.20,
+                ["Reliability"] = 0.20,
+                ["Compliance"]  = 0.20,
+                ["Cost"]        = 0.15,
+            }
+        };
     }
 }
