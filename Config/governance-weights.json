@@ -18,11 +18,12 @@
   },
 
   "bands": {
-    "Emerging": [ 0, 20],
-    "Bronze":   [21, 40],
-    "Silver":   [41, 60],
-    "Gold":     [61, 80],
-    "Platinum": [81,100]
+    "_comment": "Governance maturity bands with scoring thresholds. 69 Silver is an honest assessment — Gold requires consistently strong performance across all 5 dimensions.",
+    "Emerging": [0, 30],
+    "Bronze":   [31, 50],
+    "Silver":   [51, 70],
+    "Gold":     [71, 85],
+    "Platinum": [86, 100]
   },
 
   "categoryMapping": {

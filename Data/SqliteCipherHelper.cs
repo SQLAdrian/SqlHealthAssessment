@@ -202,8 +202,8 @@ namespace SQLTriage.Data
                     var candidate = path + suffix;
                     if (File.Exists(candidate))
                     {
-                        File.Delete(candidate);
-                        Serilog.Log.Information("[SqliteCipherHelper] Deleted plain SQLite file {File} for re-encryption", candidate);
+                        try { File.Delete(candidate); }
+                        catch (IOException) { /* file locked by previous process — will be cleaned on next restart */ }
                     }
                 }
             }

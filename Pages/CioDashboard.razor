@@ -76,14 +76,14 @@
                 </div>
                 <div class="cio-dimension-score">
                     @{
-                        var dimsWithData = _governanceScore.Categories.Count(c => c.Value.FindingCount > 0);
-                        var totalDims = _governanceScore.Categories.Count;
+                        var starCount = (int)Math.Floor(_governanceScore.Overall / 20);
+                        var totalStars = 5;
                     }
-                    @for (int i = 0; i < totalDims; i++)
+                    @for (int i = 0; i < totalStars; i++)
                     {
-                        <i class="fa-solid fa-star @(i < dimsWithData ? "cio-dimension-star-filled" : "cio-dimension-star-empty")"></i>
+                        <i class="fa-solid fa-star @(i < starCount ? "cio-dimension-star-filled" : "cio-dimension-star-empty")"></i>
                     }
-                    <span class="cio-dimension-label">@dimsWithData/@totalDims dimensions scored</span>
+                    <span class="cio-dimension-label">@starCount/@totalStars stars</span>
                 </div>
                 <div style="margin-top:12px;">
                     <span class="cio-assessment-badge" style="@AssessmentBadgeStyle()">
@@ -739,9 +739,10 @@
 
     private string ScoreColor(double score)
     {
-        if (score >= 81) return "var(--green)";
-        if (score >= 41) return "var(--yellow)";
-        return "var(--red)";
+        if (score >= 71) return "var(--green)";   // Gold + Platinum
+        if (score >= 51) return "var(--yellow)";  // Silver
+        if (score >= 31) return "var(--orange)";  // Bronze
+        return "var(--red)";                      // Emerging
     }
 
     private string CategoryColor(double passRate)

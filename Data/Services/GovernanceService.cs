@@ -226,11 +226,11 @@ namespace SQLTriage.Data.Services
 
         public Dictionary<string, int[]> Bands { get; set; } = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["Emerging"] = new[] { 0, 20 },
-            ["Bronze"] = new[] { 21, 40 },
-            ["Silver"] = new[] { 41, 60 },
-            ["Gold"] = new[] { 61, 80 },
-            ["Platinum"] = new[] { 81, 100 }
+            ["Emerging"] = new[] { 0, 30 },
+            ["Bronze"]   = new[] { 31, 50 },
+            ["Silver"]   = new[] { 51, 70 },
+            ["Gold"]     = new[] { 71, 85 },
+            ["Platinum"] = new[] { 86, 100 }
         };
 
         public Dictionary<string, string> CategoryMapping { get; set; } = new(StringComparer.OrdinalIgnoreCase)
