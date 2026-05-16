@@ -1,0 +1,180 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/trends"
+<PageTitle>SQLTriage - Performance Trends</PageTitle>
+@using SQLTriage.Data
+@using SQLTriage.Data.Models
+@using SQLTriage.Data.Services
+@using System.Collections.Generic
+@using System.Linq
+@inject ServerConnectionManager ConnectionManager
+@inject HistoricalPerformanceService HistoricalPerf
+@inject ToastService Toast
+
+<div class="settings-page" style="max-width: 1400px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Performance Trends</h2>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="settings-btn" @onclick="LoadData" disabled="@_loading">
+                <i class="fa-solid @(_loading ? "fa-spinner fa-spin" : "fa-rotate")"></i>
+                @(_loading ? "Loading..." : "Refresh")
+            </button>
+        </div>
+    </div>
+
+    @* ── Filters ── *@
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 20px;">
+        <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Server</label>
+            <select class="settings-input" style="min-width: 200px;" @bind="_selectedServer" @bind:after="LoadData">
+                <option value="">— select server —</option>
+                @foreach (var s in _servers)
+                {
+                    <option value="@s">@s</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Wait Type</label>
+            <select class="settings-input" style="min-width: 180px;" @bind="_selectedWaitType" @bind:after="LoadData">
+                <option value="">(all)</option>
+                @foreach (var w in _waitTypes)
+                {
+                    <option value="@w">@w</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Range</label>
+            <select class="settings-input" @bind="_rangeDays" @bind:after="LoadData">
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last 365 days</option>
+            </select>
+        </div>
+
+        <div style="align-self: flex-end; padding-bottom: 2px;">
+            <span style="font-size: 11px; color: var(--text-muted);">
+                Granularity: <strong>@_granularityLabel</strong>
+            </span>
+        </div>
+    </div>
+
+    @* ── Chart or empty state ── *@
+    @if (_loading)
+    {
+        <PageLoadingSpinner Message="Loading trend data..." />
+    }
+    else if (string.IsNullOrEmpty(_selectedServer))
+    {
+        <div style="text-align: center; padding: 48px; color: var(--text-muted);">
+            <i class="fa-solid fa-chart-area" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
+            <div style="font-size: 14px;">Select a server to view historical wait-stats trends.</div>
+        </div>
+    }
+    else if (_chartData == null || _chartData.Count == 0)
+    {
+        <div style="text-align: center; padding: 48px; color: var(--text-muted);">
+            <i class="fa-solid fa-hourglass-half" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
+            <div style="font-size: 14px; margin-bottom: 8px;">No rollup data yet for <strong>@_selectedServer</strong></div>
+            <div style="font-size: 12px;">
+                Hourly rollups run once per hour. Data accumulates from raw snapshots collected by<br/>
+                WaitStatsHistoryService. Return after the first rollup tick (~1 hour from first connect).
+            </div>
+        </div>
+    }
+    else
+    {
+        <TimeSeriesChart Title="@_chartTitle"
+                         Data="_chartData"
+                         YAxisUnit="ms"
+                         Height="340"
+                         ChartSeriesType="ApexCharts.SeriesType.Line" />
+
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+            @_chartData.Select(p => p.Series).Distinct().Count() series &nbsp;·&nbsp;
+            @_chartData.Count points &nbsp;·&nbsp;
+            @_granularityLabel granularity
+        </div>
+    }
+</div>
+
+@code {
+    // ── State ────────────────────────────────────────────────────────────────
+    private string[]       _servers        = Array.Empty<string>();
+    private List<string>   _waitTypes      = new();
+    private string         _selectedServer = "";
+    private string         _selectedWaitType = "";
+    private int            _rangeDays      = 30;
+    private bool           _loading;
+    private List<TimeSeriesPoint>? _chartData;
+    private string         _chartTitle     = "";
+    private string         _granularityLabel = "hourly";
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        _servers = ConnectionManager.GetEnabledServerNames();
+        if (_servers.Length == 1)
+            _selectedServer = _servers[0];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !string.IsNullOrEmpty(_selectedServer))
+            await LoadData();
+    }
+
+    // ── Data load ────────────────────────────────────────────────────────────
+
+    private async Task LoadData()
+    {
+        if (string.IsNullOrEmpty(_selectedServer)) return;
+        _loading = true;
+        StateHasChanged();
+
+        await Task.Run(() =>
+        {
+            var toUtc   = DateTime.UtcNow;
+            var fromUtc = toUtc.AddDays(-_rangeDays);
+
+            // Populate wait-type dropdown (always from hourly — best coverage).
+            _waitTypes = HistoricalPerf.GetKnownWaitTypes(_selectedServer).ToList();
+
+            var waitTypeFilter = string.IsNullOrEmpty(_selectedWaitType) ? null : _selectedWaitType;
+
+            // Granularity selection: ≤14 days → hourly; >14 days → daily.
+            if (_rangeDays <= 14)
+            {
+                _granularityLabel = "hourly";
+                var rows = HistoricalPerf.GetHourlyWaitStats(_selectedServer, fromUtc, toUtc, waitTypeFilter);
+                _chartData = rows.Select(r => new TimeSeriesPoint
+                {
+                    Time   = r.HourUtc,
+                    Series = r.WaitType,
+                    Value  = r.AvgWaitMs,
+                }).ToList();
+            }
+            else
+            {
+                _granularityLabel = "daily";
+                var rows = HistoricalPerf.GetDailyWaitStats(_selectedServer, fromUtc, toUtc, waitTypeFilter);
+                _chartData = rows.Select(r => new TimeSeriesPoint
+                {
+                    Time   = r.DayUtc,
+                    Series = r.WaitType,
+                    Value  = r.AvgWaitMs,
+                }).ToList();
+            }
+
+            var typeDesc = string.IsNullOrEmpty(waitTypeFilter) ? "all wait types" : waitTypeFilter;
+            _chartTitle  = $"{_selectedServer} — {typeDesc} (avg wait ms, {_granularityLabel})";
+        });
+
+        _loading = false;
+        StateHasChanged();
+    }
+}

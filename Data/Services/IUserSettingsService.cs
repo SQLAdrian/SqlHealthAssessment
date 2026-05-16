@@ -108,5 +108,21 @@ namespace SQLTriage.Data.Services
         event Action<bool>? OnExperimentalModeChanged;
         event Action<bool>? OnShowMaturityRoadmapChanged;
         event Action<string>? OnSelectedThemeChanged;
+
+        // Threshold-based highlighting
+        bool GetThresholdsEnabled();
+        void SetThresholdsEnabled(bool enabled);
+        int GetThresholdCpuMs();
+        void SetThresholdCpuMs(int ms);
+        int GetThresholdWaitTimeMs();
+        void SetThresholdWaitTimeMs(int ms);
+        int GetThresholdMemoryMb();
+        void SetThresholdMemoryMb(int mb);
+        int GetThresholdReadsKb();
+        void SetThresholdReadsKb(int kb);
+        int GetThresholdWritesKb();
+        void SetThresholdWritesKb(int kb);
+        int GetThresholdDurationMs();
+        void SetThresholdDurationMs(int ms);
     }
 }

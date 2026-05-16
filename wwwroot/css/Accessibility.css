@@ -29,6 +29,7 @@ body.colorblind-mode {
     /* Faint tints — remapped to match the colorblind-safe palette above */
     --red-faint:    rgba(217,119,6,0.10);   /* matches --red: #d97706 */
     --yellow-faint: rgba(147,197,253,0.10); /* matches --yellow: #93c5fd */
+    --orange-faint: rgba(245,158,11,0.10);  /* matches --orange: #f59e0b (amber, kept) */
 }
 
 /* Status indicator dots used in nav and elsewhere — colorblind-safe palette

@@ -242,6 +242,16 @@ public partial class Settings
     private bool _alertBaselineEnabled;
     private bool _alertBaselinePerServer;
 
+    // Threshold Highlighting
+    private bool _thresholdsEnabled;
+    private int _thresholdCpuMs;
+    private int _thresholdWaitTimeMs;
+    private int _thresholdMemoryMb;
+    private int _thresholdReadsKb;
+    private int _thresholdWritesKb;
+    private int _thresholdDurationMs;
+    private string? _thresholdSaveMessage;
+
     // Notifications
     private bool _showReleaseNotesOnUpdate;
 
@@ -282,6 +292,13 @@ public partial class Settings
         _experimentalMode = UserSettings.GetExperimentalMode();
         _alertBaselineEnabled = UserSettings.GetAlertBaselineEnabled();
         _alertBaselinePerServer = UserSettings.GetAlertBaselinePerServer();
+        _thresholdsEnabled = UserSettings.GetThresholdsEnabled();
+        _thresholdCpuMs = UserSettings.GetThresholdCpuMs();
+        _thresholdWaitTimeMs = UserSettings.GetThresholdWaitTimeMs();
+        _thresholdMemoryMb = UserSettings.GetThresholdMemoryMb();
+        _thresholdReadsKb = UserSettings.GetThresholdReadsKb();
+        _thresholdWritesKb = UserSettings.GetThresholdWritesKb();
+        _thresholdDurationMs = UserSettings.GetThresholdDurationMs();
         DefaultDashboardId = UserSettings.GetDefaultDashboardId();
         _zoomLevel = UserSettings.GetZoomLevel();
         _selectedTheme = UserSettings.GetSelectedTheme();
@@ -945,6 +962,29 @@ public partial class Settings
     {
         UserSettings.SetAlertBaselineEnabled(_alertBaselineEnabled);
         UserSettings.SetAlertBaselinePerServer(_alertBaselinePerServer);
+    }
+
+    private void SaveThresholdSettings()
+    {
+        UserSettings.SetThresholdsEnabled(_thresholdsEnabled);
+        UserSettings.SetThresholdCpuMs(_thresholdCpuMs);
+        UserSettings.SetThresholdWaitTimeMs(_thresholdWaitTimeMs);
+        UserSettings.SetThresholdMemoryMb(_thresholdMemoryMb);
+        UserSettings.SetThresholdReadsKb(_thresholdReadsKb);
+        UserSettings.SetThresholdWritesKb(_thresholdWritesKb);
+        UserSettings.SetThresholdDurationMs(_thresholdDurationMs);
+        _thresholdSaveMessage = "Saved.";
+    }
+
+    private void ResetThresholdDefaults()
+    {
+        _thresholdCpuMs = 80000;
+        _thresholdWaitTimeMs = 1000;
+        _thresholdMemoryMb = 0;
+        _thresholdReadsKb = 0;
+        _thresholdWritesKb = 0;
+        _thresholdDurationMs = 5000;
+        SaveThresholdSettings();
     }
 
     private void SaveNotificationSettings()

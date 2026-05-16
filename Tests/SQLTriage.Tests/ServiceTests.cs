@@ -160,6 +160,22 @@ public class ChartThemeServiceTests
         public event Action<bool>? OnNoPantsModeChanged;
         public event Action<bool>? OnExperimentalModeChanged;
         public event Action<bool>? OnShowMaturityRoadmapChanged;
+
+        // Threshold highlighting stubs
+        public bool GetThresholdsEnabled() => false;
+        public void SetThresholdsEnabled(bool enabled) { }
+        public int GetThresholdCpuMs() => 80000;
+        public void SetThresholdCpuMs(int ms) { }
+        public int GetThresholdWaitTimeMs() => 1000;
+        public void SetThresholdWaitTimeMs(int ms) { }
+        public int GetThresholdMemoryMb() => 0;
+        public void SetThresholdMemoryMb(int mb) { }
+        public int GetThresholdReadsKb() => 0;
+        public void SetThresholdReadsKb(int kb) { }
+        public int GetThresholdWritesKb() => 0;
+        public void SetThresholdWritesKb(int kb) { }
+        public int GetThresholdDurationMs() => 5000;
+        public void SetThresholdDurationMs(int ms) { }
     }
 
     [Fact]

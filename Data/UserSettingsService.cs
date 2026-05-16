@@ -139,6 +139,22 @@ namespace SQLTriage.Data
             /// <summary>Monthly OPEX per server (NZD) — running costs + ops management + support services. Drives 3-year TCO calculation.</summary>
             public double MonthlyOpexPerServerNZD { get; set; } = 400.0;
 
+            // ── Threshold-Based Highlighting (triage aid; not monitoring) ──
+            /// <summary>When true, rows/bubbles exceeding any configured threshold are highlighted. Off by default — opt-in.</summary>
+            public bool ThresholdsEnabled { get; set; } = false;
+            /// <summary>CPU time threshold in milliseconds. Sessions with CpuTime &gt;= this value are highlighted. 0 = disabled.</summary>
+            public int ThresholdCpuMs { get; set; } = 5000;
+            /// <summary>Wait time threshold in milliseconds. Sessions with WaitTime &gt;= this value are highlighted. 0 = disabled.</summary>
+            public int ThresholdWaitTimeMs { get; set; } = 1000;
+            /// <summary>Memory threshold in MB. Sessions with MemoryUsageKB / 1024 &gt;= this value are highlighted. 0 = disabled.</summary>
+            public int ThresholdMemoryMb { get; set; } = 0;
+            /// <summary>Logical reads threshold in KB. Sessions with LogicalReads &gt;= this value are highlighted. 0 = disabled.</summary>
+            public int ThresholdReadsKb { get; set; } = 0;
+            /// <summary>Writes threshold in KB. Sessions with Writes &gt;= this value are highlighted. 0 = disabled.</summary>
+            public int ThresholdWritesKb { get; set; } = 0;
+            /// <summary>Total elapsed time threshold in milliseconds. Sessions with TotalElapsedTime &gt;= this value are highlighted. 0 = disabled.</summary>
+            public int ThresholdDurationMs { get; set; } = 5000;
+
             // ── Updates ──
             /// <summary>Optional HTTP/HTTPS proxy URL for update checks. Null = use system proxy.</summary>
             public string? UpdateProxyUrl { get; set; }
@@ -532,6 +548,28 @@ namespace SQLTriage.Data
 
         public string? GetUpdateProxyUrl() { lock (_lock) return _settings.UpdateProxyUrl; }
         public void SetUpdateProxyUrl(string? url) { lock (_lock) _settings.UpdateProxyUrl = string.IsNullOrWhiteSpace(url) ? null : url.Trim(); SaveSettings(); }
+
+        // ── Threshold-Based Highlighting ──
+        public bool GetThresholdsEnabled() { lock (_lock) return _settings.ThresholdsEnabled; }
+        public void SetThresholdsEnabled(bool enabled) { lock (_lock) _settings.ThresholdsEnabled = enabled; SaveSettings(); }
+
+        public int GetThresholdCpuMs() { lock (_lock) return _settings.ThresholdCpuMs; }
+        public void SetThresholdCpuMs(int ms) { lock (_lock) _settings.ThresholdCpuMs = Math.Max(0, ms); SaveSettings(); }
+
+        public int GetThresholdWaitTimeMs() { lock (_lock) return _settings.ThresholdWaitTimeMs; }
+        public void SetThresholdWaitTimeMs(int ms) { lock (_lock) _settings.ThresholdWaitTimeMs = Math.Max(0, ms); SaveSettings(); }
+
+        public int GetThresholdMemoryMb() { lock (_lock) return _settings.ThresholdMemoryMb; }
+        public void SetThresholdMemoryMb(int mb) { lock (_lock) _settings.ThresholdMemoryMb = Math.Max(0, mb); SaveSettings(); }
+
+        public int GetThresholdReadsKb() { lock (_lock) return _settings.ThresholdReadsKb; }
+        public void SetThresholdReadsKb(int kb) { lock (_lock) _settings.ThresholdReadsKb = Math.Max(0, kb); SaveSettings(); }
+
+        public int GetThresholdWritesKb() { lock (_lock) return _settings.ThresholdWritesKb; }
+        public void SetThresholdWritesKb(int kb) { lock (_lock) _settings.ThresholdWritesKb = Math.Max(0, kb); SaveSettings(); }
+
+        public int GetThresholdDurationMs() { lock (_lock) return _settings.ThresholdDurationMs; }
+        public void SetThresholdDurationMs(int ms) { lock (_lock) _settings.ThresholdDurationMs = Math.Max(0, ms); SaveSettings(); }
 
         // ── Auto-Export Accessors ──
         public UserSettings GetSettings() { lock (_lock) return _settings; }

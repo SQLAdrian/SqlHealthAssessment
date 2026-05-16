@@ -59,6 +59,7 @@
                 <a href="#set-perf-diag">Performance Diagnostics</a>
                 <a href="#set-orchestrator">Orchestrator Tuning</a>
                 <a href="#set-alerts">Alert Baseline</a>
+                <a href="#set-thresholds">Threshold Highlighting</a>
             </div>
             <div class="settings-rail-group">
                 <div class="settings-rail-heading">Diagnostics</div>
@@ -1218,6 +1219,113 @@
         @if (_rotateMessage != null)
         {
             <p style="margin-top:8px;font-size:12px;color:@(_rotateSuccess ? "var(--green)" : "var(--red)");">@_rotateMessage</p>
+        }
+    </div>
+
+    @* ── Threshold-Based Highlighting ── *@
+    <div class="settings-group" id="set-thresholds">
+        <h3>Threshold Highlighting <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(triage aid)</span></h3>
+        <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">
+            Threshold highlighting is a triage aid during active diagnosis. Sessions exceeding any enabled threshold
+            are highlighted with an orange ring on the bubble view. No alerts, no emails — this is purely visual
+            triage on the page you are viewing.
+        </p>
+        <div class="settings-row">
+            <label class="settings-label">
+                Enable threshold highlighting
+                <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(off by default)</span>
+            </label>
+            <input type="checkbox" @bind="_thresholdsEnabled" @bind:after="SaveThresholdSettings" />
+        </div>
+
+        @if (_thresholdsEnabled)
+        {
+            <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px;">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">
+                    Set a value to 0 to disable that individual threshold check.
+                </div>
+
+                <div class="settings-field">
+                    <label title="Highlights sessions whose cumulative CPU time (ms) meets or exceeds this value.">
+                        CPU time (ms) <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">— 0 = disabled</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" min="0" step="1000" value="@_thresholdCpuMs"
+                               @onchange="e => _thresholdCpuMs = int.TryParse(e.Value?.ToString(), out var v) ? Math.Max(0,v) : _thresholdCpuMs"
+                               style="width:120px;" />
+                        <span style="font-size:11px;color:var(--text-muted);">e.g. 80000 = 80 sec cumulative CPU</span>
+                    </div>
+                </div>
+
+                <div class="settings-field">
+                    <label title="Highlights sessions currently waiting for longer than this duration.">
+                        Wait time (ms) <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">— 0 = disabled</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" min="0" step="100" value="@_thresholdWaitTimeMs"
+                               @onchange="e => _thresholdWaitTimeMs = int.TryParse(e.Value?.ToString(), out var v) ? Math.Max(0,v) : _thresholdWaitTimeMs"
+                               style="width:120px;" />
+                        <span style="font-size:11px;color:var(--text-muted);">e.g. 1000 = waiting &gt;1 sec</span>
+                    </div>
+                </div>
+
+                <div class="settings-field">
+                    <label title="Highlights sessions consuming more memory than this threshold.">
+                        Memory usage (MB) <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">— 0 = disabled</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" min="0" step="64" value="@_thresholdMemoryMb"
+                               @onchange="e => _thresholdMemoryMb = int.TryParse(e.Value?.ToString(), out var v) ? Math.Max(0,v) : _thresholdMemoryMb"
+                               style="width:120px;" />
+                        <span style="font-size:11px;color:var(--text-muted);">e.g. 256 = sessions using &gt;256 MB</span>
+                    </div>
+                </div>
+
+                <div class="settings-field">
+                    <label title="Highlights sessions that have performed more logical reads than this threshold.">
+                        Logical reads (KB) <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">— 0 = disabled</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" min="0" step="1000" value="@_thresholdReadsKb"
+                               @onchange="e => _thresholdReadsKb = int.TryParse(e.Value?.ToString(), out var v) ? Math.Max(0,v) : _thresholdReadsKb"
+                               style="width:120px;" />
+                        <span style="font-size:11px;color:var(--text-muted);">e.g. 100000 = 100 MB of reads</span>
+                    </div>
+                </div>
+
+                <div class="settings-field">
+                    <label title="Highlights sessions that have performed more writes than this threshold.">
+                        Writes (KB) <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">— 0 = disabled</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" min="0" step="1000" value="@_thresholdWritesKb"
+                               @onchange="e => _thresholdWritesKb = int.TryParse(e.Value?.ToString(), out var v) ? Math.Max(0,v) : _thresholdWritesKb"
+                               style="width:120px;" />
+                        <span style="font-size:11px;color:var(--text-muted);">e.g. 10000 = 10 MB of writes</span>
+                    </div>
+                </div>
+
+                <div class="settings-field">
+                    <label title="Highlights sessions that have been running longer than this duration.">
+                        Total duration (ms) <span style="font-weight:normal;color:var(--text-secondary);font-size:11px;">— 0 = disabled</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" min="0" step="1000" value="@_thresholdDurationMs"
+                               @onchange="e => _thresholdDurationMs = int.TryParse(e.Value?.ToString(), out var v) ? Math.Max(0,v) : _thresholdDurationMs"
+                               style="width:120px;" />
+                        <span style="font-size:11px;color:var(--text-muted);">e.g. 5000 = sessions running &gt;5 sec</span>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px;margin-top:4px;">
+                    <button class="settings-btn" @onclick="SaveThresholdSettings" style="font-size:11px;padding:4px 10px;">Save</button>
+                    <button class="settings-btn" style="background:var(--bg-hover);font-size:11px;padding:4px 10px;" @onclick="ResetThresholdDefaults">Reset Defaults</button>
+                </div>
+                @if (!string.IsNullOrEmpty(_thresholdSaveMessage))
+                {
+                    <p style="margin:4px 0 0;font-size:11px;color:var(--green);">@_thresholdSaveMessage</p>
+                }
+            </div>
         }
     </div>
 

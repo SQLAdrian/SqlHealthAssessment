@@ -89,6 +89,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ServerDocumentationService>();
         services.AddSingleton<WaitStatsHistoryService>();
         services.AddSingleton<WaitStatsService>();
+        services.AddSingleton<HistoricalPerformanceService>(sp =>
+            new HistoricalPerformanceService(
+                sp.GetRequiredService<ILogger<HistoricalPerformanceService>>(),
+                rawRetentionDays:    configuration.GetValue<int>("Historical:RawRetentionDays",    14),
+                hourlyRetentionDays: configuration.GetValue<int>("Historical:HourlyRetentionDays", 90),
+                dailyRetentionDays:  configuration.GetValue<int>("Historical:DailyRetentionDays",  365)));
         services.AddSingleton<IErrorCatalog, ErrorCatalog>();
         services.AddSingleton<IQuickCheckRunner, QuickCheckRunner>();
 

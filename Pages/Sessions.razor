@@ -184,7 +184,8 @@
             <div class="sessions-bubble-area">
                 <SessionBubbleView Sessions="@FilteredSessions"
                                    OnSessionClicked="OnSessionClicked"
-                                   SelectedSpid="@SelectedSession?.SPID" />
+                                   SelectedSpid="@SelectedSession?.SPID"
+                                   ThresholdExceededSpids="@GetThresholdExceededSpids()" />
                 <div class="sessions-bubble-footer">
                     <button class="sessions-filter-btn" @onclick="() => ShowLegend = true">
                         <i class="fa-solid fa-book"></i> Show Legend
@@ -329,6 +330,39 @@
     }
 
     private void ToggleHideLowIO() => HideLowIO = !HideLowIO;
+
+    /// <summary>
+    /// Returns the set of SPIDs that exceed at least one enabled threshold.
+    /// Returns an empty set when ThresholdsEnabled is false (zero overhead).
+    /// </summary>
+    private HashSet<int> GetThresholdExceededSpids()
+    {
+        if (!UserSettings.GetThresholdsEnabled())
+            return [];
+
+        var cpuMs      = UserSettings.GetThresholdCpuMs();
+        var waitMs     = UserSettings.GetThresholdWaitTimeMs();
+        var memMb      = UserSettings.GetThresholdMemoryMb();
+        var readsKb    = UserSettings.GetThresholdReadsKb();
+        var writesKb   = UserSettings.GetThresholdWritesKb();
+        var durationMs = UserSettings.GetThresholdDurationMs();
+
+        var result = new HashSet<int>();
+        foreach (var s in FilteredSessions)
+        {
+            bool exceeded =
+                (cpuMs      > 0 && s.CpuTime >= cpuMs)      ||
+                (waitMs     > 0 && s.WaitTime >= waitMs)     ||
+                (memMb      > 0 && s.MemoryUsageKB / 1024 >= memMb) ||
+                (readsKb    > 0 && s.LogicalReads >= readsKb) ||
+                (writesKb   > 0 && s.Writes >= writesKb)     ||
+                (durationMs > 0 && s.TotalElapsedTime >= durationMs);
+
+            if (exceeded)
+                result.Add(s.SPID);
+        }
+        return result;
+    }
 
     protected override async Task OnInitializedAsync()
     {

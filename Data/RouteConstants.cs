@@ -26,6 +26,7 @@ public static class RouteConstants
     public static string Dashboard(string id) => $"/dashboard/{id}";
 
     // ── Diagnostics ──
+    public const string PerformanceTrends  = "/trends";
     public const string DiagnosticsRoadmap = "/diagnostics-roadmap";
     public const string VulnerabilityAssessment = "/vulnerabilityassessment";
     public const string Benchmark = "/benchmark";

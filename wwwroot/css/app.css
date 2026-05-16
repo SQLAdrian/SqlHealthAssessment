@@ -92,6 +92,7 @@
     /* Faint tints for card backgrounds — colorblind-mode overrides in Accessibility.css */
     --red-faint:    rgba(239,68,68,0.07);
     --yellow-faint: rgba(251,191,36,0.07);
+    --orange-faint: rgba(245,158,11,0.10);
 
     /* Type — Inter from rsms.me CDN with system fallbacks */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -4402,6 +4403,29 @@ tr.clickable:hover .datagrid-plan-badge {
 
 .session-bubble.selected circle:first-of-type {
     filter: url(#glowSelected) brightness(1.1);
+}
+
+/* ── Threshold Highlighting — triage aid ring ──
+ * An orange dashed ring rendered as a separate SVG circle inside the
+ * session-bubble <g> when the session exceeds a configured threshold.
+ * Uses var(--orange) so colorblind-mode remaps it automatically.
+ */
+.session-bubble.threshold-exceeded .bubble-threshold-ring {
+    display: block;
+}
+.bubble-threshold-ring {
+    display: none;
+    fill: none;
+    stroke: var(--orange);
+    stroke-width: 2.5;
+    stroke-dasharray: 4 3;
+    opacity: 0.85;
+    pointer-events: none;
+    animation: threshold-ring-pulse 1.8s ease-in-out infinite;
+}
+@keyframes threshold-ring-pulse {
+    0%, 100% { opacity: 0.85; }
+    50%       { opacity: 0.45; }
 }
 
 /* ── Session Detail Panel ── */
