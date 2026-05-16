@@ -41,6 +41,7 @@
 @import "ScheduledTasks.css";
 @import "Benchmark.css";
 @import "Alerts.css";
+@import "DashboardEditor.css";
 /* SQLTriage — audit-first design system (2026-05-11)
  * Tokens aligned with docs/assets/css/site.css for cross-surface consistency.
  * Old VS-Code-dark palette backed up at .ignore/app.css.pre-design-swap-2026-05-11.

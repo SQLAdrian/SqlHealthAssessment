@@ -3,6 +3,7 @@
 <PageTitle>SQLTriage - Environment</PageTitle>
 @inject ServerConnectionManager ConnectionManager
 @inject IJSRuntime JS
+@inject AuditLogService AuditLog
 @using Microsoft.Data.SqlClient
 @using System.Data
 @using System.Linq
@@ -57,6 +58,9 @@
             @if (_serverResults.Count > 0)
             {
                 <button class="btn btn-secondary" @onclick="ClearResults">Clear</button>
+                <button class="btn btn-secondary" @onclick="ExportPngAsync" title="Download topology as PNG">
+                    <i class="fa-solid fa-image"></i> Export PNG
+                </button>
             }
         </div>
     </div>
@@ -336,6 +340,30 @@
         _selectedHost = null;
         _selectedHostServer = "";
         _errorMessage = null;
+    }
+
+    private async Task ExportPngAsync()
+    {
+        var fileName = $"topology-{DateTime.Now:yyyyMMdd}.png";
+        try
+        {
+            var dataUrl = await JS.InvokeAsync<string>("environmentView.exportPng", "env-topo-canvas");
+            if (string.IsNullOrEmpty(dataUrl) || !dataUrl.StartsWith("data:image/png;base64,"))
+            {
+                _errorMessage = "Export failed: topology canvas not found. Run a Scan first.";
+                StateHasChanged();
+                return;
+            }
+            var base64 = dataUrl.Substring("data:image/png;base64,".Length);
+            await JS.InvokeVoidAsync("blazorDownloadFile", fileName, "image/png", base64);
+            AuditLog.LogExportOperation("PNG", fileName, true);
+        }
+        catch (Exception ex)
+        {
+            AuditLog.LogExportOperation("PNG", fileName, false, ex.Message);
+            _errorMessage = $"Export failed: {ex.Message}";
+            StateHasChanged();
+        }
     }
 
     // ── Physical host deduplication ──────────────────────────────────────

@@ -727,9 +727,20 @@ window.environmentView = (function () {
         });
     }
 
+    // Export the topology canvas as a PNG data-URL.
+    // Returns null if the canvas is not yet rendered.
+    function exportPng(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return null;
+        var cvs = container.querySelector('canvas');
+        if (!cvs) return null;
+        return cvs.toDataURL('image/png');
+    }
+
     return {
         renderTopology:  renderTopology,
         renderMini:      renderMini,
-        setHostCallback: setHostCallback
+        setHostCallback: setHostCallback,
+        exportPng:       exportPng
     };
 })();

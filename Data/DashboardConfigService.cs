@@ -359,6 +359,28 @@ namespace SQLTriage.Data
         }
 
         /// <summary>
+        /// Returns (true, null) if json deserialises into a DashboardConfigRoot, otherwise
+        /// (false, errorMessage). Used by DashboardEditor for live validation.
+        /// </summary>
+        public (bool valid, string? error) ValidateJson(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return (false, "JSON is empty.");
+            try
+            {
+                var config = JsonSerializer.Deserialize<DashboardConfigRoot>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (config == null)
+                    return (false, "JSON parsed to null.");
+                return (true, null);
+            }
+            catch (JsonException ex)
+            {
+                return (false, $"Line {ex.LineNumber + 1}, position {ex.BytePositionInLine}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Replaces the current configuration with the default, saves it, and notifies subscribers.
         /// </summary>
         public void ResetToDefault()

@@ -359,6 +359,26 @@ description: 600+ framework-mapped audit checks for SQL Server. NIST, CIS, STIG,
       <h3>License?</h3>
       <p>GNU GPL v3. Free for commercial use, no per-server fees, no subscription, no feature tiers. Source on GitHub.</p>
     </div>
+    <div class="panel">
+      <h3>Why is my alert firing constantly?</h3>
+      <p>Alerts use IQR-based dynamic baselines. If a metric is genuinely outside its historical 25–75 percentile range, the alert fires. To tune: open the alert's edit modal, increase <code>NextAlertDelayMinutes</code> to suppress repeated firings, or enable Dry-Run mode (Settings → Alerts) to see what <em>would</em> fire without actually firing.</p>
+    </div>
+    <div class="panel">
+      <h3>Do I need SQLWATCH?</h3>
+      <p>No. Most pages work without it. Only the long-term historical dashboards (capacity trends, week-over-week comparisons) benefit from SQLWATCH. Live diagnostics, alerts, and the query plan viewer all work without it.</p>
+    </div>
+    <div class="panel">
+      <h3>How do I move my saved server credentials to another machine?</h3>
+      <p>Settings → Server Credentials → Export. This produces an <code>.lmcreds</code> file protected with a passphrase you choose. On the target machine, Settings → Server Credentials → Import, supply the file and passphrase.</p>
+    </div>
+    <div class="panel">
+      <h3>Where are the logs?</h3>
+      <p><code>logs/app-YYYYMMDD.log</code> next to the exe. Older logs are auto-rotated (kept 14 days). Set "Debug logging" in Settings to capture verbose output.</p>
+    </div>
+    <div class="panel">
+      <h3>Have more questions?</h3>
+      <p><a href="https://github.com/SQLAdrian/SQLTriage/discussions">Ask on GitHub Discussions</a> · <a href="https://github.com/SQLAdrian/SQLTriage/blob/main/QUICKSTART.md#frequently-asked-questions">Full FAQ in QUICKSTART.md</a> · <a href="https://github.com/SQLAdrian/SQLTriage/issues/new?template=bug_report.md">Report a bug</a></p>
+    </div>
   </div>
 </section>
 
