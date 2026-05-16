@@ -119,8 +119,11 @@ namespace SQLTriage.Data
 
             _eventLogAvailable = TryEnsureEventLogSource();
             VerifyChainOnStartup();
-            // R-L6: emit one-time migration note on first run after switching to UTC filenames.
-            EmitSegmentFilenameUtcMarkerIfNeeded();
+            // R-L6: emit one-time migration note on first run after switching to UTC
+            // filenames. Production-only (gated like CheckHmacKeyAge below): in test
+            // mode startFlushTimer=false and we must not enqueue a self-entry that
+            // would skew exact-entry-count assertions (R-L6 side-effect, not a test concern).
+            if (startFlushTimer) EmitSegmentFilenameUtcMarkerIfNeeded();
             // L6: check key age after chain verification (only in production mode with timer)
             if (startFlushTimer) CheckHmacKeyAge(configuration);
 
@@ -804,7 +807,7 @@ namespace SQLTriage.Data
                 }
                 File.WriteAllText(path, sb.ToString());
 
-                Serilog.Log.Critical(
+                Serilog.Log.Fatal(
                     "[AUDIT] PRIMARY FLUSH UNAVAILABLE after {N} consecutive failures. " +
                     "Signed failover batch written to {Path}. Investigate disk/permissions immediately.",
                     _consecutiveFlushFailures, path);

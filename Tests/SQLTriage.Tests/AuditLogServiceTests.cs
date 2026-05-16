@@ -623,8 +623,7 @@ namespace SQLTriage.Tests
             // This validates that the rotation anchor correctly bridges old-key and
             // new-key entries without breaking the PreviousHash link sequence.
             for (int i = 1; i < entries.Count; i++)
-                Assert.Equal(entries[i - 1].Signature, entries[i].PreviousHash,
-                    $"Entry[{i}].PreviousHash should match Entry[{i-1}].Signature");
+                Assert.Equal(entries[i - 1].Signature, entries[i].PreviousHash);
 
             // ChainBroken is set only by startup verification (VerifyChainOnStartup).
             // Since we haven't restarted the service, it should remain false.
