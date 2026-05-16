@@ -32,5 +32,19 @@ jobs:
       - name: Build
         run: dotnet build SQLTriage.sln -c Release --no-restore
 
+      # coverlet.collector is already referenced by the test project. Collect
+      # coverage every run and publish it as an artifact. No hard threshold
+      # gate yet: a failing % gate without a measured baseline would red the
+      # build on the first run. The gate is a deliberate follow-up once a
+      # baseline is known (worklist 22b targets: 60% services /
+      # 80% security-critical paths).
       - name: Test
-        run: dotnet test SQLTriage.sln -c Release --no-build --verbosity normal
+        run: dotnet test SQLTriage.sln -c Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: code-coverage
+          path: ./coverage/**/coverage.cobertura.xml
+          if-no-files-found: warn
