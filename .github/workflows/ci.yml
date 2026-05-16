@@ -32,12 +32,6 @@ jobs:
       - name: Build
         run: dotnet build SQLTriage.sln -c Release --no-restore
 
-      # coverlet.collector is already referenced by the test project. Collect
-      # coverage every run and publish it as an artifact. No hard threshold
-      # gate yet: a failing % gate without a measured baseline would red the
-      # build on the first run. The gate is a deliberate follow-up once a
-      # baseline is known (worklist 22b targets: 60% services /
-      # 80% security-critical paths).
       - name: Test
         run: dotnet test SQLTriage.sln -c Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
 
@@ -48,3 +42,34 @@ jobs:
           name: code-coverage
           path: ./coverage/**/coverage.cobertura.xml
           if-no-files-found: warn
+
+      # Coverage RATCHET FLOOR, not an aspiration. Measured global line
+      # coverage on 2026-05-17 was 5.95% (4740/79660). This codebase is
+      # mostly Blazor .razor / WPF UI, which is exercised via DevBridge
+      # screenshot loops, NOT xUnit — so a 60% global gate (the worklist
+      # 22b aspiration) would red-ball every build forever and is the
+      # wrong target for a UI-heavy desktop app. Instead this floor (5%)
+      # catches a real REGRESSION: tests deleted/broken so coverage
+      # collapses. It cannot false-red on normal Razor-heavy changes.
+      # Raise the floor deliberately as the unit-tested surface grows;
+      # the 60% services / 80% security-critical figures remain a
+      # documented roadmap target (RbacService already 87%, AuditLog
+      # 53%, CredentialProtector 59% as of 2026-05-17), not a build gate.
+      - name: Coverage floor gate
+        if: always()
+        shell: pwsh
+        run: |
+          $xml = Get-ChildItem -Recurse -Filter coverage.cobertura.xml ./coverage | Select-Object -First 1
+          if (-not $xml) { Write-Error "No coverage file produced"; exit 1 }
+          [xml]$doc = Get-Content $xml.FullName
+          $lines = $doc.SelectNodes('//line')
+          $total = $lines.Count
+          $hit = ($lines | Where-Object { [int]$_.hits -gt 0 }).Count
+          $pct = if ($total -gt 0) { 100.0 * $hit / $total } else { 0 }
+          $floor = 5.0
+          Write-Host ("Global line coverage: {0}/{1} = {2:N2}% (floor {3}%)" -f $hit,$total,$pct,$floor)
+          if ($pct -lt $floor) {
+            Write-Error ("Coverage {0:N2}% dropped below ratchet floor {1}% — tests likely deleted or broken." -f $pct,$floor)
+            exit 1
+          }
+          Write-Host "Coverage floor OK."
