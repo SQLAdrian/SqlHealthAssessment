@@ -62,15 +62,16 @@ public sealed class HistoricalPerformanceService : IDisposable
         ILogger<HistoricalPerformanceService> logger,
         int rawRetentionDays    = 14,
         int hourlyRetentionDays = 90,
-        int dailyRetentionDays  = 365)
+        int dailyRetentionDays  = 365,
+        string? dbPath          = null)
     {
         _logger                 = logger;
         _rawRetentionDays       = rawRetentionDays;
         _hourlyRetentionDays    = hourlyRetentionDays;
         _dailyRetentionDays     = dailyRetentionDays;
 
-        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "governance-history.db");
-        _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
+        var resolvedPath = dbPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "governance-history.db");
+        _connectionString = $"Data Source={resolvedPath};Mode=ReadWriteCreate;Cache=Shared";
 
         InitializeSchema();
 
