@@ -1,6 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/bulkeditchecks"
-
+<PageTitle>SQLTriage - Bulk Edit Checks</PageTitle>
 @using System
 @using System.Collections.Generic
 @using Microsoft.Data.SqlClient
@@ -177,7 +177,7 @@ else
     <!-- Status Message -->
     @if (!string.IsNullOrEmpty(StatusMessage))
     {
-        <div class="status-message @(StatusSuccess ? "success" : "error")">
+        <div class="status-message @(StatusSuccess ? "success" : "error")" role="status">
             @StatusMessage
         </div>
     }

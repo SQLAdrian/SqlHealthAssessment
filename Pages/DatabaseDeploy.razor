@@ -1,6 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/deploysqlwatch"
-
+<PageTitle>SQLTriage - Deploy SQLWATCH</PageTitle>
 @using Microsoft.Data.SqlClient
 @using Microsoft.Extensions.Configuration
 @using System.IO
@@ -115,7 +115,7 @@
 
     @if (!string.IsNullOrEmpty(ConnectionStatus))
     {
-        <div class="status-message @(ConnectionSuccess ? "success" : "error")">
+        <div class="status-message @(ConnectionSuccess ? "success" : "error")" role="status">
             @ConnectionStatus
         </div>
     }
@@ -124,7 +124,7 @@
     {
         <div class="deploy-status">
             <h4>Deployment Status</h4>
-            <div class="status-message @(DeploySuccess ? "success" : "error")">
+            <div class="status-message @(DeploySuccess ? "success" : "error")" role="status">
                 @DeployStatus
             </div>
             @if (!string.IsNullOrEmpty(DeployLog))

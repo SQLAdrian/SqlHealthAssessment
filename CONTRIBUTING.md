@@ -71,8 +71,7 @@ Copy or edit `appsettings.json` to point at your local SQL Server:
 ### Running Tests
 
 ```bash
-cd Tests
-dotnet test
+dotnet test SQLTriage.sln -c Release --no-build
 ```
 
 See [Tests/TESTING_GUIDE.md](Tests/TESTING_GUIDE.md) for the full testing guide.
@@ -81,7 +80,7 @@ See [Tests/TESTING_GUIDE.md](Tests/TESTING_GUIDE.md) for the full testing guide.
 
 ## Making Changes
 
-1. **Fork** the repository and create a branch from `master`.
+1. **Fork** the repository and create a branch from `main`.
    ```bash
    git checkout -b feature/my-new-panel
    ```
@@ -93,7 +92,7 @@ See [Tests/TESTING_GUIDE.md](Tests/TESTING_GUIDE.md) for the full testing guide.
    - Run `dotnet test` in the `Tests/` folder.
    - Check for regressions in existing dashboards.
 
-4. **Submit a Pull Request** against `master`.
+4. **Submit a Pull Request** against `main`.
    - Describe what you changed and why.
    - Reference any related issues (`Fixes #123`).
    - Include before/after screenshots for UI changes.

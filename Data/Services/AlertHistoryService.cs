@@ -51,6 +51,9 @@ namespace SQLTriage.Data.Services
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
+                    PRAGMA foreign_keys=ON;
+                    -- DE-C3: MUST be set before any tables are created (no-op on existing DBs with auto_vacuum=NONE).
+                    PRAGMA auto_vacuum=INCREMENTAL;
 
                     CREATE TABLE IF NOT EXISTS alert_history (
                         id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -351,8 +354,26 @@ namespace SQLTriage.Data.Services
             }
         }
 
-        public List<AlertHistoryRecord> GetActiveAlerts()
+        /// <summary>
+        /// DE-C4: Returns active/acknowledged alerts up to <paramref name="maxRows"/> rows (default 1 000).
+        /// Use <see cref="GetAllActiveAlerts"/> for export scenarios that require every row.
+        /// </summary>
+        public List<AlertHistoryRecord> GetActiveAlerts(int maxRows = 1000)
         {
+            return QueryRecords(
+                "WHERE status IN ('Active', 'Acknowledged') ORDER BY last_triggered DESC LIMIT @maxRows",
+                ("@maxRows", maxRows.ToString()));
+        }
+
+        /// <summary>
+        /// DE-C4: Returns ALL active/acknowledged alerts without a row limit. Use only for
+        /// export or reporting — materialises the full result set. Logs a Warning on use
+        /// to make unbounded reads visible in observability tooling.
+        /// </summary>
+        public List<AlertHistoryRecord> GetAllActiveAlerts()
+        {
+            _logger.LogWarning(
+                "[DE-C4] GetAllActiveAlerts called — unbounded query; ensure this is intentional (export/report path only)");
             return QueryRecords("WHERE status IN ('Active', 'Acknowledged') ORDER BY last_triggered DESC");
         }
 
@@ -477,6 +498,10 @@ namespace SQLTriage.Data.Services
                 if (deleted > 0)
                     _logger.LogInformation("Purged {Count} resolved alert history records older than {Days} days",
                         deleted, retentionDays);
+                // DE-C3: reclaim space after purge.
+                using var vac = conn.CreateCommand();
+                vac.CommandText = "PRAGMA incremental_vacuum;";
+                vac.ExecuteNonQuery();
             }
             catch (Exception ex)
             {

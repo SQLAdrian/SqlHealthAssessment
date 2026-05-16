@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
                 audit: sp.GetService<AuditLogService>()));
         services.AddSingleton<AlertBaselineService>();
         services.AddSingleton<AlertEvaluationService>();
+        services.AddSingleton<ServerCircuitBreakerService>();
 
         // ── Unified checks / governance / reporting ──
         services.AddSingleton<UnifiedCheckService>();

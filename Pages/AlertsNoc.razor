@@ -1,5 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/alerts-noc"
+<PageTitle>SQLTriage - NOC Alert Status Board</PageTitle>
 @using SQLTriage.Data
 @using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
@@ -70,8 +71,8 @@
             };
             var cardBg = server.Status switch
             {
-                NocStatus.Critical => "rgba(244,71,71,0.07)",
-                NocStatus.Warning  => "rgba(255,204,0,0.07)",
+                NocStatus.Critical => "var(--red-faint)",
+                NocStatus.Warning  => "var(--yellow-faint)",
                 NocStatus.Ok       => "rgba(78,201,176,0.06)",
                 _                  => "var(--bg-panel)"
             };

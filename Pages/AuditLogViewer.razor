@@ -1,5 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/audit-log"
+<PageTitle>SQLTriage - Audit Log</PageTitle>
 @using SQLTriage.Data
 @inject AuditLogService AuditLog
 @inject SQLTriage.Data.Services.AppUserState UserState
@@ -20,8 +21,8 @@ else
 
     @if (AuditLog.ChainBroken)
     {
-        <div class="status-message error" style="margin-bottom: 16px;">
-            <i class="fa-solid fa-triangle-exclamation"></i> Audit log chain integrity check has failed. The log may have been tampered with.
+        <div class="status-message error" role="alert" aria-live="assertive" style="margin-bottom: 16px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> Audit chain integrity check failed. First failing record: <code>@(AuditLog.ChainBreakFirstRecordId ?? "unknown")</code>. See <code>docs/compliance/incident-response-runbook.md</code> § Audit Chain Break for next steps.
         </div>
     }
 
@@ -79,14 +80,14 @@ else
 
     @if (_verifyResult != null)
     {
-        <div class="status-message @(_verifyResult.Contains("INTACT") ? "success" : "error")" style="margin-bottom:12px;">
+        <div class="status-message @(_verifyResult.Contains("INTACT") ? "success" : "error")" role="status" aria-live="polite" style="margin-bottom:12px;">
             <i class="fa-solid @(_verifyResult.Contains("INTACT") ? "fa-check-circle" : "fa-triangle-exclamation")"></i>
             @_verifyResult
         </div>
     }
     @if (_exportMessage != null)
     {
-        <div class="status-message success" style="margin-bottom:12px;">
+        <div class="status-message success" role="status" aria-live="polite" style="margin-bottom:12px;">
             <i class="fa-solid fa-check-circle"></i> @_exportMessage
         </div>
     }

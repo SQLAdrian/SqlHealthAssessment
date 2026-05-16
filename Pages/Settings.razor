@@ -1,6 +1,6 @@
 ﻿<!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/settings"
-
+<PageTitle>SQLTriage - Settings</PageTitle>
 @using Microsoft.Extensions.Configuration
 @using Microsoft.Extensions.DependencyInjection
 @using System.IO
@@ -1006,11 +1006,11 @@
                                     @(u.LastReviewedAt.HasValue ? u.LastReviewedAt.Value.ToString("yyyy-MM-dd") : "Never")
                                 </td>
                                 <td style="padding:5px 0 5px 6px;white-space:nowrap;">
-                                    <button class="btn-icon" title="Mark access reviewed"
+                                    <button class="btn-icon" title="Mark access reviewed" aria-label="Mark access reviewed for @u.Email"
                                             @onclick="() => MarkUserAccessReviewed(u)">
                                         <i class="fa-solid fa-clipboard-check"></i>
                                     </button>
-                                    <button class="btn-icon" title="Remove user" style="color:var(--error,#e05252);"
+                                    <button class="btn-icon" title="Remove user" aria-label="Remove user @u.Email" style="color:var(--error,#e05252);"
                                             @onclick="() => RemoveRbacUser(u.Id)">
                                         <i class="fa-solid fa-trash"></i>
                                     </button>

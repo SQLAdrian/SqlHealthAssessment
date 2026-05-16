@@ -20,13 +20,13 @@
     <ApplicationIcon>SQLTriage.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Title>SQLTriage</Title>
-    <Authors>Adrian Sullivn</Authors>
+    <Authors>Adrian Sullivan</Authors>
     <Description>An Enterprise grade SQL health check assessment tool. This tool will generate diagnostic outputs for a comprehensive SQL health audit. Incorporating SQLWATCH for database metrics.</Description>
     <Copyright>Adrian Sullivan</Copyright>
     <PackageProjectUrl>https://github.com/SQLAdrian/SQLTriage</PackageProjectUrl>
     <PackageIcon>SQLTriage.png</PackageIcon>
     <RepositoryUrl>https://github.com/SQLAdrian/SQLTriage</RepositoryUrl>
-    <RepositoryType>GIthub</RepositoryType>
+    <RepositoryType>git</RepositoryType>
     <!-- Memory Optimization: Server GC for better throughput, concurrent for lower latency -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
@@ -50,6 +50,11 @@
     <GenerateRazorTargetAssemblyInfo>false</GenerateRazorTargetAssemblyInfo>
     <!-- Custom entry point: Program.Main handles both WPF and service modes -->
     <StartupObject Condition="!$(MSBuildProjectFile.Contains('_wpftmp'))">SQLTriage.Program</StartupObject>
+    <!-- Supply-chain: reproducible builds + lock file -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <EmbedAllSources>true</EmbedAllSources>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <!-- ASP.NET Core framework for Blazor Server mode (Kestrel, SignalR) -->
@@ -87,7 +92,7 @@
   <!-- No new package dependency: uses the dotnet CLI already on PATH. -->
   <Target Name="GenerateSbom" AfterTargets="Build"
           Condition="'$(Configuration)' == 'Release' AND !$(MSBuildProjectFile.Contains('_wpftmp'))">
-    <Exec Command="dotnet list &quot;$(MSBuildProjectFullPath)&quot; package --include-transitive --format json &gt; &quot;$(OutputPath)sbom.json&quot;"
+    <Exec Command="dotnet list &quot;$(MSBuildProjectFullPath)&quot; package --include-transitive --format json --output &quot;$(OutputPath)sbom.json&quot;"
           ContinueOnError="true" />
     <Message Text="[SBOM] Written to $(OutputPath)sbom.json" Importance="high" />
   </Target>
@@ -96,8 +101,8 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishReadyToRunShowWarnings>true</PublishReadyToRunShowWarnings>
-    <DebugType>none</DebugType>
-    <DebugSymbols>false</DebugSymbols>
+    <DebugType>embedded</DebugType>
+    <DebugSymbols>true</DebugSymbols>
     <Optimize>true</Optimize>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
@@ -293,7 +298,7 @@
   </ItemGroup>
 
   <!-- Organize build output: DLLs to bin/, JSON configs to config/ -->
-  <Target Name="OrganizeBuildOutput" AfterTargets="Build" Condition="'$(PublishDir)' == ''">
+  <Target Name="OrganizeBuildOutput" AfterTargets="Build" Condition="'$(PublishDir)' == '' AND ('$(IsPublishing)' == 'true' OR '$(_IsPublishing)' == 'true')">
     <ItemGroup>
       <DllFiles Include="$(OutputPath)*.dll" Exclude="$(OutputPath)SQLTriage.dll" />
       <ConfigFiles Include="$(OutputPath)appsettings*.json" />
@@ -327,7 +332,8 @@
   </Target>
 
   <!-- Increment build number on every build -->
-  <Target Name="IncrementBuildNumber" BeforeTargets="BeforeBuild">
+  <Target Name="IncrementBuildNumber" BeforeTargets="BeforeBuild"
+          Condition="'$(CI)' != 'true' AND '$(ContinuousIntegrationBuild)' != 'true'">
     <Exec Command="powershell -ExecutionPolicy Bypass -File increment-build.ps1" />
   </Target>
 

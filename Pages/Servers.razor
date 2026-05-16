@@ -1,5 +1,6 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/servers"
+<PageTitle>SQLTriage - Server Management</PageTitle>
 @inject ServerConnectionManager ConnectionManager
 @inject SQLTriage.Data.Services.AppUserState UserState
 @inject SQLTriage.Data.Services.BuildCatalogueService BuildCatalogue
@@ -79,7 +80,7 @@ else
 
     @if (StatusMessage != null)
     {
-        <div class="status-message @(IsSuccess ? "success" : "error")">
+        <div class="status-message @(IsSuccess ? "success" : "error")" role="status">
             @StatusMessage
         </div>
     }
@@ -108,9 +109,9 @@ else
                         }
                     </div>
                     <div class="server-actions">
-                        <button class="btn-icon" @onclick="() => TestConnection(conn)" title="Test"><i class="fa-solid fa-link"></i></button>
-                        <button class="btn-icon" @onclick="() => EditConnection(conn)" title="Edit"><i class="fa-solid fa-pen"></i></button>
-                        <button class="btn-icon" @onclick="() => DeleteConnection(conn)" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn-icon" @onclick="() => TestConnection(conn)" title="Test" aria-label="Test connection @conn.ServerNames"><i class="fa-solid fa-link"></i></button>
+                        <button class="btn-icon" @onclick="() => EditConnection(conn)" title="Edit" aria-label="Edit server @conn.ServerNames"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn-icon" @onclick="() => DeleteConnection(conn)" title="Delete" aria-label="Delete server @conn.ServerNames"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
                 

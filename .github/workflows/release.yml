@@ -22,13 +22,13 @@ jobs:
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0   # full history for changelog generation
 
       # ── 2. .NET setup ────────────────────────────────────────────────────
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@4d6c8fcf3c8f7a60068d26b594648e99df24cee3 # v4.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -71,6 +71,9 @@ jobs:
             -o ${{ env.PUBLISH_DIR }}
 
       # ── 8. Code-sign exe (skipped at runtime if secret not configured) ──
+      # Code signing — requires CODESIGN_CERT_BASE64 + CODESIGN_CERT_PASSWORD secrets.
+      # Without these, releases ship UNSIGNED and SmartScreen will block installs.
+      # TODO: Adrian — obtain code-signing certificate before first regulated-buyer release.
       # Note: cannot use `if: ${{ secrets.X != '' }}` — GitHub Actions does
       # not allow `secrets.*` in `if:` expressions. The runtime guard inside
       # the script handles the no-cert case instead.
@@ -206,7 +209,7 @@ jobs:
 
       # ── 14. Create GitHub Release ─────────────────────────────────────────
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@69320dbe05506a9a39fc8ae11030b214ec2d1f87 # v2.0.5
         with:
           name: "SQLTriage v${{ steps.ver.outputs.version }}"
           body_path: release_notes.md

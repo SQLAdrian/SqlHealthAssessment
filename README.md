@@ -18,7 +18,7 @@ Full gallery → `/docs/screenshots`
 
 ## What It Is
 
-SQLTriage is an **audit-first SQL Server compliance platform** for DBAs, DBA firms, and MSPs.
+SQLTriage is an **agentless**, audit-first SQL Server compliance platform for DBAs, DBA firms, and MSPs.
 
 Run it against a SQL Server. In seconds you get:
 

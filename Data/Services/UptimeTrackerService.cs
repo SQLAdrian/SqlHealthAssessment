@@ -58,19 +58,59 @@ namespace SQLTriage.Data.Services
             {
                 using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
                 using var cmd = conn.CreateCommand();
+
+                // R-L3: Detect old single-column PK schema and drop+recreate.
+                // uptime.db is regenerable (no long-term business data), so this is safe.
+                // Old schema had timestamp_utc TEXT PRIMARY KEY alone — vulnerable to
+                // sub-millisecond clock collisions and backward clock jumps silently
+                // dropping rows via INSERT OR IGNORE. New schema uses AUTOINCREMENT id PK
+                // with a UNIQUE constraint on (timestamp_utc, event_type, session_id).
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
+                    PRAGMA foreign_keys=ON;
 
                     CREATE TABLE IF NOT EXISTS uptime_events (
-                        timestamp_utc TEXT PRIMARY KEY,
+                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp_utc TEXT NOT NULL,
                         event_type    TEXT NOT NULL,
-                        session_id    TEXT NOT NULL
+                        session_id    TEXT NOT NULL,
+                        UNIQUE (timestamp_utc, event_type, session_id)
                     );
 
                     CREATE INDEX IF NOT EXISTS idx_uptime_ts
                         ON uptime_events (timestamp_utc);";
                 cmd.ExecuteNonQuery();
+
+                // Detect old schema (no id column) and migrate by drop+recreate.
+                using var checkCmd = conn.CreateCommand();
+                checkCmd.CommandText = "PRAGMA table_info(uptime_events);";
+                bool hasIdColumn = false;
+                using (var reader = checkCmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        if (reader.GetString(1) == "id") { hasIdColumn = true; break; }
+                    }
+                }
+                if (!hasIdColumn)
+                {
+                    _logger.LogWarning("[UPTIME] Old single-column PK schema detected — migrating (drop+recreate uptime_events)");
+                    using var dropCmd = conn.CreateCommand();
+                    dropCmd.CommandText = @"
+                        DROP TABLE IF EXISTS uptime_events;
+                        CREATE TABLE uptime_events (
+                            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                            timestamp_utc TEXT NOT NULL,
+                            event_type    TEXT NOT NULL,
+                            session_id    TEXT NOT NULL,
+                            UNIQUE (timestamp_utc, event_type, session_id)
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_uptime_ts
+                            ON uptime_events (timestamp_utc);";
+                    dropCmd.ExecuteNonQuery();
+                    _logger.LogInformation("[UPTIME] Migration to compound-key schema complete");
+                }
             }
             catch (Exception ex)
             {

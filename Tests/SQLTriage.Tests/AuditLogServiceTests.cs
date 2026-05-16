@@ -546,5 +546,124 @@ namespace SQLTriage.Tests
             Assert.Equal(string.Empty, first.PreviousHash);
             Assert.NotEmpty(first.Signature);
         }
+
+        // ── T1: failover write when primary dir is unavailable ──────────
+
+        [Fact]
+        public void Flush_WhenPrimaryDirUnwritable_WritesToFailoverDir()
+        {
+            // Arrange: create service, then delete the log directory so the next
+            // Flush() cannot write to the primary location.
+            using var svc = NewService();
+            svc.MaxBufferSize = 100; // prevent auto-flush on Enqueue
+
+            // Confirm no log file exists yet
+            Assert.Empty(Directory.GetFiles(_tempDir, "audit-*.jsonl"));
+
+            // Delete the primary log directory so File.AppendAllText fails.
+            // The service was already constructed (key loaded, timers stopped)
+            // so removing the directory only blocks writes, not construction.
+            Directory.Delete(_tempDir, recursive: true);
+
+            // Enqueue 3 entries, then force FlushFailoverThreshold (3) flushes
+            // to trigger the failover path. Each failed Flush() increments the counter.
+            svc.LogConnectionAttempt("srv1", success: false, errorMessage: "unreachable");
+            svc.LogConnectionAttempt("srv2", success: false, errorMessage: "unreachable");
+            svc.LogConnectionAttempt("srv3", success: false, errorMessage: "unreachable");
+
+            // Three consecutive Flush() calls needed to reach FlushFailoverThreshold (3)
+            svc.Flush(); // attempt 1 – fails, requeues, increments counter to 1
+            svc.Flush(); // attempt 2 – fails, counter 2
+            svc.Flush(); // attempt 3 – fails, counter == FlushFailoverThreshold → writes failover
+
+            // Assert: failover directory + at least one failover file was created.
+            var failoverDir = Path.Combine(_tempDir, ".failover");
+            Assert.True(Directory.Exists(failoverDir), "Failover directory should have been created by TryWriteFailover.");
+
+            var failoverFiles = Directory.GetFiles(failoverDir, "*.jsonl");
+            Assert.NotEmpty(failoverFiles);
+
+            // Chain should not be flagged as broken from our side (the break is on the write side,
+            // not the read/verify side — ChainBroken is set only by VerifyChainOnStartup).
+            Assert.False(svc.ChainBroken);
+
+            // Cleanup: re-create _tempDir so IDisposable cleanup in class can succeed
+            Directory.CreateDirectory(_tempDir);
+        }
+
+        // ── T2: HMAC key rotation preserves chain continuity ────────────
+
+        [Fact]
+        public void RotateHmacKey_PreservesChainContinuity()
+        {
+            // Arrange: 3 entries before rotation
+            using var svc = NewService();
+            svc.LogConnectionAttempt("srv1", success: true);
+            svc.LogConnectionAttempt("srv2", success: true);
+            svc.LogConnectionAttempt("srv3", success: true);
+
+            // Act: rotate key (internally flushes first, writes rotation anchor, then new entries use new key)
+            svc.RotateHmacKey("test-admin");
+
+            // Append 3 more entries under the new key
+            svc.LogConnectionAttempt("srv4", success: true);
+            svc.LogConnectionAttempt("srv5", success: true);
+            svc.LogConnectionAttempt("srv6", success: true);
+            svc.Flush();
+
+            // Assert: 7 entries total (3 + 1 rotation anchor + 3)
+            var entries = ReadAll(LatestLogFile());
+            Assert.Equal(7, entries.Count);
+
+            // The 4th entry (index 3) is the rotation anchor
+            Assert.Equal(AuditEventType.HmacKeyRotated, entries[3].EventType);
+
+            // Structural chain continuity: each entry's PreviousHash must equal
+            // the prior entry's Signature regardless of which key signed them.
+            // This validates that the rotation anchor correctly bridges old-key and
+            // new-key entries without breaking the PreviousHash link sequence.
+            for (int i = 1; i < entries.Count; i++)
+                Assert.Equal(entries[i - 1].Signature, entries[i].PreviousHash,
+                    $"Entry[{i}].PreviousHash should match Entry[{i-1}].Signature");
+
+            // ChainBroken is set only by startup verification (VerifyChainOnStartup).
+            // Since we haven't restarted the service, it should remain false.
+            Assert.False(svc.ChainBroken,
+                "ChainBroken should not be set mid-session after key rotation.");
+
+            // Note: VerifyChain() re-signs using only the current (new) key, so it will
+            // report intact=false for pre-rotation entries — by design. The structural
+            // PreviousHash chain above (asserted above) is the correct continuity guarantee.
+        }
+
+        // ── T7: legacy raw key file migrates to DPAPI on Windows ────────
+
+        [Fact]
+        public void LegacyRawKey_MigratesToDpapi_OnWindows()
+        {
+            if (!OperatingSystem.IsWindows()) return; // DPAPI is Windows-only
+
+            // Arrange: plant a raw 32-byte key (no DPAPI wrap) — simulates a pre-DPAPI build.
+            var keyPath = Path.Combine(_tempDir, "hmac.key");
+            var rawKey = new byte[32];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(rawKey);
+            File.WriteAllBytes(keyPath, rawKey);
+
+            // Act: construct service — LoadOrCreateHmacKey detects raw 32-byte blob,
+            // re-wraps under DPAPI, and returns the original key bytes.
+            using var svc = NewService();
+            svc.LogApplicationStart();
+            svc.Flush();
+
+            // Assert: file is now larger than 32 bytes (DPAPI header adds overhead)
+            var migratedSize = new FileInfo(keyPath).Length;
+            Assert.True(migratedSize > 32,
+                $"Key file should be DPAPI-wrapped (>32 bytes) but was {migratedSize} bytes.");
+
+            // Assert: chain is valid (key semantics preserved through migration)
+            Assert.False(svc.ChainBroken);
+            var entries = ReadAll(LatestLogFile());
+            Assert.Equal(AuditEventType.ApplicationLifecycle, entries[0].EventType);
+        }
     }
 }

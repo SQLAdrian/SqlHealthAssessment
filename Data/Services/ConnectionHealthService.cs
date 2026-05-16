@@ -51,6 +51,7 @@ namespace SQLTriage.Data.Services
             => _caps.TryGetValue(serverName, out var v) ? v : null;
 
         private readonly CancellationTokenSource _cts = new();
+        private readonly ServerCircuitBreakerService? _breaker;
         private Task? _loopTask;
         private bool _disposed;
 
@@ -61,10 +62,12 @@ namespace SQLTriage.Data.Services
             => _isAzure.TryGetValue(serverName, out var v) && v;
 
         public ConnectionHealthService(ServerConnectionManager connections, ILogger<ConnectionHealthService> logger,
-            IConfiguration? configuration = null)
+            IConfiguration? configuration = null,
+            ServerCircuitBreakerService? breaker = null)
         {
             _connections = connections;
             _logger = logger;
+            _breaker = breaker;
             var intervalSeconds = configuration?.GetValue<int>("ConnectionHealth:PollIntervalSeconds", 30) ?? 30;
             PollInterval = TimeSpan.FromSeconds(intervalSeconds > 0 ? intervalSeconds : 30);
         }
@@ -137,6 +140,9 @@ namespace SQLTriage.Data.Services
 
         private async Task CheckServerAsync(ServerConnection conn, string serverName, CancellationToken outerCt)
         {
+            if (_breaker != null && !_breaker.ShouldAttempt(serverName))
+                return;
+
             try
             {
                 var connStr = conn.GetConnectionString(serverName, "master") +
@@ -197,6 +203,7 @@ namespace SQLTriage.Data.Services
                 }
 
                 _status[serverName] = new HealthEntry(ServerStatus.Online, DateTime.UtcNow, null);
+                _breaker?.RecordSuccess(serverName);
                 _logger.LogDebug("Health check OK: {Server}", serverName);
             }
             catch (OperationCanceledException) when (outerCt.IsCancellationRequested)
@@ -205,6 +212,7 @@ namespace SQLTriage.Data.Services
             }
             catch (Exception ex)
             {
+                _breaker?.RecordFailure(serverName);
                 var prev = GetStatus(serverName);
                 _status[serverName] = new HealthEntry(ServerStatus.Offline, DateTime.UtcNow, ex.Message);
 

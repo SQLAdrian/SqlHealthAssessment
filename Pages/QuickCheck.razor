@@ -359,7 +359,7 @@ else
 
             @if (!string.IsNullOrEmpty(State.StatusMessage))
             {
-                <div class="status-message @State.StatusClass">
+                <div class="status-message @State.StatusClass" role="status">
                     @State.StatusMessage
                 </div>
             }

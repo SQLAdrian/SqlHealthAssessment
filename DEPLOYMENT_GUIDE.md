@@ -126,6 +126,9 @@ The application requires the SQLWATCH database on the target SQL Server.
 
 ### 2. Configure Server Connections
 
+> Before adding connections: create a least-privilege monitoring account on each SQL Server.
+> See [Minimum-Privilege SQL Login](docs/min-privilege-sql-login.md) for the T-SQL setup script and permissions table.
+
 1. Navigate to **Servers** page
 2. Click **+ Add Connection**
 3. Enter connection details:
