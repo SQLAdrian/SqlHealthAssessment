@@ -2,7 +2,6 @@
 @page "/config-diff"
 
 @using SQLTriage.Data
-@using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
 @using System.Text
 
@@ -11,7 +10,7 @@
 @inject AuditLogService AuditLog
 @inject IJSRuntime JS
 
-<PageTitle>Config Snapshot & Diff - SQLTriage</PageTitle>
+<PageTitle>Config Snapshot &amp; Diff - SQLTriage</PageTitle>
 
 <div class="scd-page">
 
@@ -25,7 +24,6 @@
         </div>
     </div>
 
-    <!-- ── Controls ────────────────────────────────────────────────── -->
     <div class="scd-toolbar">
 
         <div class="scd-toolbar-group">
@@ -52,7 +50,7 @@
 
         <div class="scd-toolbar-group scd-capture-group">
             <label>New baseline label</label>
-            <input @bind="_newLabel" placeholder="e.g. pre-patch-2026-05-17" class="scd-input" />
+            <input @bind="_newLabel" placeholder="e.g. pre-patch" class="scd-input" />
             <button class="btn btn-primary" @onclick="CaptureAsync"
                     disabled="@(string.IsNullOrWhiteSpace(_selectedServer) || _busy)">
                 <i class="fa-solid fa-camera"></i> Save Baseline
@@ -87,8 +85,6 @@
 
     @if (_diffResult != null)
     {
-        var totalChanges = _diffResult.Added.Count + _diffResult.Removed.Count + _diffResult.Modified.Count;
-
         <div class="scd-summary-bar">
             <span class="scd-badge scd-badge-added">+@_diffResult.Added.Count added</span>
             <span class="scd-badge scd-badge-removed">-@_diffResult.Removed.Count removed</span>
@@ -102,7 +98,9 @@
         @if (_diffResult.Modified.Count > 0)
         {
             <div class="scd-section">
-                <h3 class="scd-section-title scd-modified"><i class="fa-solid fa-pen-to-square"></i> Modified (@_diffResult.Modified.Count)</h3>
+                <h3 class="scd-section-title scd-modified">
+                    <i class="fa-solid fa-pen-to-square"></i> Modified (@_diffResult.Modified.Count)
+                </h3>
                 <table class="scd-table">
                     <thead>
                         <tr>
@@ -115,15 +113,15 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var (key, baseline, current) in _diffResult.Modified.OrderBy(m => m.Key))
+                        @foreach (var m in _diffResult.Modified.OrderBy(x => x.Key))
                         {
                             <tr class="scd-row-modified">
-                                <td class="scd-key">@key</td>
-                                <td class="scd-old">@baseline.Value</td>
-                                <td class="scd-old">@baseline.ValueInUse</td>
-                                <td class="scd-new">@current.Value</td>
-                                <td class="scd-new">@current.ValueInUse</td>
-                                <td class="scd-desc">@current.Description</td>
+                                <td class="scd-key">@m.Key</td>
+                                <td class="scd-old">@m.Baseline.Value</td>
+                                <td class="scd-old">@m.Baseline.ValueInUse</td>
+                                <td class="scd-new">@m.Current.Value</td>
+                                <td class="scd-new">@m.Current.ValueInUse</td>
+                                <td class="scd-desc">@m.Current.Description</td>
                             </tr>
                         }
                     </tbody>
@@ -134,19 +132,21 @@
         @if (_diffResult.Added.Count > 0)
         {
             <div class="scd-section">
-                <h3 class="scd-section-title scd-added"><i class="fa-solid fa-plus-circle"></i> Added (@_diffResult.Added.Count)</h3>
+                <h3 class="scd-section-title scd-added">
+                    <i class="fa-solid fa-plus-circle"></i> Added (@_diffResult.Added.Count)
+                </h3>
                 <table class="scd-table">
                     <thead>
                         <tr><th>Setting</th><th>Value</th><th>In-Use</th><th>Description</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var (key, entry) in _diffResult.Added.OrderBy(a => a.Key))
+                        @foreach (var a in _diffResult.Added.OrderBy(x => x.Key))
                         {
                             <tr class="scd-row-added">
-                                <td class="scd-key">@key</td>
-                                <td>@entry.Value</td>
-                                <td>@entry.ValueInUse</td>
-                                <td class="scd-desc">@entry.Description</td>
+                                <td class="scd-key">@a.Key</td>
+                                <td>@a.Entry.Value</td>
+                                <td>@a.Entry.ValueInUse</td>
+                                <td class="scd-desc">@a.Entry.Description</td>
                             </tr>
                         }
                     </tbody>
@@ -157,19 +157,21 @@
         @if (_diffResult.Removed.Count > 0)
         {
             <div class="scd-section">
-                <h3 class="scd-section-title scd-removed"><i class="fa-solid fa-minus-circle"></i> Removed (@_diffResult.Removed.Count)</h3>
+                <h3 class="scd-section-title scd-removed">
+                    <i class="fa-solid fa-minus-circle"></i> Removed (@_diffResult.Removed.Count)
+                </h3>
                 <table class="scd-table">
                     <thead>
                         <tr><th>Setting</th><th>Baseline Value</th><th>Baseline In-Use</th><th>Description</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var (key, entry) in _diffResult.Removed.OrderBy(r => r.Key))
+                        @foreach (var r in _diffResult.Removed.OrderBy(x => x.Key))
                         {
                             <tr class="scd-row-removed">
-                                <td class="scd-key">@key</td>
-                                <td>@entry.Value</td>
-                                <td>@entry.ValueInUse</td>
-                                <td class="scd-desc">@entry.Description</td>
+                                <td class="scd-key">@r.Key</td>
+                                <td>@r.Entry.Value</td>
+                                <td>@r.Entry.ValueInUse</td>
+                                <td class="scd-desc">@r.Entry.Description</td>
                             </tr>
                         }
                     </tbody>
@@ -200,7 +202,7 @@
     private string _statusMessage = string.Empty;
     private string _statusClass = string.Empty;
 
-    // Cached current config (fetched once per compare; reused for export)
+    // Cached current config (fetched once per compare; reused for export).
     private Dictionary<string, ConfigEntry>? _currentSpConfig;
     private BaselineInfo? _compareBaseline;
 
@@ -224,16 +226,25 @@
         ClearStatus();
 
         if (!string.IsNullOrWhiteSpace(_selectedServer))
+        {
             _baselines = await BaselineService.GetBaselinesAsync(_selectedServer);
+        }
     }
 
     // ── Capture ────────────────────────────────────────────────────────
     private async Task CaptureAsync()
     {
-        if (string.IsNullOrWhiteSpace(_selectedServer)) return;
+        if (string.IsNullOrWhiteSpace(_selectedServer))
+        {
+            return;
+        }
 
+        // Pre-format the timestamp into a local — never use an inline
+        // {value:format} specifier inside a Razor @code interpolation
+        // (the Razor source generator mis-tokenises the ':' + '-' run).
+        var stamp = DateTime.UtcNow.ToString("yyyy-MM-dd-HHmm");
         var label = string.IsNullOrWhiteSpace(_newLabel)
-            ? $"snapshot-{DateTime.UtcNow:yyyy-MM-dd-HHmm}"
+            ? "snapshot-" + stamp
             : _newLabel.Trim();
 
         _busy = true;
@@ -248,11 +259,11 @@
             _newLabel = string.Empty;
             _baselines = await BaselineService.GetBaselinesAsync(_selectedServer);
             _selectedBaselineId = id;
-            SetStatus($"Baseline '{label}' saved (id={id}).", isError: false);
+            SetStatus("Baseline '" + label + "' saved (id=" + id + ").", isError: false);
         }
         catch (Exception ex)
         {
-            SetStatus($"Capture failed: {ex.Message}", isError: true);
+            SetStatus("Capture failed: " + ex.Message, isError: true);
         }
         finally
         {
@@ -263,7 +274,10 @@
     // ── Compare ────────────────────────────────────────────────────────
     private async Task CompareAsync()
     {
-        if (string.IsNullOrWhiteSpace(_selectedServer) || _selectedBaselineId == 0) return;
+        if (string.IsNullOrWhiteSpace(_selectedServer) || _selectedBaselineId == 0)
+        {
+            return;
+        }
 
         _busy = true;
         _diffResult = null;
@@ -280,10 +294,10 @@
                 return;
             }
 
-            var (current, _) = await BaselineService.GetCurrentConfigAsync(_selectedServer);
-            _currentSpConfig = current;
+            var live = await BaselineService.GetCurrentConfigAsync(_selectedServer);
+            _currentSpConfig = live.SpConfig;
 
-            _diffResult = ServerConfigBaselineService.DiffConfig(baseline, current);
+            _diffResult = ServerConfigBaselineService.DiffConfig(baseline, live.SpConfig);
             _compareBaseline = _baselines.FirstOrDefault(b => b.Id == _selectedBaselineId);
 
             AuditLog.LogServerConfigBaselineCompared(
@@ -295,15 +309,12 @@
                 _diffResult.Removed.Count,
                 _diffResult.Modified.Count);
 
-            SetStatus(
-                _diffResult.HasChanges
-                    ? $"Diff complete — {_diffResult.Modified.Count} modified, {_diffResult.Added.Count} added, {_diffResult.Removed.Count} removed."
-                    : "Diff complete — no changes detected.",
-                isError: false);
+            var changeWord = _diffResult.HasChanges ? "changes detected" : "no changes";
+            SetStatus("Compare complete — " + changeWord + ".", isError: false);
         }
         catch (Exception ex)
         {
-            SetStatus($"Compare failed: {ex.Message}", isError: true);
+            SetStatus("Compare failed: " + ex.Message, isError: true);
         }
         finally
         {
@@ -311,29 +322,41 @@
         }
     }
 
-    // ── Export ─────────────────────────────────────────────────────────
+    // ── Export CSV ─────────────────────────────────────────────────────
     private async Task ExportCsvAsync()
     {
-        if (_diffResult == null) return;
+        if (_diffResult == null)
+        {
+            return;
+        }
 
         var sb = new StringBuilder();
-        sb.AppendLine("ChangeType,Setting,BaselineValue,BaselineInUse,CurrentValue,CurrentInUse,Description");
+        sb.AppendLine("Change,Setting,Value,ValueInUse,BaselineValue,BaselineInUse,Description");
 
-        foreach (var (key, bl, cur) in _diffResult.Modified.OrderBy(m => m.Key))
-            sb.AppendLine($"Modified,{CsvEscape(key)},{CsvEscape(bl.Value)},{CsvEscape(bl.ValueInUse)},{CsvEscape(cur.Value)},{CsvEscape(cur.ValueInUse)},{CsvEscape(cur.Description)}");
-
-        foreach (var (key, entry) in _diffResult.Added.OrderBy(a => a.Key))
-            sb.AppendLine($"Added,{CsvEscape(key)},,, {CsvEscape(entry.Value)},{CsvEscape(entry.ValueInUse)},{CsvEscape(entry.Description)}");
-
-        foreach (var (key, entry) in _diffResult.Removed.OrderBy(r => r.Key))
-            sb.AppendLine($"Removed,{CsvEscape(key)},{CsvEscape(entry.Value)},{CsvEscape(entry.ValueInUse)},,,{CsvEscape(entry.Description)}");
+        foreach (var m in _diffResult.Modified.OrderBy(x => x.Key))
+        {
+            sb.AppendLine("Modified," + CsvEscape(m.Key) + "," + CsvEscape(m.Current.Value) + ","
+                + CsvEscape(m.Current.ValueInUse) + "," + CsvEscape(m.Baseline.Value) + ","
+                + CsvEscape(m.Baseline.ValueInUse) + "," + CsvEscape(m.Current.Description));
+        }
+        foreach (var a in _diffResult.Added.OrderBy(x => x.Key))
+        {
+            sb.AppendLine("Added," + CsvEscape(a.Key) + "," + CsvEscape(a.Entry.Value) + ","
+                + CsvEscape(a.Entry.ValueInUse) + ",,," + CsvEscape(a.Entry.Description));
+        }
+        foreach (var r in _diffResult.Removed.OrderBy(x => x.Key))
+        {
+            sb.AppendLine("Removed," + CsvEscape(r.Key) + ",,," + CsvEscape(r.Entry.Value) + ","
+                + CsvEscape(r.Entry.ValueInUse) + "," + CsvEscape(r.Entry.Description));
+        }
 
         var totalRows = _diffResult.Added.Count + _diffResult.Removed.Count + _diffResult.Modified.Count;
         var label = _compareBaseline?.Label ?? "baseline";
-        var filename = $"config-diff-{_selectedServer.Replace('\\', '-')}-{label}-{DateTime.UtcNow:yyyyMMdd-HHmm}.csv";
-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        var base64 = Convert.ToBase64String(bytes);
+        var safeServer = _selectedServer.Replace('\\', '-');
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmm");
+        var filename = "config-diff-" + safeServer + "-" + label + "-" + stamp + ".csv";
 
+        var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(sb.ToString()));
         await JS.InvokeVoidAsync("blazorDownloadFile", filename, "text/csv", base64);
 
         AuditLog.LogServerConfigBaselineExported(_selectedServer, label, Environment.UserName, totalRows);
@@ -343,16 +366,21 @@
     private static string FormatUtc(string iso)
     {
         if (DateTime.TryParse(iso, out var dt))
+        {
             return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        }
         return iso;
     }
 
     private static string CsvEscape(string? value)
     {
-        if (string.IsNullOrEmpty(value)) return string.Empty;
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        return value;
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+        var needsQuote = value.Contains(',') || value.Contains('"') || value.Contains('\n');
+        var escaped = value.Replace("\"", "\"\"");
+        return needsQuote ? "\"" + escaped + "\"" : escaped;
     }
 
     private void SetStatus(string msg, bool isError)
@@ -364,6 +392,6 @@
     private void ClearStatus()
     {
         _statusMessage = string.Empty;
-        _statusClass   = string.Empty;
+        _statusClass = string.Empty;
     }
 }

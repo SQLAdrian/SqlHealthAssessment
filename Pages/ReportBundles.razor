@@ -3,6 +3,7 @@
 @using SQLTriage.Data
 @using SQLTriage.Data.Services
 @using System.IO
+@using Microsoft.Extensions.Logging
 @inject ReportBundleService ReportBundleSvc
 @inject ServerConnectionManager ConnectionManager
 @inject PrintService PrintSvc
@@ -59,7 +60,7 @@
             }
             <div class="rb-btn-group">
                 <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
-                        @onclick="() => GenerateAsync(\"ExecutiveSummary\")">
+                        @onclick='() => GenerateAsync("ExecutiveSummary")'>
                     @if (_generating && _generatingType == "ExecutiveSummary")
                     {
                         <i class="fa-solid fa-spinner rb-spinning"></i>
@@ -73,7 +74,7 @@
                 </button>
                 <button class="rb-gen-btn rb-pdf-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer) || !PrintSvc.IsAvailable)"
                         title="@PdfBtnTitle"
-                        @onclick="() => GeneratePdfAsync(\"ExecutiveSummary\")">
+                        @onclick='() => GeneratePdfAsync("ExecutiveSummary")'>
                     @if (_generating && _generatingType == "ExecutiveSummary_pdf")
                     {
                         <i class="fa-solid fa-spinner rb-spinning"></i>
@@ -120,7 +121,7 @@
             }
             <div class="rb-btn-group">
                 <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
-                        @onclick="() => GenerateAsync(\"DbaHandoff\")">
+                        @onclick='() => GenerateAsync("DbaHandoff")'>
                     @if (_generating && _generatingType == "DbaHandoff")
                     {
                         <i class="fa-solid fa-spinner rb-spinning"></i>
@@ -134,7 +135,7 @@
                 </button>
                 <button class="rb-gen-btn rb-pdf-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer) || !PrintSvc.IsAvailable)"
                         title="@PdfBtnTitle"
-                        @onclick="() => GeneratePdfAsync(\"DbaHandoff\")">
+                        @onclick='() => GeneratePdfAsync("DbaHandoff")'>
                     @if (_generating && _generatingType == "DbaHandoff_pdf")
                     {
                         <i class="fa-solid fa-spinner rb-spinning"></i>
@@ -181,7 +182,7 @@
             }
             <div class="rb-btn-group">
                 <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
-                        @onclick="() => GenerateAsync(\"AuditEvidence\")">
+                        @onclick='() => GenerateAsync("AuditEvidence")'>
                     @if (_generating && _generatingType == "AuditEvidence")
                     {
                         <i class="fa-solid fa-spinner rb-spinning"></i>
@@ -195,7 +196,7 @@
                 </button>
                 <button class="rb-gen-btn rb-pdf-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer) || !PrintSvc.IsAvailable)"
                         title="@PdfBtnTitle"
-                        @onclick="() => GeneratePdfAsync(\"AuditEvidence\")">
+                        @onclick='() => GeneratePdfAsync("AuditEvidence")'>
                     @if (_generating && _generatingType == "AuditEvidence_pdf")
                     {
                         <i class="fa-solid fa-spinner rb-spinning"></i>

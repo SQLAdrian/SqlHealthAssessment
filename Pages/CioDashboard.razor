@@ -262,6 +262,23 @@
             }
         }
 
+        <!-- Performance Health -->
+        @if (_lastCheckResults.Any(r => r.CheckId == "WAIT_001"))
+        {
+            var waitResult = _lastCheckResults.First(r => r.CheckId == "WAIT_001");
+            if (!string.IsNullOrEmpty(waitResult.Message))
+            {
+                <div class="cio-wait-section">
+                    <div class="cio-wait-header">
+                        <i class="fa-solid fa-gauge-high"></i> Performance Health
+                    </div>
+                    <div class="cio-wait-verdict">
+                        @WaitVerdict(waitResult.Message)
+                    </div>
+                </div>
+            }
+        }
+
         <!-- Server Risk Heatmap -->
         @if (_serverScores.Count > 0)
         {
@@ -745,36 +762,32 @@
         return "var(--red)";                      // Emerging
     }
 
-    private string CategoryColor(double passRate)
-    {
-        if (passRate >= 80) return "var(--green)";
-        if (passRate >= 50) return "var(--yellow)";
-        return "var(--red)";
-    }
-
-    private string SeverityColor(HealthSeverity severity) => severity switch
-    {
-        HealthSeverity.Healthy => "var(--green)",
-        HealthSeverity.Warning => "var(--yellow)",
-        HealthSeverity.Critical => "var(--red)",
-        _ => "var(--text-muted)"
-    };
-
     private string AssessmentBadgeStyle()
     {
-        if (_governanceScore?.IsIndicative == true)
-            return "background:rgba(234,179,8,0.15); color:var(--yellow);";
-        return "background:rgba(34,197,94,0.15); color:var(--green);";
+        if (_governanceScore == null) return "";
+        return _governanceScore.IsIndicative
+            ? "background:rgba(99,102,241,0.12);color:var(--accent);border:1px solid rgba(99,102,241,0.3)"
+            : "background:rgba(34,197,94,0.12);color:var(--green);border:1px solid rgba(34,197,94,0.3)";
     }
 
-    private static int SeverityRank(string? severity) => severity?.ToLower() switch
+    private static string SeverityColor(HealthSeverity? sev)
     {
-        "critical" => 4,
-        "high" => 3,
-        "medium" => 2,
-        "low" => 1,
-        _ => 0
-    };
+        return sev switch
+        {
+            HealthSeverity.Healthy => "var(--green)",
+            HealthSeverity.Warning => "var(--yellow)",
+            HealthSeverity.Critical => "var(--red)",
+            _ => "var(--text-muted)"
+        };
+    }
+
+    private static int SeverityRank(string severity)
+    {
+        return severity?.ToLower() switch
+        {
+            "critical" => 4, "high" => 3, "medium" => 2, "low" => 1, _ => 0
+        };
+    }
 
     private void SetTrendView(string view)
     {
@@ -783,25 +796,43 @@
         if (!string.IsNullOrEmpty(firstServer))
         {
             if (view == "weekly")
-            {
-                var weeklyData = HistoryService.GetWeeklyAverages(firstServer, 12);
-                _trendData = weeklyData.Select(w => new GovernanceTrendPoint
-                {
-                    RecordedAt = w.Week,
-                    OverallScore = w.AvgScore,
-                    Band = "",
-                }).ToList();
-                _trendDelta = _trendData.Count >= 2 ? _trendData.Last().OverallScore - _trendData.First().OverallScore : 0;
-                _trendPeriod = "12 weeks";
-            }
+                _trendData = HistoryService.GetWeeklyAverages(firstServer, 12).Select(w => new GovernanceTrendPoint { RecordedAt = w.Week, OverallScore = w.AvgScore }).ToList();
             else
-            {
                 _trendData = HistoryService.GetTrend(firstServer, 90);
-                _trendDelta = _trendData.Count >= 2 ? _trendData.Last().OverallScore - _trendData.First().OverallScore : 0;
-                _trendPeriod = "90 days";
-            }
             StateHasChanged();
         }
+    }
+
+    private string CategoryColor(double passRate)
+    {
+        if (passRate >= 80) return "var(--green)";
+        if (passRate >= 50) return "var(--yellow)";
+        return "var(--red)";
+    }
+
+    private static string WaitVerdict(string waitMessage)
+    {
+        if (string.IsNullOrEmpty(waitMessage)) return "No wait data available.";
+        
+        // Try parse "category|pct" format from SQL message
+        var parts = waitMessage.Split('|');
+        if (parts.Length >= 2 && double.TryParse(parts[1].Trim(), out var pct))
+        {
+            var cat = parts[0].Trim();
+            return cat switch
+            {
+                "Disk I/O" when pct > 30 => $"Disk I/O is {pct:F0}% of wait time — storage upgrade recommended (4-6 hour engagement).",
+                "Locking" when pct > 20 => $"Locking is {pct:F0}% of wait time — query/index tuning recommended (6-8 hour engagement).",
+                "CPU Pressure" when pct > 40 => $"CPU pressure at {pct:F0}% of wait time — query optimization recommended (8-12 hour engagement).",
+                "Memory Pressure" when pct > 15 => $"Memory pressure at {pct:F0}% — memory configuration review recommended (4-6 hour engagement).",
+                "Transaction Log" when pct > 15 => $"Transaction log waits at {pct:F0}% — log drive performance review recommended (2-4 hour engagement).",
+                "Parallelism" when pct > 20 => $"Parallelism waits at {pct:F0}% — MAXDOP and CTFP tuning recommended (2-4 hour engagement).",
+                _ => $"{cat} at {pct:F0}% of wait time. Performance review recommended."
+            };
+        }
+        
+        // Fallback: show generic performance health
+        return "Performance snapshot available — run Quick Check for dominant wait category with engagement estimate.";
     }
 
     private string TrendLabel(string recordedAt)

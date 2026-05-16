@@ -398,44 +398,48 @@ namespace SQLTriage.Data.Services
             => string.IsNullOrEmpty(s) ? string.Empty
                : s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 
-        private static string HtmlHead(string title) => $"""
+        // $$ raw interpolated string: interpolation delimiter is {{ }} so CSS
+        // uses natural SINGLE braces. (A single-$ literal hit CS9006 on the
+        // nested @media rule because {{ body {{ ... }} }} exceeds the brace
+        // depth a single-$ raw string can disambiguate.)
+        private static string HtmlHead(string title) => $$"""
             <!DOCTYPE html>
             <html lang="en">
             <head>
             <meta charset="utf-8"/>
-            <title>{EscapeHtml(title)} — SQLTriage</title>
+            <title>{{EscapeHtml(title)}} — SQLTriage</title>
             <style>
-            *, *::before, *::after {{ box-sizing: border-box; }}
-            body {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a2e; margin: 0; padding: 16px 24px; background: #fff; }}
-            .rb-header {{ border-bottom: 2px solid #1a1a2e; padding-bottom: 12px; margin-bottom: 20px; }}
-            .rb-tag {{ font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #5a5a7a; margin-bottom: 4px; }}
-            h1 {{ margin: 0 0 4px; font-size: 20px; font-weight: 700; }}
-            h2 {{ font-size: 13px; font-weight: 700; margin: 0 0 8px; border-bottom: 1px solid #d0d0e0; padding-bottom: 4px; }}
-            .rb-meta {{ font-size: 10px; color: #5a5a7a; }}
-            .rb-sha {{ font-size: 9px; font-family: monospace; color: #888; margin-top: 4px; word-break: break-all; }}
-            section {{ margin-bottom: 20px; page-break-inside: avoid; }}
-            .rb-table {{ border-collapse: collapse; width: 100%; margin-bottom: 8px; }}
-            .rb-table th, .rb-table td {{ border: 1px solid #d0d0e0; padding: 4px 8px; text-align: left; vertical-align: top; }}
-            .rb-table thead th {{ background: #f0f0f8; font-weight: 700; }}
-            .rb-table tr:nth-child(even) {{ background: #f8f8fc; }}
-            .rb-kv th {{ width: 200px; font-weight: 700; background: #f0f0f8; }}
-            .sev-error, .sev-critical, .sev-high {{ color: var(--red, #c00); font-weight: 700; }}
-            .sev-warning, .sev-medium {{ color: var(--orange, #c60); font-weight: 600; }}
-            .sev-information, .sev-info, .sev-low {{ color: var(--green, #060); }}
-            .score-block {{ display: inline-block; border: 2px solid #d0d0e0; border-radius: 8px; padding: 12px 24px; margin: 8px 0; }}
-            .score-good {{ border-color: var(--green, #4caf50); }}
-            .score-warn {{ border-color: var(--orange, #ff9800); }}
-            .score-bad {{ border-color: var(--red, #f44336); }}
-            .score-number {{ font-size: 32px; font-weight: 900; }}
-            .score-label {{ font-size: 16px; color: #5a5a7a; }}
-            .score-msg {{ font-size: 11px; color: #5a5a7a; margin-top: 4px; }}
-            .rb-empty {{ color: #888; font-style: italic; }}
-            .rb-placeholder {{ color: #888; font-style: italic; background: #f8f8fc; padding: 12px; border-radius: 4px; border: 1px dashed #d0d0e0; }}
-            .chain-intact {{ color: var(--green, #060); font-weight: 700; }}
-            .chain-broken {{ color: var(--red, #c00); font-weight: 700; }}
-            .rb-signature {{ border-top: 1px solid #d0d0e0; padding-top: 12px; }}
-            .mono {{ font-family: monospace; font-size: 10px; word-break: break-all; }}
-            @media print {{ body {{ margin: 0; padding: 8px; }} }}
+            *, *::before, *::after { box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a2e; margin: 0; padding: 16px 24px; background: #fff; }
+            .rb-header { border-bottom: 2px solid #1a1a2e; padding-bottom: 12px; margin-bottom: 20px; }
+            .rb-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #5a5a7a; margin-bottom: 4px; }
+            h1 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+            h2 { font-size: 13px; font-weight: 700; margin: 0 0 8px; border-bottom: 1px solid #d0d0e0; padding-bottom: 4px; }
+            .rb-meta { font-size: 10px; color: #5a5a7a; }
+            .rb-sha { font-size: 9px; font-family: monospace; color: #888; margin-top: 4px; word-break: break-all; }
+            section { margin-bottom: 20px; page-break-inside: avoid; }
+            .rb-table { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
+            .rb-table th, .rb-table td { border: 1px solid #d0d0e0; padding: 4px 8px; text-align: left; vertical-align: top; }
+            .rb-table thead th { background: #f0f0f8; font-weight: 700; }
+            .rb-table tr:nth-child(even) { background: #f8f8fc; }
+            .rb-kv th { width: 200px; font-weight: 700; background: #f0f0f8; }
+            .sev-error, .sev-critical, .sev-high { color: var(--red, #c00); font-weight: 700; }
+            .sev-warning, .sev-medium { color: var(--orange, #c60); font-weight: 600; }
+            .sev-information, .sev-info, .sev-low { color: var(--green, #060); }
+            .score-block { display: inline-block; border: 2px solid #d0d0e0; border-radius: 8px; padding: 12px 24px; margin: 8px 0; }
+            .score-good { border-color: var(--green, #4caf50); }
+            .score-warn { border-color: var(--orange, #ff9800); }
+            .score-bad { border-color: var(--red, #f44336); }
+            .score-number { font-size: 32px; font-weight: 900; }
+            .score-label { font-size: 16px; color: #5a5a7a; }
+            .score-msg { font-size: 11px; color: #5a5a7a; margin-top: 4px; }
+            .rb-empty { color: #888; font-style: italic; }
+            .rb-placeholder { color: #888; font-style: italic; background: #f8f8fc; padding: 12px; border-radius: 4px; border: 1px dashed #d0d0e0; }
+            .chain-intact { color: var(--green, #060); font-weight: 700; }
+            .chain-broken { color: var(--red, #c00); font-weight: 700; }
+            .rb-signature { border-top: 1px solid #d0d0e0; padding-top: 12px; }
+            .mono { font-family: monospace; font-size: 10px; word-break: break-all; }
+            @media print { body { margin: 0; padding: 8px; } }
             </style>
             </head>
             <body>

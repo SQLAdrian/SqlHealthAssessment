@@ -107,8 +107,8 @@
         <div class="settings-group">
             <div class="settings-group-header" style="display:flex;justify-content:space-between;align-items:center;">
                 <span><i class="fa-solid fa-table-list"></i> Index Maintenance Script</span>
-                <button class="btn btn-sm btn-secondary" @onclick="() => CopyToClipboard(_indexScript.SqlScript, &quot;index&quot;)">
-                    <i class="fa-solid @(_copyState == &quot;index&quot; ? &quot;fa-check&quot; : &quot;fa-copy&quot;)"></i>
+                <button class="btn btn-sm btn-secondary" @onclick='() => CopyToClipboard(_indexScript.SqlScript, "index")'>
+                    <i class='fa-solid @(_copyState == "index" ? "fa-check" : "fa-copy")'></i>
                     @(_copyState == "index" ? "Copied!" : "Copy")
                 </button>
             </div>
@@ -130,8 +130,8 @@
         <div class="settings-group">
             <div class="settings-group-header" style="display:flex;justify-content:space-between;align-items:center;">
                 <span><i class="fa-solid fa-chart-bar"></i> Update Statistics Script</span>
-                <button class="btn btn-sm btn-secondary" @onclick="() => CopyToClipboard(_statsScript.SqlScript, &quot;stats&quot;)">
-                    <i class="fa-solid @(_copyState == &quot;stats&quot; ? &quot;fa-check&quot; : &quot;fa-copy&quot;)"></i>
+                <button class="btn btn-sm btn-secondary" @onclick='() => CopyToClipboard(_statsScript.SqlScript, "stats")'>
+                    <i class='fa-solid @(_copyState == "stats" ? "fa-check" : "fa-copy")'></i>
                     @(_copyState == "stats" ? "Copied!" : "Copy")
                 </button>
             </div>
@@ -153,8 +153,8 @@
         <div class="settings-group">
             <div class="settings-group-header" style="display:flex;justify-content:space-between;align-items:center;">
                 <span><i class="fa-solid fa-shield-halved"></i> DBCC CHECKDB Script</span>
-                <button class="btn btn-sm btn-secondary" @onclick="() => CopyToClipboard(_checkDbScript.SqlScript, &quot;checkdb&quot;)">
-                    <i class="fa-solid @(_copyState == &quot;checkdb&quot; ? &quot;fa-check&quot; : &quot;fa-copy&quot;)"></i>
+                <button class="btn btn-sm btn-secondary" @onclick='() => CopyToClipboard(_checkDbScript.SqlScript, "checkdb")'>
+                    <i class='fa-solid @(_copyState == "checkdb" ? "fa-check" : "fa-copy")'></i>
                     @(_copyState == "checkdb" ? "Copied!" : "Copy")
                 </button>
             </div>
