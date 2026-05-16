@@ -650,6 +650,29 @@ namespace SQLTriage.Data
         }
 
         /// <summary>
+        /// Logs generation of a diagnostic report bundle (Executive Summary, DBA Handoff, Audit Evidence).
+        /// </summary>
+        public void LogReportBundle(string bundleType, string serverName, bool success, string? outputPath = null, string? errorMessage = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ReportBundleGenerated,
+                Severity = success ? AuditSeverity.Info : AuditSeverity.Error,
+                Message = success
+                    ? $"Report bundle '{bundleType}' generated for server '{serverName}'"
+                    : $"Report bundle '{bundleType}' failed for server '{serverName}': {errorMessage}",
+                Details = new Dictionary<string, string>
+                {
+                    ["BundleType"] = bundleType,
+                    ["ServerName"] = serverName,
+                    ["Success"] = success.ToString(),
+                    ["OutputPath"] = outputPath ?? string.Empty,
+                    ["Error"] = errorMessage ?? string.Empty
+                }
+            });
+        }
+
+        /// <summary>
         /// Logs cache operations (clearing, eviction due to memory pressure).
         /// </summary>
         public void LogCacheOperation(string operation, string cacheKey, Dictionary<string, string>? details = null)
@@ -1467,6 +1490,74 @@ namespace SQLTriage.Data
         }
 
         // ================================================================
+        // Server Config Baseline — Gap #9
+        // ================================================================
+
+        /// <summary>
+        /// Emits an audit record when a monitored-server config baseline is captured.
+        /// </summary>
+        public void LogServerConfigBaselineCaptured(string serverName, string label, string capturedBy, int keyCount)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ServerConfigBaselineCaptured,
+                Severity  = AuditSeverity.Info,
+                Message   = $"Server config baseline '{label}' captured for {serverName} by {capturedBy} ({keyCount} keys)",
+                Details   = new Dictionary<string, string>
+                {
+                    ["ServerName"]  = serverName,
+                    ["Label"]       = label,
+                    ["CapturedBy"]  = capturedBy,
+                    ["KeyCount"]    = keyCount.ToString()
+                }
+            });
+        }
+
+        /// <summary>
+        /// Emits an audit record when a config diff comparison is run.
+        /// </summary>
+        public void LogServerConfigBaselineCompared(string serverName, int baselineId, string label,
+            string comparedBy, int added, int removed, int modified)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ServerConfigBaselineCompared,
+                Severity  = AuditSeverity.Info,
+                Message   = $"Config diff for {serverName} vs baseline '{label}' (id={baselineId}): +{added} -{removed} ~{modified} by {comparedBy}",
+                Details   = new Dictionary<string, string>
+                {
+                    ["ServerName"]  = serverName,
+                    ["BaselineId"]  = baselineId.ToString(),
+                    ["Label"]       = label,
+                    ["ComparedBy"]  = comparedBy,
+                    ["Added"]       = added.ToString(),
+                    ["Removed"]     = removed.ToString(),
+                    ["Modified"]    = modified.ToString()
+                }
+            });
+        }
+
+        /// <summary>
+        /// Emits an audit record when a config diff is exported to CSV.
+        /// </summary>
+        public void LogServerConfigBaselineExported(string serverName, string label, string exportedBy, int rowCount)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ServerConfigBaselineExported,
+                Severity  = AuditSeverity.Info,
+                Message   = $"Config diff exported for {serverName} baseline '{label}' by {exportedBy} ({rowCount} rows)",
+                Details   = new Dictionary<string, string>
+                {
+                    ["ServerName"]  = serverName,
+                    ["Label"]       = label,
+                    ["ExportedBy"]  = exportedBy,
+                    ["RowCount"]    = rowCount.ToString()
+                }
+            });
+        }
+
+        // ================================================================
         // L5: IR-5 — INCIDENT STATE CHANGE
         // ================================================================
 
@@ -1548,6 +1639,31 @@ namespace SQLTriage.Data
                     ["OldValue"]   = oldValue ?? string.Empty,
                     ["NewValue"]   = newValue ?? string.Empty,
                     ["ChangedBy"]  = changedBy ?? string.Empty
+                }
+            });
+        }
+
+        // ================================================================
+        // PERFORMANCE BASELINES
+        // ================================================================
+
+        /// <summary>
+        /// Emits an audit record when a user triggers baseline learning for a
+        /// server/wait-type pair from the Performance Trends page.
+        /// </summary>
+        public void LogBaselineLearned(string serverName, string waitType, int bucketsWritten, int lookbackDays)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.BaselineLearned,
+                Severity  = AuditSeverity.Info,
+                Message   = $"Performance baseline learned for {serverName}/{waitType} ({bucketsWritten} buckets, {lookbackDays}d lookback)",
+                Details   = new Dictionary<string, string>
+                {
+                    ["ServerName"]     = serverName,
+                    ["WaitType"]       = waitType,
+                    ["BucketsWritten"] = bucketsWritten.ToString(),
+                    ["LookbackDays"]   = lookbackDays.ToString()
                 }
             });
         }
@@ -1665,6 +1781,12 @@ namespace SQLTriage.Data
         ConfigDriftDetected,
         /// <summary>CM-3: admin explicitly re-snapshotted the current config as the new baseline.</summary>
         ConfigBaselineUpdated,
+        /// <summary>Gap #9: user captured a sp_configure + surface-area snapshot for a monitored server.</summary>
+        ServerConfigBaselineCaptured,
+        /// <summary>Gap #9: user ran a config diff comparison against a stored server baseline.</summary>
+        ServerConfigBaselineCompared,
+        /// <summary>Gap #9: user exported a server config diff to CSV.</summary>
+        ServerConfigBaselineExported,
         // ── L5: IR-5 ──────────────────────────────────────────────────────
         /// <summary>IR-5: alert incident lifecycle state changed (acknowledged / root-caused / closed).</summary>
         IncidentStateChanged,
@@ -1686,7 +1808,13 @@ namespace SQLTriage.Data
         /// is unavailable. Fully signed and chained; verifiers should include failover
         /// segments when performing full-chain audits.
         /// </summary>
-        AuditFailoverEntry
+        AuditFailoverEntry,
+        // ── Diagnostic report bundles ──────────────────────────────────────
+        /// <summary>One-click diagnostic report bundle generated (Executive Summary, DBA Handoff, or Audit Evidence).</summary>
+        ReportBundleGenerated,
+        // ── Performance baselines ─────────────────────────────────────────
+        /// <summary>User triggered baseline learning for a server/wait-type pair (Performance Trends page).</summary>
+        BaselineLearned
     }
 
     public enum AuditSeverity

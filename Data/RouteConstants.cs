@@ -43,6 +43,7 @@ public static class RouteConstants
     public const string IndexAnalysis = "/index-analysis";
     public const string Compare = "/compare";
     public const string Blocking = "/blocking";
+    public const string BlockingForensics = "/blocking-forensics";
     public const string LongQueries = "/longqueries";
     public const string Memory = "/memory";
     public const string Pmemory = "/pmemory";
@@ -53,6 +54,7 @@ public static class RouteConstants
     public const string Query = "/query";
 
     // ── Configuration ──
+    public const string ServerConfigDiff = "/config-diff";
     public const string Pconfig = "/pconfig";
     public const string Pevents = "/pevents";
     public const string Presource = "/presource";
@@ -72,6 +74,7 @@ public static class RouteConstants
     public const string SchedulerHealth = "/scheduler-health";
     public const string ServiceManagement = "/service-management";
     public const string DbaTools = "/dbatools";
+    public const string MaintenanceRecommendations = "/maintenance-recommendations";
     public const string Onboarding = "/onboarding";
 
     // ── Deployment ──
@@ -97,6 +100,9 @@ public static class RouteConstants
 
     // ── Audit ──
     public const string AuditLogViewer = "/audit-log";
+
+    // ── Report Bundles ──
+    public const string ReportBundles = "/reports";
 
     // ── Query Store ──
     public const string QueryStore = "/querystore";

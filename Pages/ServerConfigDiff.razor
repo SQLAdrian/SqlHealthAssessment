@@ -1,0 +1,369 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/config-diff"
+
+@using SQLTriage.Data
+@using SQLTriage.Data.Models
+@using SQLTriage.Data.Services
+@using System.Text
+
+@inject ServerConfigBaselineService BaselineService
+@inject ServerConnectionManager ConnectionManager
+@inject AuditLogService AuditLog
+@inject IJSRuntime JS
+
+<PageTitle>Config Snapshot & Diff - SQLTriage</PageTitle>
+
+<div class="scd-page">
+
+    <div class="page-header">
+        <div>
+            <h2><i class="fa-solid fa-code-compare"></i> Configuration Snapshot &amp; Diff</h2>
+            <p class="page-description">
+                Capture sp_configure + surface-area settings for a monitored server and compare
+                against any saved baseline. Use after patches or configuration changes.
+            </p>
+        </div>
+    </div>
+
+    <!-- ── Controls ────────────────────────────────────────────────── -->
+    <div class="scd-toolbar">
+
+        <div class="scd-toolbar-group">
+            <label>Server</label>
+            <select @bind="_selectedServer" class="scd-select" @bind:after="OnServerChanged">
+                <option value="">— select server —</option>
+                @foreach (var s in _serverNames)
+                {
+                    <option value="@s">@s</option>
+                }
+            </select>
+        </div>
+
+        <div class="scd-toolbar-group">
+            <label>Baseline</label>
+            <select @bind="_selectedBaselineId" class="scd-select">
+                <option value="0">— select baseline —</option>
+                @foreach (var b in _baselines)
+                {
+                    <option value="@b.Id">@b.Label (@FormatUtc(b.CapturedUtc)) by @b.CapturedBy</option>
+                }
+            </select>
+        </div>
+
+        <div class="scd-toolbar-group scd-capture-group">
+            <label>New baseline label</label>
+            <input @bind="_newLabel" placeholder="e.g. pre-patch-2026-05-17" class="scd-input" />
+            <button class="btn btn-primary" @onclick="CaptureAsync"
+                    disabled="@(string.IsNullOrWhiteSpace(_selectedServer) || _busy)">
+                <i class="fa-solid fa-camera"></i> Save Baseline
+            </button>
+        </div>
+
+        <div class="scd-toolbar-actions">
+            <button class="btn btn-secondary" @onclick="CompareAsync"
+                    disabled="@(string.IsNullOrWhiteSpace(_selectedServer) || _selectedBaselineId == 0 || _busy)">
+                <i class="fa-solid fa-arrows-left-right"></i> Compare to Baseline
+            </button>
+            <button class="btn btn-secondary" @onclick="ExportCsvAsync"
+                    disabled="@(_diffResult == null || _busy)">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+        </div>
+
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="scd-status @_statusClass">
+            <i class="fa-solid @(_statusClass == "scd-status-error" ? "fa-circle-exclamation" : "fa-circle-info")"></i>
+            @_statusMessage
+        </div>
+    }
+
+    @if (_busy)
+    {
+        <div class="scd-loading"><i class="fa-solid fa-spinner fa-spin"></i> Working…</div>
+    }
+
+    @if (_diffResult != null)
+    {
+        var totalChanges = _diffResult.Added.Count + _diffResult.Removed.Count + _diffResult.Modified.Count;
+
+        <div class="scd-summary-bar">
+            <span class="scd-badge scd-badge-added">+@_diffResult.Added.Count added</span>
+            <span class="scd-badge scd-badge-removed">-@_diffResult.Removed.Count removed</span>
+            <span class="scd-badge scd-badge-modified">~@_diffResult.Modified.Count modified</span>
+            @if (!_diffResult.HasChanges)
+            {
+                <span class="scd-no-changes"><i class="fa-solid fa-check-circle"></i> No changes detected</span>
+            }
+        </div>
+
+        @if (_diffResult.Modified.Count > 0)
+        {
+            <div class="scd-section">
+                <h3 class="scd-section-title scd-modified"><i class="fa-solid fa-pen-to-square"></i> Modified (@_diffResult.Modified.Count)</h3>
+                <table class="scd-table">
+                    <thead>
+                        <tr>
+                            <th>Setting</th>
+                            <th>Baseline Value</th>
+                            <th>Baseline In-Use</th>
+                            <th>Current Value</th>
+                            <th>Current In-Use</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (key, baseline, current) in _diffResult.Modified.OrderBy(m => m.Key))
+                        {
+                            <tr class="scd-row-modified">
+                                <td class="scd-key">@key</td>
+                                <td class="scd-old">@baseline.Value</td>
+                                <td class="scd-old">@baseline.ValueInUse</td>
+                                <td class="scd-new">@current.Value</td>
+                                <td class="scd-new">@current.ValueInUse</td>
+                                <td class="scd-desc">@current.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (_diffResult.Added.Count > 0)
+        {
+            <div class="scd-section">
+                <h3 class="scd-section-title scd-added"><i class="fa-solid fa-plus-circle"></i> Added (@_diffResult.Added.Count)</h3>
+                <table class="scd-table">
+                    <thead>
+                        <tr><th>Setting</th><th>Value</th><th>In-Use</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (key, entry) in _diffResult.Added.OrderBy(a => a.Key))
+                        {
+                            <tr class="scd-row-added">
+                                <td class="scd-key">@key</td>
+                                <td>@entry.Value</td>
+                                <td>@entry.ValueInUse</td>
+                                <td class="scd-desc">@entry.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (_diffResult.Removed.Count > 0)
+        {
+            <div class="scd-section">
+                <h3 class="scd-section-title scd-removed"><i class="fa-solid fa-minus-circle"></i> Removed (@_diffResult.Removed.Count)</h3>
+                <table class="scd-table">
+                    <thead>
+                        <tr><th>Setting</th><th>Baseline Value</th><th>Baseline In-Use</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (key, entry) in _diffResult.Removed.OrderBy(r => r.Key))
+                        {
+                            <tr class="scd-row-removed">
+                                <td class="scd-key">@key</td>
+                                <td>@entry.Value</td>
+                                <td>@entry.ValueInUse</td>
+                                <td class="scd-desc">@entry.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (!_diffResult.HasChanges)
+        {
+            <div class="scd-clean">
+                <i class="fa-solid fa-shield-check"></i>
+                All sp_configure settings match the baseline.
+            </div>
+        }
+    }
+
+</div>
+
+@code {
+    // ── State ──────────────────────────────────────────────────────────
+    private List<string> _serverNames = new();
+    private string _selectedServer = string.Empty;
+    private List<BaselineInfo> _baselines = new();
+    private int _selectedBaselineId;
+    private string _newLabel = string.Empty;
+    private ConfigDiffResult? _diffResult;
+    private bool _busy;
+    private string _statusMessage = string.Empty;
+    private string _statusClass = string.Empty;
+
+    // Cached current config (fetched once per compare; reused for export)
+    private Dictionary<string, ConfigEntry>? _currentSpConfig;
+    private BaselineInfo? _compareBaseline;
+
+    // ── Lifecycle ──────────────────────────────────────────────────────
+    protected override void OnInitialized()
+    {
+        _serverNames = ConnectionManager.GetConnections()
+            .SelectMany(c => c.GetServerList())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
+    }
+
+    private async Task OnServerChanged()
+    {
+        _baselines.Clear();
+        _diffResult = null;
+        _selectedBaselineId = 0;
+        _currentSpConfig = null;
+        _compareBaseline = null;
+        ClearStatus();
+
+        if (!string.IsNullOrWhiteSpace(_selectedServer))
+            _baselines = await BaselineService.GetBaselinesAsync(_selectedServer);
+    }
+
+    // ── Capture ────────────────────────────────────────────────────────
+    private async Task CaptureAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedServer)) return;
+
+        var label = string.IsNullOrWhiteSpace(_newLabel)
+            ? $"snapshot-{DateTime.UtcNow:yyyy-MM-dd-HHmm}"
+            : _newLabel.Trim();
+
+        _busy = true;
+        ClearStatus();
+        StateHasChanged();
+
+        try
+        {
+            var id = await BaselineService.CaptureBaselineAsync(
+                _selectedServer, label, capturedBy: Environment.UserName);
+
+            _newLabel = string.Empty;
+            _baselines = await BaselineService.GetBaselinesAsync(_selectedServer);
+            _selectedBaselineId = id;
+            SetStatus($"Baseline '{label}' saved (id={id}).", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Capture failed: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Compare ────────────────────────────────────────────────────────
+    private async Task CompareAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedServer) || _selectedBaselineId == 0) return;
+
+        _busy = true;
+        _diffResult = null;
+        _currentSpConfig = null;
+        ClearStatus();
+        StateHasChanged();
+
+        try
+        {
+            var baseline = await BaselineService.LoadBaselineAsync(_selectedBaselineId);
+            if (baseline == null)
+            {
+                SetStatus("Baseline not found.", isError: true);
+                return;
+            }
+
+            var (current, _) = await BaselineService.GetCurrentConfigAsync(_selectedServer);
+            _currentSpConfig = current;
+
+            _diffResult = ServerConfigBaselineService.DiffConfig(baseline, current);
+            _compareBaseline = _baselines.FirstOrDefault(b => b.Id == _selectedBaselineId);
+
+            AuditLog.LogServerConfigBaselineCompared(
+                _selectedServer,
+                _selectedBaselineId,
+                _compareBaseline?.Label ?? "?",
+                Environment.UserName,
+                _diffResult.Added.Count,
+                _diffResult.Removed.Count,
+                _diffResult.Modified.Count);
+
+            SetStatus(
+                _diffResult.HasChanges
+                    ? $"Diff complete — {_diffResult.Modified.Count} modified, {_diffResult.Added.Count} added, {_diffResult.Removed.Count} removed."
+                    : "Diff complete — no changes detected.",
+                isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Compare failed: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Export ─────────────────────────────────────────────────────────
+    private async Task ExportCsvAsync()
+    {
+        if (_diffResult == null) return;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("ChangeType,Setting,BaselineValue,BaselineInUse,CurrentValue,CurrentInUse,Description");
+
+        foreach (var (key, bl, cur) in _diffResult.Modified.OrderBy(m => m.Key))
+            sb.AppendLine($"Modified,{CsvEscape(key)},{CsvEscape(bl.Value)},{CsvEscape(bl.ValueInUse)},{CsvEscape(cur.Value)},{CsvEscape(cur.ValueInUse)},{CsvEscape(cur.Description)}");
+
+        foreach (var (key, entry) in _diffResult.Added.OrderBy(a => a.Key))
+            sb.AppendLine($"Added,{CsvEscape(key)},,, {CsvEscape(entry.Value)},{CsvEscape(entry.ValueInUse)},{CsvEscape(entry.Description)}");
+
+        foreach (var (key, entry) in _diffResult.Removed.OrderBy(r => r.Key))
+            sb.AppendLine($"Removed,{CsvEscape(key)},{CsvEscape(entry.Value)},{CsvEscape(entry.ValueInUse)},,,{CsvEscape(entry.Description)}");
+
+        var totalRows = _diffResult.Added.Count + _diffResult.Removed.Count + _diffResult.Modified.Count;
+        var label = _compareBaseline?.Label ?? "baseline";
+        var filename = $"config-diff-{_selectedServer.Replace('\\', '-')}-{label}-{DateTime.UtcNow:yyyyMMdd-HHmm}.csv";
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var base64 = Convert.ToBase64String(bytes);
+
+        await JS.InvokeVoidAsync("blazorDownloadFile", filename, "text/csv", base64);
+
+        AuditLog.LogServerConfigBaselineExported(_selectedServer, label, Environment.UserName, totalRows);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    private static string FormatUtc(string iso)
+    {
+        if (DateTime.TryParse(iso, out var dt))
+            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        return iso;
+    }
+
+    private static string CsvEscape(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        return value;
+    }
+
+    private void SetStatus(string msg, bool isError)
+    {
+        _statusMessage = msg;
+        _statusClass = isError ? "scd-status-error" : "scd-status-ok";
+    }
+
+    private void ClearStatus()
+    {
+        _statusMessage = string.Empty;
+        _statusClass   = string.Empty;
+    }
+}

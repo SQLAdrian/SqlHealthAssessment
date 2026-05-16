@@ -1,4 +1,6 @@
 /* In the name of God, the Merciful, the Compassionate */
+@import "ServerConfigDiff.css";
+@import "BlockingForensics.css";
 @import "CheckTrend.css";
 @import "ServerDocs.css";
 @import "MemoryProfile.css";
@@ -42,6 +44,8 @@
 @import "Benchmark.css";
 @import "Alerts.css";
 @import "DashboardEditor.css";
+@import "MaintenanceRecommendations.css";
+@import "ReportBundles.css";
 /* SQLTriage — audit-first design system (2026-05-11)
  * Tokens aligned with docs/assets/css/site.css for cross-surface consistency.
  * Old VS-Code-dark palette backed up at .ignore/app.css.pre-design-swap-2026-05-11.

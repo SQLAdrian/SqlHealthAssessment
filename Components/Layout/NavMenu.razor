@@ -53,6 +53,9 @@
             <NavLink href="@RouteConstants.VulnerabilityAssessment" class="nav-link">
                 <span class="nav-icon"><i class="fa-solid fa-bug"></i></span><span class="nav-link-text"> Vulnerability Scan</span>
             </NavLink>
+            <NavLink href="@RouteConstants.ServerConfigDiff" class="nav-link">
+                <span class="nav-icon"><i class="fa-solid fa-code-compare"></i></span><span class="nav-link-text"> Config Snapshot &amp; Diff</span>
+            </NavLink>
             @* Governance Scoring page deprecated 2026-05-11 — CIO Dashboard covers it better. Route /governance still works for bookmarks. *@
             @if (_corpusEditorVisible)
             {
@@ -60,6 +63,9 @@
                     <span class="nav-icon"><i class="fa-solid fa-shield-halved"></i></span><span class="nav-link-text"> Compliance Map</span>
                 </NavLink>
             }
+            <NavLink href="@RouteConstants.ReportBundles" class="nav-link">
+                <span class="nav-icon"><i class="fa-solid fa-file-export"></i></span><span class="nav-link-text"> Report Bundles</span>
+            </NavLink>
             <NavLink href="@RouteConstants.Playbooks" class="nav-link">
                 <span class="nav-icon"><i class="fa-solid fa-book-medical"></i></span><span class="nav-link-text"> Remediation Playbooks</span>
             </NavLink>
@@ -85,6 +91,9 @@
             </NavLink>
             <NavLink href="@RouteConstants.Compare" class="nav-link">
                 <span class="nav-icon"><i class="fa-solid fa-code-compare"></i></span><span class="nav-link-text"> Server Comparison</span>
+            </NavLink>
+            <NavLink href="@RouteConstants.BlockingForensics" class="nav-link">
+                <span class="nav-icon"><i class="fa-solid fa-link-slash"></i></span><span class="nav-link-text"> Blocking Forensics</span>
             </NavLink>
             @if (_corpusEditorVisible)
             {
@@ -187,6 +196,9 @@
                         <span class="nav-icon"><i class="fa-brands fa-windows"></i></span><span class="nav-link-text"> dbatools</span>
                     </NavLink>
                 }
+                <NavLink href="@RouteConstants.MaintenanceRecommendations" class="nav-link">
+                    <span class="nav-icon"><i class="fa-solid fa-wrench"></i></span><span class="nav-link-text"> Maintenance</span>
+                </NavLink>
                 <NavLink href="@RouteConstants.Environment" class="nav-link">
                     <span class="nav-icon"><i class="fa-solid fa-network-wired"></i></span><span class="nav-link-text"> Environment View</span>
                 </NavLink>

@@ -1,0 +1,252 @@
+<!--/* In the name of God, the Merciful, the Compassionate */-->
+@page "/reports"
+@using SQLTriage.Data
+@using SQLTriage.Data.Services
+@using System.IO
+@inject ReportBundleService ReportBundleSvc
+@inject ServerConnectionManager ConnectionManager
+@inject ILogger<ReportBundles> Logger
+<PageTitle>Report Bundles - SQLTriage</PageTitle>
+
+<div class="report-bundles-container">
+    <div class="report-bundles-header">
+        <h1><i class="fa-solid fa-file-export" style="margin-right:8px;color:var(--accent)"></i>Diagnostic Report Bundles</h1>
+    </div>
+
+    <div class="rb-server-row">
+        <label for="rb-server-picker">Server</label>
+        <select id="rb-server-picker" @bind="_selectedServer">
+            <option value="">— select a server —</option>
+            @foreach (var s in _serverNames)
+            {
+                <option value="@s">@s</option>
+            }
+        </select>
+    </div>
+
+    <div class="rb-cards">
+
+        @* ── Executive Summary ──────────────────────────────────────────── *@
+        <div class="rb-card">
+            <div class="rb-card-icon"><i class="fa-solid fa-chart-pie"></i></div>
+            <div class="rb-card-title">Executive Summary</div>
+            <div class="rb-card-desc">
+                1-page snapshot for non-technical stakeholders: health score, top 5 risks, and 30-day context.
+                Suitable for board reports and management briefings.
+            </div>
+            <div class="rb-card-meta">
+                @if (ReportBundleSvc.GetLastGenerated(_selectedServer ?? "", "ExecutiveSummary") is DateTime dt1)
+                {
+                    <span>Last generated: @dt1.ToString("yyyy-MM-dd HH:mm")</span>
+                }
+            </div>
+            @if (_results.TryGetValue("ExecutiveSummary", out var r1))
+            {
+                <div class="rb-card-result @(r1.Success ? "rb-success" : "rb-error")">
+                    @if (r1.Success)
+                    {
+                        <span class="rb-path">@r1.Path</span>
+                        <button class="rb-open-btn" @onclick="() => OpenInExplorer(r1.Path!)">
+                            <i class="fa-solid fa-folder-open"></i> Open
+                        </button>
+                    }
+                    else
+                    {
+                        <span style="color:var(--red)"><i class="fa-solid fa-circle-exclamation"></i> @r1.Error</span>
+                    }
+                </div>
+            }
+            <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
+                    @onclick="() => GenerateAsync(\"ExecutiveSummary\")">
+                @if (_generating && _generatingType == "ExecutiveSummary")
+                {
+                    <i class="fa-solid fa-spinner rb-spinning"></i>
+                    <span>Generating…</span>
+                }
+                else
+                {
+                    <i class="fa-solid fa-file-pdf"></i>
+                    <span>Generate</span>
+                }
+            </button>
+        </div>
+
+        @* ── DBA Handoff Package ────────────────────────────────────────── *@
+        <div class="rb-card">
+            <div class="rb-card-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+            <div class="rb-card-title">DBA Handoff Package</div>
+            <div class="rb-card-desc">
+                Multi-page PDF: server inventory, all VA findings, known issues, and failed checks.
+                For the incoming DBA or support handoff.
+            </div>
+            <div class="rb-card-meta">
+                @if (ReportBundleSvc.GetLastGenerated(_selectedServer ?? "", "DbaHandoff") is DateTime dt2)
+                {
+                    <span>Last generated: @dt2.ToString("yyyy-MM-dd HH:mm")</span>
+                }
+            </div>
+            @if (_results.TryGetValue("DbaHandoff", out var r2))
+            {
+                <div class="rb-card-result @(r2.Success ? "rb-success" : "rb-error")">
+                    @if (r2.Success)
+                    {
+                        <span class="rb-path">@r2.Path</span>
+                        <button class="rb-open-btn" @onclick="() => OpenInExplorer(r2.Path!)">
+                            <i class="fa-solid fa-folder-open"></i> Open
+                        </button>
+                    }
+                    else
+                    {
+                        <span style="color:var(--red)"><i class="fa-solid fa-circle-exclamation"></i> @r2.Error</span>
+                    }
+                </div>
+            }
+            <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
+                    @onclick="() => GenerateAsync(\"DbaHandoff\")">
+                @if (_generating && _generatingType == "DbaHandoff")
+                {
+                    <i class="fa-solid fa-spinner rb-spinning"></i>
+                    <span>Generating…</span>
+                }
+                else
+                {
+                    <i class="fa-solid fa-file-pdf"></i>
+                    <span>Generate</span>
+                }
+            </button>
+        </div>
+
+        @* ── Audit Evidence ─────────────────────────────────────────────── *@
+        <div class="rb-card">
+            <div class="rb-card-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+            <div class="rb-card-title">Audit Evidence</div>
+            <div class="rb-card-desc">
+                Compliance-ready PDF: VA findings with framework tags, audit log summary,
+                HMAC chain status, and SHA-256 integrity hash.
+            </div>
+            <div class="rb-card-meta">
+                @if (ReportBundleSvc.GetLastGenerated(_selectedServer ?? "", "AuditEvidence") is DateTime dt3)
+                {
+                    <span>Last generated: @dt3.ToString("yyyy-MM-dd HH:mm")</span>
+                }
+            </div>
+            @if (_results.TryGetValue("AuditEvidence", out var r3))
+            {
+                <div class="rb-card-result @(r3.Success ? "rb-success" : "rb-error")">
+                    @if (r3.Success)
+                    {
+                        <span class="rb-path">@r3.Path</span>
+                        <button class="rb-open-btn" @onclick="() => OpenInExplorer(r3.Path!)">
+                            <i class="fa-solid fa-folder-open"></i> Open
+                        </button>
+                    }
+                    else
+                    {
+                        <span style="color:var(--red)"><i class="fa-solid fa-circle-exclamation"></i> @r3.Error</span>
+                    }
+                </div>
+            }
+            <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
+                    @onclick="() => GenerateAsync(\"AuditEvidence\")">
+                @if (_generating && _generatingType == "AuditEvidence")
+                {
+                    <i class="fa-solid fa-spinner rb-spinning"></i>
+                    <span>Generating…</span>
+                }
+                else
+                {
+                    <i class="fa-solid fa-file-pdf"></i>
+                    <span>Generate</span>
+                }
+            </button>
+        </div>
+
+    </div>
+
+    <p style="margin-top:24px;font-size:11px;color:var(--text-muted)">
+        Reports are saved to your Downloads folder as HTML files. Open them in any browser and use
+        <strong>File → Print → Save as PDF</strong> for a final PDF.
+        Scheduled generation and email delivery are deferred to v2.
+    </p>
+</div>
+
+@code {
+    private string? _selectedServer;
+    private List<string> _serverNames = new();
+    private bool _generating;
+    private string? _generatingType;
+
+    // Key: bundleType → result record
+    private readonly Dictionary<string, (bool Success, string? Path, string? Error)> _results = new();
+
+    protected override void OnInitialized()
+    {
+        _serverNames = ConnectionManager.GetEnabledServerNames().ToList();
+        if (_serverNames.Count == 1)
+            _selectedServer = _serverNames[0];
+    }
+
+    private async Task GenerateAsync(string bundleType)
+    {
+        var server = _selectedServer;
+        if (string.IsNullOrEmpty(server) || _generating) return;
+
+        _generating = true;
+        _generatingType = bundleType;
+        _results.Remove(bundleType);
+        StateHasChanged();
+
+        try
+        {
+            string html = bundleType switch
+            {
+                "ExecutiveSummary" => await ReportBundleSvc.PrepareExecutiveSummaryHtmlAsync(server),
+                "DbaHandoff"       => await ReportBundleSvc.PrepareDbaHandoffHtmlAsync(server),
+                "AuditEvidence"    => await ReportBundleSvc.PrepareAuditEvidenceHtmlAsync(server),
+                _                  => throw new InvalidOperationException($"Unknown bundle type: {bundleType}")
+            };
+
+            var outputPath = GetOutputPath(server, bundleType);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            await File.WriteAllTextAsync(outputPath, html);
+
+            ReportBundleSvc.RecordSuccess(server, bundleType, outputPath);
+            _results[bundleType] = (true, outputPath, null);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Report bundle generation failed for {BundleType}/{Server}", bundleType, server);
+            ReportBundleSvc.RecordFailure(server, bundleType, ex.Message);
+            _results[bundleType] = (false, null, ex.Message);
+        }
+        finally
+        {
+            _generating = false;
+            _generatingType = null;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetOutputPath(string serverName, string bundleType)
+    {
+        var downloads = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var downloadsDir = Path.Combine(downloads, "Downloads");
+        var safeName = serverName.Replace("\\", "_").Replace("/", "_").Replace(":", "_");
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
+        return Path.Combine(downloadsDir, $"{safeName}_{bundleType}_{timestamp}.html");
+    }
+
+    private Task OpenInExplorer(string filePath)
+    {
+        try
+        {
+            _ = Task.Run(() =>
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{filePath}\""));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "OpenInExplorer failed for {Path}", filePath);
+        }
+        return Task.CompletedTask;
+    }
+}

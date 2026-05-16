@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using SQLTriage.Data.Models;
+using SQLTriage.Data.Services;
 
 // Required for SqlServerConnectionFactory.CreateConnection(initialDatabase)
 using SQLTriage.Data;
@@ -23,6 +24,7 @@ namespace SQLTriage.Data
     public class SessionDataService
     {
         private readonly IDbConnectionFactory _connectionFactory;
+        private readonly BlockingHistoryService? _blockingHistory;
 
         // Prefetch cache — keyed by server name (empty string = default connection).
         // Stores the last unfiltered result and its age. Max 60s stale before ignored.
@@ -75,9 +77,12 @@ OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
 ORDER BY s.cpu_time + s.reads DESC";
         }
 
-        public SessionDataService(IDbConnectionFactory connectionFactory)
+        public SessionDataService(
+            IDbConnectionFactory connectionFactory,
+            BlockingHistoryService? blockingHistory = null)
         {
             _connectionFactory = connectionFactory;
+            _blockingHistory = blockingHistory;
         }
 
         /// <summary>
@@ -185,8 +190,10 @@ ORDER BY s.cpu_time + s.reads DESC";
 
         /// <summary>
         /// Gets detailed blocking information from sys.dm_os_waiting_tasks for more accurate chain.
+        /// When <paramref name="serverName"/> is supplied and <see cref="BlockingHistoryService"/>
+        /// is registered, each pair is persisted for forensics (noise threshold: 5 s).
         /// </summary>
-        public async Task<List<BlockingInfo>> GetBlockingChainAsync()
+        public async Task<List<BlockingInfo>> GetBlockingChainAsync(string? serverName = null)
         {
             var blockers = new List<BlockingInfo>();
 
@@ -199,7 +206,7 @@ ORDER BY s.cpu_time + s.reads DESC";
             sqlConn.ChangeDatabase("master");
             using var cmd = sqlConn.CreateCommand();
             cmd.CommandText = @"
-                SELECT 
+                SELECT
                     blocking_session_id AS BlockingSPID,
                     session_id AS BlockedSPID,
                     wait_duration_ms AS WaitDurationMs,
@@ -218,6 +225,27 @@ ORDER BY s.cpu_time + s.reads DESC";
                     BlockedSPID = reader.GetInt32(reader.GetOrdinal("BlockedSPID")),
                     WaitDurationMs = reader.GetInt64(reader.GetOrdinal("WaitDurationMs")),
                     WaitType = reader.GetString(reader.GetOrdinal("WaitType"))
+                });
+            }
+
+            // Persist for forensics history — fire-and-forget, never blocks the caller.
+            if (_blockingHistory != null && !string.IsNullOrEmpty(serverName) && blockers.Count > 0)
+            {
+                var capturedUtc = DateTime.UtcNow;
+                _ = Task.Run(async () =>
+                {
+                    foreach (var b in blockers)
+                    {
+                        await _blockingHistory.RecordBlockingEventAsync(new BlockingEvent
+                        {
+                            ServerName      = serverName,
+                            CapturedUtc     = capturedUtc,
+                            BlockerSpid     = b.BlockingSPID,
+                            BlockedSpid     = b.BlockedSPID,
+                            WaitType        = b.WaitType,
+                            DurationSeconds = (int)(b.WaitDurationMs / 1000)
+                        });
+                    }
                 });
             }
 

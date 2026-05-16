@@ -95,6 +95,7 @@ public static class ServiceCollectionExtensions
                 rawRetentionDays:    configuration.GetValue<int>("Historical:RawRetentionDays",    14),
                 hourlyRetentionDays: configuration.GetValue<int>("Historical:HourlyRetentionDays", 90),
                 dailyRetentionDays:  configuration.GetValue<int>("Historical:DailyRetentionDays",  365)));
+        services.AddSingleton<PerformanceBaselineService>();
         services.AddSingleton<IErrorCatalog, ErrorCatalog>();
         services.AddSingleton<IQuickCheckRunner, QuickCheckRunner>();
 
@@ -114,6 +115,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<UserSettingsService>();
         services.AddSingleton<IUserSettingsService>(sp => sp.GetRequiredService<UserSettingsService>());
         services.AddSingleton<IChartThemeService, ChartThemeService>();
+        services.AddSingleton<BlockingHistoryService>(sp =>
+            new BlockingHistoryService(
+                sp.GetRequiredService<ILogger<BlockingHistoryService>>(),
+                retentionDays: configuration.GetValue<int>("Blocking:RetentionDays", 30)));
         services.AddSingleton<SessionDataService>();
         services.AddSingleton<ToastService>();
         services.AddSingleton<LogCleanupService>();
@@ -127,11 +132,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ConnectionHealthService>();
         services.AddSingleton<KeyboardShortcutService>();
         services.AddSingleton<SqlAssessmentService>();
+        services.AddSingleton<MaintenanceScriptService>();
         services.AddSingleton<ReportPageConfigService>();
         services.AddSingleton<XEventService>();
         services.AddSingleton<AdminAuthService>();
         services.AddSingleton<QuickCheckStateService>();
         services.AddSingleton<VulnerabilityAssessmentStateService>();
+        services.AddSingleton<ReportBundleService>();
 
         // ── Compliance / SOC2 services ──
         services.AddSingleton<UptimeTrackerService>(sp =>
@@ -142,6 +149,12 @@ public static class ServiceCollectionExtensions
             new ConfigBaselineService(
                 sp.GetRequiredService<ILogger<ConfigBaselineService>>(),
                 sp.GetService<AuditLogService>()));
+        services.AddSingleton<Services.ServerConfigBaselineService>(sp =>
+            new Services.ServerConfigBaselineService(
+                sp.GetRequiredService<ILogger<Services.ServerConfigBaselineService>>(),
+                sp.GetService<ServerConnectionManager>(),
+                sp.GetService<AuditLogService>(),
+                sp.GetService<IConfiguration>()));
 
         // ── Audit / observability ──
         // CorrelationIdAccessor stores its value in an AsyncLocal (see class doc),
