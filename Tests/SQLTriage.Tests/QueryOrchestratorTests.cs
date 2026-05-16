@@ -54,40 +54,77 @@ public class QueryOrchestratorTests : IAsyncLifetime
     [Fact]
     public async Task EnqueueAsync_PriorityOrdering_P0CompletesBeforeP4()
     {
-        var p0Completed = false;
-        var p4Completed = false;
+        // Deterministic priority proof — asserts the actual contract (the
+        // dispatcher drains higher-priority channels first) by recording the
+        // ORDER in which Work delegates execute, with no wall-clock timing.
+        //
+        // Why a dedicated single-concurrency orchestrator: the class fixture
+        // uses GlobalConcurrency=10, so P0 and P4 Work run in parallel and
+        // execution order is not observable — priority only governs DEQUEUE
+        // order. With concurrency 1, dequeue order == execution order, so the
+        // priority guarantee becomes directly assertable.
+        //
+        // The flaw in every prior version was a dependency on timing:
+        //   v1 assumed 10x50ms P4s can't all finish within a ~10ms P0 window
+        //       (false under CI scheduling jitter);
+        //   v2 parked P4s on a gate, but the orchestrator cancels work after
+        //       Orchestrator:DefaultTimeoutSeconds=2 — a slow CI run timed the
+        //       parked P4s out, so All(IsCompleted) flipped true intermittently.
+        // This version depends on neither concurrency level nor any timeout.
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Orchestrator:GlobalConcurrency"] = "1",
+                ["Orchestrator:PerServerConcurrency"] = "1",
+                ["Orchestrator:ChannelCapacity"] = "100",
+                ["Orchestrator:DefaultTimeoutSeconds"] = "30"
+            })
+            .Build();
 
-        // Enqueue 10 P4 tasks that each take 50ms
+        using var registry = new QueryRegistry(NullLogger<QueryRegistry>.Instance, config);
+        using var orchestrator = new QueryOrchestrator(NullLogger<QueryOrchestrator>.Instance, config, registry);
+
+        // A single in-flight gate task occupies the lone worker so that all
+        // P4s and the P0 are guaranteed to be sitting in their channels
+        // BEFORE any of them is dispatched — removing the enqueue-vs-dispatch
+        // race entirely. The gate is released only once everything is queued.
+        var releaseGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executionOrder = new System.Collections.Concurrent.ConcurrentQueue<string>();
+
+        orchestrator.Start();
+
+        var gateTask = orchestrator.EnqueueAsync(new QueryRequest
+        {
+            QueryId = "test:gate",
+            Work = async ct => await releaseGate.Task.WaitAsync(ct)
+        }, QueryPriority.P0_Dashboard);
+
+        // With the worker occupied by the gate, queue 10 P4s then 1 P0.
         var p4Tasks = Enumerable.Range(0, 10)
-            .Select(i => _orchestrator.EnqueueAsync(new QueryRequest
+            .Select(i => orchestrator.EnqueueAsync(new QueryRequest
             {
                 QueryId = $"test:p4:{i}",
-                Work = async ct =>
-                {
-                    await Task.Delay(50, ct);
-                    p4Completed = true;
-                }
+                Work = ct => { executionOrder.Enqueue("p4"); return Task.CompletedTask; }
             }, QueryPriority.P4_Prefetch))
             .ToList();
 
-        // Immediately enqueue a P0 task
-        var p0Task = _orchestrator.EnqueueAsync(new QueryRequest
+        var p0Task = orchestrator.EnqueueAsync(new QueryRequest
         {
             QueryId = "test:p0",
-            Work = async ct =>
-            {
-                await Task.Delay(10, ct);
-                p0Completed = true;
-            }
+            Work = ct => { executionOrder.Enqueue("p0"); return Task.CompletedTask; }
         }, QueryPriority.P0_Dashboard);
 
-        await p0Task;
+        // Everything is now queued. Release the worker and let it drain.
+        releaseGate.SetResult();
+        await Task.WhenAll(p4Tasks.Append(p0Task).Append(gateTask))
+            .WaitAsync(TimeSpan.FromSeconds(20));
 
-        // P0 should have completed while P4 tasks are still running
-        Assert.True(p0Completed);
-        Assert.False(p4Tasks.All(t => t.IsCompleted));
-
-        await Task.WhenAll(p4Tasks);
+        // Contract: P0 must have been dispatched (and so executed, since the
+        // single worker runs serially) before any P4. The first non-gate
+        // entry in the execution log must be "p0".
+        var order = executionOrder.ToArray();
+        Assert.Equal("p0", order[0]);
+        Assert.Equal(10, order.Count(x => x == "p4"));
     }
 
     [Fact]
