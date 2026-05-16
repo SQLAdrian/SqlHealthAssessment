@@ -804,7 +804,7 @@ namespace SQLTriage.Data
                 }
                 File.WriteAllText(path, sb.ToString());
 
-                Serilog.Log.Critical(
+                Serilog.Log.Fatal(
                     "[AUDIT] PRIMARY FLUSH UNAVAILABLE after {N} consecutive failures. " +
                     "Signed failover batch written to {Path}. Investigate disk/permissions immediately.",
                     _consecutiveFlushFailures, path);
