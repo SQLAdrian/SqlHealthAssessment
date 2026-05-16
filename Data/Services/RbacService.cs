@@ -248,6 +248,35 @@ namespace SQLTriage.Data.Services
         /// </summary>
         public string GetDesktopUserRole() => AppRoles.Admin;
 
+        /// <summary>
+        /// True when RBAC enforcement is active: the feature is explicitly enabled
+        /// AND at least one Admin user exists. Until an admin is configured, RBAC
+        /// stays dormant so a single-user / unconfigured install is never locked
+        /// out of the Settings page it needs to configure RBAC in the first place.
+        /// </summary>
+        public bool IsRbacEnforced()
+        {
+            lock (_lock)
+            {
+                if (!_config.Enabled) return false;
+                return _users.Any(u =>
+                    u.Enabled &&
+                    string.Equals(u.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        /// <summary>
+        /// Authorization gate for UI pages. Returns true (allow) when RBAC is not
+        /// being enforced — i.e. single-user / no-admin-configured installs behave
+        /// as full admin. When RBAC is enforced, defers to the permission matrix.
+        /// All Admin-gated pages should call this rather than HasPermission directly.
+        /// </summary>
+        public bool IsAuthorized(string role, string permission)
+        {
+            if (!IsRbacEnforced()) return true;
+            return HasPermission(role, permission);
+        }
+
         // ── Local password authentication (Argon2id) ─────────────────────
         //
         // Format: argon2id$v=19$m=19456,t=2,p=1$<salt-b64>$<hash-b64>

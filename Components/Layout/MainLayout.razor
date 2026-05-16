@@ -12,6 +12,7 @@
 @implements IDisposable
 
 @inject SQLTriage.Data.CorrelationIdAccessor CorrelationAccessor
+@inject SQLTriage.Data.Services.AppUserState UserState
 
 <!-- Skip link for screen readers -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -147,8 +148,15 @@
     private string _maintenanceUntilText = "";
     private System.Timers.Timer? _maintenanceTimer;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        // Resolve the current user's role for this circuit BEFORE any page renders.
+        // WPF desktop mode: sets Admin synchronously (no network). Server mode:
+        // fetches role from /auth/me. Without this, AppUserState.Role falls back
+        // to Viewer and every Admin-gated page (Settings, Servers, AlertingConfig,
+        // AuditLogViewer, ServerDocs, ServiceManagement) shows "restricted to Admin".
+        await UserState.InitAsync();
+
         // Push a correlation ID into Serilog LogContext for this circuit/request
         _ = CorrelationAccessor.PushToLogContext();
         // Show onboarding wizard whenever there are no servers configured

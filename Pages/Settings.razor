@@ -30,7 +30,7 @@
 @inject SQLTriage.Data.Services.UptimeTrackerService UptimeTracker
 @inject SQLTriage.Data.Services.ConfigBaselineService ConfigBaselineSvc
 
-@if (!RbacService.HasPermission(UserState.Role, "settings"))
+@if (!RbacService.IsAuthorized(UserState.Role, "settings"))
 {
     <div style="padding: 32px;">
         <AccessDenied RequiredRole="Admin" Message="Settings are restricted to Admin users." />
