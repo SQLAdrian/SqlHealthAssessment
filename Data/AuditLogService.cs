@@ -352,6 +352,14 @@ namespace SQLTriage.Data
                 ? WrapHmacKey(rawKey)
                 : rawKey;
 
+            // Rotation overwrites an existing key file that we previously marked
+            // Hidden (and which may be ReadOnly): File.WriteAllBytes cannot open a
+            // Hidden file for write on Windows -> UnauthorizedAccessException.
+            // Clear attributes first so rotation can replace the key in place.
+            if (File.Exists(keyPath))
+            {
+                try { File.SetAttributes(keyPath, FileAttributes.Normal); } catch { }
+            }
             File.WriteAllBytes(keyPath, toWrite);
             // Hidden as defense-in-depth; primary protection is DPAPI wrapping on Windows.
             try { File.SetAttributes(keyPath, FileAttributes.Hidden); } catch { }
