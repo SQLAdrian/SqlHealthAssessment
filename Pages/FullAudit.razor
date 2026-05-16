@@ -16,8 +16,16 @@
 @inject SQLTriage.Data.ToastService Toast
 @inject SQLTriage.Data.Services.ReportPageConfigService ReportPageCfg
 @inject UserSettingsService UserSettings
+@inject SQLTriage.Data.Services.PrintService PrintSvc
+@inject AuditLogService AuditLog
 @implements IDisposable
 <PageTitle>Full Audit - SQLTriage</PageTitle>
+
+<SQLTriage.Components.Shared.PdfExportModal @ref="_pdfModal"
+    Title="Export Full Audit to PDF"
+    DefaultLandscape="true"
+    DefaultBackgrounds="true"
+    OnConfirm="OnPdfConfirmed" />
 
 <SQLTriage.Components.Shared.SectionEditorModal IsVisible="_faEditingSection != null"
     Section="_faEditingSection"
@@ -325,6 +333,12 @@
                     <div class="summary-header">
                         <button class="btn btn-sm btn-secondary"@onclick="() => openfolder()">
                             Open output folder
+                        </button>
+                        <button class="btn btn-sm btn-secondary" @onclick="ExportSummaryCsvAsync">
+                            <i class="fa-solid fa-file-csv"></i> Export CSV
+                        </button>
+                        <button class="btn btn-sm btn-secondary @(_pdfExporting ? "active" : "")" @onclick="OpenPdfModal" disabled="@_pdfExporting">
+                            <i class="fa-solid fa-file-pdf"></i> @(_pdfExporting ? "Saving..." : "Export PDF")
                         </button>
                         <button class="btn btn-sm btn-danger" @onclick="ClearResults">
                             Clear Results
@@ -1083,13 +1097,113 @@
         {
             var bytes = Encoding.UTF8.GetBytes(content);
             var base64 = Convert.ToBase64String(bytes);
-            
+
             await JSRuntime.InvokeVoidAsync("downloadFile", fileName, base64);
             Logger.LogInformation("Download triggered for {FileName}", fileName);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error triggering download for {FileName}", fileName);
+        }
+    }
+
+    // ── Manual CSV/PDF export ────────────────────────────────────────────────
+
+    private static string CsvQuote(string? v)
+    {
+        if (string.IsNullOrEmpty(v)) return "";
+        if (v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) < 0) return v;
+        return "\"" + v.Replace("\"", "\"\"") + "\"";
+    }
+
+    private void ExportSummaryCsvAsync()
+    {
+        try
+        {
+            var results = _executionResults;
+            var sb = new StringBuilder();
+            sb.AppendLine("ServerName,ScriptName,Success,RowsAffected,ExecutionTimeSec,StatusMessage,ErrorMessage");
+            foreach (var r in results)
+            {
+                sb.AppendLine(string.Join(",",
+                    CsvQuote(r.ServerName),
+                    CsvQuote(r.ScriptName),
+                    r.Success.ToString(),
+                    r.RowsAffected.ToString(),
+                    r.ExecutionTime.TotalSeconds.ToString("F2"),
+                    CsvQuote(r.StatusMessage),
+                    CsvQuote(r.ErrorMessage)));
+            }
+
+            var downloadsDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var exportDir = Path.Combine(downloadsDir, "Downloads");
+            if (!Directory.Exists(exportDir)) exportDir = AppDomain.CurrentDomain.BaseDirectory;
+
+            var fileName = $"FullAudit_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            var filePath = Path.Combine(exportDir, fileName);
+            File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+
+            AuditLog.LogExportOperation("CSV", "FullAudit", true);
+            Toast.ShowSuccess($"CSV exported ({results.Count} rows): {fileName}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "CSV export failed");
+            AuditLog.LogExportOperation("CSV", "FullAudit", false, ex.Message);
+            Toast.ShowError($"CSV export failed: {ex.Message}");
+        }
+    }
+
+    private SQLTriage.Components.Shared.PdfExportModal _pdfModal = default!;
+    private bool _pdfExporting;
+
+    private void OpenPdfModal()
+    {
+        var stem = $"FullAudit_{DateTime.Now:yyyyMMdd_HHmmss}";
+        _pdfModal.Show(stem);
+    }
+
+    private async Task OnPdfConfirmed(SQLTriage.Data.Models.PdfExportSettings settings)
+    {
+        await Task.Delay(350);
+        _pdfExporting = true;
+        StateHasChanged();
+        try
+        {
+            if (!PrintSvc.IsAvailable)
+            {
+                await PrintSvc.PrintViaBrowserAsync(JSRuntime);
+                Toast.ShowInfo("Browser print dialog opened — use 'Save as PDF' to export.");
+                return;
+            }
+
+            var orientation = settings.LandscapeOrientation
+                ? Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Landscape
+                : Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait;
+            var (success, path, error) = await PrintSvc.PrintToPdfAsync(settings.FileName,
+                printBackgrounds: settings.PrintBackgrounds,
+                orientation: orientation);
+            if (success)
+            {
+                AuditLog.LogExportOperation("PDF", "FullAudit", true);
+                Toast.ShowSuccess($"PDF saved: {System.IO.Path.GetFileName(path)}");
+            }
+            else
+            {
+                AuditLog.LogExportOperation("PDF", "FullAudit", false, error);
+                Toast.ShowError($"PDF export failed: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "PDF export failed");
+            AuditLog.LogExportOperation("PDF", "FullAudit", false, ex.Message);
+            Toast.ShowError($"PDF export failed: {ex.Message}");
+        }
+        finally
+        {
+            _pdfExporting = false;
+            StateHasChanged();
         }
     }
 }

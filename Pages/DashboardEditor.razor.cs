@@ -42,6 +42,7 @@ public partial class DashboardEditor
     private bool ShowPreview;
     private bool ShowImport;
     private string ImportJson = "";
+    private (bool valid, string? error) _importValidation = (true, null);
     private System.Timers.Timer? _autoSaveTimer;
     private bool _hasUnsavedChanges;
 
@@ -755,11 +756,28 @@ public partial class DashboardEditor
     {
         ShowImport = true;
         ImportJson = "";
+        _importValidation = (true, null);
     }
 
     private void CloseImportDialog()
     {
         ShowImport = false;
+    }
+
+    private void OnImportJsonChanged(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        ImportJson = e.Value?.ToString() ?? "";
+        _importValidation = string.IsNullOrWhiteSpace(ImportJson)
+            ? (true, null)
+            : ConfigService.ValidateJson(ImportJson);
+    }
+
+    private void ResetConfigToDefault()
+    {
+        ConfigService.ResetToDefault();
+        LoadConfig();
+        StatusMessage = "Configuration reset to default.";
+        IsSuccess = true;
     }
 
     private void ImportConfig()

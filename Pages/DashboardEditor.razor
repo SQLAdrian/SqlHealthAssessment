@@ -24,6 +24,7 @@
                     <td><button class="btn btn-secondary" @onclick="Redo" disabled="@(!CanRedo)"><i class="fa-solid fa-rotate-right"></i> Redo</button></td>
                     <td><button class="btn btn-secondary" @onclick="ExportConfig"><i class="fa-solid fa-upload"></i> Export</button></td>
                     <td><button class="btn btn-secondary" @onclick="ShowImportDialog"><i class="fa-solid fa-download"></i> Import</button></td>
+                    <td><button class="btn btn-secondary" @onclick="ResetConfigToDefault" title="Reset dashboard config to shipped defaults"><i class="fa-solid fa-rotate-left"></i> Reset to Default</button></td>
                     <td><button class="btn btn-primary" @onclick="SaveAll"><i class="fa-solid fa-floppy-disk"></i> Save All</button></td>
                     <td>
                         @if (!string.IsNullOrEmpty(StatusMessage))
@@ -580,12 +581,20 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label>Paste JSON configuration:</label>
-                        <textarea @bind="ImportJson" rows="10" placeholder='{"dashboards": [...]}'></textarea>
+                        <textarea class="@(_importValidation.valid ? "" : "json-invalid")"
+                                  value="@ImportJson" @oninput="OnImportJsonChanged"
+                                  rows="10" placeholder='{"dashboards": [...]}'></textarea>
+                        @if (!_importValidation.valid)
+                        {
+                            <div style="color:var(--red); font-size:12px; padding:4px 0;">
+                                @_importValidation.error
+                            </div>
+                        }
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseImportDialog">Cancel</button>
-                    <button class="btn btn-primary" @onclick="ImportConfig">Import</button>
+                    <button class="btn btn-primary" @onclick="ImportConfig" disabled="@(!_importValidation.valid && !string.IsNullOrWhiteSpace(ImportJson))">Import</button>
                 </div>
             </div>
         </div>
