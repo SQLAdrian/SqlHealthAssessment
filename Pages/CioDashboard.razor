@@ -262,6 +262,72 @@
             }
         }
 
+        <!-- ── Health Score & Risk Rating (Strategic #7) ───────────────────── -->
+        @if (_serverScores.Count > 0)
+        {
+            <div class="cio-health-score-section">
+                <div class="cio-section-header">
+                    <i class="fa-solid fa-heart-pulse" style="color:var(--accent);"></i>
+                    <h3 class="cio-section-title">Health Score &amp; Risk Rating</h3>
+                    <a href="/health" class="cio-health-view-full">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Full breakdown
+                    </a>
+                </div>
+
+                @foreach (var kvp in _serverScores)
+                {
+                    var hs      = kvp.Value;
+                    var sevCls  = hs.Severity.ToString().ToLower();
+                    var bd      = hs.Breakdown;
+
+                    <div class="cio-health-server-card">
+                        <!-- Hero row -->
+                        <div class="cio-health-hero">
+                            <span class="cio-health-server-name">
+                                <i class="fa-solid fa-database"></i> @kvp.Key
+                            </span>
+                            <span class="cio-health-score sev-@sevCls">@hs.Score</span>
+                            <span class="cio-health-band">@CioScoreBand(hs.Score)</span>
+                            <span class="cio-health-trend" title="Trend vs yesterday">
+                                @switch (hs.Trend)
+                                {
+                                    case HealthTrend.Improving:
+                                        <i class="fa-solid fa-arrow-trend-up" style="color:var(--green);"></i>
+                                        break;
+                                    case HealthTrend.Degrading:
+                                        <i class="fa-solid fa-arrow-trend-down" style="color:var(--red);"></i>
+                                        break;
+                                    default:
+                                        <i class="fa-solid fa-equals" style="color:var(--text-muted);"></i>
+                                        break;
+                                }
+                            </span>
+                        </div>
+
+                        <!-- Dimension mini-bars -->
+                        <div class="cio-health-dims">
+                            @foreach (var dim in bd.Dimensions)
+                            {
+                                var barPct  = Math.Max(2, dim.Score);
+                                var dimCol  = CioDimColor(dim.Score);
+                                <div class="cio-health-dim" title="@dim.Tooltip">
+                                    <span class="cio-health-dim-label">@dim.Name</span>
+                                    <div class="cio-health-dim-track">
+                                        <div class="cio-health-dim-fill"
+                                             style="width:@barPct%;background:@dimCol;">
+                                        </div>
+                                    </div>
+                                    <span class="cio-health-dim-score" style="color:@dimCol;">
+                                        @dim.Score
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
         <!-- Server Risk Heatmap -->
         @if (_serverScores.Count > 0)
         {
@@ -766,6 +832,23 @@
             return "background:rgba(234,179,8,0.15); color:var(--yellow);";
         return "background:rgba(34,197,94,0.15); color:var(--green);";
     }
+
+    // ── Health Score helpers (Strategic #7) ──────────────────────────────────
+    private static string CioScoreBand(int score) => score switch
+    {
+        >= 86 => "Platinum",
+        >= 71 => "Gold",
+        >= 51 => "Silver",
+        >= 31 => "Bronze",
+        _     => "Emerging"
+    };
+
+    private static string CioDimColor(int score) =>
+        score >= 80 ? "var(--green)"
+        : score >= 60 ? "var(--yellow)"
+        : score >= 40 ? "var(--orange)"
+        : "var(--red)";
+    // ─────────────────────────────────────────────────────────────────────────
 
     private static int SeverityRank(string? severity) => severity?.ToLower() switch
     {

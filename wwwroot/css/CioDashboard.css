@@ -825,3 +825,113 @@
     font-size: 11px;
     margin-left: 6px;
 }
+
+/* ── Health Score & Risk Rating section (Strategic #7) ── */
+.cio-health-score-section {
+    margin-bottom: 28px;
+}
+
+.cio-health-view-full {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    opacity: 0.85;
+    transition: opacity 120ms;
+}
+.cio-health-view-full:hover { opacity: 1; text-decoration: underline; }
+
+.cio-health-server-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+}
+
+.cio-health-hero {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.cio-health-server-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 120px;
+}
+
+.cio-health-score {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+}
+.cio-health-score.sev-healthy  { color: var(--green); }
+.cio-health-score.sev-warning  { color: var(--yellow); }
+.cio-health-score.sev-critical { color: var(--red); }
+.cio-health-score.sev-unknown  { color: var(--text-muted); }
+
+.cio-health-band {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(var(--accent-rgb, 99, 102, 241), 0.10);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.cio-health-trend {
+    font-size: 18px;
+}
+
+/* Dimension mini-bars */
+.cio-health-dims {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.cio-health-dim {
+    display: grid;
+    grid-template-columns: 100px 1fr 36px;
+    align-items: center;
+    gap: 8px;
+    cursor: help;
+}
+
+.cio-health-dim-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cio-health-dim-track {
+    height: 6px;
+    background: var(--bg-input);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.cio-health-dim-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 500ms ease;
+}
+
+.cio-health-dim-score {
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+}

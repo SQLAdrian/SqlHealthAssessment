@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data;
@@ -142,6 +143,22 @@ namespace SQLTriage.Data.Services
 
                     CREATE INDEX IF NOT EXISTS idx_integrity_type_id
                         ON report_integrity(report_type, report_id);
+
+                    -- Health Score & Risk Rating v1 (Strategic #7)
+                    CREATE TABLE IF NOT EXISTS health_score_history (
+                        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                        server_name         TEXT NOT NULL,
+                        recorded_date       TEXT NOT NULL,           -- YYYY-MM-DD UTC date key
+                        composite_score     INTEGER NOT NULL,
+                        perf_score          INTEGER,
+                        compliance_score    INTEGER,
+                        security_score      INTEGER,
+                        resource_score      INTEGER,
+                        blocking_score      INTEGER
+                    );
+
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_health_score_server_date
+                        ON health_score_history(server_name, recorded_date);
                 ";
                 cmd.ExecuteNonQuery();
                 _logger.LogInformation("Governance history database initialized");
@@ -685,6 +702,122 @@ namespace SQLTriage.Data.Services
             return score.Categories.TryGetValue(dimension, out var cat) ? cat.CappedScore : 0;
         }
 
+        // ── Health Score & Risk Rating (Strategic #7) ──────────────────────────
+
+        /// <summary>
+        /// Persists a daily health score snapshot (once per UTC day per server).
+        /// Uses INSERT OR REPLACE so a re-run on the same day overwrites the earlier value.
+        /// </summary>
+        public void RecordHealthScore(string serverName, int compositeScore, HealthScoreBreakdown breakdown)
+        {
+            try
+            {
+                var dateKey = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                lock (_writeLock)
+                {
+                    using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
+                    using var cmd  = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        INSERT OR REPLACE INTO health_score_history
+                            (server_name, recorded_date, composite_score,
+                             perf_score, compliance_score, security_score,
+                             resource_score, blocking_score)
+                        VALUES
+                            (@srv, @date, @comp,
+                             @perf, @compl, @sec,
+                             @res, @blk);";
+                    cmd.Parameters.AddWithValue("@srv",   serverName);
+                    cmd.Parameters.AddWithValue("@date",  dateKey);
+                    cmd.Parameters.AddWithValue("@comp",  compositeScore);
+                    cmd.Parameters.AddWithValue("@perf",  breakdown.Performance.Score);
+                    cmd.Parameters.AddWithValue("@compl", breakdown.Compliance.Score);
+                    cmd.Parameters.AddWithValue("@sec",   breakdown.Security.Score);
+                    cmd.Parameters.AddWithValue("@res",   breakdown.Resource.Score);
+                    cmd.Parameters.AddWithValue("@blk",   breakdown.Blocking.Score);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to record health score for {Server}", serverName);
+            }
+        }
+
+        /// <summary>
+        /// Returns the most recent composite health score recorded on or after
+        /// <paramref name="fromDate"/>, or null if no row exists.
+        /// </summary>
+        public async Task<int?> GetLatestHealthScoreAsync(string serverName, DateTime fromDate)
+        {
+            try
+            {
+                var dateKey = fromDate.ToString("yyyy-MM-dd");
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
+                using var cmd  = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT composite_score
+                    FROM health_score_history
+                    WHERE server_name   = @srv
+                      AND recorded_date >= @date
+                    ORDER BY recorded_date DESC
+                    LIMIT 1;";
+                cmd.Parameters.AddWithValue("@srv",  serverName);
+                cmd.Parameters.AddWithValue("@date", dateKey);
+                var result = await cmd.ExecuteScalarAsync();
+                return result == null || result == DBNull.Value
+                    ? (int?)null
+                    : Convert.ToInt32(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "GetLatestHealthScoreAsync failed for {Server}", serverName);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Returns the last <paramref name="days"/> daily health score snapshots for a server,
+        /// oldest-first, for trend sparkline rendering.
+        /// </summary>
+        public List<HealthScoreTrendPoint> GetHealthScoreTrend(string serverName, int days = 30)
+        {
+            var rows = new List<HealthScoreTrendPoint>();
+            try
+            {
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
+                using var cmd  = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT recorded_date, composite_score,
+                           perf_score, compliance_score, security_score,
+                           resource_score, blocking_score
+                    FROM health_score_history
+                    WHERE server_name   = @srv
+                      AND recorded_date >= date('now', @days)
+                    ORDER BY recorded_date ASC;";
+                cmd.Parameters.AddWithValue("@srv",  serverName);
+                cmd.Parameters.AddWithValue("@days", $"-{days} days");
+                using var rdr = cmd.ExecuteReader();
+                while (rdr.Read())
+                {
+                    rows.Add(new HealthScoreTrendPoint
+                    {
+                        RecordedDate      = rdr.GetString(0),
+                        CompositeScore    = rdr.GetInt32(1),
+                        PerfScore         = rdr.IsDBNull(2) ? 0 : rdr.GetInt32(2),
+                        ComplianceScore   = rdr.IsDBNull(3) ? 0 : rdr.GetInt32(3),
+                        SecurityScore     = rdr.IsDBNull(4) ? 0 : rdr.GetInt32(4),
+                        ResourceScore     = rdr.IsDBNull(5) ? 0 : rdr.GetInt32(5),
+                        BlockingScore     = rdr.IsDBNull(6) ? 0 : rdr.GetInt32(6),
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "GetHealthScoreTrend failed for {Server}", serverName);
+            }
+            return rows;
+        }
+
         public void Dispose()
         {
             _purgeTimer?.Dispose();
@@ -692,6 +825,17 @@ namespace SQLTriage.Data.Services
     }
 
     // ── Models ──────────────────────────────────────────────────────
+
+    public class HealthScoreTrendPoint
+    {
+        public string RecordedDate    { get; set; } = "";
+        public int    CompositeScore  { get; set; }
+        public int    PerfScore       { get; set; }
+        public int    ComplianceScore { get; set; }
+        public int    SecurityScore   { get; set; }
+        public int    ResourceScore   { get; set; }
+        public int    BlockingScore   { get; set; }
+    }
 
     public class GovernanceTrendPoint
     {
