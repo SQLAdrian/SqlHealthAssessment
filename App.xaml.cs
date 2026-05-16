@@ -311,7 +311,7 @@ namespace SQLTriage
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, “[STARTUP] fire-and-forget task failed: {Context}”, “SessionDataService.PrefetchAsync”);
+                            Log.Error(ex, "[STARTUP] fire-and-forget task failed: {Context}", "SessionDataService.PrefetchAsync");
                         }
                     });
                 }
