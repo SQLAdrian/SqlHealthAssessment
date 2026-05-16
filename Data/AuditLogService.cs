@@ -42,6 +42,9 @@ namespace SQLTriage.Data
         private const int FlushFailoverThreshold = 3;
         // DE-H1: tracks last full multi-segment chain verify time.
         private DateTime _lastFullChainVerifyUtc = DateTime.MinValue;
+        // DE-H4: cached current segment path — avoids O(n) Directory.GetFiles on every flush.
+        // Invalidated (set null) when MaybeRotate creates a new segment.
+        private string? _currentSegmentPath;
         private readonly int _fullChainVerifyIntervalDays;
 
         /// <summary>Event Log source name. Creating the source requires admin rights.</summary>
@@ -876,6 +879,10 @@ namespace SQLTriage.Data
         /// </summary>
         private string GetCurrentLogFile()
         {
+            // DE-H4: return cached segment path when available — avoids O(n) Directory.GetFiles
+            // on every flush call (can reach 5000+ files over a 15-year deployment).
+            if (_currentSegmentPath != null) return _currentSegmentPath;
+
             // R-L6: use UTC so segment filenames match entry timestamp_utc — no midnight
             // mismatch for observers in non-UTC zones.
             var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
@@ -883,11 +890,16 @@ namespace SQLTriage.Data
 
             // Pick the highest-numbered rotated segment if any exist.
             var rotated = Directory.GetFiles(_logDirectory, $"audit-{today}_*.jsonl");
-            if (rotated.Length == 0) return baseFile;
+            if (rotated.Length == 0)
+            {
+                _currentSegmentPath = baseFile;
+                return baseFile;
+            }
 
-            return rotated
+            _currentSegmentPath = rotated
                 .OrderByDescending(f => f, StringComparer.OrdinalIgnoreCase)
                 .First();
+            return _currentSegmentPath;
         }
 
         private void MaybeRotate(ref string logFile)
@@ -904,6 +916,8 @@ namespace SQLTriage.Data
                     next++;
 
                 logFile = Path.Combine(_logDirectory, $"audit-{today}_{next:D4}.jsonl");
+                // DE-H4: invalidate cached segment so GetCurrentLogFile rescans on next call.
+                _currentSegmentPath = logFile;
             }
             catch (Exception ex)
             {

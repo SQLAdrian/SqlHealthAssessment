@@ -68,6 +68,7 @@ namespace SQLTriage.Data.Services
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
+                    PRAGMA foreign_keys=ON;
                     -- DE-C3: MUST be set before any tables are created (no-op on existing DBs with auto_vacuum=NONE;
                     -- those will get auto_vacuum on the next fresh install or SQLCipher migration).
                     PRAGMA auto_vacuum=INCREMENTAL;
@@ -645,17 +646,22 @@ namespace SQLTriage.Data.Services
             try
             {
                 using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = @"
-                    DELETE FROM governance_history WHERE recorded_at < datetime('now', @days);
-                    DELETE FROM compliance_history WHERE recorded_at < datetime('now', @days);
-                    DELETE FROM check_results WHERE recorded_at < datetime('now', @days);
-                    DELETE FROM report_integrity WHERE recorded_at < datetime('now', @days);
-                ";
-                cmd.Parameters.AddWithValue("@days", $"-{_retentionDays} days");
-                var deleted = cmd.ExecuteNonQuery();
-                if (deleted > 0)
-                    _logger.LogInformation("Purged {Count} old governance history records", deleted);
+                var daysParam = $"-{_retentionDays} days";
+
+                // DE-C5: Execute each DELETE separately so ExecuteNonQuery() returns the
+                // actual rowcount for that table (batched multi-statement returns only the
+                // last statement's count, making the log misleading).
+                int totalDeleted = 0;
+                foreach (var table in new[] { "governance_history", "compliance_history", "check_results", "report_integrity" })
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $"DELETE FROM {table} WHERE recorded_at < datetime('now', @days);";
+                    cmd.Parameters.AddWithValue("@days", daysParam);
+                    totalDeleted += cmd.ExecuteNonQuery();
+                }
+
+                if (totalDeleted > 0)
+                    _logger.LogInformation("Purged {Count} old governance history records", totalDeleted);
                 // DE-C3: reclaim space after purge.
                 using var vac = conn.CreateCommand();
                 vac.CommandText = "PRAGMA incremental_vacuum;";

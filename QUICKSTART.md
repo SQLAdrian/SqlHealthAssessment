@@ -12,6 +12,9 @@
 
 ## Adding Your First Server
 
+> Before you start: ensure the SQL account has the minimum permissions SQLTriage needs.
+> See [Minimum-Privilege SQL Login](docs/min-privilege-sql-login.md) for the T-SQL setup script.
+
 1. Go to **Servers** page
 2. Click **Add Server**
 3. Enter your SQL Server instance name (e.g., `SERVERNAME` or `SERVERNAME\INSTANCENAME`)

@@ -47,6 +47,8 @@ public class WaitStatsHistoryService : IDisposable
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=NORMAL;
+                PRAGMA foreign_keys=ON;
                 -- DE-C3: MUST be set before any tables are created (no-op on existing DBs with auto_vacuum=NONE).
                 PRAGMA auto_vacuum=INCREMENTAL;
 

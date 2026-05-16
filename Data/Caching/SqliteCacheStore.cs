@@ -141,6 +141,14 @@ namespace SQLTriage.Data.Caching
         {
             using var conn = CreateConnection(); // already open + keyed
 
+            // DE-C4: page_size MUST be set before any tables exist (no-op on existing DBs).
+            // 8192-byte pages reduce I/O amplification for the json_data TEXT blob in cache_datatable.
+            using (var pragma = conn.CreateCommand())
+            {
+                pragma.CommandText = "PRAGMA page_size=8192;";
+                pragma.ExecuteNonQuery();
+            }
+
             // Enable WAL mode for concurrent reads during writes
             using (var pragma = conn.CreateCommand())
             {
@@ -167,8 +175,9 @@ namespace SQLTriage.Data.Caching
                     PRIMARY KEY (query_id, instance_key, time_value, series)
                 );
 
-                CREATE INDEX IF NOT EXISTS idx_ts_query_time
-                    ON cache_timeseries(query_id, instance_key, time_value);
+                -- idx_ts_query_time was a prefix of the composite PK (query_id, instance_key, time_value, series)
+                -- and therefore redundant. Dropped for storage and write-amplification savings.
+                DROP INDEX IF EXISTS idx_ts_query_time;
 
                 CREATE INDEX IF NOT EXISTS idx_ts_fetched_at
                     ON cache_timeseries(fetched_at);

@@ -68,6 +68,7 @@ namespace SQLTriage.Data.Services
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
+                    PRAGMA foreign_keys=ON;
 
                     CREATE TABLE IF NOT EXISTS uptime_events (
                         id            INTEGER PRIMARY KEY AUTOINCREMENT,

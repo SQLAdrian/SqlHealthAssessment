@@ -114,8 +114,9 @@ namespace SQLTriage.Data.Services
                 }
                 return instances.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Serilog.Log.Warning(ex, "[QuickCheckRunner] Local instance discovery failed");
                 return new List<string>();
             }
         }
