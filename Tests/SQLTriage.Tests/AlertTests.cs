@@ -55,6 +55,7 @@ public class AlertDefinitionTests
         Assert.NotNull(state.ResolvedAt);
     }
 
+    // T8: delegates to production IsThresholdBreached (internal) instead of re-implementing inline
     [Theory]
     [InlineData("greater_than", 85.0, 80.0, true)]
     [InlineData("greater_than", 79.0, 80.0, false)]
@@ -63,9 +64,7 @@ public class AlertDefinitionTests
     [InlineData("greater_than", 80.0, 80.0, false)] // not strictly greater
     public void ThresholdBreach_OperatorLogic(string op, double value, double threshold, bool expected)
     {
-        var result = op == "less_than"
-            ? value < threshold
-            : value > threshold;
+        var result = AlertEvaluationService.IsThresholdBreached(value, threshold, op);
         Assert.Equal(expected, result);
     }
 }

@@ -787,7 +787,7 @@ namespace SQLTriage.Data.Services
             finally { ReturnOrDispose(sqlConn, connString, pooled); }
         }
 
-        private static bool IsThresholdBreached(double value, double? threshold, string op)
+        internal static bool IsThresholdBreached(double value, double? threshold, string op)
         {
             if (!threshold.HasValue) return false;
             return op == "less_than"

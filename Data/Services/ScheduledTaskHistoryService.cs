@@ -38,6 +38,8 @@ namespace SQLTriage.Data.Services
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
+                    -- DE-C3: MUST be set before any tables are created (no-op on existing DBs with auto_vacuum=NONE).
+                    PRAGMA auto_vacuum=INCREMENTAL;
 
                     CREATE TABLE IF NOT EXISTS task_executions (
                         id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,6 +202,10 @@ namespace SQLTriage.Data.Services
                 var deleted = cmd.ExecuteNonQuery();
                 if (deleted > 0)
                     _logger.LogInformation("Purged {Count} old task execution records", deleted);
+                // DE-C3: reclaim space after purge.
+                using var vac = conn.CreateCommand();
+                vac.CommandText = "PRAGMA incremental_vacuum;";
+                vac.ExecuteNonQuery();
             }
             catch (Exception ex)
             {

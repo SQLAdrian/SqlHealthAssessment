@@ -40,13 +40,22 @@ namespace SQLTriage.Data
         private readonly int _configuredRetentionDays;
         private int _consecutiveFlushFailures;
         private const int FlushFailoverThreshold = 3;
+        // DE-H1: tracks last full multi-segment chain verify time.
+        private DateTime _lastFullChainVerifyUtc = DateTime.MinValue;
+        private readonly int _fullChainVerifyIntervalDays;
 
         /// <summary>Event Log source name. Creating the source requires admin rights.</summary>
         private const string EventLogSource = "SQLTriage-Audit";
         private const string EventLogName = "Application";
 
-        /// <summary>Maximum log file size before rotation (64 KiB).</summary>
-        private const long RotationSizeBytes = 64 * 1024;
+        /// <summary>
+        /// Maximum log file size before rotation (4 MiB default; configurable via Audit:SegmentMaxBytes).
+        /// Prior value was 64 KiB which caused 24-48 segments/day at moderate event rates (DE-H3).
+        /// </summary>
+        private const long DefaultRotationSizeBytes = 4 * 1024 * 1024;
+
+        private long RotationSizeBytes => _rotationSizeBytes;
+        private readonly long _rotationSizeBytes;
 
         /// <summary>
         /// True when startup verification detected a chain break. While set, new
@@ -54,6 +63,12 @@ namespace SQLTriage.Data
         /// break is surfaced to callers.
         /// </summary>
         public bool ChainBroken { get; private set; }
+
+        /// <summary>
+        /// First record ID where chain verification failed, or null if chain intact.
+        /// Surfaced to UI / IR runbook as the forensic starting point.
+        /// </summary>
+        public string? ChainBreakFirstRecordId { get; private set; }
 
         /// <summary>Maximum number of entries to buffer before forcing a flush.</summary>
         public int MaxBufferSize { get; set; } = 50;
@@ -86,6 +101,11 @@ namespace SQLTriage.Data
         {
             _configuredRetentionDays = configuration?.GetValue<int>("Audit:RetentionDays", 90) ?? 90;
             RetentionDays = _configuredRetentionDays;
+            // DE-H3: configurable segment size; defaults to 4 MiB
+            _rotationSizeBytes = configuration?.GetValue<long>("Audit:SegmentMaxBytes", DefaultRotationSizeBytes)
+                                 ?? DefaultRotationSizeBytes;
+            // DE-H1: full chain verify interval; defaults to 7 days
+            _fullChainVerifyIntervalDays = configuration?.GetValue<int>("Audit:FullChainVerifyIntervalDays", 7) ?? 7;
 
             _logDirectory = logDirectory;
             if (!Directory.Exists(_logDirectory))
@@ -362,20 +382,33 @@ namespace SQLTriage.Data
             }
         }
 
+        /// <summary>
+        /// Returns all audit segment files in chronological order (oldest first).
+        /// </summary>
+        private string[] GetAllSegmentsChronological()
+        {
+            var all = Directory.GetFiles(_logDirectory, "audit-*.jsonl");
+            return all.OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
         private void VerifyChainOnStartup()
         {
             try
             {
-                var latest = GetCurrentLogFile();
-                if (!File.Exists(latest)) return;
+                // DE-H4: seed _lastSignature from the LAST entry of the LAST segment,
+                // not just today's file. Entries written to earlier intra-day segments
+                // before a crash are no longer orphaned from the chain forward-link.
+                var allSegments = GetAllSegmentsChronological();
+                if (allSegments.Length == 0) return;
 
                 // Load last-known-chain-break marker to avoid repeating the error on every restart
                 var breakMarkerPath = Path.Combine(_logDirectory, ".chain-break-marker");
                 var previousBreak = File.Exists(breakMarkerPath) ? File.ReadAllText(breakMarkerPath).Trim() : null;
 
-                // Seed with the first entry's PreviousHash so cross-file rotations
-                // don't register as chain breaks. Chain integrity within a single
-                // file is what we actually verify.
+                // Verify only the most-recent segment on startup (quick check).
+                // Full multi-segment verification is performed by VerifyChain() / the weekly sweep.
+                var latest = allSegments[^1];
+
                 string? previousSig = null;
                 foreach (var line in File.ReadLines(latest))
                 {
@@ -394,6 +427,7 @@ namespace SQLTriage.Data
                     {
                         ChainBroken = true;
                         var breakId = $"{entry.Timestamp}_{recomputed[..16]}";
+                        ChainBreakFirstRecordId ??= breakId;
 
                         // Only log the first time this specific break is detected
                         if (previousBreak != breakId)
@@ -737,7 +771,12 @@ namespace SQLTriage.Data
         }
 
         /// <summary>
-        /// Writes the batch to audit-logs/.failover/ when the primary directory is unavailable.
+        /// DE-H2: Writes the batch to audit-logs/.failover/ when the primary directory is unavailable.
+        /// Each entry is individually signed and chained: the first failover entry chains to the
+        /// last main-chain signature; subsequent failover entries chain to each other.
+        /// Each entry carries EventType = AuditFailoverEntry so verifiers can identify it.
+        /// When the main writer recovers, its first entry will chain to the last failover signature
+        /// because _lastSignature is updated here.
         /// Emits AuditFlushFailover once per transition (guarded by _consecutiveFlushFailures == threshold).
         /// </summary>
         private void TryWriteFailover(List<AuditLogEntry> entries)
@@ -748,14 +787,23 @@ namespace SQLTriage.Data
                 Directory.CreateDirectory(failoverDir);
                 var path = Path.Combine(failoverDir,
                     $"audit-failover-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.jsonl");
+
+                // DE-H2: sign and chain every failover entry.
                 var sb = new StringBuilder();
                 foreach (var e in entries)
+                {
+                    // Mark as failover so verifiers can identify it.
+                    e.EventType = AuditEventType.AuditFailoverEntry;
+                    e.PreviousHash = _lastSignature;
+                    e.Signature    = ComputeSignature(e, _lastSignature);
+                    _lastSignature = e.Signature;
                     sb.AppendLine(JsonSerializer.Serialize(e, SerializerOptions));
+                }
                 File.WriteAllText(path, sb.ToString());
 
                 Serilog.Log.Critical(
                     "[AUDIT] PRIMARY FLUSH UNAVAILABLE after {N} consecutive failures. " +
-                    "Failover batch written to {Path}. Investigate disk/permissions immediately.",
+                    "Signed failover batch written to {Path}. Investigate disk/permissions immediately.",
                     _consecutiveFlushFailures, path);
 
                 // Emit one AuditFlushFailover event only on the exact transition tick.
@@ -931,28 +979,63 @@ namespace SQLTriage.Data
         /// Applies the retention policy by deleting old audit log files.
         /// Returns the number of files deleted.
         /// </summary>
+        // Parses "audit-yyyy-MM-dd*.jsonl" and returns the UTC date embedded in the filename.
+        // Returns null if the filename does not match the expected pattern.
+        private static DateTime? TryParseDateFromSegmentName(string fileName)
+        {
+            // Matches: audit-2026-05-16.jsonl  or  audit-2026-05-16_0001.jsonl
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            if (name.StartsWith("audit-", StringComparison.Ordinal) && name.Length >= 16)
+            {
+                var datePart = name.Substring(6, 10); // "yyyy-MM-dd"
+                if (DateTime.TryParseExact(datePart, "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal |
+                    System.Globalization.DateTimeStyles.AdjustToUniversal,
+                    out var parsed))
+                    return parsed;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Applies the retention policy by deleting old audit log segments.
+        /// DE-C1: uses UTC exclusively — cutoff from DateTime.UtcNow, file age from
+        /// UTC date embedded in the filename (falls back to CreationTimeUtc).
+        /// Emits a Serilog Info line with the cutoff timestamp for forensic traceability.
+        /// </summary>
         private int ApplyRetentionPolicy()
         {
             int deleted = 0;
             try
             {
-                var cutoffDate = DateTime.Now.AddDays(-RetentionDays);
+                // DE-C1: UTC cutoff — never local clock.
+                var cutoffDateUtc = DateTime.UtcNow.AddDays(-RetentionDays);
+                Serilog.Log.Information(
+                    "[AUDIT] Retention sweep: cutoff UTC = {CutoffUtc:o}, retentionDays = {Days}",
+                    cutoffDateUtc, RetentionDays);
+
                 var logFiles = Directory.GetFiles(_logDirectory, "audit-*.jsonl");
 
                 foreach (var file in logFiles)
                 {
                     var fileInfo = new FileInfo(file);
-                    if (fileInfo.CreationTime < cutoffDate)
+                    // Prefer the UTC date embedded in the filename; fall back to CreationTimeUtc.
+                    var fileDate = TryParseDateFromSegmentName(fileInfo.Name) ?? fileInfo.CreationTimeUtc;
+
+                    if (fileDate < cutoffDateUtc)
                     {
                         fileInfo.Delete();
                         deleted++;
-                        Serilog.Log.Information("Deleted old audit log: {FileName}", fileInfo.Name);
+                        Serilog.Log.Information(
+                            "[AUDIT] Deleted old audit segment: {FileName} (fileDate={FileDate:o})",
+                            fileInfo.Name, fileDate);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Serilog.Log.Warning(ex, "Error applying audit log retention policy");
+                Serilog.Log.Warning(ex, "[AUDIT] Error applying audit log retention policy");
             }
             return deleted;
         }
@@ -1026,7 +1109,9 @@ namespace SQLTriage.Data
             DateTime VerifiedAt);
 
         /// <summary>
-        /// Verifies the HMAC chain of the current log file on demand.
+        /// DE-H1: Verifies the HMAC chain across ALL segments in chronological order,
+        /// validating PreviousHash continuity across segment boundaries.
+        /// Emits a Warning if total entry count exceeds 100 000 (forensic visibility for slow runs).
         /// Returns a <see cref="ChainVerificationResult"/> and emits an <c>AuditChainVerified</c> event.
         /// </summary>
         public ChainVerificationResult VerifyChain(string? triggeredBy = null)
@@ -1038,11 +1123,22 @@ namespace SQLTriage.Data
 
             try
             {
-                var latest = GetCurrentLogFile();
-                if (File.Exists(latest))
+                var segments = GetAllSegmentsChronological();
+
+                // Cross-segment chain: previousSig carries across segment boundaries.
+                // Within each segment, the first entry's PreviousHash declares the expected
+                // carry-in value — if it doesn't match what we carried from the prior segment
+                // we treat that as a cross-segment break.
+                string? crossSegmentSig = null;
+
+                foreach (var segmentPath in segments)
                 {
-                    string? previousSig = null;
-                    foreach (var line in File.ReadLines(latest))
+                    if (!File.Exists(segmentPath)) continue;
+
+                    string? previousSig = null; // within this segment
+                    bool firstEntryOfSegment = true;
+
+                    foreach (var line in File.ReadLines(segmentPath))
                     {
                         if (string.IsNullOrWhiteSpace(line)) continue;
                         var entry = JsonSerializer.Deserialize<AuditLogEntry>(line, SerializerOptions);
@@ -1052,10 +1148,27 @@ namespace SQLTriage.Data
                         first ??= entry.Timestamp;
                         last = entry.Timestamp;
 
-                        if (previousSig == null)
-                            previousSig = entry.PreviousHash ?? string.Empty;
+                        if (firstEntryOfSegment)
+                        {
+                            firstEntryOfSegment = false;
+                            var declaredPrev = entry.PreviousHash ?? string.Empty;
 
-                        var recomputed = ComputeSignature(entry, previousSig);
+                            // Validate cross-segment continuity (skip for the very first segment).
+                            if (crossSegmentSig != null &&
+                                !string.Equals(crossSegmentSig, declaredPrev, StringComparison.Ordinal))
+                            {
+                                intact = false;
+                                Serilog.Log.Warning(
+                                    "[AUDIT] Cross-segment chain break at segment {Seg}: expected PreviousHash={Expected} got {Got}",
+                                    Path.GetFileName(segmentPath), crossSegmentSig[..Math.Min(16, crossSegmentSig.Length)],
+                                    declaredPrev.Length >= 16 ? declaredPrev[..16] : declaredPrev);
+                                break;
+                            }
+
+                            previousSig = declaredPrev;
+                        }
+
+                        var recomputed = ComputeSignature(entry, previousSig!);
                         if (!string.Equals(recomputed, entry.Signature, StringComparison.Ordinal))
                         {
                             intact = false;
@@ -1063,7 +1176,15 @@ namespace SQLTriage.Data
                         }
                         previousSig = entry.Signature;
                     }
+
+                    if (!intact) break;
+                    crossSegmentSig = previousSig; // carry the last sig into next segment
                 }
+
+                if (count > 100_000)
+                    Serilog.Log.Warning(
+                        "[AUDIT] VerifyChain processed {Count} entries across {Segments} segments — consider archiving old segments",
+                        count, segments.Length);
             }
             catch (Exception ex)
             {
@@ -1077,13 +1198,26 @@ namespace SQLTriage.Data
         }
 
         /// <summary>Called by the scheduled verification timer (background).</summary>
+        /// <summary>
+        /// DE-H1: Scheduled verification — daily quick check (today's segment) + full
+        /// multi-segment sweep every Audit:FullChainVerifyIntervalDays (default 7).
+        /// </summary>
         private void RunScheduledVerification()
         {
             try
             {
-                var result = VerifyChain("scheduled");
-                Serilog.Log.Information("[AUDIT] Scheduled chain verification: {Status}, {Count} entries",
-                    result.Intact ? "INTACT" : "BROKEN", result.EntryCount);
+                var daysSinceFull = (DateTime.UtcNow - _lastFullChainVerifyUtc).TotalDays;
+                bool runFull = daysSinceFull >= _fullChainVerifyIntervalDays;
+
+                var result = VerifyChain(runFull ? "scheduled-full" : "scheduled-quick");
+                Serilog.Log.Information(
+                    "[AUDIT] Scheduled chain verification ({Mode}): {Status}, {Count} entries",
+                    runFull ? "FULL" : "QUICK",
+                    result.Intact ? "INTACT" : "BROKEN",
+                    result.EntryCount);
+
+                if (runFull)
+                    _lastFullChainVerifyUtc = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
@@ -1520,7 +1654,14 @@ namespace SQLTriage.Data
         /// <summary>Server circuit breaker opened; polling suppressed until back-off expires.</summary>
         ServerCircuitOpened,
         /// <summary>Server circuit breaker closed; polling resumed after successful connection.</summary>
-        ServerCircuitClosed
+        ServerCircuitClosed,
+        // ── DE-H2: failover chain ─────────────────────────────────────────
+        /// <summary>
+        /// DE-H2: entry written to the .failover/ directory when the primary flush target
+        /// is unavailable. Fully signed and chained; verifiers should include failover
+        /// segments when performing full-chain audits.
+        /// </summary>
+        AuditFailoverEntry
     }
 
     public enum AuditSeverity

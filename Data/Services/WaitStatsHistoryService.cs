@@ -47,6 +47,8 @@ public class WaitStatsHistoryService : IDisposable
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 PRAGMA journal_mode=WAL;
+                -- DE-C3: MUST be set before any tables are created (no-op on existing DBs with auto_vacuum=NONE).
+                PRAGMA auto_vacuum=INCREMENTAL;
 
                 CREATE TABLE IF NOT EXISTS wait_stats_history (
                     server_name      TEXT    NOT NULL,
@@ -158,6 +160,10 @@ public class WaitStatsHistoryService : IDisposable
             cmd.Parameters.AddWithValue("@cutoff", DateTime.UtcNow.AddDays(-_retentionDays).ToString("o"));
             var deleted = cmd.ExecuteNonQuery();
             if (deleted > 0) _logger.LogInformation("Purged {Count} wait-stats rows older than {Days}d", deleted, _retentionDays);
+            // DE-C3: reclaim space after purge.
+            using var vac = conn.CreateCommand();
+            vac.CommandText = "PRAGMA incremental_vacuum;";
+            vac.ExecuteNonQuery();
         }
         catch (Exception ex)
         {

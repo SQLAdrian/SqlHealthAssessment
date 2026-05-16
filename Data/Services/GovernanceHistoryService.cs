@@ -49,6 +49,10 @@ namespace SQLTriage.Data.Services
 
             InitializeSchema();
             VerifyIntegrityChain();
+            // DE-C2: purge legacy rows whose recorded_at has a '+00:00' suffix.
+            // These rows were written by earlier builds using DateTime.UtcNow.ToString("o").
+            // They silently never matched the SQLite datetime() purge because of the suffix.
+            PurgeLegacyOffsetRows();
 
             _purgeTimer = new System.Timers.Timer(TimeSpan.FromHours(24).TotalMilliseconds);
             _purgeTimer.Elapsed += (_, _) => PurgeOldRecords();
@@ -64,6 +68,9 @@ namespace SQLTriage.Data.Services
                 cmd.CommandText = @"
                     PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
+                    -- DE-C3: MUST be set before any tables are created (no-op on existing DBs with auto_vacuum=NONE;
+                    -- those will get auto_vacuum on the next fresh install or SQLCipher migration).
+                    PRAGMA auto_vacuum=INCREMENTAL;
 
                     CREATE TABLE IF NOT EXISTS governance_history (
                         id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -579,6 +586,60 @@ namespace SQLTriage.Data.Services
             return violations;
         }
 
+        /// <summary>
+        /// DE-C2: One-shot startup sweep that removes rows written by earlier builds using
+        /// DateTime.UtcNow.ToString("o"), which appends "+00:00". Those rows never matched
+        /// the SQLite <c>datetime('now', '-N days')</c> purge because SQLite's datetime()
+        /// compares lexically and the suffix breaks the comparison.
+        /// Safe to re-run — rows already purged are gone, no duplicate effect.
+        /// Gated by a .vacuum_marker table so it only runs once per install.
+        /// </summary>
+        private void PurgeLegacyOffsetRows()
+        {
+            try
+            {
+                using var conn = SqliteCipherHelper.OpenEncrypted(_connectionString);
+
+                // Create the once-run marker table if it doesn't exist.
+                using (var mk = conn.CreateCommand())
+                {
+                    mk.CommandText = "CREATE TABLE IF NOT EXISTS _legacy_offset_purge_marker (ran_at TEXT);";
+                    mk.ExecuteNonQuery();
+                }
+
+                // Check if we've already run.
+                using (var chk = conn.CreateCommand())
+                {
+                    chk.CommandText = "SELECT COUNT(*) FROM _legacy_offset_purge_marker;";
+                    var already = Convert.ToInt32(chk.ExecuteScalar());
+                    if (already > 0) return;
+                }
+
+                // Delete rows with the ISO-8601 offset suffix.
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    DELETE FROM governance_history  WHERE recorded_at LIKE '%+00:00';
+                    DELETE FROM compliance_history  WHERE recorded_at LIKE '%+00:00';
+                    DELETE FROM check_results       WHERE recorded_at LIKE '%+00:00';
+                    DELETE FROM report_integrity    WHERE recorded_at LIKE '%+00:00';
+                ";
+                var deleted = cmd.ExecuteNonQuery();
+                _logger.LogInformation(
+                    "[DE-C2] Legacy offset-suffix purge: removed {Count} rows with '+00:00' recorded_at",
+                    deleted);
+
+                // Mark as done.
+                using var mark = conn.CreateCommand();
+                mark.CommandText = "INSERT INTO _legacy_offset_purge_marker (ran_at) VALUES (@now);";
+                mark.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"));
+                mark.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[DE-C2] Legacy offset-suffix purge failed (non-fatal)");
+            }
+        }
+
         private void PurgeOldRecords()
         {
             try
@@ -595,6 +656,10 @@ namespace SQLTriage.Data.Services
                 var deleted = cmd.ExecuteNonQuery();
                 if (deleted > 0)
                     _logger.LogInformation("Purged {Count} old governance history records", deleted);
+                // DE-C3: reclaim space after purge.
+                using var vac = conn.CreateCommand();
+                vac.CommandText = "PRAGMA incremental_vacuum;";
+                vac.ExecuteNonQuery();
             }
             catch (Exception ex)
             {

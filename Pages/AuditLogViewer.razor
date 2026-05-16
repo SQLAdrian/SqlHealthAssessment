@@ -22,7 +22,7 @@ else
     @if (AuditLog.ChainBroken)
     {
         <div class="status-message error" role="alert" aria-live="assertive" style="margin-bottom: 16px;">
-            <i class="fa-solid fa-triangle-exclamation"></i> Audit log chain integrity check has failed. The log may have been tampered with.
+            <i class="fa-solid fa-triangle-exclamation"></i> Audit chain integrity check failed. First failing record: <code>@(AuditLog.ChainBreakFirstRecordId ?? "unknown")</code>. See <code>docs/compliance/incident-response-runbook.md</code> § Audit Chain Break for next steps.
         </div>
     }
 
