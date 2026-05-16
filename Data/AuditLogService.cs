@@ -650,6 +650,30 @@ namespace SQLTriage.Data
         }
 
         /// <summary>
+        /// Logs a compliance evidence report export (Gap #3 — Compliance Framework).
+        /// </summary>
+        public void LogComplianceReportExported(string framework, string exportedBy, int totalControls, double overallPercent, bool success, string? errorMessage = null)
+        {
+            Enqueue(new AuditLogEntry
+            {
+                EventType = AuditEventType.ComplianceReportExported,
+                Severity  = success ? AuditSeverity.Info : AuditSeverity.Error,
+                Message   = success
+                    ? $"Compliance report exported for framework '{framework}' by {exportedBy}: {overallPercent:F1}% overall compliance"
+                    : $"Compliance report export failed for framework '{framework}': {errorMessage}",
+                Details   = new Dictionary<string, string>
+                {
+                    ["Framework"]       = framework,
+                    ["ExportedBy"]      = exportedBy,
+                    ["TotalControls"]   = totalControls.ToString(),
+                    ["OverallPercent"]  = overallPercent.ToString("F2"),
+                    ["Success"]         = success.ToString(),
+                    ["Error"]           = errorMessage ?? string.Empty,
+                }
+            });
+        }
+
+        /// <summary>
         /// Logs generation of a diagnostic report bundle (Executive Summary, DBA Handoff, Audit Evidence).
         /// </summary>
         public void LogReportBundle(string bundleType, string serverName, bool success, string? outputPath = null, string? errorMessage = null)
@@ -1814,7 +1838,10 @@ namespace SQLTriage.Data
         ReportBundleGenerated,
         // ── Performance baselines ─────────────────────────────────────────
         /// <summary>User triggered baseline learning for a server/wait-type pair (Performance Trends page).</summary>
-        BaselineLearned
+        BaselineLearned,
+        // ── Compliance Framework (Strategic Gap #3) ───────────────────────
+        /// <summary>Gap #3: user exported a compliance evidence report (framework scorecard + VA findings).</summary>
+        ComplianceReportExported
     }
 
     public enum AuditSeverity

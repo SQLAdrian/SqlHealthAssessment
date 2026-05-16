@@ -25,5 +25,18 @@ namespace SQLTriage.Data.Services
             int timeoutSeconds = 30);
 
         Task<(bool Success, string? Path, string? Error)> PrintViaBrowserAsync(IJSRuntime jsRuntime);
+
+        /// <summary>
+        /// Writes <paramref name="html"/> to a temporary file, navigates WebView2 to it,
+        /// captures it as a PDF at <paramref name="outputPath"/>, then navigates back.
+        /// Returns (false, null, error) when WebView2 is unavailable.
+        /// </summary>
+        Task<(bool Success, string? Path, string? Error)> PrintHtmlToPdfAsync(
+            string html,
+            string outputPath,
+            bool printBackgrounds = false,
+            CoreWebView2PrintOrientation orientation = CoreWebView2PrintOrientation.Portrait,
+            string? headerTitle = null,
+            int timeoutSeconds = 60);
     }
 }

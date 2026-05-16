@@ -5,6 +5,7 @@
 @using System.IO
 @inject ReportBundleService ReportBundleSvc
 @inject ServerConnectionManager ConnectionManager
+@inject PrintService PrintSvc
 @inject ILogger<ReportBundles> Logger
 <PageTitle>Report Bundles - SQLTriage</PageTitle>
 
@@ -56,19 +57,35 @@
                     }
                 </div>
             }
-            <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
-                    @onclick="() => GenerateAsync(\"ExecutiveSummary\")">
-                @if (_generating && _generatingType == "ExecutiveSummary")
-                {
-                    <i class="fa-solid fa-spinner rb-spinning"></i>
-                    <span>Generating…</span>
-                }
-                else
-                {
-                    <i class="fa-solid fa-file-pdf"></i>
-                    <span>Generate</span>
-                }
-            </button>
+            <div class="rb-btn-group">
+                <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
+                        @onclick="() => GenerateAsync(\"ExecutiveSummary\")">
+                    @if (_generating && _generatingType == "ExecutiveSummary")
+                    {
+                        <i class="fa-solid fa-spinner rb-spinning"></i>
+                        <span>Generating…</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-file-code"></i>
+                        <span>Save as HTML</span>
+                    }
+                </button>
+                <button class="rb-gen-btn rb-pdf-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer) || !PrintSvc.IsAvailable)"
+                        title="@PdfBtnTitle"
+                        @onclick="() => GeneratePdfAsync(\"ExecutiveSummary\")">
+                    @if (_generating && _generatingType == "ExecutiveSummary_pdf")
+                    {
+                        <i class="fa-solid fa-spinner rb-spinning"></i>
+                        <span>Exporting…</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span>Save as PDF</span>
+                    }
+                </button>
+            </div>
         </div>
 
         @* ── DBA Handoff Package ────────────────────────────────────────── *@
@@ -101,19 +118,35 @@
                     }
                 </div>
             }
-            <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
-                    @onclick="() => GenerateAsync(\"DbaHandoff\")">
-                @if (_generating && _generatingType == "DbaHandoff")
-                {
-                    <i class="fa-solid fa-spinner rb-spinning"></i>
-                    <span>Generating…</span>
-                }
-                else
-                {
-                    <i class="fa-solid fa-file-pdf"></i>
-                    <span>Generate</span>
-                }
-            </button>
+            <div class="rb-btn-group">
+                <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
+                        @onclick="() => GenerateAsync(\"DbaHandoff\")">
+                    @if (_generating && _generatingType == "DbaHandoff")
+                    {
+                        <i class="fa-solid fa-spinner rb-spinning"></i>
+                        <span>Generating…</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-file-code"></i>
+                        <span>Save as HTML</span>
+                    }
+                </button>
+                <button class="rb-gen-btn rb-pdf-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer) || !PrintSvc.IsAvailable)"
+                        title="@PdfBtnTitle"
+                        @onclick="() => GeneratePdfAsync(\"DbaHandoff\")">
+                    @if (_generating && _generatingType == "DbaHandoff_pdf")
+                    {
+                        <i class="fa-solid fa-spinner rb-spinning"></i>
+                        <span>Exporting…</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span>Save as PDF</span>
+                    }
+                </button>
+            </div>
         </div>
 
         @* ── Audit Evidence ─────────────────────────────────────────────── *@
@@ -146,26 +179,42 @@
                     }
                 </div>
             }
-            <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
-                    @onclick="() => GenerateAsync(\"AuditEvidence\")">
-                @if (_generating && _generatingType == "AuditEvidence")
-                {
-                    <i class="fa-solid fa-spinner rb-spinning"></i>
-                    <span>Generating…</span>
-                }
-                else
-                {
-                    <i class="fa-solid fa-file-pdf"></i>
-                    <span>Generate</span>
-                }
-            </button>
+            <div class="rb-btn-group">
+                <button class="rb-gen-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer))"
+                        @onclick="() => GenerateAsync(\"AuditEvidence\")">
+                    @if (_generating && _generatingType == "AuditEvidence")
+                    {
+                        <i class="fa-solid fa-spinner rb-spinning"></i>
+                        <span>Generating…</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-file-code"></i>
+                        <span>Save as HTML</span>
+                    }
+                </button>
+                <button class="rb-gen-btn rb-pdf-btn" disabled="@(_generating || string.IsNullOrEmpty(_selectedServer) || !PrintSvc.IsAvailable)"
+                        title="@PdfBtnTitle"
+                        @onclick="() => GeneratePdfAsync(\"AuditEvidence\")">
+                    @if (_generating && _generatingType == "AuditEvidence_pdf")
+                    {
+                        <i class="fa-solid fa-spinner rb-spinning"></i>
+                        <span>Exporting…</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span>Save as PDF</span>
+                    }
+                </button>
+            </div>
         </div>
 
     </div>
 
     <p style="margin-top:24px;font-size:11px;color:var(--text-muted)">
-        Reports are saved to your Downloads folder as HTML files. Open them in any browser and use
-        <strong>File → Print → Save as PDF</strong> for a final PDF.
+        <strong>Save as PDF</strong> produces a print-ready PDF directly in your Downloads folder (requires desktop mode).
+        <strong>Save as HTML</strong> saves a portable file you can open in any browser and print manually.
         Scheduled generation and email delivery are deferred to v2.
     </p>
 </div>
@@ -178,6 +227,10 @@
 
     // Key: bundleType → result record
     private readonly Dictionary<string, (bool Success, string? Path, string? Error)> _results = new();
+
+    private string PdfBtnTitle => PrintSvc.IsAvailable
+        ? "Save as PDF"
+        : "PDF export requires desktop (WebView2) mode";
 
     protected override void OnInitialized()
     {
@@ -227,13 +280,70 @@
         }
     }
 
-    private static string GetOutputPath(string serverName, string bundleType)
+    private async Task GeneratePdfAsync(string bundleType)
+    {
+        var server = _selectedServer;
+        if (string.IsNullOrEmpty(server) || _generating) return;
+
+        var pdfKey = $"{bundleType}_pdf";
+        _generating = true;
+        _generatingType = pdfKey;
+        _results.Remove(bundleType);
+        StateHasChanged();
+
+        try
+        {
+            string html = bundleType switch
+            {
+                "ExecutiveSummary" => await ReportBundleSvc.PrepareExecutiveSummaryHtmlAsync(server),
+                "DbaHandoff"       => await ReportBundleSvc.PrepareDbaHandoffHtmlAsync(server),
+                "AuditEvidence"    => await ReportBundleSvc.PrepareAuditEvidenceHtmlAsync(server),
+                _                  => throw new InvalidOperationException($"Unknown bundle type: {bundleType}")
+            };
+
+            var outputPath = GetOutputPath(server, bundleType, ".pdf");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+
+            var (success, path, error) = await PrintSvc.PrintHtmlToPdfAsync(
+                html,
+                outputPath,
+                printBackgrounds: true,
+                headerTitle: null);
+
+            if (success && path != null)
+            {
+                ReportBundleSvc.RecordSuccess(server, bundleType, path);
+                _results[bundleType] = (true, path, null);
+            }
+            else
+            {
+                var msg = error ?? "PDF export failed";
+                Logger.LogError("PDF bundle generation failed for {BundleType}/{Server}: {Error}", bundleType, server, msg);
+                ReportBundleSvc.RecordFailure(server, bundleType, msg);
+                _results[bundleType] = (false, null, msg);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "PDF report bundle generation failed for {BundleType}/{Server}", bundleType, server);
+            ReportBundleSvc.RecordFailure(server, bundleType, ex.Message);
+            _results[bundleType] = (false, null, ex.Message);
+        }
+        finally
+        {
+            _generating = false;
+            _generatingType = null;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetOutputPath(string serverName, string bundleType, string extension = ".html")
     {
         var downloads = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var downloadsDir = Path.Combine(downloads, "Downloads");
         var safeName = serverName.Replace("\\", "_").Replace("/", "_").Replace(":", "_");
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
-        return Path.Combine(downloadsDir, $"{safeName}_{bundleType}_{timestamp}.html");
+        return Path.Combine(downloadsDir, $"{safeName}_{bundleType}_{timestamp}{extension}");
     }
 
     private Task OpenInExplorer(string filePath)

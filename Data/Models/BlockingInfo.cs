@@ -12,5 +12,15 @@ namespace SQLTriage.Data.Models
         public int BlockedSPID { get; set; }
         public long WaitDurationMs { get; set; }
         public string? WaitType { get; set; }
+
+        // Enriched from sys.dm_exec_sessions / sys.dm_exec_sql_text
+        public string? BlockerLogin { get; set; }
+        public string? BlockedLogin { get; set; }
+        public string? BlockerDatabase { get; set; }
+        public string? BlockedDatabase { get; set; }
+        /// <summary>Blocker SQL text, truncated to 2 000 chars.</summary>
+        public string? BlockerSqlText { get; set; }
+        /// <summary>Blocked SQL text, truncated to 2 000 chars.</summary>
+        public string? BlockedSqlText { get; set; }
     }
 }

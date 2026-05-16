@@ -207,13 +207,28 @@ ORDER BY s.cpu_time + s.reads DESC";
             using var cmd = sqlConn.CreateCommand();
             cmd.CommandText = @"
                 SELECT
-                    blocking_session_id AS BlockingSPID,
-                    session_id AS BlockedSPID,
-                    wait_duration_ms AS WaitDurationMs,
-                    wait_type AS WaitType
-                FROM sys.dm_os_waiting_tasks WITH (NOLOCK)
-                WHERE blocking_session_id IS NOT NULL
-                  AND blocking_session_id > 0";
+                    wt.blocking_session_id          AS BlockingSPID,
+                    wt.session_id                   AS BlockedSPID,
+                    wt.wait_duration_ms             AS WaitDurationMs,
+                    wt.wait_type                    AS WaitType,
+                    s_blocker.login_name            AS BlockerLogin,
+                    s_blocked.login_name            AS BlockedLogin,
+                    DB_NAME(r_blocker.database_id)  AS BlockerDatabase,
+                    DB_NAME(r_blocked.database_id)  AS BlockedDatabase,
+                    LEFT(CONVERT(NVARCHAR(MAX), ib_blocker.[event_info]), 2000) AS BlockerSqlText,
+                    LEFT(CONVERT(NVARCHAR(MAX), ib_blocked.[event_info]),  2000) AS BlockedSqlText
+                FROM sys.dm_os_waiting_tasks wt WITH (NOLOCK)
+                -- blocker session info
+                LEFT JOIN sys.dm_exec_sessions   s_blocker WITH (NOLOCK) ON s_blocker.session_id = wt.blocking_session_id
+                LEFT JOIN sys.dm_exec_requests   r_blocker WITH (NOLOCK) ON r_blocker.session_id = wt.blocking_session_id
+                -- blocked session info
+                LEFT JOIN sys.dm_exec_sessions   s_blocked WITH (NOLOCK) ON s_blocked.session_id = wt.session_id
+                LEFT JOIN sys.dm_exec_requests   r_blocked WITH (NOLOCK) ON r_blocked.session_id = wt.session_id
+                -- SQL text via dm_exec_input_buffer (works for sleeping blockers with no active request)
+                OUTER APPLY sys.dm_exec_input_buffer(wt.blocking_session_id, NULL) ib_blocker
+                OUTER APPLY sys.dm_exec_input_buffer(wt.session_id,          NULL) ib_blocked
+                WHERE wt.blocking_session_id IS NOT NULL
+                  AND wt.blocking_session_id > 0";
             cmd.CommandTimeout = 15;
 
             using var reader = await cmd.ExecuteReaderAsync();
@@ -221,10 +236,16 @@ ORDER BY s.cpu_time + s.reads DESC";
             {
                 blockers.Add(new BlockingInfo
                 {
-                    BlockingSPID = reader.GetInt32(reader.GetOrdinal("BlockingSPID")),
-                    BlockedSPID = reader.GetInt32(reader.GetOrdinal("BlockedSPID")),
-                    WaitDurationMs = reader.GetInt64(reader.GetOrdinal("WaitDurationMs")),
-                    WaitType = reader.GetString(reader.GetOrdinal("WaitType"))
+                    BlockingSPID    = reader.GetInt32(reader.GetOrdinal("BlockingSPID")),
+                    BlockedSPID     = reader.GetInt32(reader.GetOrdinal("BlockedSPID")),
+                    WaitDurationMs  = reader.GetInt64(reader.GetOrdinal("WaitDurationMs")),
+                    WaitType        = reader.IsDBNull(reader.GetOrdinal("WaitType"))        ? null : reader.GetString(reader.GetOrdinal("WaitType")),
+                    BlockerLogin    = reader.IsDBNull(reader.GetOrdinal("BlockerLogin"))    ? null : reader.GetString(reader.GetOrdinal("BlockerLogin")),
+                    BlockedLogin    = reader.IsDBNull(reader.GetOrdinal("BlockedLogin"))    ? null : reader.GetString(reader.GetOrdinal("BlockedLogin")),
+                    BlockerDatabase = reader.IsDBNull(reader.GetOrdinal("BlockerDatabase")) ? null : reader.GetString(reader.GetOrdinal("BlockerDatabase")),
+                    BlockedDatabase = reader.IsDBNull(reader.GetOrdinal("BlockedDatabase")) ? null : reader.GetString(reader.GetOrdinal("BlockedDatabase")),
+                    BlockerSqlText  = reader.IsDBNull(reader.GetOrdinal("BlockerSqlText"))  ? null : reader.GetString(reader.GetOrdinal("BlockerSqlText")),
+                    BlockedSqlText  = reader.IsDBNull(reader.GetOrdinal("BlockedSqlText"))  ? null : reader.GetString(reader.GetOrdinal("BlockedSqlText")),
                 });
             }
 
@@ -243,7 +264,13 @@ ORDER BY s.cpu_time + s.reads DESC";
                             BlockerSpid     = b.BlockingSPID,
                             BlockedSpid     = b.BlockedSPID,
                             WaitType        = b.WaitType,
-                            DurationSeconds = (int)(b.WaitDurationMs / 1000)
+                            DurationSeconds = (int)(b.WaitDurationMs / 1000),
+                            BlockerLogin    = b.BlockerLogin,
+                            BlockedLogin    = b.BlockedLogin,
+                            BlockerDatabase = b.BlockerDatabase,
+                            BlockedDatabase = b.BlockedDatabase,
+                            BlockerSqlText  = b.BlockerSqlText,
+                            BlockedSqlText  = b.BlockedSqlText,
                         });
                     }
                 });

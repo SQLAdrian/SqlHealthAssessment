@@ -506,7 +506,7 @@
     {
         try
         {
-            var blockingInfos = await SessionService.GetBlockingChainAsync();
+            var blockingInfos = await SessionService.GetBlockingChainAsync(SelectedInstance);
             _blockingChainSPIDs = new HashSet<int>(blockingInfos.SelectMany(b => new[] { b.BlockingSPID, b.BlockedSPID }));
             _blockedByMap = blockingInfos.GroupBy(b => b.BlockedSPID)
                                          .ToDictionary(g => g.Key, g => g.Select(b => b.BlockingSPID).ToList());

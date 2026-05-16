@@ -117,6 +117,133 @@ namespace SQLTriage.Data.Services
         }
 
         /// <summary>
+        /// Writes HTML to a temp file, navigates WebView2 to it, captures as PDF, then navigates back.
+        /// No new packages required — reuses CoreWebView2.PrintToPdfAsync on a file:// URL.
+        /// </summary>
+        public async Task<(bool Success, string? Path, string? Error)> PrintHtmlToPdfAsync(
+            string html,
+            string outputPath,
+            bool printBackgrounds = false,
+            CoreWebView2PrintOrientation orientation = CoreWebView2PrintOrientation.Portrait,
+            string? headerTitle = null,
+            int timeoutSeconds = 60)
+        {
+            if (_webView == null)
+            {
+                _auditLog?.LogExportOperation("PDF", outputPath, false, "WebView not available");
+                return (false, null, "WebView not available — PDF export requires the desktop (WebView2) mode.");
+            }
+
+            // Write HTML to a unique temp file so the WebView can load it via file://
+            var tempFile = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                $"sqltriage_report_{Guid.NewGuid():N}.html");
+
+            try
+            {
+                await System.IO.File.WriteAllTextAsync(tempFile, html, System.Text.Encoding.UTF8);
+
+                // Capture the URL the WebView is currently showing so we can restore it afterward.
+                string? returnUrl = null;
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    returnUrl = _webView.Source;
+                });
+
+                // Navigate to the temp file and wait for NavigationCompleted.
+                var navTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                void OnNavCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs args)
+                {
+                    _webView.NavigationCompleted -= OnNavCompleted;
+                    navTcs.TrySetResult(args.IsSuccess);
+                }
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    _webView.NavigationCompleted += OnNavCompleted;
+                    _webView.Navigate($"file:///{tempFile.Replace('\\', '/')}");
+                });
+
+                using var navCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds / 2));
+                var navTimeout = Task.Delay(Timeout.Infinite, navCts.Token);
+                var navResult = await Task.WhenAny(navTcs.Task, navTimeout);
+
+                if (navResult == navTimeout || !await navTcs.Task)
+                {
+                    _logger.LogError("HTML navigation timed out or failed for {OutputPath}", outputPath);
+                    _auditLog?.LogExportOperation("PDF", outputPath, false, "Navigation to temp HTML failed");
+                    return (false, null, "Navigation to temp HTML timed out or failed.");
+                }
+
+                // Small settle delay so the browser renders fully before capture.
+                await Task.Delay(300);
+
+                // Print the now-loaded page to PDF.
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath)!);
+
+                var printTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                await Application.Current.Dispatcher.InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        var settings = _webView.Environment.CreatePrintSettings();
+                        settings.Orientation = orientation;
+                        settings.ShouldPrintBackgrounds = printBackgrounds;
+                        settings.ShouldPrintHeaderAndFooter = headerTitle != null;
+                        if (headerTitle != null) settings.HeaderTitle = headerTitle;
+                        settings.MarginTop = 0.2;
+                        settings.MarginBottom = 0.25;
+                        settings.MarginLeft = 0.2;
+                        settings.MarginRight = 0.2;
+                        await _webView.PrintToPdfAsync(outputPath, settings);
+                        printTcs.TrySetResult(true);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        printTcs.TrySetException(ex);
+                    }
+                });
+
+                using var printCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds / 2));
+                var printTimeout = Task.Delay(Timeout.Infinite, printCts.Token);
+                var printCompleted = await Task.WhenAny(printTcs.Task, printTimeout);
+
+                if (printCompleted == printTimeout)
+                {
+                    _logger.LogError("PDF capture timed out for {OutputPath}", outputPath);
+                    _auditLog?.LogExportOperation("PDF", outputPath, false, "PDF capture timed out");
+                    return (false, null, "PDF capture timed out.");
+                }
+
+                await printTcs.Task; // unwrap any exception
+
+                // Navigate back to the original URL.
+                if (!string.IsNullOrEmpty(returnUrl))
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        _webView.Navigate(returnUrl);
+                    });
+                }
+
+                _auditLog?.LogExportOperation("PDF", outputPath, true);
+                return (true, outputPath, null);
+            }
+            catch (System.Exception ex)
+            {
+                _auditLog?.LogExportOperation("PDF", outputPath, false, ex.Message);
+                _logger.LogError(ex, "PrintHtmlToPdfAsync failed for {OutputPath}", outputPath);
+                return (false, null, ex.Message);
+            }
+            finally
+            {
+                // Best-effort cleanup — leave the file if deletion fails (OS lock during capture).
+                try { System.IO.File.Delete(tempFile); } catch { /* ignored */ }
+            }
+        }
+
+        /// <summary>
         /// Falls back to the browser's native print dialog via JS interop.
         /// Used in server mode where WebView2 is not available.
         /// </summary>

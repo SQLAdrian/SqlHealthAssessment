@@ -323,17 +323,67 @@ namespace SQLTriage.Data.Services
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync(ct);
 
-            // sp_configure (read-only sys view)
-            using (var cmd = new SqlCommand("SELECT name, value, value_in_use, description FROM sys.configurations ORDER BY name;", conn))
+            // sp_configure — temporarily enable 'show advanced options' so all rows are visible.
+            // NOTE: This is a deliberate side-effect during a read-only capture.  We restore the
+            //       prior value in the finally block even on exception.  If the caller lacks
+            //       sysadmin/serveradmin, the EXEC will fail; we swallow that error and proceed
+            //       with whatever rows are already visible.
+            int priorShowAdvanced = 0;
+            bool toggledAdvanced = false;
+            try
             {
-                using var reader = await cmd.ExecuteReaderAsync(ct);
-                while (await reader.ReadAsync(ct))
+                using (var cmdCheck = new SqlCommand(
+                    "SELECT CAST(value AS int) FROM sys.configurations WHERE name = 'show advanced options';", conn))
                 {
-                    var name = reader.GetString(0);
-                    spConfig[name] = new ConfigEntry(
-                        Value:       reader.IsDBNull(1) ? string.Empty : reader.GetValue(1).ToString() ?? string.Empty,
-                        ValueInUse:  reader.IsDBNull(2) ? string.Empty : reader.GetValue(2).ToString() ?? string.Empty,
-                        Description: reader.IsDBNull(3) ? string.Empty : reader.GetString(3));
+                    var raw = await cmdCheck.ExecuteScalarAsync(ct);
+                    priorShowAdvanced = raw is int i ? i : Convert.ToInt32(raw);
+                }
+
+                if (priorShowAdvanced == 0)
+                {
+                    using (var cmdEnable = new SqlCommand(
+                        "EXEC sp_configure 'show advanced options', 1; RECONFIGURE;", conn))
+                        await cmdEnable.ExecuteNonQueryAsync(ct);
+                    toggledAdvanced = true;
+                    Log.Information("[CONFIG-BASELINE] Temporarily enabled show advanced options for full capture; will restore to {Prior}", priorShowAdvanced);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[CONFIG-BASELINE] Could not enable show advanced options (likely insufficient permission); proceeding with visible rows only.");
+            }
+
+            try
+            {
+                // sp_configure (read-only sys view)
+                using (var cmd = new SqlCommand("SELECT name, value, value_in_use, description FROM sys.configurations ORDER BY name;", conn))
+                {
+                    using var reader = await cmd.ExecuteReaderAsync(ct);
+                    while (await reader.ReadAsync(ct))
+                    {
+                        var name = reader.GetString(0);
+                        spConfig[name] = new ConfigEntry(
+                            Value:       reader.IsDBNull(1) ? string.Empty : reader.GetValue(1).ToString() ?? string.Empty,
+                            ValueInUse:  reader.IsDBNull(2) ? string.Empty : reader.GetValue(2).ToString() ?? string.Empty,
+                            Description: reader.IsDBNull(3) ? string.Empty : reader.GetString(3));
+                    }
+                }
+            }
+            finally
+            {
+                if (toggledAdvanced)
+                {
+                    try
+                    {
+                        using var cmdRestore = new SqlCommand(
+                            $"EXEC sp_configure 'show advanced options', {priorShowAdvanced}; RECONFIGURE;", conn);
+                        await cmdRestore.ExecuteNonQueryAsync(ct);
+                        Log.Information("[CONFIG-BASELINE] Temporarily enabled show advanced options for full capture; restored to {Prior}", priorShowAdvanced);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "[CONFIG-BASELINE] Could not restore show advanced options to {Prior}.", priorShowAdvanced);
+                    }
                 }
             }
 

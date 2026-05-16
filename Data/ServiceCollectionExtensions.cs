@@ -140,6 +140,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<VulnerabilityAssessmentStateService>();
         services.AddSingleton<ReportBundleService>();
 
+        // ── Compliance Framework v1 (Strategic Gap #3) ──
+        services.AddSingleton<ComplianceMappingService>();
+        services.AddSingleton<ComplianceScoreService>();
+
         // ── Compliance / SOC2 services ──
         services.AddSingleton<UptimeTrackerService>(sp =>
             new UptimeTrackerService(

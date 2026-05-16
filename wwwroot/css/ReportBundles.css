@@ -168,6 +168,30 @@
     opacity: 0.88;
 }
 
+/* Button group — HTML + PDF buttons side by side */
+.rb-btn-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.rb-btn-group .rb-gen-btn {
+    flex: 1 1 auto;
+}
+
+/* PDF variant — uses a muted accent so it reads as secondary */
+.rb-pdf-btn {
+    background: var(--surface-2, var(--bg-card));
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+}
+
+.rb-pdf-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: #fff;
+    opacity: 1;
+}
+
 /* Print iframe — hidden from view, used by PrintService */
 .rb-print-frame {
     position: fixed;

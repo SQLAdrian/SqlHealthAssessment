@@ -1,331 +1,379 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/compliance-map"
-@using System.Text.Json
-@inject ServerConnectionManager ConnectionManager
-@inject IQuickCheckRunner QuickCheckRunner
-@inject IGovernanceService GovernanceService
+@using SQLTriage.Data
+@using SQLTriage.Data.Services
+@using static SQLTriage.Data.Services.ComplianceScoreService
+@inject ComplianceMappingService MappingSvc
+@inject ComplianceScoreService ScoreSvc
+@inject VulnerabilityAssessmentStateService VaState
+@inject AuditLogService Audit
 @inject ToastService Toast
+@inject IJSRuntime JSRuntime
 
-<PageTitle>Compliance Framework Coverage - SQLTriage</PageTitle>
-
-@if (!_pageAuthorised)
-{
-    <AccessDenied Message="Compliance Map is currently restricted to the maintainer workstation." />
-    return;
-}
+<PageTitle>Compliance Scorecard - SQLTriage</PageTitle>
 
 <div class="compliance-map-container">
-    <div class="compliance-map-header">
-        <i class="fa-solid fa-shield-halved"></i>
-        <h1>Compliance Framework Coverage</h1>
-    </div>
-    <p class="compliance-map-subtitle">Map SQLTriage checks to compliance frameworks</p>
 
-    @if (_loading)
+    <div class="compliance-map-header">
+        <div class="compliance-map-title-row">
+            <i class="fa-solid fa-shield-halved"></i>
+            <h1>Compliance Framework Scorecard</h1>
+        </div>
+        <p class="compliance-map-subtitle">
+            VA findings scored against industry frameworks via category-level control mapping.
+            Run a Vulnerability Assessment first to populate scores.
+        </p>
+    </div>
+
+    @* ── Framework picker ── *@
+    <div class="framework-tabs" role="tablist" aria-label="Compliance frameworks">
+        @foreach (var fw in _frameworks)
+        {
+            <button class="framework-tab @(fw == _selectedFramework ? "active" : "")"
+                    role="tab"
+                    aria-selected="@(fw == _selectedFramework ? "true" : "false")"
+                    @onclick="() => SelectFramework(fw)">
+                @fw
+            </button>
+        }
+    </div>
+
+    @if (_scorecard == null)
     {
-        <div class="loading-container">
-            <div class="loading-spinner"></div>
-            <span class="loading-text">Loading compliance data...</span>
+        <div class="compliance-no-data-banner">
+            <i class="fa-solid fa-circle-info"></i>
+            No framework definitions loaded. Verify <code>Config/control_mappings.json</code> is present.
         </div>
     }
-    else if (!string.IsNullOrEmpty(_error))
+    else if (!_scorecard.HasData)
     {
-        <div class="error-banner">
-            <i class="fa-solid fa-circle-exclamation"></i>
-            @_error
+        <div class="compliance-no-data-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            No Vulnerability Assessment results found.
+            <a href="/vulnerabilityassessment" class="compliance-link">Run a VA scan</a> to populate this scorecard.
+        </div>
+        @* Still render the control table for gap-awareness even without VA data *@
+        <div class="compliance-gap-table-wrapper">
+            <p class="compliance-gap-hint">Framework controls for <strong>@_selectedFramework</strong> — no VA data mapped yet.</p>
+            <table class="controls-table">
+                <thead>
+                    <tr>
+                        <th class="col-id">Control ID</th>
+                        <th>Control Name</th>
+                        <th class="col-checks">VA Categories</th>
+                        <th class="col-status">Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var fs in _scorecard.FamilyScores)
+                    {
+                        <tr>
+                            <td class="control-id-cell">@fs.FamilyId</td>
+                            <td>@fs.FamilyName</td>
+                            <td><span class="no-checks-placeholder">—</span></td>
+                            <td><span class="status-badge status-nodata">No Data</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
     else
     {
-        <div class="framework-tabs">
-            @foreach (var fw in _frameworks)
-            {
-                <button class="framework-tab @(fw == _selectedFramework ? "active" : "")"
-                        @onclick="() => SelectFramework(fw)">
-                    @fw
-                </button>
-            }
-        </div>
-
-        @if (_coverageData != null)
-        {
-            <div class="coverage-summary-bar">
-                <div class="coverage-stat">
-                    <span class="coverage-stat-label">Controls Covered</span>
-                    <span class="coverage-stat-value">@_coverageData.CoveredCount of @_coverageData.TotalControls</span>
+        @* ── Overall summary bar ── *@
+        <div class="coverage-summary-bar">
+            <div class="compliance-overall-score @GetOverallScoreClass(_scorecard.OverallPercent)">
+                @(_scorecard.OverallPercent >= 0 ? _scorecard.OverallPercent.ToString("F0") + "%" : "—")
+            </div>
+            <div class="compliance-summary-details">
+                <div class="coverage-bar-track" title="@(_scorecard.OverallPercent >= 0 ? _scorecard.OverallPercent.ToString("F1") + "% compliance" : "No data")">
+                    @if (_scorecard.OverallPercent >= 0)
+                    {
+                        <div class="coverage-bar-fill @GetOverallScoreClass(_scorecard.OverallPercent)"
+                             style="width: @(_scorecard.OverallPercent.ToString("F0"))%">
+                        </div>
+                    }
                 </div>
-                <div class="coverage-bar-track">
-                    <div class="coverage-bar-fill" style="width: @(_coverageData.CoveragePercent.ToString("F0"))%"></div>
-                </div>
-                <div class="coverage-percentage">@_coverageData.CoveragePercent.ToString("F1")%</div>
-                <div class="coverage-stat">
-                    <span class="coverage-stat-label">Checks Mapped</span>
-                    <span class="coverage-stat-value">@_coverageData.TotalChecksMapped</span>
+                <div class="compliance-summary-stats">
+                    <span>@_scorecard.FamilyScores.Count(f => f.Status == ControlStatus.Compliant) compliant</span>
+                    <span>@_scorecard.FamilyScores.Count(f => f.Status == ControlStatus.PartiallyCompliant) partial</span>
+                    <span>@_scorecard.FamilyScores.Count(f => f.Status == ControlStatus.NonCompliant) non-compliant</span>
+                    <span>@_scorecard.FamilyScores.Count(f => f.Status == ControlStatus.NoData) no data</span>
                 </div>
             </div>
+            <button class="btn-export-compliance"
+                    @onclick="ExportReport"
+                    title="Export audit evidence for @_selectedFramework">
+                <i class="fa-solid fa-file-export"></i> Export Evidence
+            </button>
+        </div>
 
-            <div class="controls-table-wrapper">
-                <div class="section-count-label">@_coverageData.ControlRows.Count controls &middot; @(_coverageData.GapControls.Count) gaps</div>
-                <table class="controls-table">
-                    <thead>
-                        <tr>
-                            <th class="col-id">Control ID</th>
-                            <th>Control Name</th>
-                            <th class="col-mapping">Mapping Type</th>
-                            <th class="col-checks">Checks Mapped</th>
-                            <th class="col-status">Status</th>
+        @* ── Per-control scorecard table ── *@
+        <div class="controls-table-wrapper">
+            <table class="controls-table" id="compliance-scorecard-table">
+                <thead>
+                    <tr>
+                        <th class="col-id">Control ID</th>
+                        <th>Control Name</th>
+                        <th class="col-checks">Checks (Pass / Total)</th>
+                        <th class="col-bar">Compliance</th>
+                        <th class="col-status">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var fs in _scorecard.FamilyScores.OrderBy(f => f.FamilyId))
+                    {
+                        <tr class="@(fs == _expandedFamily ? "expanded" : "")"
+                            @onclick="() => ToggleDrillDown(fs)">
+                            <td class="control-id-cell">@fs.FamilyId</td>
+                            <td>@fs.FamilyName</td>
+                            <td class="checks-cell">
+                                @if (fs.Status == ControlStatus.NoData)
+                                {
+                                    <span class="no-checks-placeholder">—</span>
+                                }
+                                else
+                                {
+                                    <span>@fs.PassingChecks / @fs.TotalChecks</span>
+                                }
+                            </td>
+                            <td class="bar-cell">
+                                @if (fs.Status != ControlStatus.NoData && fs.Percent >= 0)
+                                {
+                                    <div class="mini-bar-track">
+                                        <div class="mini-bar-fill @GetStatusClass(fs.Status)"
+                                             style="width: @(fs.Percent.ToString("F0"))%">
+                                        </div>
+                                    </div>
+                                    <span class="mini-bar-label">@fs.Percent.ToString("F0")%</span>
+                                }
+                            </td>
+                            <td>
+                                @if (fs.Status == ControlStatus.Compliant)
+                                {
+                                    <span class="status-badge status-covered"><i class="fa-solid fa-check"></i> Compliant</span>
+                                }
+                                else if (fs.Status == ControlStatus.PartiallyCompliant)
+                                {
+                                    <span class="status-badge status-partial"><i class="fa-solid fa-minus"></i> Partial</span>
+                                }
+                                else if (fs.Status == ControlStatus.NonCompliant)
+                                {
+                                    <span class="status-badge status-gap"><i class="fa-solid fa-xmark"></i> Non-Compliant</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge status-nodata">No Data</span>
+                                }
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var row in _coverageData.ControlRows)
+
+                        @* ── Drill-down: failing findings for this control ── *@
+                        @if (fs == _expandedFamily && fs.SampleResults.Count > 0)
                         {
-                            <tr>
-                                <td class="control-id-cell">@row.ControlId</td>
-                                <td>@row.ControlName</td>
-                                <td>
-                                    @if (row.MappingTypes.Contains("direct_match"))
-                                    {
-                                        <span class="mapping-type-badge mapping-direct">direct_match</span>
-                                    }
-                                    else if (row.MappingTypes.Contains("related"))
-                                    {
-                                        <span class="mapping-type-badge mapping-related">related</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="mapping-type-badge mapping-supplementary">supplementary</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if (row.Checks.Count > 0)
-                                    {
-                                        @foreach (var chk in row.Checks)
-                                        {
-                                            <span class="check-pill" title="@chk.Name">@chk.Id</span>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <span class="no-checks-placeholder">&mdash;</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if (row.IsCovered)
-                                    {
-                                        <span class="status-badge status-covered"><i class="fa-solid fa-check"></i> Covered</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="status-badge status-gap"><i class="fa-solid fa-xmark"></i> Gap</span>
-                                    }
+                            <tr class="drill-down-row">
+                                <td colspan="5">
+                                    <div class="drill-down-panel">
+                                        <div class="drill-down-header">
+                                            <i class="fa-solid fa-list-check"></i>
+                                            Failing findings mapped to <strong>@fs.FamilyId</strong>
+                                            (showing up to 5)
+                                        </div>
+                                        <table class="drill-down-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Check ID</th>
+                                                    <th>Name</th>
+                                                    <th>Severity</th>
+                                                    <th>Message</th>
+                                                    <th>Target</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var r in fs.SampleResults)
+                                                {
+                                                    <tr>
+                                                        <td class="control-id-cell">@r.CheckId</td>
+                                                        <td>@r.DisplayName</td>
+                                                        <td><span class="severity-badge @r.Severity.ToLower()">@r.Severity</span></td>
+                                                        <td>@r.Message</td>
+                                                        <td>@r.TargetName</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </td>
                             </tr>
                         }
-                    </tbody>
-                </table>
-            </div>
+                    }
+                </tbody>
+            </table>
+        </div>
 
+        @* ── Gap summary ── *@
+        @{
+            var gaps = _scorecard.FamilyScores.Where(f => f.Status == ControlStatus.NonCompliant).ToList();
+        }
+        @if (gaps.Count > 0)
+        {
             <div class="gap-analysis-section">
                 <div class="gap-analysis-header">
                     <i class="fa-solid fa-triangle-exclamation"></i>
-                    <h3>Gap Analysis</h3>
+                    <h3>Non-Compliant Controls (@gaps.Count)</h3>
                 </div>
-
-                <p class="gap-compliance-line">
-                    You're <strong>@_coverageData.CoveragePercent.ToString("F1")%</strong> @_selectedFramework compliant based on check coverage.
-                </p>
-
-                @if (_coverageData.GapControls.Count > 0)
-                {
-                    <p class="gap-missing-label">Missing these @_coverageData.GapControls.Count controls:</p>
-                    <div class="gap-control-list">
-                        @foreach (var gap in _coverageData.GapControls)
-                        {
-                            <div class="gap-control-item">
-                                <span class="gap-id">@gap.ControlId</span>
-                                <span class="gap-name">@gap.ControlName</span>
-                            </div>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <div class="no-gaps-message">
-                        <i class="fa-solid fa-circle-check"></i>
-                        All controls in this framework are covered by at least one SQLTriage check.
-                    </div>
-                }
+                <div class="gap-control-list">
+                    @foreach (var gap in gaps.OrderBy(g => g.FamilyId))
+                    {
+                        <div class="gap-control-item">
+                            <span class="gap-id">@gap.FamilyId</span>
+                            <span class="gap-name">@gap.FamilyName</span>
+                            <span class="gap-pct">@gap.Percent.ToString("F0")%</span>
+                        </div>
+                    }
+                </div>
             </div>
         }
     }
+
 </div>
 
 @code {
-    // Gate: page is hidden from nav/palette + redirects unauthorised users (2026-05-12).
-    private static readonly bool _pageAuthorised =
-        string.Equals(Environment.MachineName, "MSI",   StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(Environment.UserName,    "afsul", StringComparison.OrdinalIgnoreCase);
+    private List<string> _frameworks = new();
+    private string _selectedFramework = "";
+    private ComplianceScorecard? _scorecard;
+    private ControlFamilyScore? _expandedFamily;
 
-    private bool _loading = true;
-    private string? _error;
-    private string _selectedFramework = "NIST SP 800-53 Rev 5";
-    private CoverageResult? _coverageData;
-
-    private readonly string[] _frameworks = new[]
+    protected override void OnInitialized()
     {
-        "NIST SP 800-53 Rev 5",
-        "SOC 2 (2017 TSC)",
-        "ISO 27001:2022",
-        "CIS Controls v8",
-        "HIPAA",
-        "PCI-DSS v4.0"
-    };
+        _frameworks = MappingSvc.GetFrameworks().ToList();
+        _selectedFramework = _frameworks.FirstOrDefault() ?? "";
+        ComputeScorecard();
+    }
 
-    private List<CheckEntry> _allChecks = new();
-
-    protected override async Task OnInitializedAsync()
+    private void SelectFramework(string fw)
     {
+        _selectedFramework = fw;
+        _expandedFamily = null;
+        ComputeScorecard();
+    }
+
+    private void ComputeScorecard()
+    {
+        if (string.IsNullOrEmpty(_selectedFramework)) return;
+        _scorecard = ScoreSvc.ComputeScorecard(VaState.Results, _selectedFramework);
+    }
+
+    private void ToggleDrillDown(ControlFamilyScore fs)
+    {
+        _expandedFamily = _expandedFamily == fs ? null : fs;
+    }
+
+    private async Task ExportReport()
+    {
+        if (_scorecard == null) return;
+
         try
         {
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var path = Path.Combine(baseDir, "Config", "sql-checks.json");
-            if (!File.Exists(path)) path = Path.Combine(baseDir, "config", "sql-checks.json");
-            if (!File.Exists(path))
-            {
-                _error = "Config/sql-checks.json not found.";
-                _loading = false;
-                return;
-            }
+            var html = BuildEvidenceHtml(_scorecard);
+            var fileName = $"compliance-evidence-{_selectedFramework.Replace(" ", "-")}-{DateTime.Now:yyyyMMdd-HHmm}.html";
 
-            var json = await File.ReadAllTextAsync(path);
-            var opts = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                ReadCommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true
-            };
-            _allChecks = JsonSerializer.Deserialize<List<CheckEntry>>(json, opts) ?? new();
-            ComputeCoverage();
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, html, "text/html");
+
+            Audit.LogComplianceReportExported(
+                framework:      _selectedFramework,
+                exportedBy:     Environment.UserName,
+                totalControls:  _scorecard.FamilyScores.Count,
+                overallPercent: _scorecard.OverallPercent >= 0 ? _scorecard.OverallPercent : 0,
+                success:        true);
+
+            Toast.ShowSuccess("Compliance Export", $"Evidence report saved as {fileName}");
         }
         catch (Exception ex)
         {
-            _error = $"Failed to load sql-checks.json: {ex.Message}";
-            Toast.ShowError("Compliance Map", $"Failed to load checks: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
+            Audit.LogComplianceReportExported(
+                framework:      _selectedFramework,
+                exportedBy:     Environment.UserName,
+                totalControls:  _scorecard?.FamilyScores.Count ?? 0,
+                overallPercent: 0,
+                success:        false,
+                errorMessage:   ex.Message);
+
+            Toast.ShowError("Compliance Export", $"Export failed: {ex.Message}");
         }
     }
 
-    private void SelectFramework(string framework)
+    private static string BuildEvidenceHtml(ComplianceScorecard scorecard)
     {
-        _selectedFramework = framework;
-        ComputeCoverage();
-    }
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">");
+        sb.AppendLine($"<title>Compliance Evidence — {scorecard.Framework}</title>");
+        sb.AppendLine("<style>");
+        sb.AppendLine("body{font-family:sans-serif;margin:2rem;color:#222}");
+        sb.AppendLine("h1{font-size:1.5rem}h2{font-size:1.1rem;margin-top:2rem}");
+        sb.AppendLine("table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 10px;font-size:0.85rem}");
+        sb.AppendLine("th{background:#f4f4f4;text-align:left}.compliant{color:green}.partial{color:darkorange}.noncompliant{color:crimson}.nodata{color:#888}");
+        sb.AppendLine("</style></head><body>");
+        sb.AppendLine($"<h1>Compliance Evidence Report — {scorecard.Framework}</h1>");
+        sb.AppendLine($"<p>Generated: {scorecard.ComputedAt:yyyy-MM-dd HH:mm:ss} UTC &nbsp;|&nbsp; Host: {Environment.MachineName}</p>");
 
-    private void ComputeCoverage()
-    {
-        var controlMap = new Dictionary<string, ControlRowData>(StringComparer.OrdinalIgnoreCase);
-        var checksMapped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var overallLabel = scorecard.OverallPercent >= 0 ? scorecard.OverallPercent.ToString("F1") + "%" : "No VA data";
+        sb.AppendLine($"<p><strong>Overall Compliance:</strong> {overallLabel}</p>");
 
-        foreach (var check in _allChecks)
+        sb.AppendLine("<h2>Control Family Scores</h2>");
+        sb.AppendLine("<table><thead><tr><th>Control ID</th><th>Control Name</th><th>Pass</th><th>Total</th><th>%</th><th>Status</th></tr></thead><tbody>");
+
+        foreach (var fs in scorecard.FamilyScores.OrderBy(f => f.FamilyId))
         {
-            if (check.FrameworkMappings == null) continue;
-
-            foreach (var mapping in check.FrameworkMappings)
+            var cls = fs.Status switch
             {
-                if (!string.Equals(mapping.Framework, _selectedFramework, StringComparison.OrdinalIgnoreCase))
-                    continue;
+                ControlStatus.Compliant          => "compliant",
+                ControlStatus.PartiallyCompliant => "partial",
+                ControlStatus.NonCompliant       => "noncompliant",
+                _                                => "nodata"
+            };
+            var label = fs.Status switch
+            {
+                ControlStatus.Compliant          => "Compliant",
+                ControlStatus.PartiallyCompliant => "Partial",
+                ControlStatus.NonCompliant       => "Non-Compliant",
+                _                                => "No Data"
+            };
+            var pct = fs.Percent >= 0 ? fs.Percent.ToString("F1") + "%" : "—";
+            sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(fs.FamilyId)}</td><td>{System.Net.WebUtility.HtmlEncode(fs.FamilyName)}</td><td>{fs.PassingChecks}</td><td>{fs.TotalChecks}</td><td>{pct}</td><td class=\"{cls}\">{label}</td></tr>");
+        }
+        sb.AppendLine("</tbody></table>");
 
-                checksMapped.Add(check.Id ?? "");
-
-                if (!controlMap.TryGetValue(mapping.ControlId ?? "", out var row))
+        // Failing findings detail
+        var failingFamilies = scorecard.FamilyScores.Where(f => f.SampleResults.Count > 0).OrderBy(f => f.FamilyId).ToList();
+        if (failingFamilies.Count > 0)
+        {
+            sb.AppendLine("<h2>Failing Findings by Control</h2>");
+            foreach (var fs in failingFamilies)
+            {
+                sb.AppendLine($"<h3 style=\"font-size:0.95rem;margin-top:1rem\">{System.Net.WebUtility.HtmlEncode(fs.FamilyId)} — {System.Net.WebUtility.HtmlEncode(fs.FamilyName)}</h3>");
+                sb.AppendLine("<table><thead><tr><th>Check ID</th><th>Name</th><th>Severity</th><th>Message</th><th>Target</th></tr></thead><tbody>");
+                foreach (var r in fs.SampleResults)
                 {
-                    row = new ControlRowData
-                    {
-                        ControlId = mapping.ControlId ?? "",
-                        ControlName = mapping.ControlName ?? ""
-                    };
-                    controlMap[mapping.ControlId ?? ""] = row;
+                    sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(r.CheckId)}</td><td>{System.Net.WebUtility.HtmlEncode(r.DisplayName)}</td><td>{System.Net.WebUtility.HtmlEncode(r.Severity)}</td><td>{System.Net.WebUtility.HtmlEncode(r.Message)}</td><td>{System.Net.WebUtility.HtmlEncode(r.TargetName)}</td></tr>");
                 }
-
-                if (!row.MappingTypes.Contains(mapping.MappingType ?? ""))
-                    row.MappingTypes.Add(mapping.MappingType ?? "");
-
-                if (!row.Checks.Any(c => c.Id == check.Id))
-                    row.Checks.Add(new CheckRef { Id = check.Id ?? "", Name = check.Name ?? "" });
+                sb.AppendLine("</tbody></table>");
             }
         }
 
-        var controlRows = controlMap.Values
-            .OrderBy(r => r.ControlId, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        sb.AppendLine("</body></html>");
+        return sb.ToString();
+    }
 
-        foreach (var row in controlRows)
-            row.IsCovered = row.Checks.Count > 0;
+    private static string GetOverallScoreClass(double pct)
+        => pct >= 80 ? "score-compliant" : pct >= 50 ? "score-partial" : "score-noncompliant";
 
-        var coveredCount = controlRows.Count(r => r.IsCovered);
-        var totalControls = controlRows.Count;
-        var gapControls = controlRows.Where(r => !r.IsCovered)
-            .Select(r => new GapControl { ControlId = r.ControlId, ControlName = r.ControlName })
-            .ToList();
-
-        _coverageData = new CoverageResult
+    private static string GetStatusClass(ControlStatus status)
+        => status switch
         {
-            ControlRows = controlRows,
-            CoveredCount = coveredCount,
-            TotalControls = totalControls,
-            CoveragePercent = totalControls > 0 ? (coveredCount * 100.0 / totalControls) : 0,
-            TotalChecksMapped = checksMapped.Count,
-            GapControls = gapControls
+            ControlStatus.Compliant          => "bar-compliant",
+            ControlStatus.PartiallyCompliant => "bar-partial",
+            ControlStatus.NonCompliant       => "bar-noncompliant",
+            _                                => "bar-nodata"
         };
-    }
-
-    private class CheckEntry
-    {
-        public string? Id { get; set; }
-        public string? Name { get; set; }
-        public string? Category { get; set; }
-        public List<FrameworkMappingEntry>? FrameworkMappings { get; set; }
-    }
-
-    private class FrameworkMappingEntry
-    {
-        public string? Framework { get; set; }
-        public string? ControlId { get; set; }
-        public string? ControlName { get; set; }
-        public string? MappingType { get; set; }
-    }
-
-    private class ControlRowData
-    {
-        public string ControlId { get; set; } = "";
-        public string ControlName { get; set; } = "";
-        public List<string> MappingTypes { get; set; } = new();
-        public List<CheckRef> Checks { get; set; } = new();
-        public bool IsCovered { get; set; }
-    }
-
-    private class CheckRef
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
-    }
-
-    private class CoverageResult
-    {
-        public List<ControlRowData> ControlRows { get; set; } = new();
-        public int CoveredCount { get; set; }
-        public int TotalControls { get; set; }
-        public double CoveragePercent { get; set; }
-        public int TotalChecksMapped { get; set; }
-        public List<GapControl> GapControls { get; set; } = new();
-    }
-
-    private class GapControl
-    {
-        public string ControlId { get; set; } = "";
-        public string ControlName { get; set; } = "";
-    }
 }
