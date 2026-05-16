@@ -36,6 +36,9 @@ namespace SQLTriage
                 .WriteTo.File(
                     path: System.IO.Path.Combine(AppContext.BaseDirectory, "logs", "app-.log"),
                     rollingInterval: RollingInterval.Day,
+                    fileSizeLimitBytes: 50L * 1024 * 1024,
+                    rollOnFileSizeLimit: true,
+                    retainedFileCountLimit: 30,
                     outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
@@ -58,7 +61,7 @@ namespace SQLTriage
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-            // Configure Serilog - Single consolidated log file
+            // Configure Serilog - Single consolidated log file (defaults applied; reconfigured after config loads)
             var configStart = DateTime.Now;
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.ControlledBy(LogLevelSwitch)
@@ -70,6 +73,8 @@ namespace SQLTriage
                 .WriteTo.File(
                     path: System.IO.Path.Combine(AppContext.BaseDirectory, "logs", "app-.log"),
                     rollingInterval: RollingInterval.Day,
+                    fileSizeLimitBytes: 50L * 1024 * 1024,
+                    rollOnFileSizeLimit: true,
                     retainedFileCountLimit: 30,
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
@@ -128,6 +133,32 @@ namespace SQLTriage
             }
             sw.Stop();
             Log.Information("[STARTUP] Configuration loaded in {ElapsedMs}ms", sw.ElapsedMilliseconds);
+
+            // Reconfigure Serilog with config-driven file-sink bounds (Serilog:FileSink:* keys).
+            // Caps log storage to ~1.5 GB (50 MB × 30 files) by default.
+            {
+                var fileSinkCfg = configuration.GetSection("Serilog:FileSink");
+                var fileSizeMb   = fileSinkCfg.GetValue<int>("FileSizeLimitMb", 50);
+                var retainCount  = fileSinkCfg.GetValue<int>("RetainedFileCount", 30);
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.ControlledBy(LogLevelSwitch)
+                    .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithProperty("Application", "SQLTriage")
+                    .Enrich.WithProperty("User", Environment.UserName)
+                    .Enrich.WithProperty("Machine", Environment.MachineName)
+                    .WriteTo.File(
+                        path: System.IO.Path.Combine(AppContext.BaseDirectory, "logs", "app-.log"),
+                        rollingInterval: RollingInterval.Day,
+                        fileSizeLimitBytes: (long)fileSizeMb * 1024 * 1024,
+                        rollOnFileSizeLimit: true,
+                        retainedFileCountLimit: retainCount,
+                        buffered: false,
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                    .CreateLogger();
+                Log.Information("[STARTUP] Serilog reconfigured: {SizeMb}MB per file, {Count} files retained (max ~{TotalMb}MB)",
+                    fileSizeMb, retainCount, fileSizeMb * retainCount);
+            }
 
             // ===== STARTUP PHASE 3: Service Registration =====
             sw.Restart();

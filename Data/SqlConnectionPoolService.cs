@@ -20,12 +20,16 @@ namespace SQLTriage.Data
         private readonly ConcurrentQueue<PooledConnection> _availableConnections = new();
         private readonly ConcurrentDictionary<string, int> _connectionCounts = new();
         private readonly Timer _cleanupTimer;
-        private readonly int _maxPoolSize;
+        private readonly int _maxPerServer;
+        private readonly int _maxGlobal;
         private readonly int _minPoolSize;
         private readonly TimeSpan _connectionTimeout;
         private readonly TimeSpan _idleTimeout;
         private readonly ILogger<SqlConnectionPoolService> _logger;
         private volatile bool _disposed;
+
+        // Atomic total-connection counter across all servers.
+        private int _totalActiveConnections;
 
         // Global lock used to make the count-check → increment sequence atomic,
         // preventing TOCTOU races when multiple callers acquire simultaneously.
@@ -37,8 +41,10 @@ namespace SQLTriage.Data
         public SqlConnectionPoolService(IConfiguration configuration, ILogger<SqlConnectionPoolService> logger)
         {
             _logger = logger;
-            _maxPoolSize = configuration.GetValue<int>("ConnectionPool:MaxSize", 50);
-            _minPoolSize = configuration.GetValue<int>("ConnectionPool:MinSize", 2);
+            _maxPerServer = configuration.GetValue<int>("ConnectionPool:MaxPerServer",
+                              configuration.GetValue<int>("ConnectionPool:MaxSize", 13));
+            _maxGlobal    = configuration.GetValue<int>("ConnectionPool:MaxGlobal", 100);
+            _minPoolSize  = configuration.GetValue<int>("ConnectionPool:MinSize", 2);
             _connectionTimeout = TimeSpan.FromSeconds(configuration.GetValue<int>("ConnectionPool:TimeoutSeconds", 30));
             _idleTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("ConnectionPool:IdleTimeoutMinutes", 5));
 
@@ -81,13 +87,25 @@ namespace SQLTriage.Data
                 }
 
                 // 2. Atomically check-and-increment the count to avoid TOCTOU race.
+                //    Rent fails if EITHER per-server OR global cap is hit.
                 bool slotAcquired = false;
+                bool perServerSaturated = false;
                 lock (_countLock)
                 {
-                    var currentCount = _connectionCounts.GetOrAdd(connectionKey, 0);
-                    if (currentCount < _maxPoolSize)
+                    var perServerCount = _connectionCounts.GetOrAdd(connectionKey, 0);
+                    var totalCount     = _totalActiveConnections;
+                    if (perServerCount >= _maxPerServer)
+                    {
+                        perServerSaturated = true;
+                    }
+                    else if (totalCount >= _maxGlobal)
+                    {
+                        // globalSaturated — handled by the else branch in the warning below
+                    }
+                    else
                     {
                         _connectionCounts.AddOrUpdate(connectionKey, 1, (k, v) => v + 1);
+                        Interlocked.Increment(ref _totalActiveConnections);
                         slotAcquired = true;
                     }
                 }
@@ -102,20 +120,27 @@ namespace SQLTriage.Data
                     }
                     catch
                     {
-                        // Failed to open — release the count slot we reserved.
+                        // Failed to open — release the count slots we reserved.
                         lock (_countLock) { _connectionCounts.AddOrUpdate(connectionKey, 0, (k, v) => Math.Max(0, v - 1)); }
+                        Interlocked.Decrement(ref _totalActiveConnections);
                         throw;
                     }
                 }
 
                 // 3. Pool saturated — block until a connection is returned.
-                _logger.LogWarning("[POOL] Saturated at {Max}, waiting for connection return (key={Key})", _maxPoolSize, connectionKey);
+                if (perServerSaturated)
+                    _logger.LogWarning("[POOL] Per-server cap reached ({PerServer}) for key={Key}; waiting for return (global={Total}/{Max})",
+                        _maxPerServer, connectionKey, _totalActiveConnections, _maxGlobal);
+                else
+                    _logger.LogWarning("[POOL] Global cap reached ({Global}); waiting for connection return (key={Key}, per-server={PerServer}/{Max})",
+                        _maxGlobal, connectionKey, _connectionCounts.GetOrAdd(connectionKey, 0), _maxPerServer);
+
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var acquired = await _returnSignal.WaitAsync(_connectionTimeout, cancellationToken);
                 if (!acquired)
                     throw new TimeoutException(
                         $"[POOL] No connection available for key '{connectionKey}' after {_connectionTimeout.TotalSeconds:F0}s. " +
-                        $"Pool is saturated at {_maxPoolSize} connections.");
+                        $"Per-server cap: {_maxPerServer}, global cap: {_maxGlobal}, total active: {_totalActiveConnections}.");
 
                 _logger.LogInformation("[POOL] Connection available after {Ms}ms wait (key={Key})", sw.ElapsedMilliseconds, connectionKey);
                 // Loop back and try to dequeue or create now that signal was received.
@@ -134,8 +159,9 @@ namespace SQLTriage.Data
                 {
                     var k = GetConnectionKey(connectionString);
                     lock (_countLock) { _connectionCounts.AddOrUpdate(k, 0, (_, v) => Math.Max(0, v - 1)); }
+                    Interlocked.Decrement(ref _totalActiveConnections);
                 }
-                // Signal even on failed return so waiters can attempt a new create.
+                // Signal even on failed return so waiters on either cap can attempt a new create.
                 if (!_disposed) _returnSignal.Release();
                 return;
             }
@@ -191,6 +217,7 @@ namespace SQLTriage.Data
                     connection.Connection.Dispose();
                     var key = GetConnectionKey(connection.ConnectionString);
                     lock (_countLock) { _connectionCounts.AddOrUpdate(key, 0, (k, v) => Math.Max(0, v - 1)); }
+                    Interlocked.Decrement(ref _totalActiveConnections);
                 }
                 catch (Exception ex) { _logger.LogDebug(ex, "[ConnPool] Dispose during cleanup failed"); }
             }
@@ -229,6 +256,7 @@ namespace SQLTriage.Data
             }
 
             _connectionCounts.Clear();
+            Interlocked.Exchange(ref _totalActiveConnections, 0);
         }
 
         private class PooledConnection

@@ -32,7 +32,6 @@ namespace SQLTriage.Data.Services
         private readonly IQueryOrchestrator _orchestrator;
         private readonly SqlConnectionPoolService? _pool;
         private readonly ServerCircuitBreakerService? _breaker;
-        private readonly System.Timers.Timer _timer;
 
         // In-memory state: key = "alertId:serverName"
         private readonly ConcurrentDictionary<string, AlertState> _activeStates = new(StringComparer.OrdinalIgnoreCase);
@@ -48,8 +47,10 @@ namespace SQLTriage.Data.Services
 
         private bool _isRunning;
         private bool _dryRun;
+        private readonly int _baseTickSeconds;
         private readonly SemaphoreSlim _evaluationLock = new(1, 1);
         private readonly CancellationTokenSource _cts = new();
+        private Task? _loopTask;
 
         public event Action? OnAlertsChanged;
 
@@ -109,33 +110,47 @@ namespace SQLTriage.Data.Services
 
             var baseTickSeconds = configuration?.GetValue<int>("AlertEvaluation:BaseTickSeconds", 30) ?? 30;
             if (baseTickSeconds <= 0) baseTickSeconds = 30;
-            // Base timer ticks per config (default 30 seconds); individual alert frequencies are checked inside
-            _timer = new System.Timers.Timer(baseTickSeconds * 1_000);
-            _timer.Elapsed += (_, _) =>
-            {
-                _ = Task.Run(async () =>
-                {
-                    try { await EvaluateAllAsync(_cts.Token); }
-                    catch (OperationCanceledException) { /* graceful shutdown */ }
-                    catch (Exception ex) { _logger.LogError(ex, "Alert evaluation cycle failed"); }
-                });
-            };
+            _baseTickSeconds = baseTickSeconds;
         }
 
         public void Start()
         {
             if (_isRunning) return;
             _isRunning = true;
-            _timer.Start();
-            _logger.LogInformation("Alert evaluation engine started ({Interval}ms tick)", _timer.Interval);
+            _loopTask = Task.Run(() => LoopAsync(_cts.Token));
+            _logger.LogInformation("Alert evaluation engine started ({IntervalS}s tick)", _baseTickSeconds);
         }
 
         public void Stop()
         {
             _isRunning = false;
-            _timer.Stop();
             _cts.Cancel();
             _logger.LogInformation("Alert evaluation engine stopped");
+        }
+
+        private async Task LoopAsync(CancellationToken ct)
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_baseTickSeconds));
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                var tickStart = DateTime.UtcNow;
+                try
+                {
+                    await EvaluateAllAsync(ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Alert evaluation cycle failed");
+                }
+                var elapsed = DateTime.UtcNow - tickStart;
+                if (elapsed.TotalSeconds > _baseTickSeconds)
+                    _logger.LogWarning("[ALERT] Evaluation tick overran interval ({ElapsedMs}ms > {IntervalS}s); next tick dropped",
+                        (int)elapsed.TotalMilliseconds, _baseTickSeconds);
+            }
         }
 
         /// <summary>
@@ -908,8 +923,7 @@ namespace SQLTriage.Data.Services
         public void Dispose()
         {
             Stop();
-            _timer?.Dispose();
-            _cts?.Cancel();
+            try { _loopTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* best effort */ }
             _cts?.Dispose();
             _evaluationLock?.Dispose();
         }
