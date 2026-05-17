@@ -88,7 +88,7 @@
                                 <div class="health-dim-name">
                                     <i class="@DimIcon(dim.Name)"></i>
                                     @dim.Name
-                                    <span class="health-dim-weight">(@((dim.Weight * 100):F0)%)</span>
+                                    <span class="health-dim-weight">(@(Math.Round(dim.Weight * 100))%)</span>
                                 </div>
                                 <div class="health-dim-bar-track">
                                     <div class="health-dim-bar-fill"
