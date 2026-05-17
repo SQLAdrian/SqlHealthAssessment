@@ -377,10 +377,15 @@
     /// </summary>
     private static string InjectWatermarkIntoHtml(string html)
     {
-        const string watermarkCss = """
-            <style id="draft-watermark-css">
+        // Verbatim (@"") not a raw ("""...""") string: the Razor source
+        // generator HTML-parses <style>/</style> inside a raw literal in
+        // @code and desyncs (RZ9981/RZ1000/CS8999). Verbatim strings are
+        // tokenised reliably. Internal " is doubled; \2014 stays literal
+        // (CSS escape for the em-dash) since verbatim does not process \.
+        const string watermarkCss =
+            @"<style id=""draft-watermark-css"">
             body.has-draft-watermark::before {
-                content: "DRAFT \2014 non-production data";
+                content: ""DRAFT \2014 non-production data"";
                 position: fixed;
                 top: 50%;
                 left: 50%;
@@ -396,8 +401,7 @@
                 print-color-adjust: exact;
             }
             @media print { body.has-draft-watermark::before { opacity: 0.14; } }
-            </style>
-            """;
+            </style>";
 
         // Insert CSS before </head>, add class to <body> tag.
         html = html.Replace("</head>", watermarkCss + "</head>", StringComparison.OrdinalIgnoreCase);
