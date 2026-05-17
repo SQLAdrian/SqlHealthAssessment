@@ -212,10 +212,7 @@
         </div>
 
         @* ── Gap summary ── *@
-        @{
-            var gaps = _scorecard.FamilyScores.Where(f => f.Status == ControlStatus.NonCompliant).ToList();
-        }
-        @if (gaps.Count > 0)
+        @if (_scorecard.FamilyScores.Where(f => f.Status == ControlStatus.NonCompliant).ToList() is var gaps && gaps.Count > 0)
         {
             <div class="gap-analysis-section">
                 <div class="gap-analysis-header">
