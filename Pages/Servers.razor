@@ -5,6 +5,7 @@
 @inject SQLTriage.Data.Services.AppUserState UserState
 @inject SQLTriage.Data.Services.BuildCatalogueService BuildCatalogue
 @inject SQLTriage.Data.Services.LicensingEstimator LicensingEstimator
+@inject AuditLogService AuditLog
 @using Microsoft.Data.SqlClient
 @using SQLTriage.Data
 @using SQLTriage.Data.Models
@@ -342,6 +343,7 @@ else
                         <option value="Production">Production</option>
                         <option value="Staging">Staging</option>
                         <option value="Development">Development</option>
+                        <option value="Test">Test</option>
                         <option value="QA">QA</option>
                         <option value="DR">DR</option>
                     </select>
@@ -684,8 +686,22 @@ else
             if (IsEditing)
             {
                 // For edit, update as single connection — no duplicate check needed
+                var priorEnv = ConnectionManager.GetConnection(EditingConnection.Id)?.Environment;
                 EditingConnection.ServerNames = string.Join("\n", serverNames);
                 ConnectionManager.UpdateConnection(EditingConnection);
+
+                // Audit the environment change whenever it differs from the prior value
+                var newEnv = EditingConnection.Environment;
+                if (!string.Equals(priorEnv, newEnv, StringComparison.OrdinalIgnoreCase))
+                {
+                    AuditLog.LogConfigurationChange(
+                        "ServerConnection",
+                        "EnvironmentTagChanged",
+                        string.IsNullOrEmpty(priorEnv) ? "(none)" : priorEnv,
+                        string.IsNullOrEmpty(newEnv)   ? "(none)" : newEnv,
+                        System.Environment.UserName);
+                }
+
                 StatusMessage = "Server connection updated successfully";
             }
             else

@@ -196,9 +196,12 @@
                         <span class="nav-icon"><i class="fa-brands fa-windows"></i></span><span class="nav-link-text"> dbatools</span>
                     </NavLink>
                 }
-                <NavLink href="@RouteConstants.MaintenanceRecommendations" class="nav-link">
-                    <span class="nav-icon"><i class="fa-solid fa-wrench"></i></span><span class="nav-link-text"> Maintenance</span>
-                </NavLink>
+                @if (_experimentalMode)
+                {
+                    <NavLink href="@RouteConstants.MaintenanceRecommendations" class="nav-link">
+                        <span class="nav-icon"><i class="fa-solid fa-wrench"></i></span><span class="nav-link-text"> Maintenance</span>
+                    </NavLink>
+                }
                 <NavLink href="@RouteConstants.Environment" class="nav-link">
                     <span class="nav-icon"><i class="fa-solid fa-network-wired"></i></span><span class="nav-link-text"> Environment View</span>
                 </NavLink>
@@ -220,6 +223,16 @@
                 <NavLink href="@RouteConstants.DeployDarlingPm" class="nav-link">
                     <span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-link-text"> Darling Perf Monitor</span>
                 </NavLink>
+                @* v2 scaffolds — hidden until Experimental Mode is on *@
+                @if (_experimentalMode)
+                {
+                    <NavLink href="@RouteConstants.Documentation" class="nav-link" title="v2 preview — Server Documentation Generator">
+                        <span class="nav-icon"><i class="fa-solid fa-file-lines"></i></span><span class="nav-link-text"> Server Docs Gen</span>
+                    </NavLink>
+                    <NavLink href="@RouteConstants.InstallationHelper" class="nav-link" title="v2 preview — Installation Hardening Checklist">
+                        <span class="nav-icon"><i class="fa-solid fa-screwdriver-wrench"></i></span><span class="nav-link-text"> Install Helper</span>
+                    </NavLink>
+                }
             </div>
         }
 

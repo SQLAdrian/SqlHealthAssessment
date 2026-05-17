@@ -1,6 +1,7 @@
 <!--/* In the name of God, the Merciful, the Compassionate */-->
 @page "/reports"
 @using SQLTriage.Data
+@using SQLTriage.Data.Models
 @using SQLTriage.Data.Services
 @using System.IO
 @using Microsoft.Extensions.Logging
@@ -25,6 +26,14 @@
             }
         </select>
     </div>
+
+    @if (!string.IsNullOrEmpty(_selectedServer) && _selectedServerRequiresWatermark)
+    {
+        <div class="rb-watermark-notice" role="note">
+            <i class="fa-solid fa-triangle-exclamation" style="color:var(--orange);margin-right:6px;"></i>
+            This report will be marked <strong>DRAFT</strong> because the selected server is tagged non-Production or unset.
+        </div>
+    }
 
     <div class="rb-cards">
 
@@ -233,6 +242,15 @@
         ? "Save as PDF"
         : "PDF export requires desktop (WebView2) mode";
 
+    /// <summary>True when the selected server is non-production or unset (watermark will be applied).</summary>
+    private bool _selectedServerRequiresWatermark =>
+        !string.IsNullOrEmpty(_selectedServer) &&
+        ServerEnvironment.RequiresWatermark(
+            ConnectionManager.GetConnections()
+                .Where(c => c.GetServerList().Any(n =>
+                    string.Equals(n, _selectedServer, StringComparison.OrdinalIgnoreCase)))
+                .Select(c => c.Environment));
+
     protected override void OnInitialized()
     {
         _serverNames = ConnectionManager.GetEnabledServerNames().ToList();
@@ -302,6 +320,10 @@
                 _                  => throw new InvalidOperationException($"Unknown bundle type: {bundleType}")
             };
 
+            // Watermark: inject class + CSS into the self-contained HTML when server is non-production/unset.
+            if (_selectedServerRequiresWatermark)
+                html = InjectWatermarkIntoHtml(html);
+
             var outputPath = GetOutputPath(server, bundleType, ".pdf");
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
@@ -345,6 +367,42 @@
         var safeName = serverName.Replace("\\", "_").Replace("/", "_").Replace(":", "_");
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
         return Path.Combine(downloadsDir, $"{safeName}_{bundleType}_{timestamp}{extension}");
+    }
+
+    /// <summary>
+    /// Injects the DRAFT watermark CSS rule and body class into a self-contained HTML string.
+    /// Called when the target server is non-production or unset.
+    /// The CSS uses a literal colour (#c00) rather than var(--red) because the HTML is
+    /// rendered standalone (no app.css) — the intent matches the main watermark styling.
+    /// </summary>
+    private static string InjectWatermarkIntoHtml(string html)
+    {
+        const string watermarkCss = """
+            <style id="draft-watermark-css">
+            body.has-draft-watermark::before {
+                content: "DRAFT \2014 non-production data";
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(-30deg);
+                opacity: 0.10;
+                font-size: 100pt;
+                font-weight: 800;
+                color: #c00;
+                pointer-events: none;
+                z-index: 9999;
+                white-space: nowrap;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            @media print { body.has-draft-watermark::before { opacity: 0.14; } }
+            </style>
+            """;
+
+        // Insert CSS before </head>, add class to <body> tag.
+        html = html.Replace("</head>", watermarkCss + "</head>", StringComparison.OrdinalIgnoreCase);
+        html = html.Replace("<body>", "<body class=\"has-draft-watermark\">", StringComparison.OrdinalIgnoreCase);
+        return html;
     }
 
     private Task OpenInExplorer(string filePath)

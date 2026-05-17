@@ -29,15 +29,16 @@ namespace SQLTriage.Data.Services
 
         public bool IntegrityBroken { get; private set; }
 
-        public GovernanceHistoryService(ILogger<GovernanceHistoryService> logger, int retentionDays = 365)
+        public GovernanceHistoryService(ILogger<GovernanceHistoryService> logger, int retentionDays = 365, string? dbDir = null)
         {
             _logger = logger;
             _retentionDays = retentionDays;
-            var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "governance-history.db");
+            var resolvedDir = dbDir ?? AppDomain.CurrentDomain.BaseDirectory;
+            var dbPath = Path.Combine(resolvedDir, "governance-history.db");
             _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
 
             // Load or generate HMAC key
-            var keyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".governance-hmac-key");
+            var keyPath = Path.Combine(resolvedDir, ".governance-hmac-key");
             if (File.Exists(keyPath))
             {
                 _hmacKey = File.ReadAllBytes(keyPath);

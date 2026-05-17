@@ -5925,6 +5925,36 @@ tr.clickable:hover .datagrid-plan-badge {
     }
 }
 
+/* ── DRAFT / non-production watermark ──────────────────────────────────────
+   Applied via JS: document.body.classList.add('has-draft-watermark')
+   before PrintToPdfAsync, removed after.  Visible in browser preview AND
+   in the printed/saved PDF (-webkit-print-color-adjust: exact).
+   Colour: var(--red) so colorblind-mode (Accessibility.css) auto-remaps
+   it to the Wong amber without any extra rule here.
+   ───────────────────────────────────────────────────────────────────────── */
+body.has-draft-watermark::before {
+    content: "DRAFT \2014 non-production data";
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    opacity: 0.08;
+    font-size: 120pt;
+    font-weight: 800;
+    color: var(--red);
+    pointer-events: none;
+    z-index: 9999;
+    white-space: nowrap;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+@media print {
+    body.has-draft-watermark::before {
+        opacity: 0.12;
+    }
+}
+
 /* ============================================
    Vulnerability Assessment Page Styles
    ============================================ */

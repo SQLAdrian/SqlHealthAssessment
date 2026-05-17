@@ -29,12 +29,13 @@ namespace SQLTriage.Data.Services
 
         public BlockingHistoryService(
             ILogger<BlockingHistoryService> logger,
-            int retentionDays = 30)
+            int retentionDays = 30,
+            string? dbPath = null)
         {
             _logger = logger;
             _retentionDays = retentionDays;
-            var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "blocking-history.db");
-            _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
+            var resolvedPath = dbPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "blocking-history.db");
+            _connectionString = $"Data Source={resolvedPath};Mode=ReadWriteCreate;Cache=Shared";
             InitializeSchema();
 
             _purgeTimer = new System.Timers.Timer(TimeSpan.FromHours(24).TotalMilliseconds);

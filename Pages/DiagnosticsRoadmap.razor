@@ -17,6 +17,7 @@
 @inject SQLTriage.Data.Services.KeyboardShortcutService ShortcutSvc
 @inject AutoUpdateService AutoUpdateSvc
 @inject AppUserState UserState
+@inject ServerConnectionManager ConnectionManager
 
 @* Print/PDF styles for this page live in wwwroot/css/DiagnosticsRoadmap.css *@
 
@@ -2114,12 +2115,25 @@
             $"f.innerHTML='<span style=\"display:flex;align-items:center;gap:5px;font-weight:700;color:#e2583e;\"><i class=\"fa-solid fa-heart-pulse\" style=\"font-size:10px;\"></i> SQLTriage</span><span style=\"color:#444;\">{footerCentre}</span><span style=\"color:#888;font-style:italic;\">{footerRight}</span>';" +
             $"document.body.appendChild(f);");
 
+        // Watermark: apply if ANY selected server is non-production or unset.
+        var allConnections     = ConnectionManager.GetConnections();
+        var serverInstances    = selectedServers.Select(s => s.SqlInstance).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var serverEnvironments = allConnections
+            .Where(c => c.GetServerList().Any(n => serverInstances.Contains(n)))
+            .Select(c => c.Environment)
+            .ToList();
+        var applyWatermark = ServerEnvironment.RequiresWatermark(serverEnvironments);
+        if (applyWatermark)
+            await JS.InvokeVoidAsync("eval", "document.body.classList.add('has-draft-watermark');");
+
         var (success, path, error) = await PrintSvc.PrintToPdfAsync(fileName,
             printBackgrounds: false,
             orientation: Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Landscape,
             headerTitle: null,
             footerUri: null);
 
+        if (applyWatermark)
+            await JS.InvokeVoidAsync("eval", "document.body.classList.remove('has-draft-watermark');");
         await JS.InvokeVoidAsync("eval", "document.getElementById('pdf-footer-bar')?.remove();");
 
         if (success)
@@ -2145,6 +2159,12 @@
                         frameworkVersion = _reportFrameworkVersion,
                         artefact         = System.IO.Path.GetFileName(path),
                         sha256           = _reportBytesSha256,
+                        watermarkApplied = applyWatermark,
+                        environments     = serverEnvironments
+                            .Select(e => string.IsNullOrEmpty(e) ? "(none)" : e)
+                            .Distinct()
+                            .OrderBy(e => e)
+                            .ToList(),
                         servers          = selectedServers.Select(s => new {
                             s.SqlInstance,
                             s.Domain,

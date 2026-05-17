@@ -63,13 +63,14 @@ public sealed class PerformanceBaselineService : IDisposable
 
     public PerformanceBaselineService(
         ILogger<PerformanceBaselineService> logger,
-        HistoricalPerformanceService historical)
+        HistoricalPerformanceService historical,
+        string? dbPath = null)
     {
         _logger     = logger;
         _historical = historical;
 
-        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "governance-history.db");
-        _connectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared";
+        var resolvedPath = dbPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "governance-history.db");
+        _connectionString = $"Data Source={resolvedPath};Mode=ReadWriteCreate;Cache=Shared";
 
         InitializeSchema();
     }
