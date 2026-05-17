@@ -76,15 +76,33 @@ public class QueryOrchestratorTests : IAsyncLifetime
     // hook/event the dispatcher raises per dequeue, asserted directly), or
     // (b) unit-test DequeueNextAsync in isolation with pre-populated
     // channels. Both test the real contract; neither races the thread pool.
-    [Fact(Skip = "Flaky: asserts Work-execution order, but orchestrator only " +
-                 "guarantees dequeue order (TrackWorkAsync is fire-and-forget). " +
-                 "Prod code correct; needs a dequeue-order test seam. See " +
-                 "memory/project_orchestrator_priority_test_debt.md")]
-    public void EnqueueAsync_PriorityOrdering_P0CompletesBeforeP4()
+    [Fact]
+    public async Task DequeueOrder_P0_DrainsBeforeP4()
     {
-        // Intentionally empty — quarantined. Do not re-enable without the
-        // dequeue-order seam described above; a black-box rewrite WILL be
-        // flaky again (proven 3x).
+        // Deterministic. Drives the REAL WriteChannelAsync + DequeueNextAsync
+        // via the ProbeDequeueOrderAsync seam — no dispatcher, no thread-pool
+        // race. 10 P4 enqueued first, then 1 P0; P0 MUST dequeue before any P4
+        // (dashboard queries never wait behind prefetch). This asserts the
+        // actual guarantee (dequeue order), not the non-guarantee (Work
+        // execution order) the prior 3 black-box rewrites flakily chased.
+        var cfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Orchestrator:GlobalConcurrency"] = "1",
+                ["Orchestrator:ChannelCapacity"] = "100"
+            }).Build();
+        using var reg = new QueryRegistry(NullLogger<QueryRegistry>.Instance, cfg);
+        using var orch = new QueryOrchestrator(NullLogger<QueryOrchestrator>.Instance, cfg, reg);
+        // Intentionally NOT Start()ed — drive the dequeue path directly.
+
+        var enq = Enumerable.Repeat(QueryPriority.P4_Prefetch, 10)
+            .Append(QueryPriority.P0_Dashboard)
+            .ToList();
+        var order = await orch.ProbeDequeueOrderAsync(enq);
+
+        Assert.Equal(11, order.Count);
+        Assert.Equal(QueryPriority.P0_Dashboard, order[0]);
+        Assert.All(order.Skip(1), p => Assert.Equal(QueryPriority.P4_Prefetch, p));
     }
 
     [Fact]

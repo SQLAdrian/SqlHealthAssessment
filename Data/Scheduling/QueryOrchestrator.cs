@@ -330,6 +330,43 @@ namespace SQLTriage.Data.Scheduling
             return null;
         }
 
+        // ── Test seam (InternalsVisibleTo SQLTriage.Tests) ──────────────
+        // Exercises the REAL priority path (WriteChannelAsync + DequeueNextAsync)
+        // WITHOUT the background dispatcher, so the P0-before-P4 dequeue
+        // invariant is observable DETERMINISTICALLY. Black-box tests of this
+        // were flaky because Work *execution* order is thread-pool-decided and
+        // is NOT a guarantee — only dequeue order is. Channels are constructed
+        // in the ctor (not Start()), so this works on an unstarted instance.
+        // See memory project_orchestrator_priority_test_debt.
+        internal async Task<IReadOnlyList<QueryPriority>> ProbeDequeueOrderAsync(
+            IReadOnlyList<QueryPriority> enqueueOrder,
+            CancellationToken cancellationToken = default)
+        {
+            foreach (var p in enqueueOrder)
+            {
+                await WriteChannelAsync(p, new QueuedRequest
+                {
+                    Request = new QueryRequest
+                    {
+                        QueryId = "probe",
+                        Work = _ => Task.CompletedTask
+                    },
+                    Priority = p,
+                    Completion = new TaskCompletionSource<QueryResult>(),
+                    EnqueuedAt = DateTime.UtcNow
+                }, cancellationToken);
+            }
+
+            var order = new List<QueryPriority>(enqueueOrder.Count);
+            for (int i = 0; i < enqueueOrder.Count; i++)
+            {
+                var r = await DequeueNextAsync(cancellationToken);
+                if (r is null) break;
+                order.Add(r.Priority);
+            }
+            return order;
+        }
+
         // ── Execution ──────────────────────────────────────────────────
 
         private async Task ExecuteWorkAsync(QueuedRequest queued)
