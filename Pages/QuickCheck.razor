@@ -657,10 +657,16 @@ else
                 else
                 {
                     var fileName = $"QuickCheck_{timestamp}.pdf";
+                    var qkEnv = ConnectionManager.GetConnection(State.SelectedConnectionId)?.Environment;
+                    var qkWatermark = ServerEnvironment.RequiresWatermark(new[] { qkEnv });
+                    if (qkWatermark)
+                        await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.add('has-draft-watermark');");
                     var (success, path, error) = await PrintSvc.PrintToPdfAsync(
                         fileName,
                         printBackgrounds: false,
                         orientation: Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait);
+                    if (qkWatermark)
+                        await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.remove('has-draft-watermark');");
                     if (success)
                         Toast.ShowInfo($"Quick Check PDF exported: {fileName}");
                 }
@@ -694,10 +700,16 @@ else
             var orientation = settings.LandscapeOrientation
                 ? Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Landscape
                 : Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait;
+            var qcEnv2 = ConnectionManager.GetConnection(State.SelectedConnectionId)?.Environment;
+            var qcWatermark2 = ServerEnvironment.RequiresWatermark(new[] { qcEnv2 });
+            if (qcWatermark2)
+                await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.add('has-draft-watermark');");
             var (success, path, error) = await PrintSvc.PrintToPdfAsync(
                 settings.FileName,
                 printBackgrounds: settings.PrintBackgrounds,
                 orientation: orientation);
+            if (qcWatermark2)
+                await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.remove('has-draft-watermark');");
             if (success && path != null)
                 Toast.ShowSuccess($"PDF saved: {System.IO.Path.GetFileName(path)}");
             else

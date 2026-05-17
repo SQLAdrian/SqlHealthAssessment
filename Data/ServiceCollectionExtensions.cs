@@ -129,6 +129,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<StartupService>();
         services.AddSingleton<PrintService>();
         services.AddSingleton<IPrintService>(sp => sp.GetRequiredService<PrintService>());
+        services.AddSingleton<IDocumentationService, DocumentationService>();
         services.AddSingleton<ConnectionHealthService>();
         services.AddSingleton<KeyboardShortcutService>();
         services.AddSingleton<SqlAssessmentService>();

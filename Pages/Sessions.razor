@@ -585,9 +585,20 @@
             var orientation = settings.LandscapeOrientation
                 ? Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Landscape
                 : Microsoft.Web.WebView2.Core.CoreWebView2PrintOrientation.Portrait;
+
+            // Watermark: apply when the current server is non-production or unset.
+            var applyWatermark = ServerEnvironment.RequiresWatermark(
+                new[] { ConnectionManager.CurrentServer?.Environment });
+            if (applyWatermark)
+                await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.add('has-draft-watermark');");
+
             var (success, path, error) = await PrintSvc.PrintToPdfAsync(settings.FileName,
                 printBackgrounds: settings.PrintBackgrounds,
                 orientation: orientation);
+
+            if (applyWatermark)
+                await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.remove('has-draft-watermark');");
+
             if (success) Toast.ShowSuccess($"PDF saved: {System.IO.Path.GetFileName(path)}");
             else         Toast.ShowError($"PDF export failed: {error}");
         }

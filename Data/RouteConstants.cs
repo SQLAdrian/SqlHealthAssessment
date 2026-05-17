@@ -104,6 +104,10 @@ public static class RouteConstants
     // ── Report Bundles ──
     public const string ReportBundles = "/reports";
 
+    // ── Documentation / Installation Helper (v2 scaffolds) ──
+    public const string Documentation     = "/documentation";
+    public const string InstallationHelper = "/installation-helper";
+
     // ── Query Store ──
     public const string QueryStore = "/querystore";
 }

@@ -188,14 +188,16 @@ body.has-ambient-bg .nav-menu {
     text-transform: capitalize;
 }
 
-.env-badge.env-production  { background: #b91c1c; }
-.env-badge.env-staging     { background: #b45309; }
-.env-badge.env-development { background: #15803d; }
-.env-badge.env-test        { background: #1d4ed8; }
+.env-badge.env-production  { background: var(--red); }
+.env-badge.env-staging     { background: var(--orange); }
+.env-badge.env-development { background: var(--green); }
+.env-badge.env-test        { background: var(--purple); }
+.env-badge.env-qa          { background: var(--purple); }
+.env-badge.env-dr          { background: var(--purple); }
 .env-badge.env-other       { background: var(--bg-hover); color: var(--text-secondary); }
 
-body.colorblind-mode .env-badge.env-production  { background: #d97706; }
-body.colorblind-mode .env-badge.env-development { background: #2563eb; }
+/* colorblind-mode overrides are handled automatically by Accessibility.css
+   remapping --red/--orange/--green/--purple to the Wong (2011) palette. */
 
 /* ── Tag pill (small, neutral, multiple per row) ──────────────────── */
 .tag-pill {
