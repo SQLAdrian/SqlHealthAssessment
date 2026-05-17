@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SQLTriage.Data.Models;
 
@@ -12,15 +13,16 @@ namespace SQLTriage.Data.Services
 {
     /// <summary>
     /// Computes a weighted 0-100 Health Score and Risk Rating from five dimensions:
-    ///   1. Performance   — wait-stats trend from HistoricalPerformanceService (weight: governance-weights.json Performance)
+    ///   1. Performance   — saturation wait-stats trend (PAGEIOLATCH/CXPACKET/SOS/LCK_M_*) (weight: governance-weights.json Performance)
     ///   2. Compliance    — governance pass-rate across Compliance dimension (weight: Compliance)
     ///   3. Security      — VA security findings pass-rate (weight: Security)
     ///   4. Resource      — CPU / memory saturation from live HealthCheckService (weight: Reliability)
-    ///   5. Blocking      — blocking event frequency from BlockingHistoryService (weight: Performance share)
+    ///   5. Blocking      — blocking event frequency from BlockingHistoryService (weight: governance-weights.json Blocking)
     ///
     /// Weights are read from Config/governance-weights.json via the same IOptionsMonitor used by
     /// GovernanceService.  Breakdown snapshots are written once per UTC day to governance-history.db
     /// (health_score_history table) for trend rendering.
+    /// Performance signal wait types are configurable via Health:PerformanceSignalWaitTypes (appsettings).
     /// </summary>
     public class ExecutiveHealthService
     {
@@ -35,6 +37,20 @@ namespace SQLTriage.Data.Services
         // Reload is not needed at runtime for v1; the file changes rarely.
         private readonly GovernanceWeightsConfig _weights;
 
+        // Saturation/contention wait-type prefixes for the Performance dimension.
+        // Configurable via Health:PerformanceSignalWaitTypes in appsettings.json.
+        // Default covers I/O, parallel-query contention, scheduler starvation, and lock waits.
+        private static readonly string[] DefaultPerfSignalPrefixes =
+        {
+            "PAGEIOLATCH_",
+            "CXPACKET",
+            "CXCONSUMER",
+            "SOS_SCHEDULER_YIELD",
+            "LCK_M_",
+        };
+
+        private readonly string[] _perfSignalPrefixes;
+
         // One snapshot per server per UTC day — guards against duplicate writes.
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime>
             _lastSnapshotDate = new(StringComparer.OrdinalIgnoreCase);
@@ -45,7 +61,8 @@ namespace SQLTriage.Data.Services
             BlockingHistoryService blockingHistory,
             HistoricalPerformanceService perfHistory,
             VulnerabilityAssessmentStateService vaState,
-            ILogger<ExecutiveHealthService> logger)
+            ILogger<ExecutiveHealthService> logger,
+            IConfiguration? configuration = null)
         {
             _healthCheckService = healthCheckService ?? throw new ArgumentNullException(nameof(healthCheckService));
             _historyService     = historyService     ?? throw new ArgumentNullException(nameof(historyService));
@@ -55,6 +72,13 @@ namespace SQLTriage.Data.Services
             _logger             = logger             ?? throw new ArgumentNullException(nameof(logger));
 
             _weights = LoadWeights();
+
+            // Load performance signal wait-type prefixes from config, falling back to defaults.
+            var configuredTypes = configuration?.GetSection("Health:PerformanceSignalWaitTypes")
+                                               .Get<string[]>();
+            _perfSignalPrefixes = configuredTypes is { Length: > 0 }
+                ? configuredTypes
+                : DefaultPerfSignalPrefixes;
         }
 
         // ── Public API ────────────────────────────────────────────────────────
@@ -136,7 +160,9 @@ namespace SQLTriage.Data.Services
         }
 
         // Performance (0-100): deduct points when avg wait_ms is elevated vs prior day.
-        // Uses PAGEIOLATCH + CXPACKET + SOS_SCHEDULER_YIELD as saturation signals.
+        // Only saturation/contention wait types (prefixes in _perfSignalPrefixes) are included.
+        // Configurable via Health:PerformanceSignalWaitTypes; defaults: PAGEIOLATCH_*, CXPACKET,
+        // CXCONSUMER, SOS_SCHEDULER_YIELD, LCK_M_*.
         private async Task<DimensionScore> ScorePerformanceAsync(string serverName)
         {
             const string dim = "Performance";
@@ -144,17 +170,25 @@ namespace SQLTriage.Data.Services
 
             try
             {
-                var now      = DateTime.UtcNow;
-                var todayRows = _perfHistory.GetHourlyWaitStats(serverName, now.AddHours(-24), now);
+                var now       = DateTime.UtcNow;
+                var allRows   = _perfHistory.GetHourlyWaitStats(serverName, now.AddHours(-24), now);
+
+                // Filter to saturation/contention signal wait types only.
+                var todayRows = allRows
+                    .Where(r => IsPerfSignalWait(r.WaitType))
+                    .ToList();
 
                 if (todayRows.Count == 0)
-                    return new DimensionScore(dim, weight, 100, "No wait-stat history yet — full points awarded by default.",
-                        "Collects once HistoricalPerformanceService has 24 h of data.");
+                    return new DimensionScore(dim, weight, 100,
+                        "No saturation wait-stat history yet — full points awarded by default.",
+                        $"Collects once HistoricalPerformanceService has 24 h of data for signal waits " +
+                        $"({string.Join(", ", _perfSignalPrefixes)}).");
 
                 double avgWaitMs = todayRows.Average(r => r.AvgWaitMs);
 
-                // Compare to prior day for trend signal
-                var priorRows = _perfHistory.GetHourlyWaitStats(serverName, now.AddHours(-48), now.AddHours(-24));
+                // Compare to prior day for trend signal (same wait-type filter)
+                var priorAll  = _perfHistory.GetHourlyWaitStats(serverName, now.AddHours(-48), now.AddHours(-24));
+                var priorRows = priorAll.Where(r => IsPerfSignalWait(r.WaitType)).ToList();
                 double priorAvg = priorRows.Count > 0 ? priorRows.Average(r => r.AvgWaitMs) : avgWaitMs;
 
                 // Score: 100 at ≤50ms avg wait, linear decay to 0 at ≥1500ms
@@ -165,17 +199,30 @@ namespace SQLTriage.Data.Services
                 string direction = delta > 10 ? "degrading" : delta < -10 ? "improving" : "stable";
 
                 return new DimensionScore(dim, weight, score,
-                    $"Avg wait {avgWaitMs:F0} ms over last 24 h ({direction} vs prior day). " +
+                    $"Avg saturation wait {avgWaitMs:F0} ms over last 24 h ({direction} vs prior day). " +
                     $"Score = {score}/100.",
                     $"This dimension contributes {weight * score:F0} of {weight * 100:F0} possible points " +
                     $"(weight {weight * 100:F0}%). " +
-                    $"Source: {todayRows.Count} hourly wait-stat rows from HistoricalPerformanceService.");
+                    $"Signal wait types: {string.Join(", ", _perfSignalPrefixes)}. " +
+                    $"Source: {todayRows.Count} matching hourly rows from HistoricalPerformanceService.");
             }
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "Performance score failed for {Server}", serverName);
                 return new DimensionScore(dim, weight, 100, "No performance data — full points by default.", "");
             }
+        }
+
+        /// <summary>Returns true if the wait type matches any configured performance signal prefix.</summary>
+        private bool IsPerfSignalWait(string? waitType)
+        {
+            if (string.IsNullOrEmpty(waitType)) return false;
+            foreach (var prefix in _perfSignalPrefixes)
+            {
+                if (waitType.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         // Compliance (0-100): governance compliance pass-rate from VA results (Compliance/Auditing/Patching categories).
@@ -334,12 +381,11 @@ namespace SQLTriage.Data.Services
         }
 
         // Blocking (0-100): event count over last 24 h from BlockingHistoryService.
-        // Uses a share of Performance weight (blocking is a performance-adjacent concern).
+        // Weight read directly from governance-weights.json "Blocking" key (first-class dimension).
         private async Task<DimensionScore> ScoreBlockingAsync(string serverName)
         {
             const string dim = "Blocking";
-            // Blocking takes half the Performance weight for its share
-            double weight = GetWeight("Performance") * 0.5;
+            double weight = GetWeight("Blocking");
 
             try
             {
@@ -496,7 +542,7 @@ namespace SQLTriage.Data.Services
     /// <summary>Full breakdown of the 5-dimension health index.</summary>
     public sealed class HealthScoreBreakdown
     {
-        public DimensionScore Performance { get; set; } = new("Performance", 0.20, 100, "", "");
+        public DimensionScore Performance { get; set; } = new("Performance", 0.15, 100, "", "");
         public DimensionScore Compliance  { get; set; } = new("Compliance",  0.20, 100, "", "");
         public DimensionScore Security    { get; set; } = new("Security",    0.25, 100, "", "");
         public DimensionScore Resource    { get; set; } = new("Resource",    0.20, 100, "", "");
@@ -530,10 +576,11 @@ namespace SQLTriage.Data.Services
             Categories = new(StringComparer.OrdinalIgnoreCase)
             {
                 ["Security"]    = 0.25,
-                ["Performance"] = 0.20,
+                ["Performance"] = 0.15,
                 ["Reliability"] = 0.20,
                 ["Compliance"]  = 0.20,
-                ["Cost"]        = 0.15,
+                ["Cost"]        = 0.10,
+                ["Blocking"]    = 0.10,
             }
         };
     }

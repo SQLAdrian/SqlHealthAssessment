@@ -2,6 +2,7 @@
 
 using System.IO;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace SQLTriage.Data.Services;
@@ -25,6 +26,10 @@ public sealed class ComplianceMappingService
     // Reverse map: sqlCheckHint → controls that reference it
     private readonly Dictionary<string, List<ControlRef>> _hintToControls = new(StringComparer.OrdinalIgnoreCase);
 
+    // Frameworks to suppress from GetFrameworks() output (configurable via Compliance:HiddenFrameworks).
+    // Default: ["ISO 27001"] — ISO 27002 is the implementation guide and supersedes it in the picker.
+    private readonly HashSet<string> _hiddenFrameworks;
+
     // ── VA Category → sqlCheckHint vocabulary ──────────────────────────────
     // Bridges AssessmentResult.Category (produced by SqlAssessmentService) to the
     // sqlCheckHints vocabulary used in control_mappings.json.
@@ -44,17 +49,34 @@ public sealed class ComplianceMappingService
             ["General"]         = new[] { "configuration_hardening" },
         };
 
-    public ComplianceMappingService(ILogger<ComplianceMappingService> logger)
+    public ComplianceMappingService(
+        ILogger<ComplianceMappingService> logger,
+        IConfiguration? configuration = null)
     {
         _logger = logger;
+
+        var hidden = configuration?.GetSection("Compliance:HiddenFrameworks").Get<string[]>();
+        _hiddenFrameworks = hidden is { Length: > 0 }
+            ? new HashSet<string>(hidden, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(new[] { "ISO 27001" }, StringComparer.OrdinalIgnoreCase);
+
         Load();
     }
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    /// <summary>Returns distinct framework acronyms loaded from control_mappings.json.</summary>
-    public IReadOnlyList<string> GetFrameworks()
-        => _frameworks.Select(f => f.Acronym).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(a => a).ToList();
+    /// <summary>
+    /// Returns distinct framework acronyms loaded from control_mappings.json,
+    /// excluding any framework listed in Compliance:HiddenFrameworks (default: ISO 27001).
+    /// Pass <paramref name="includeHidden"/> = true to bypass suppression (e.g. for admin/tests).
+    /// </summary>
+    public IReadOnlyList<string> GetFrameworks(bool includeHidden = false)
+        => _frameworks
+            .Select(f => f.Acronym)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(a => includeHidden || !_hiddenFrameworks.Contains(a))
+            .OrderBy(a => a)
+            .ToList();
 
     /// <summary>Returns all framework definitions (includes region metadata).</summary>
     public IReadOnlyList<FrameworkDefinition> GetFrameworkDefinitions() => _frameworks.AsReadOnly();

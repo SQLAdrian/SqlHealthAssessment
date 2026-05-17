@@ -34,9 +34,9 @@ namespace SQLTriage.Tests
         // ── GetFrameworks — framework count ──────────────────────────────────
 
         [Fact]
-        public void GetFrameworks_ReturnsExpectedCount()
+        public void GetFrameworks_ReturnsExpectedCount_ExcludingHidden()
         {
-            // control_mappings.json has 29 "acronym" entries as of the current commit.
+            // control_mappings.json has 29 "acronym" entries; default hidden = ["ISO 27001"] → 28 visible.
             var svc = NewServiceWithRealFile();
             var frameworks = svc.GetFrameworks();
 
@@ -44,7 +44,35 @@ namespace SQLTriage.Tests
             if (frameworks.Count == 0)
                 return; // file not in test output dir; integration deferred to CI
 
-            Assert.Equal(29, frameworks.Count);
+            Assert.Equal(28, frameworks.Count);
+        }
+
+        [Fact]
+        public void GetFrameworks_IncludeHidden_ReturnsAll29()
+        {
+            // Bypass suppression to confirm the raw count is still 29 and ISO 27001 is present.
+            var svc = NewServiceWithRealFile();
+            var allFrameworks = svc.GetFrameworks(includeHidden: true);
+
+            if (allFrameworks.Count == 0)
+                return; // file not in test output dir; integration deferred to CI
+
+            Assert.Equal(29, allFrameworks.Count);
+            Assert.Contains("ISO 27001", allFrameworks, StringComparer.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void GetFrameworks_DefaultHides_Iso27001_ButShows_Iso27002()
+        {
+            var svc = NewServiceWithRealFile();
+            var frameworks = svc.GetFrameworks();
+
+            if (frameworks.Count == 0)
+                return;
+
+            // ISO 27001 suppressed by default; ISO 27002 (granular implementation guide) visible.
+            Assert.DoesNotContain("ISO 27001", frameworks, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains("ISO 27002", frameworks, StringComparer.OrdinalIgnoreCase);
         }
 
         // ── GetControlsForVaCategory — known Security category ───────────────

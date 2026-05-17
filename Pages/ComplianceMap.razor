@@ -9,6 +9,7 @@
 @inject AuditLogService Audit
 @inject ToastService Toast
 @inject IJSRuntime JSRuntime
+@inject PrintService PrintSvc
 
 <PageTitle>Compliance Scorecard - SQLTriage</PageTitle>
 
@@ -272,10 +273,21 @@
 
         try
         {
-            var html = BuildEvidenceHtml(_scorecard);
-            var fileName = $"compliance-evidence-{_selectedFramework.Replace(" ", "-")}-{DateTime.Now:yyyyMMdd-HHmm}.html";
+            var html     = BuildEvidenceHtml(_scorecard);
+            var baseName = $"compliance-evidence-{_selectedFramework.Replace(" ", "-")}-{DateTime.Now:yyyyMMdd-HHmm}";
+            var pdfPath  = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads",
+                baseName + ".pdf");
 
-            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, html, "text/html");
+            var result = await PrintSvc.PrintHtmlToPdfAsync(
+                html,
+                pdfPath,
+                printBackgrounds: true,
+                headerTitle: $"Compliance Evidence — {_selectedFramework}");
+
+            if (!result.Success)
+                throw new InvalidOperationException(result.Error ?? "PDF generation failed.");
 
             Audit.LogComplianceReportExported(
                 framework:      _selectedFramework,
@@ -284,7 +296,7 @@
                 overallPercent: _scorecard.OverallPercent >= 0 ? _scorecard.OverallPercent : 0,
                 success:        true);
 
-            Toast.ShowSuccess("Compliance Export", $"Evidence report saved as {fileName}");
+            Toast.ShowSuccess("Compliance Export", $"Evidence report saved as {System.IO.Path.GetFileName(pdfPath)}");
         }
         catch (Exception ex)
         {
