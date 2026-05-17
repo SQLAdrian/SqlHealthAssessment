@@ -326,9 +326,13 @@ namespace SQLTriage.Data.Services
             {
                 var status = _healthCheckService.GetCachedHealth(serverName);
                 if (status == null)
-                    return new DimensionScore(dim, weight, 0,
-                        "No live health data for this server.",
-                        "Connect to the server and wait for the first health poll.");
+                    // No poll yet ≠ unhealthy. Consistent with every other dimension
+                    // (and this service's documented "no data → full points" contract):
+                    // absence of data must not drag the composite down. Offline (a real
+                    // negative signal) is handled below and still scores 0.
+                    return new DimensionScore(dim, weight, 100,
+                        "No live health data yet — full points awarded by default.",
+                        "Score will reflect real resource saturation after the first health poll.");
 
                 if (status.IsOnline != true)
                     return new DimensionScore(dim, weight, 0,

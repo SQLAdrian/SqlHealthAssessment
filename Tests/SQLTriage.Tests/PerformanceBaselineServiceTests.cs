@@ -56,12 +56,17 @@ namespace SQLTriage.Tests
                 );";
             schema.ExecuteNonQuery();
 
-            var baseTime = DateTime.UtcNow.AddDays(-7);
+            // Anchor to the current truncated hour, then step back in 7-day strides so
+            // every seeded row shares the SAME (day-of-week, hour-of-day) bucket and
+            // accumulates >= MinBucketSamples (=3) in that single bucket — which is what
+            // LearnBaselineAsync actually requires. Staying inside the 30-day lookback
+            // (i=1..4 → −7..−28 days) keeps >=4 rows in range. The shared bucket key
+            // also equals the outlier's current-hour key used by the anomaly test.
+            var anchorHour = DateTime.UtcNow.Date.AddHours(DateTime.UtcNow.Hour);
             for (int i = 0; i < samples; i++)
             {
                 using var cmd = conn.CreateCommand();
-                // Spread across different (day-of-week, hour-of-day) buckets to guarantee >= MinBucketSamples=3
-                var hourUtc = baseTime.AddHours(i * 24);   // one per day, same hour
+                var hourUtc = anchorHour.AddDays(-7 * (i + 1));   // same weekday + hour, weekly back
                 cmd.CommandText = @"
                     INSERT OR REPLACE INTO wait_stats_hourly
                         (server_name, hour_utc, wait_type, avg_wait_time_ms, max_wait_time_ms, sample_count)

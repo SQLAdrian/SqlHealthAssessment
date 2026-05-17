@@ -246,24 +246,22 @@ public sealed class HistoricalPerformanceService : IDisposable
         {
             using var conn = await SqliteCipherHelper.OpenEncryptedAsync(_connectionString).ConfigureAwait(false);
 
-            // Raw history purge (delegates responsibility; WaitStatsHistoryService also purges
-            // but this ensures rollup service keeps the raw window consistent).
-            using var rawCmd = conn.CreateCommand();
-            rawCmd.CommandText = "DELETE FROM wait_stats_history WHERE recorded_at < @cutoff;";
-            rawCmd.Parameters.AddWithValue("@cutoff", DateTime.UtcNow.AddDays(-_rawRetentionDays).ToString("o"));
-            var rawDel = await rawCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            // Each purge is independent: a failure in one (e.g. wait_stats_history is
+            // owned by WaitStatsHistoryService and may not exist yet on this connection)
+            // must NOT abort the others. Previously a single missing-table exception
+            // bubbled to the method-level catch and silently skipped hourly+daily purge
+            // entirely — retention then never ran. Fail loud per statement, continue.
+            var rawDel = await PurgeOneAsync(conn, "wait_stats_history",
+                "DELETE FROM wait_stats_history WHERE recorded_at < @cutoff;",
+                DateTime.UtcNow.AddDays(-_rawRetentionDays).ToString("o"), ct).ConfigureAwait(false);
 
-            // Hourly purge
-            using var hrCmd = conn.CreateCommand();
-            hrCmd.CommandText = "DELETE FROM wait_stats_hourly WHERE hour_utc < @cutoff;";
-            hrCmd.Parameters.AddWithValue("@cutoff", DateTime.UtcNow.AddDays(-_hourlyRetentionDays).ToString("o"));
-            var hrDel = await hrCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            var hrDel = await PurgeOneAsync(conn, "wait_stats_hourly",
+                "DELETE FROM wait_stats_hourly WHERE hour_utc < @cutoff;",
+                DateTime.UtcNow.AddDays(-_hourlyRetentionDays).ToString("o"), ct).ConfigureAwait(false);
 
-            // Daily purge
-            using var dayCmd = conn.CreateCommand();
-            dayCmd.CommandText = "DELETE FROM wait_stats_daily WHERE day_utc < @cutoff;";
-            dayCmd.Parameters.AddWithValue("@cutoff", DateTime.UtcNow.AddDays(-_dailyRetentionDays).ToString("yyyy-MM-dd"));
-            var dayDel = await dayCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            var dayDel = await PurgeOneAsync(conn, "wait_stats_daily",
+                "DELETE FROM wait_stats_daily WHERE day_utc < @cutoff;",
+                DateTime.UtcNow.AddDays(-_dailyRetentionDays).ToString("yyyy-MM-dd"), ct).ConfigureAwait(false);
 
             if (rawDel + hrDel + dayDel > 0)
                 _logger.LogInformation("[ROLLUP] Purged raw={R}, hourly={H}, daily={D} expired rows", rawDel, hrDel, dayDel);
@@ -275,6 +273,28 @@ public sealed class HistoricalPerformanceService : IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[ROLLUP] Purge failed");
+        }
+    }
+
+    /// <summary>
+    /// Runs one retention DELETE in isolation. A failure (e.g. the target table is
+    /// owned by another service and not yet created) is logged but does not abort
+    /// sibling purges. Returns rows deleted, or 0 on failure.
+    /// </summary>
+    private async Task<int> PurgeOneAsync(
+        SqliteConnection conn, string table, string sql, string cutoff, CancellationToken ct)
+    {
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.Parameters.AddWithValue("@cutoff", cutoff);
+            return await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[ROLLUP] Purge of {Table} skipped (continuing with other tables)", table);
+            return 0;
         }
     }
 
